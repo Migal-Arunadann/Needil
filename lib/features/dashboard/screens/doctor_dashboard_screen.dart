@@ -150,7 +150,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                 title: 'Settings',
                 subtitle: 'Profile, schedule, join clinic',
                 color: AppColors.textSecondary,
-                onTap: () {},
+                onTap: () => Navigator.pushNamed(context, '/settings'),
               ),
               const SizedBox(height: 32),
 
