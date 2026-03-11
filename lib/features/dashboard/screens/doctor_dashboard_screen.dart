@@ -138,6 +138,14 @@ class DoctorDashboardScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 10),
               _actionTile(
+                icon: Icons.event_available_rounded,
+                title: 'Available Slots',
+                subtitle: 'View your schedule & slots',
+                color: AppColors.info,
+                onTap: () => Navigator.pushNamed(context, '/available-slots'),
+              ),
+              const SizedBox(height: 10),
+              _actionTile(
                 icon: Icons.settings_rounded,
                 title: 'Settings',
                 subtitle: 'Profile, schedule, join clinic',

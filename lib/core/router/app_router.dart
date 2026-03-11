@@ -16,6 +16,7 @@ import '../../features/treatments/screens/session_list_screen.dart';
 import '../../features/treatments/screens/record_session_screen.dart';
 import '../../features/treatments/models/treatment_plan_model.dart';
 import '../../features/treatments/models/session_model.dart';
+import '../../features/scheduling/screens/available_slots_screen.dart';
 
 /// Named route generator for the app.
 Route<dynamic>? generateRoute(RouteSettings settings) {
@@ -82,6 +83,9 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
     case '/sessions/record':
       final session = settings.arguments as SessionModel;
       return _slide(RecordSessionScreen(session: session), settings);
+
+    case '/available-slots':
+      return _slide(const AvailableSlotsScreen(), settings);
 
     default:
       return _fade(const LoginScreen(), settings);
