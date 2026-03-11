@@ -126,7 +126,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                 title: 'New Appointment',
                 subtitle: 'Schedule or walk-in',
                 color: AppColors.primary,
-                onTap: () {},
+                onTap: () => Navigator.pushNamed(context, '/appointments/create'),
               ),
               const SizedBox(height: 10),
               _actionTile(

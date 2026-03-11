@@ -45,6 +45,9 @@ class AuthState {
       error: error,
     );
   }
+
+  /// Convenience getter for the current user's PocketBase record ID.
+  String? get userId => clinic?.id ?? doctor?.id;
 }
 
 /// Manages authentication state.

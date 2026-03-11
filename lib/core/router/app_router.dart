@@ -6,6 +6,10 @@ import '../../features/auth/screens/clinic_registration/clinic_step2_screen.dart
 import '../../features/auth/screens/clinic_registration/clinic_step3_screen.dart';
 import '../../features/auth/screens/doctor_registration/doctor_registration_screen.dart';
 import '../../features/dashboard/screens/clinic_dashboard_screen.dart';
+import '../../features/appointments/screens/appointment_list_screen.dart';
+import '../../features/appointments/screens/create_appointment_screen.dart';
+import '../../features/appointments/screens/patient_info_screen.dart';
+import '../../features/appointments/models/appointment_model.dart';
 
 /// Named route generator for the app.
 Route<dynamic>? generateRoute(RouteSettings settings) {
@@ -32,8 +36,17 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       return _slide(const DoctorRegistrationScreen(), settings);
 
     case '/dashboard':
-      // The app.dart will determine which dashboard to show based on role
       return _fade(const _DashboardRouter(), settings);
+
+    case '/appointments':
+      return _slide(const AppointmentListScreen(), settings);
+
+    case '/appointments/create':
+      return _slide(const CreateAppointmentScreen(), settings);
+
+    case '/appointments/patient-info':
+      final apt = settings.arguments as AppointmentModel;
+      return _slide(PatientInfoScreen(appointment: apt), settings);
 
     default:
       return _fade(const LoginScreen(), settings);

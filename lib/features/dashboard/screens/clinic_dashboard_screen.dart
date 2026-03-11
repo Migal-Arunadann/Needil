@@ -93,7 +93,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                 title: 'New Appointment',
                 subtitle: 'Schedule a call-by or walk-in',
                 color: AppColors.primary,
-                onTap: () {},
+                onTap: () => Navigator.pushNamed(context, '/appointments/create'),
               ),
               const SizedBox(height: 10),
               _actionTile(
@@ -109,7 +109,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                 title: 'View Appointments',
                 subtitle: 'See all scheduled appointments',
                 color: AppColors.info,
-                onTap: () {},
+                onTap: () => Navigator.pushNamed(context, '/appointments'),
               ),
               const SizedBox(height: 32),
 
