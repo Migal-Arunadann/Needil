@@ -17,11 +17,20 @@ class AppointmentListScreen extends ConsumerStatefulWidget {
 class _AppointmentListScreenState
     extends ConsumerState<AppointmentListScreen> {
   late DateTime _selectedDate;
+  String _searchQuery = '';
+  AppointmentStatus? _statusFilter;
+  final _searchCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _selectedDate = DateTime.now();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   String _formatDate(DateTime d) =>
@@ -50,17 +59,30 @@ class _AppointmentListScreenState
     }
   }
 
+  List<AppointmentModel> _filtered(List<AppointmentModel> all) {
+    var list = all;
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      list = list.where((a) => a.displayName.toLowerCase().contains(q)).toList();
+    }
+    if (_statusFilter != null) {
+      list = list.where((a) => a.status == _statusFilter).toList();
+    }
+    return list;
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(appointmentListProvider);
     final isToday = _formatDate(_selectedDate) == _formatDate(DateTime.now());
+    final filtered = _filtered(state.appointments);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
-            // Header
+            // ── Header ───────────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
               child: Row(
@@ -81,11 +103,21 @@ class _AppointmentListScreenState
                   ),
                   const SizedBox(width: 14),
                   Expanded(
-                    child: Text('Appointments', style: AppTextStyles.h2),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Appointments', style: AppTextStyles.h2),
+                        if (state.appointments.isNotEmpty)
+                          Text(
+                            '${filtered.length} of ${state.appointments.length} shown',
+                            style: AppTextStyles.caption,
+                          ),
+                      ],
+                    ),
                   ),
                   GestureDetector(
-                    onTap: () => Navigator.pushNamed(
-                        context, '/appointments/create'),
+                    onTap: () =>
+                        Navigator.pushNamed(context, '/appointments/create'),
                     child: Container(
                       width: 40,
                       height: 40,
@@ -100,9 +132,9 @@ class _AppointmentListScreenState
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
 
-            // Date selector
+            // ── Date selector ────────────────────────────────
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
               child: GestureDetector(
@@ -158,9 +190,131 @@ class _AppointmentListScreenState
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 10),
 
-            // Appointment list
+            // ── Search bar ───────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 12),
+                          Icon(Icons.search_rounded,
+                              size: 18, color: AppColors.textHint),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              controller: _searchCtrl,
+                              style: AppTextStyles.bodyMedium,
+                              decoration: InputDecoration(
+                                hintText: 'Search by patient name...',
+                                hintStyle: AppTextStyles.caption,
+                                border: InputBorder.none,
+                                isDense: true,
+                              ),
+                              onChanged: (v) =>
+                                  setState(() => _searchQuery = v),
+                            ),
+                          ),
+                          if (_searchQuery.isNotEmpty)
+                            GestureDetector(
+                              onTap: () {
+                                _searchCtrl.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: Icon(Icons.close_rounded,
+                                    size: 16, color: AppColors.textHint),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Status filter popup
+                  GestureDetector(
+                    onTap: _showFilterSheet,
+                    child: Container(
+                      height: 42,
+                      width: 42,
+                      decoration: BoxDecoration(
+                        color: _statusFilter != null
+                            ? AppColors.primary
+                            : AppColors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _statusFilter != null
+                              ? AppColors.primary
+                              : AppColors.border,
+                        ),
+                      ),
+                      child: Icon(
+                        Icons.filter_list_rounded,
+                        size: 20,
+                        color: _statusFilter != null
+                            ? Colors.white
+                            : AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // ── Status filter chips ──────────────────────────
+            if (_statusFilter != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: _statusColor(_statusFilter!)
+                            .withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _statusColor(_statusFilter!)
+                              .withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            _statusLabel(_statusFilter!),
+                            style: AppTextStyles.caption.copyWith(
+                                color: _statusColor(_statusFilter!)),
+                          ),
+                          const SizedBox(width: 6),
+                          GestureDetector(
+                            onTap: () =>
+                                setState(() => _statusFilter = null),
+                            child: Icon(Icons.close_rounded,
+                                size: 14,
+                                color: _statusColor(_statusFilter!)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // ── List ─────────────────────────────────────────
             Expanded(
               child: state.isLoading
                   ? const Center(
@@ -168,7 +322,7 @@ class _AppointmentListScreenState
                           color: AppColors.primary, strokeWidth: 3))
                   : state.error != null
                       ? _errorView(state.error!)
-                      : state.appointments.isEmpty
+                      : filtered.isEmpty
                           ? _emptyView(isToday)
                           : RefreshIndicator(
                               color: AppColors.primary,
@@ -176,14 +330,16 @@ class _AppointmentListScreenState
                                   .read(appointmentListProvider.notifier)
                                   .loadAppointments(),
                               child: ListView.separated(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 24, vertical: 4),
-                                itemCount: state.appointments.length,
+                                padding: const EdgeInsets.fromLTRB(24, 4, 24, 24),
+                                itemCount: filtered.length,
                                 separatorBuilder: (_, __) =>
                                     const SizedBox(height: 10),
                                 itemBuilder: (context, index) {
-                                  return _appointmentCard(
-                                      state.appointments[index]);
+                                  return _AnimatedCard(
+                                    index: index,
+                                    child:
+                                        _appointmentCard(filtered[index]),
+                                  );
                                 },
                               ),
                             ),
@@ -194,9 +350,68 @@ class _AppointmentListScreenState
     );
   }
 
+  void _showFilterSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text('Filter by Status', style: AppTextStyles.h3),
+                  const Spacer(),
+                  if (_statusFilter != null)
+                    TextButton(
+                      onPressed: () {
+                        setState(() => _statusFilter = null);
+                        Navigator.pop(ctx);
+                      },
+                      child: Text('Clear',
+                          style: AppTextStyles.caption
+                              .copyWith(color: AppColors.error)),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ...AppointmentStatus.values.map((s) => ListTile(
+                    leading: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: _statusColor(s),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    title: Text(_statusLabel(s),
+                        style: AppTextStyles.bodyMedium),
+                    trailing: _statusFilter == s
+                        ? Icon(Icons.check_rounded,
+                            color: AppColors.primary, size: 20)
+                        : null,
+                    onTap: () {
+                      setState(() => _statusFilter = s);
+                      Navigator.pop(ctx);
+                    },
+                  )),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _appointmentCard(AppointmentModel apt) {
     final statusColor = _statusColor(apt.status);
-    final typeLabel = apt.type == AppointmentType.callBy ? 'Call-by' : 'Walk-in';
+    final typeLabel =
+        apt.type == AppointmentType.callBy ? 'Call-by' : 'Walk-in';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -216,17 +431,20 @@ class _AppointmentListScreenState
         children: [
           // Time badge
           Container(
-            width: 56,
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            width: 58,
+            padding: const EdgeInsets.symmetric(vertical: 10),
             decoration: BoxDecoration(
               color: AppColors.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Column(
               children: [
+                Icon(Icons.access_time_rounded,
+                    size: 14, color: AppColors.primary),
+                const SizedBox(height: 2),
                 Text(apt.time,
                     style: AppTextStyles.label
-                        .copyWith(color: AppColors.primary, fontSize: 15)),
+                        .copyWith(color: AppColors.primary, fontSize: 14)),
               ],
             ),
           ),
@@ -238,7 +456,7 @@ class _AppointmentListScreenState
               children: [
                 Text(apt.displayName,
                     style: AppTextStyles.label.copyWith(fontSize: 15)),
-                const SizedBox(height: 4),
+                const SizedBox(height: 5),
                 Row(
                   children: [
                     _pill(typeLabel,
@@ -246,13 +464,7 @@ class _AppointmentListScreenState
                             ? AppColors.info
                             : AppColors.accent),
                     const SizedBox(width: 6),
-                    _pill(
-                      apt.status.name
-                          .replaceAllMapped(RegExp(r'[A-Z]'),
-                              (m) => ' ${m.group(0)}')
-                          .trim(),
-                      statusColor,
-                    ),
+                    _pill(_statusLabel(apt.status), statusColor),
                   ],
                 ),
                 if (apt.doctorName != null) ...[
@@ -263,8 +475,8 @@ class _AppointmentListScreenState
               ],
             ),
           ),
-          // Arrow
-          const Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
+          const Icon(Icons.chevron_right_rounded,
+              color: AppColors.textHint),
         ],
       ),
     );
@@ -282,6 +494,19 @@ class _AppointmentListScreenState
         style: AppTextStyles.caption.copyWith(color: color, fontSize: 11),
       ),
     );
+  }
+
+  String _statusLabel(AppointmentStatus status) {
+    switch (status) {
+      case AppointmentStatus.scheduled:
+        return 'Scheduled';
+      case AppointmentStatus.inProgress:
+        return 'In Progress';
+      case AppointmentStatus.completed:
+        return 'Completed';
+      case AppointmentStatus.cancelled:
+        return 'Cancelled';
+    }
   }
 
   Color _statusColor(AppointmentStatus status) {
@@ -306,13 +531,19 @@ class _AppointmentListScreenState
               size: 64, color: AppColors.textHint.withValues(alpha: 0.4)),
           const SizedBox(height: 16),
           Text(
-            isToday ? 'No appointments today' : 'No appointments on this date',
+            _searchQuery.isNotEmpty
+                ? 'No matches for "$_searchQuery"'
+                : isToday
+                    ? 'No appointments today'
+                    : 'No appointments on this date',
             style: AppTextStyles.bodyMedium
                 .copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 8),
           Text(
-            'Tap + to create a new appointment',
+            _searchQuery.isNotEmpty
+                ? 'Try a different name'
+                : 'Tap + to create a new appointment',
             style: AppTextStyles.caption,
           ),
         ],
@@ -336,14 +567,64 @@ class _AppointmentListScreenState
                     .copyWith(color: AppColors.textSecondary)),
             const SizedBox(height: 16),
             TextButton(
-              onPressed: () => ref
-                  .read(appointmentListProvider.notifier)
-                  .loadAppointments(),
+              onPressed: () =>
+                  ref.read(appointmentListProvider.notifier).loadAppointments(),
               child: const Text('Retry'),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Staggered slide-in animation wrapper for list cards.
+class _AnimatedCard extends StatefulWidget {
+  final Widget child;
+  final int index;
+
+  const _AnimatedCard({required this.child, required this.index});
+
+  @override
+  State<_AnimatedCard> createState() => _AnimatedCardState();
+}
+
+class _AnimatedCardState extends State<_AnimatedCard>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.12),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+
+    // Stagger by index
+    Future.delayed(Duration(milliseconds: widget.index * 60), () {
+      if (mounted) _ctrl.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(position: _slide, child: widget.child),
     );
   }
 }

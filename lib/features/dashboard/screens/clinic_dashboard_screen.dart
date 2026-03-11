@@ -16,9 +16,13 @@ class ClinicDashboardScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: () async {},
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
@@ -101,7 +105,48 @@ class ClinicDashboardScreen extends ConsumerWidget {
                 title: 'Add Doctor',
                 subtitle: 'Share your Clinic ID with doctors',
                 color: AppColors.accent,
-                onTap: () {},
+                onTap: () {
+                  if (clinic != null) {
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        title: const Text('Share Clinic ID'),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                                'Share this ID with doctors to let them join your clinic:'),
+                            const SizedBox(height: 16),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary
+                                    .withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                clinic.clinicId,
+                                style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 4),
+                              ),
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Close'),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+                },
               ),
               const SizedBox(height: 10),
               _actionTile(
@@ -122,6 +167,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
               ),
             ],
           ),
+        ),
         ),
       ),
     );

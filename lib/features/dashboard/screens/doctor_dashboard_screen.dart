@@ -4,21 +4,36 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../providers/dashboard_provider.dart';
 
 class DoctorDashboardScreen extends ConsumerWidget {
   const DoctorDashboardScreen({super.key});
+
+  String _greeting() {
+    final h = DateTime.now().hour;
+    if (h < 12) return 'Good morning! ☀️';
+    if (h < 17) return 'Good afternoon! 🌤️';
+    return 'Good evening! 🌙';
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
     final doctor = authState.doctor;
+    final stats = ref.watch(dashboardStatsProvider);
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
+        child: RefreshIndicator(
+          color: AppColors.primary,
+          onRefresh: () async {
+            await ref.read(dashboardStatsProvider.notifier).load();
+          },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
@@ -29,7 +44,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Good day! 👋',
+                          _greeting(),
                           style: AppTextStyles.bodyMedium
                               .copyWith(color: AppColors.textSecondary),
                         ),
@@ -82,14 +97,14 @@ class DoctorDashboardScreen extends ConsumerWidget {
               // Quick Stats
               Row(
                 children: [
-                  _statCard("Today's", '0', Icons.calendar_today_rounded,
-                      AppColors.primary),
+                  _statCard("Today's", stats.isLoading ? '…' : '${stats.todayAppointments}',
+                      Icons.calendar_today_rounded, AppColors.primary),
                   const SizedBox(width: 12),
-                  _statCard('Patients', '0', Icons.people_rounded,
-                      AppColors.accent),
+                  _statCard('Patients', stats.isLoading ? '…' : '${stats.totalPatients}',
+                      Icons.people_rounded, AppColors.accent),
                   const SizedBox(width: 12),
-                  _statCard('Plans', '0', Icons.assignment_rounded,
-                      AppColors.warning),
+                  _statCard('Plans', stats.isLoading ? '…' : '${stats.activePlans}',
+                      Icons.assignment_rounded, AppColors.warning),
                 ],
               ),
               const SizedBox(height: 28),
@@ -134,7 +149,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                 title: 'New Consultation',
                 subtitle: 'Record initial consultation',
                 color: AppColors.accent,
-                onTap: () {},
+                onTap: () => Navigator.pushNamed(context, '/consultation'),
               ),
               const SizedBox(height: 10),
               _actionTile(
@@ -162,6 +177,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
               ),
             ],
           ),
+        ),
         ),
       ),
     );
