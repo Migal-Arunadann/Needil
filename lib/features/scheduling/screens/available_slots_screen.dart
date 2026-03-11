@@ -110,8 +110,12 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(availableSlotsProvider);
     final service = ref.read(schedulingServiceProvider);
+    
+    // Prefer the remotely loaded schedule from state, fallback to local lookup.
+    final activeSchedules = state.schedules.isNotEmpty ? state.schedules : _schedules;
+    
     final daySchedule = service
-        .getScheduleForDay(_schedules, _selectedDate.weekday);
+        .getScheduleForDay(activeSchedules, _selectedDate.weekday);
     final isWorkingDay = daySchedule != null;
 
     return Scaffold(
@@ -212,7 +216,13 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
                 ),
               ),
 
-            if (!isWorkingDay)
+            if (state.isLoading)
+              const Expanded(
+                child: Center(
+                  child: CircularProgressIndicator(
+                      color: AppColors.primary, strokeWidth: 3)),
+              )
+            else if (!isWorkingDay)
               Expanded(
                 child: Center(
                   child: Column(
@@ -250,11 +260,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
 
               // Slots grid
               Expanded(
-                child: state.isLoading
-                    ? const Center(
-                        child: CircularProgressIndicator(
-                            color: AppColors.primary, strokeWidth: 3))
-                    : state.slots.isEmpty
+                child: state.slots.isEmpty
                         ? Center(
                             child: Text('No slots available',
                                 style: AppTextStyles.bodyMedium

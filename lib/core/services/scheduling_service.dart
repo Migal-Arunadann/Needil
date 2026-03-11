@@ -258,4 +258,15 @@ class SchedulingService {
 
   String _formatDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  /// Fetch a doctor's working schedule dynamically by ID.
+  Future<List<WorkingSchedule>> getDoctorSchedules(String doctorId) async {
+    try {
+      final record = await pb.collection(PBCollections.doctors).getOne(doctorId);
+      final doc = DoctorModel.fromRecord(record);
+      return doc.workingSchedule;
+    } catch (_) {
+      return [];
+    }
+  }
 }

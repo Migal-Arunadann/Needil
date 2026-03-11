@@ -8,6 +8,7 @@ import 'doctor_dashboard_screen.dart';
 import '../../appointments/screens/appointment_list_screen.dart';
 import '../../settings/screens/settings_screen.dart';
 import '../../../core/widgets/expandable_fab.dart';
+import '../../patients/screens/patient_list_screen.dart';
 
 class MainLayout extends ConsumerStatefulWidget {
   const MainLayout({super.key});
@@ -33,7 +34,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
       _getHomeTab(role),
       const AppointmentListScreen(),
       const Scaffold(body: Center(child: Text('Analytics (Coming Soon)'))),
-      const Scaffold(body: Center(child: Text('Patients (Coming Soon)'))),
+      const PatientListScreen(),
       const SettingsScreen(),
     ];
 

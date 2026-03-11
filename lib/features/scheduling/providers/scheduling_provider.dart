@@ -14,12 +14,14 @@ final schedulingServiceProvider = Provider<SchedulingService>((ref) {
 class AvailableSlotsState {
   final bool isLoading;
   final List<TimeSlot> slots;
+  final List<WorkingSchedule> schedules;
   final String? error;
   final DateTime? selectedDate;
 
   const AvailableSlotsState({
     this.isLoading = false,
     this.slots = const [],
+    this.schedules = const [],
     this.error,
     this.selectedDate,
   });
@@ -27,12 +29,14 @@ class AvailableSlotsState {
   AvailableSlotsState copyWith({
     bool? isLoading,
     List<TimeSlot>? slots,
+    List<WorkingSchedule>? schedules,
     String? error,
     DateTime? selectedDate,
   }) {
     return AvailableSlotsState(
       isLoading: isLoading ?? this.isLoading,
       slots: slots ?? this.slots,
+      schedules: schedules ?? this.schedules,
       error: error,
       selectedDate: selectedDate ?? this.selectedDate,
     );
@@ -51,18 +55,25 @@ class AvailableSlotsNotifier extends StateNotifier<AvailableSlotsState> {
   Future<void> loadSlots({
     required String doctorId,
     required DateTime date,
-    required List<WorkingSchedule> schedules,
+    List<WorkingSchedule>? schedules,
     int slotDurationMinutes = 30,
   }) async {
     state = state.copyWith(isLoading: true, error: null, selectedDate: date);
     try {
+      List<WorkingSchedule> activeSchedules = schedules ?? state.schedules;
+      
+      // Lazy load schedules if empty and no param was passed
+      if (activeSchedules.isEmpty) {
+        activeSchedules = await _service.getDoctorSchedules(doctorId);
+      }
+
       final slots = await _service.getAvailableSlots(
         doctorId: doctorId,
         date: date,
-        schedules: schedules,
+        schedules: activeSchedules,
         slotDurationMinutes: slotDurationMinutes,
       );
-      state = state.copyWith(isLoading: false, slots: slots);
+      state = state.copyWith(isLoading: false, slots: slots, schedules: activeSchedules);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
