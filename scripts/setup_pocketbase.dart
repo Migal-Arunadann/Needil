@@ -58,7 +58,7 @@ Future<void> main(List<String> args) async {
 }
 
 Future<String> _adminAuth(HttpClient client, String email, String password) async {
-  final uri = Uri.parse('$pbUrl/api/admins/auth-with-password');
+  final uri = Uri.parse('$pbUrl/api/collections/_superusers/auth-with-password');
   final request = await client.postUrl(uri);
   request.headers.contentType = ContentType.json;
   request.write(jsonEncode({'identity': email, 'password': password}));

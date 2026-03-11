@@ -10,6 +10,12 @@ import '../../features/appointments/screens/appointment_list_screen.dart';
 import '../../features/appointments/screens/create_appointment_screen.dart';
 import '../../features/appointments/screens/patient_info_screen.dart';
 import '../../features/appointments/models/appointment_model.dart';
+import '../../features/consultations/screens/consultation_screen.dart';
+import '../../features/treatments/screens/create_treatment_plan_screen.dart';
+import '../../features/treatments/screens/session_list_screen.dart';
+import '../../features/treatments/screens/record_session_screen.dart';
+import '../../features/treatments/models/treatment_plan_model.dart';
+import '../../features/treatments/models/session_model.dart';
 
 /// Named route generator for the app.
 Route<dynamic>? generateRoute(RouteSettings settings) {
@@ -47,6 +53,35 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
     case '/appointments/patient-info':
       final apt = settings.arguments as AppointmentModel;
       return _slide(PatientInfoScreen(appointment: apt), settings);
+
+    case '/consultation':
+      final args = settings.arguments as Map<String, String>;
+      return _slide(
+        ConsultationScreen(
+          patientId: args['patientId']!,
+          patientName: args['patientName']!,
+        ),
+        settings,
+      );
+
+    case '/treatment-plan/create':
+      final args = settings.arguments as Map<String, String>;
+      return _slide(
+        CreateTreatmentPlanScreen(
+          patientId: args['patientId']!,
+          patientName: args['patientName']!,
+          consultationId: args['consultationId'],
+        ),
+        settings,
+      );
+
+    case '/treatment-plan/sessions':
+      final plan = settings.arguments as TreatmentPlanModel;
+      return _slide(SessionListScreen(plan: plan), settings);
+
+    case '/sessions/record':
+      final session = settings.arguments as SessionModel;
+      return _slide(RecordSessionScreen(session: session), settings);
 
     default:
       return _fade(const LoginScreen(), settings);
