@@ -206,20 +206,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               // Header
               Row(
                 children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: const Icon(Icons.arrow_back_rounded,
-                          size: 20, color: AppColors.textPrimary),
-                    ),
-                  ),
+                  // Top level tab, no back button needed.
                   const SizedBox(width: 14),
                   Text('Settings', style: AppTextStyles.h2),
                 ],

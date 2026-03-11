@@ -173,7 +173,7 @@ class AuthService {
   /// Register a new doctor (individual or joining a clinic).
   Future<AuthResult> registerDoctor({
     required String name,
-    required int age,
+    required String dateOfBirth,
     required String username,
     required String password,
     required List<Map<String, dynamic>> workingSchedule,
@@ -200,7 +200,7 @@ class AuthService {
 
       final body = {
         'name': name,
-        'age': age,
+        'date_of_birth': dateOfBirth,
         'username': username,
         'password': password,
         'passwordConfirm': password,
@@ -273,21 +273,33 @@ class AuthService {
   }
 
   String _parseError(ClientException e) {
-    if (e.response.containsKey('message')) {
-      final msg = e.response['message'];
-      if (msg.toString().contains('Failed to authenticate')) {
-        return 'Invalid username or password';
+    try {
+      final response = e.response;
+
+      // Field-level validation errors (most useful)
+      if (response.containsKey('data')) {
+        final data = response['data'];
+        if (data is Map && data.isNotEmpty) {
+          final fieldErrors = data.entries
+              .where((entry) =>
+                  entry.value is Map &&
+                  (entry.value as Map).containsKey('message'))
+              .map((entry) =>
+                  '${entry.key}: ${(entry.value as Map)['message']}')
+              .join('\n');
+          if (fieldErrors.isNotEmpty) return fieldErrors;
+        }
       }
-      return msg.toString();
-    }
-    if (e.response.containsKey('data')) {
-      final data = e.response['data'] as Map<String, dynamic>;
-      final errors = data.entries
-          .where((e) => e.value is Map && (e.value as Map).containsKey('message'))
-          .map((e) => (e.value as Map)['message'])
-          .join(', ');
-      if (errors.isNotEmpty) return errors;
-    }
+
+      // Top-level message
+      if (response.containsKey('message')) {
+        final msg = response['message'].toString();
+        if (msg.contains('Failed to authenticate')) {
+          return 'Invalid username or password';
+        }
+        return msg;
+      }
+    } catch (_) {}
     return 'Something went wrong. Please try again.';
   }
 }

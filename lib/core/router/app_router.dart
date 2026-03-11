@@ -5,7 +5,7 @@ import '../../features/auth/screens/clinic_registration/clinic_step1_screen.dart
 import '../../features/auth/screens/clinic_registration/clinic_step2_screen.dart';
 import '../../features/auth/screens/clinic_registration/clinic_step3_screen.dart';
 import '../../features/auth/screens/doctor_registration/doctor_registration_screen.dart';
-import '../../features/dashboard/screens/clinic_dashboard_screen.dart';
+import '../../features/dashboard/screens/main_layout.dart';
 import '../../features/appointments/screens/appointment_list_screen.dart';
 import '../../features/appointments/screens/create_appointment_screen.dart';
 import '../../features/appointments/screens/patient_info_screen.dart';
@@ -45,13 +45,16 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       return _slide(const DoctorRegistrationScreen(), settings);
 
     case '/dashboard':
-      return _fade(const _DashboardRouter(), settings);
+      return _fade(const MainLayout(), settings);
 
     case '/appointments':
       return _slide(const AppointmentListScreen(), settings);
 
     case '/appointments/create':
-      return _slide(const CreateAppointmentScreen(), settings);
+      final args = settings.arguments as Map<String, dynamic>? ?? {};
+      return _slide(
+          CreateAppointmentScreen(initialIsCallBy: args['isCallBy'] ?? true),
+          settings);
 
     case '/appointments/patient-info':
       final apt = settings.arguments as AppointmentModel;
@@ -87,7 +90,15 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       return _slide(RecordSessionScreen(session: session), settings);
 
     case '/available-slots':
-      return _slide(const AvailableSlotsScreen(), settings);
+      final args = settings.arguments as Map<String, dynamic>? ?? {};
+      return _slide(
+        AvailableSlotsScreen(
+          doctorId: args['doctorId'] ?? '',
+          clinicId: args['clinicId'],
+          treatmentDuration: args['treatmentDuration'] ?? 30,
+        ),
+        settings,
+      );
 
     case '/settings':
       return _slide(const SettingsScreen(), settings);
@@ -97,19 +108,6 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
 
     default:
       return _fade(const LoginScreen(), settings);
-  }
-}
-
-/// Decides which dashboard to show based on auth state.
-/// This is a simple widget that reads the role from route args or auth state.
-class _DashboardRouter extends StatelessWidget {
-  const _DashboardRouter();
-
-  @override
-  Widget build(BuildContext context) {
-    // We'll use a Consumer in app.dart to determine the correct dashboard.
-    // For now, default to clinic.
-    return const ClinicDashboardScreen();
   }
 }
 

@@ -7,15 +7,22 @@ import '../../../core/services/scheduling_service.dart';
 import '../providers/scheduling_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/models/doctor_model.dart';
+import '../../../core/utils/time_utils.dart';
 
 class AvailableSlotsScreen extends ConsumerStatefulWidget {
-  final String? doctorId;
+  final String doctorId;
+  final String? clinicId;
   final List<WorkingSchedule>? schedules;
+  final int treatmentDuration;
+  final bool isSelectionMode;
 
   const AvailableSlotsScreen({
     super.key,
-    this.doctorId,
+    required this.doctorId,
+    this.clinicId,
     this.schedules,
+    required this.treatmentDuration,
+    this.isSelectionMode = false,
   });
 
   @override
@@ -29,7 +36,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
   int _slotDuration = 30;
 
   String get _doctorId {
-    return widget.doctorId ?? ref.read(authProvider).userId ?? '';
+    return widget.doctorId;
   }
 
   List<WorkingSchedule> get _schedules {
@@ -41,14 +48,8 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
   @override
   void initState() {
     super.initState();
-    // Auto-fill slot duration from first treatment config
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final auth = ref.read(authProvider);
-      if (auth.doctor != null && auth.doctor!.treatments.isNotEmpty) {
-        _slotDuration = auth.doctor!.treatments.first.durationMinutes;
-      }
-      _loadSlots();
-    });
+    _slotDuration = widget.treatmentDuration;
+    _loadSlots();
   }
 
   void _loadSlots() {
@@ -300,7 +301,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
                             color: Colors.white, size: 20),
                         const SizedBox(width: 8),
                         Text(
-                          'Select $_selectedSlot on ${DateFormat('MMM d').format(_selectedDate)}',
+                          'Select ${TimeUtils.formatStringTime(_selectedSlot!)} on ${DateFormat('MMM d').format(_selectedDate)}',
                           style: AppTextStyles.label
                               .copyWith(color: Colors.white, fontSize: 14),
                         ),
@@ -349,7 +350,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
         ),
         alignment: Alignment.center,
         child: Text(
-          slot.time,
+          TimeUtils.formatStringTime(slot.time),
           style: AppTextStyles.label.copyWith(
             color: textColor,
             fontSize: 13,

@@ -6,12 +6,15 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../core/utils/validators.dart';
-import '../providers/appointment_provider.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../scheduling/screens/available_slots_screen.dart';
+import '../providers/appointment_provider.dart';
 import '../../../core/services/auth_service.dart';
 
 class CreateAppointmentScreen extends ConsumerStatefulWidget {
-  const CreateAppointmentScreen({super.key});
+  final bool initialIsCallBy;
+
+  const CreateAppointmentScreen({super.key, this.initialIsCallBy = true});
 
   @override
   ConsumerState<CreateAppointmentScreen> createState() =>
@@ -37,6 +40,7 @@ class _CreateAppointmentScreenState
   @override
   void initState() {
     super.initState();
+    _isCallBy = widget.initialIsCallBy;
     _loadDoctors();
   }
 
@@ -67,42 +71,35 @@ class _CreateAppointmentScreenState
   String _formatTime(TimeOfDay t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 90)),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: ColorScheme.light(
-            primary: AppColors.primary,
-            onPrimary: Colors.white,
-            surface: AppColors.surface,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) setState(() => _selectedDate = picked);
-  }
+  Future<void> _pickSlot() async {
+    final auth = ref.read(authProvider);
+    final isClinic = auth.role == UserRole.clinic;
+    final doctorId = isClinic ? _selectedDoctorId : auth.userId;
 
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _selectedTime,
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: ColorScheme.light(
-            primary: AppColors.primary,
-            onPrimary: Colors.white,
-            surface: AppColors.surface,
-          ),
+    if (doctorId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a doctor first')),
+      );
+      return;
+    }
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AvailableSlotsScreen(
+          doctorId: doctorId,
+          clinicId: isClinic ? auth.userId : auth.clinic?.id,
+          treatmentDuration: 30, // Default duration, will sync with DB later
         ),
-        child: child!,
       ),
     );
-    if (picked != null) setState(() => _selectedTime = picked);
+
+    if (result != null && result is Map<String, dynamic>) {
+      setState(() {
+        _selectedDate = result['date'] as DateTime;
+        _selectedTime = result['time'] as TimeOfDay;
+      });
+    }
   }
 
   Future<void> _submit() async {
@@ -282,24 +279,15 @@ class _CreateAppointmentScreenState
                 const SizedBox(height: 20),
               ],
 
-              // Date & Time
+              // Date & Time (Unified Slot Picker)
               Row(
                 children: [
                   Expanded(
                     child: _dateTimeTile(
-                      label: 'Date',
-                      value: DateFormat('MMM d, yyyy').format(_selectedDate),
-                      icon: Icons.calendar_today_rounded,
-                      onTap: _pickDate,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _dateTimeTile(
-                      label: 'Time',
-                      value: _selectedTime.format(context),
+                      label: 'Selected Slot',
+                      value: '${DateFormat('MMM d').format(_selectedDate)} at ${_selectedTime.format(context)}',
                       icon: Icons.access_time_rounded,
-                      onTap: _pickTime,
+                      onTap: _pickSlot,
                     ),
                   ),
                 ],

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/services/appointment_service.dart';
 import '../models/appointment_model.dart';
+import '../../scheduling/providers/scheduling_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/services/auth_service.dart';
 
@@ -43,9 +44,10 @@ class AppointmentListState {
 /// Manages appointment list state.
 class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
   final AppointmentService _service;
+  final Ref _ref;
   final AuthState _authState;
 
-  AppointmentListNotifier(this._service, this._authState)
+  AppointmentListNotifier(this._service, this._ref, this._authState)
       : super(AppointmentListState(selectedDate: _todayString())) {
     loadAppointments();
   }
@@ -97,6 +99,13 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     required String time,
   }) async {
     try {
+      final schedulingService = _ref.read(schedulingServiceProvider);
+      final isBooked = await schedulingService.isSlotBooked(doctorId, date, time);
+      if (isBooked) {
+        state = state.copyWith(error: 'This time slot is already booked.');
+        return null;
+      }
+
       final appointment = await _service.createCallByAppointment(
         doctorId: doctorId,
         clinicId: clinicId,
@@ -120,6 +129,13 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     required String time,
   }) async {
     try {
+      final schedulingService = _ref.read(schedulingServiceProvider);
+      final isBooked = await schedulingService.isSlotBooked(doctorId, date, time);
+      if (isBooked) {
+        state = state.copyWith(error: 'This time slot is already booked.');
+        return null;
+      }
+
       final appointment = await _service.createWalkInAppointment(
         doctorId: doctorId,
         clinicId: clinicId,
@@ -155,5 +171,5 @@ final appointmentListProvider =
     StateNotifierProvider<AppointmentListNotifier, AppointmentListState>((ref) {
   final service = ref.watch(appointmentServiceProvider);
   final auth = ref.watch(authProvider);
-  return AppointmentListNotifier(service, auth);
+  return AppointmentListNotifier(service, ref, auth);
 });

@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/constants/app_colors.dart';
 import 'core/router/app_router.dart';
-import 'core/services/auth_service.dart';
 import 'features/auth/providers/auth_provider.dart';
-import 'features/dashboard/screens/clinic_dashboard_screen.dart';
-import 'features/dashboard/screens/doctor_dashboard_screen.dart';
+import 'features/dashboard/screens/main_layout.dart';
 import 'features/auth/screens/login_screen.dart';
 
 class PmsApp extends ConsumerStatefulWidget {
@@ -50,9 +48,7 @@ class _PmsAppState extends ConsumerState<PmsApp> {
       home: authState.isLoading
           ? const _SplashScreen()
           : authState.isAuthenticated
-              ? (authState.role == UserRole.clinic
-                  ? const ClinicDashboardScreen()
-                  : const DoctorDashboardScreen())
+              ? const MainLayout()
               : const LoginScreen(),
       onGenerateRoute: generateRoute,
     );

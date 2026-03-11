@@ -139,7 +139,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Register a doctor.
   Future<void> registerDoctor({
     required String name,
-    required int age,
+    required String dateOfBirth,
     required String username,
     required String password,
     required List<Map<String, dynamic>> workingSchedule,
@@ -150,7 +150,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
     final result = await _authService.registerDoctor(
       name: name,
-      age: age,
+      dateOfBirth: dateOfBirth,
       username: username,
       password: password,
       workingSchedule: workingSchedule,

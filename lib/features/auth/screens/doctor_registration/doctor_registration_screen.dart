@@ -6,6 +6,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/loading_overlay.dart';
 import '../../../../core/utils/validators.dart';
+import '../../../../core/utils/time_utils.dart';
 import '../../providers/auth_provider.dart';
 
 /// Doctor Registration — multi‑step in a single screen with a PageView.
@@ -25,10 +26,10 @@ class _DoctorRegistrationScreenState
   // Step 1: Basic info
   final _step1Key = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _ageController = TextEditingController();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  DateTime? _dateOfBirth;
 
   // Step 2: Working schedule
   final Map<String, bool> _selectedDays = {
@@ -51,6 +52,7 @@ class _DoctorRegistrationScreenState
     'Acupressure',
     'Cupping Therapy',
     'Physiotherapy',
+    'Foot Reflexology',
   ];
   final Map<String, bool> _selectedTreatments = {};
   final Map<String, TextEditingController> _durationControllers = {};
@@ -74,7 +76,6 @@ class _DoctorRegistrationScreenState
   void dispose() {
     _pageController.dispose();
     _nameController.dispose();
-    _ageController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -145,12 +146,10 @@ class _DoctorRegistrationScreenState
         initial = _endTimes[day] ?? const TimeOfDay(hour: 17, minute: 0);
         break;
       case 'break_start':
-        initial =
-            _breakStartTimes[day] ?? const TimeOfDay(hour: 13, minute: 0);
+        initial = _breakStartTimes[day] ?? const TimeOfDay(hour: 13, minute: 0);
         break;
       case 'break_end':
-        initial =
-            _breakEndTimes[day] ?? const TimeOfDay(hour: 14, minute: 0);
+        initial = _breakEndTimes[day] ?? const TimeOfDay(hour: 14, minute: 0);
         break;
       default:
         initial = const TimeOfDay(hour: 9, minute: 0);
@@ -162,15 +161,36 @@ class _DoctorRegistrationScreenState
         switch (type) {
           case 'start':
             _startTimes[day] = picked;
+            // Auto-fill other selected days that haven't been set yet
+            for (final d in _selectedDays.entries) {
+              if (d.value && !_startTimes.containsKey(d.key)) {
+                _startTimes[d.key] = picked;
+              }
+            }
             break;
           case 'end':
             _endTimes[day] = picked;
+            for (final d in _selectedDays.entries) {
+              if (d.value && !_endTimes.containsKey(d.key)) {
+                _endTimes[d.key] = picked;
+              }
+            }
             break;
           case 'break_start':
             _breakStartTimes[day] = picked;
+            for (final d in _selectedDays.entries) {
+              if (d.value && !_breakStartTimes.containsKey(d.key)) {
+                _breakStartTimes[d.key] = picked;
+              }
+            }
             break;
           case 'break_end':
             _breakEndTimes[day] = picked;
+            for (final d in _selectedDays.entries) {
+              if (d.value && !_breakEndTimes.containsKey(d.key)) {
+                _breakEndTimes[d.key] = picked;
+              }
+            }
             break;
         }
       });
@@ -185,6 +205,10 @@ class _DoctorRegistrationScreenState
   }
 
   void _submit() async {
+    if (_dateOfBirth == null) {
+      _showError('Please select your date of birth');
+      return;
+    }
     // Build schedule
     final schedule = _selectedDays.entries
         .where((e) => e.value)
@@ -199,21 +223,21 @@ class _DoctorRegistrationScreenState
             })
         .toList();
 
-    // Build treatments
     final treatments = _selectedTreatments.entries
         .where((e) => e.value)
         .map((e) => {
               'type': e.key,
-              'duration_min':
-                  int.tryParse(_durationControllers[e.key]!.text) ?? 30,
-              'fee':
-                  double.tryParse(_feeControllers[e.key]!.text) ?? 500,
+              'duration_min': int.tryParse(_durationControllers[e.key]!.text) ?? 30,
+              'fee': double.tryParse(_feeControllers[e.key]!.text) ?? 500,
             })
         .toList();
 
+    final dob =
+        '${_dateOfBirth!.year}-${_dateOfBirth!.month.toString().padLeft(2, '0')}-${_dateOfBirth!.day.toString().padLeft(2, '0')}';
+
     await ref.read(authProvider.notifier).registerDoctor(
           name: _nameController.text.trim(),
-          age: int.tryParse(_ageController.text.trim()) ?? 0,
+          dateOfBirth: dob,
           username: _usernameController.text.trim(),
           password: _passwordController.text,
           workingSchedule: schedule,
@@ -312,14 +336,56 @@ class _DoctorRegistrationScreenState
                   color: AppColors.textHint),
             ),
             const SizedBox(height: 16),
-            AppTextField(
-              label: 'Age',
-              hint: 'e.g. 35',
-              controller: _ageController,
-              keyboardType: TextInputType.number,
-              validator: (v) => Validators.positiveNumber(v, 'Age'),
-              prefixIcon: const Icon(Icons.cake_outlined,
-                  color: AppColors.textHint),
+            // Date of Birth picker
+            GestureDetector(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _dateOfBirth ??
+                      DateTime.now().subtract(const Duration(days: 365 * 30)),
+                  firstDate: DateTime(1940),
+                  lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+                  builder: (ctx, child) => Theme(
+                    data: Theme.of(ctx).copyWith(
+                      colorScheme: ColorScheme.light(
+                        primary: AppColors.primary,
+                        onPrimary: Colors.white,
+                        surface: AppColors.surface,
+                      ),
+                    ),
+                    child: child!,
+                  ),
+                );
+                if (picked != null) setState(() => _dateOfBirth = picked);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.cake_outlined, color: AppColors.textHint, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _dateOfBirth == null
+                            ? 'Date of Birth'
+                            : '${_dateOfBirth!.day}/${_dateOfBirth!.month}/${_dateOfBirth!.year}',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: _dateOfBirth == null
+                              ? AppColors.textHint
+                              : AppColors.textPrimary,
+                        ),
+                      ),
+                    ),
+                    const Icon(Icons.calendar_today_rounded,
+                        size: 16, color: AppColors.textHint),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 16),
             AppTextField(
@@ -474,7 +540,7 @@ class _DoctorRegistrationScreenState
           border: Border.all(color: AppColors.border),
         ),
         child: Text(
-          _formatTime(time),
+          time == null ? 'Set' : TimeUtils.formatTimeOfDay(time),
           style: AppTextStyles.bodySmall.copyWith(
             color: time != null ? AppColors.textPrimary : AppColors.textHint,
             fontWeight: FontWeight.w500,
