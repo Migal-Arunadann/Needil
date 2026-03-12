@@ -6,6 +6,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../models/appointment_model.dart';
 import '../providers/appointment_provider.dart';
 import '../../../core/utils/time_utils.dart';
+import 'patient_info_screen.dart';
 
 class AppointmentListScreen extends ConsumerStatefulWidget {
   const AppointmentListScreen({super.key});
@@ -464,11 +465,56 @@ class _AppointmentListScreenState
                 ),
                 const Spacer(),
                 // Actions
-                _iconAction(Icons.swap_calls_rounded, AppColors.primary),
-                const SizedBox(width: 12),
-                _iconAction(Icons.open_in_new_rounded, AppColors.primary),
-                const SizedBox(width: 12),
-                _iconAction(Icons.delete_outline_rounded, AppColors.error),
+                if (apt.status == AppointmentStatus.scheduled) ...[
+                  _iconAction(Icons.open_in_new_rounded, AppColors.primary,
+                      onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PatientInfoScreen(appointment: apt),
+                      ),
+                    ).then((_) => ref
+                        .read(appointmentListProvider.notifier)
+                        .loadAppointments());
+                  }),
+                  const SizedBox(width: 12),
+                  _iconAction(Icons.cancel_outlined, AppColors.error,
+                      onTap: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16)),
+                        title: const Text('Cancel Appointment?'),
+                        content: const Text(
+                            'This appointment will be marked as cancelled.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, false),
+                            child: const Text('No'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx, true),
+                            child: const Text('Yes, Cancel',
+                                style: TextStyle(color: AppColors.error)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      ref
+                          .read(appointmentListProvider.notifier)
+                          .updateStatus(apt.id, AppointmentStatus.cancelled);
+                    }
+                  }),
+                ] else if (apt.status == AppointmentStatus.inProgress) ...[
+                  _iconAction(Icons.check_circle_outlined, AppColors.success,
+                      onTap: () {
+                    ref
+                        .read(appointmentListProvider.notifier)
+                        .updateStatus(apt.id, AppointmentStatus.completed);
+                  }),
+                ],
               ],
             ),
           ),
@@ -477,14 +523,18 @@ class _AppointmentListScreenState
     );
   }
 
-  Widget _iconAction(IconData icon, Color defaultColor) {
-    return Container(
-      padding: const EdgeInsets.all(6),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(8),
+  Widget _iconAction(IconData icon, Color defaultColor,
+      {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: AppColors.background,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, size: 16, color: defaultColor.withValues(alpha: 0.8)),
       ),
-      child: Icon(icon, size: 16, color: defaultColor.withValues(alpha: 0.8)),
     );
   }
 

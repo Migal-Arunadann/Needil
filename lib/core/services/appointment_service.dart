@@ -67,6 +67,8 @@ class AppointmentService {
     String? clinicId,
     required String date,
     required String time,
+    String? patientName,
+    String? patientPhone,
   }) async {
     final body = {
       'doctor': doctorId,
@@ -75,6 +77,10 @@ class AppointmentService {
       'date': date,
       'time': time,
       'status': 'in_progress',
+      if (patientName != null && patientName.isNotEmpty)
+        'patient_name': patientName,
+      if (patientPhone != null && patientPhone.isNotEmpty)
+        'patient_phone': patientPhone,
     };
 
     final record =
@@ -140,7 +146,6 @@ class AppointmentService {
     final result = await pb.collection(PBCollections.patients).getList(
       filter:
           '(full_name ~ "$query" || phone ~ "$query") && doctor = "$doctorId"',
-      sort: '-created',
       perPage: 20,
     );
     return result.items.map((r) => PatientModel.fromRecord(r)).toList();

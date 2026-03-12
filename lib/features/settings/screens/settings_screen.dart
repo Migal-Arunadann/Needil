@@ -373,10 +373,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 label: 'Sign Out',
                 isOutlined: true,
                 icon: Icons.logout_rounded,
-                onPressed: () {
-                  ref.read(authProvider.notifier).logout();
-                  Navigator.pushNamedAndRemoveUntil(
-                      context, '/login', (route) => false);
+                onPressed: () async {
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: AppColors.surface,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20)),
+                      title: Row(
+                        children: [
+                          Icon(Icons.logout_rounded,
+                              color: AppColors.error, size: 22),
+                          const SizedBox(width: 10),
+                          const Text('Sign Out'),
+                        ],
+                      ),
+                      content: const Text(
+                          'Are you sure you want to sign out? You will need to log in again to access your account.'),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: Text('Cancel',
+                              style: TextStyle(color: AppColors.textSecondary)),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          style: TextButton.styleFrom(
+                            backgroundColor:
+                                AppColors.error.withValues(alpha: 0.1),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                          child: const Text('Sign Out',
+                              style: TextStyle(color: AppColors.error)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true && context.mounted) {
+                    ref.read(authProvider.notifier).logout();
+                    Navigator.pushNamedAndRemoveUntil(
+                        context, '/login', (route) => false);
+                  }
                 },
               ),
             ],

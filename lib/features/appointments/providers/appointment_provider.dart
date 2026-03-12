@@ -127,6 +127,8 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     String? clinicId,
     required String date,
     required String time,
+    String? patientName,
+    String? patientPhone,
   }) async {
     try {
       final schedulingService = _ref.read(schedulingServiceProvider);
@@ -141,6 +143,8 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
         clinicId: clinicId,
         date: date,
         time: time,
+        patientName: patientName,
+        patientPhone: patientPhone,
       );
       await loadAppointments();
       return appointment;

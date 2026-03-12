@@ -11,7 +11,6 @@ class PatientService {
   Future<List<PatientModel>> getClinicPatients(String clinicId) async {
     final result = await pb.collection(PBCollections.patients).getList(
       filter: 'clinic = "$clinicId"',
-      sort: '-created',
       perPage: 200,
     );
     return result.items.map((r) => PatientModel.fromRecord(r)).toList();
@@ -21,7 +20,6 @@ class PatientService {
   Future<List<PatientModel>> getDoctorPatients(String doctorId) async {
     final result = await pb.collection(PBCollections.patients).getList(
       filter: 'doctor = "$doctorId"',
-      sort: '-created',
       perPage: 200,
     );
     return result.items.map((r) => PatientModel.fromRecord(r)).toList();
