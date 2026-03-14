@@ -15,6 +15,7 @@ class AvailableSlotsScreen extends ConsumerStatefulWidget {
   final List<WorkingSchedule>? schedules;
   final int treatmentDuration;
   final bool isSelectionMode;
+  final bool allowFutureDates;
 
   const AvailableSlotsScreen({
     super.key,
@@ -23,6 +24,7 @@ class AvailableSlotsScreen extends ConsumerStatefulWidget {
     this.schedules,
     required this.treatmentDuration,
     this.isSelectionMode = false,
+    this.allowFutureDates = true,
   });
 
   @override
@@ -49,7 +51,9 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
   void initState() {
     super.initState();
     _slotDuration = widget.treatmentDuration;
-    _loadSlots();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSlots();
+    });
   }
 
   void _loadSlots() {
@@ -62,6 +66,8 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
   }
 
   Future<void> _pickDate() async {
+    if (!widget.allowFutureDates) return;
+    
     final picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
@@ -88,6 +94,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
   }
 
   void _goNextDay() {
+    if (!widget.allowFutureDates) return;
     setState(() {
       _selectedDate = _selectedDate.add(const Duration(days: 1));
       _selectedSlot = null;
@@ -163,30 +170,40 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
                 ),
                 child: Row(
                   children: [
-                    _navButton(Icons.chevron_left_rounded, _goPrevDay),
+                    _navButton(
+                      Icons.chevron_left_rounded, 
+                      widget.allowFutureDates ? _goPrevDay : () {},
+                      color: widget.allowFutureDates ? AppColors.textPrimary : AppColors.textHint,
+                    ),
                     Expanded(
                       child: GestureDetector(
-                        onTap: _pickDate,
+                        onTap: widget.allowFutureDates ? _pickDate : null,
                         child: Column(
                           children: [
                             Text(
                               DateFormat('EEEE').format(_selectedDate),
                               style: AppTextStyles.label.copyWith(
-                                color: isWorkingDay
-                                    ? AppColors.primary
-                                    : AppColors.error,
+                                color: widget.allowFutureDates
+                                    ? (isWorkingDay ? AppColors.primary : AppColors.error)
+                                    : AppColors.textHint,
                                 fontSize: 14,
                               ),
                             ),
                             Text(
                               DateFormat('MMM d, yyyy').format(_selectedDate),
-                              style: AppTextStyles.caption,
+                              style: AppTextStyles.caption.copyWith(
+                                color: widget.allowFutureDates ? AppColors.textSecondary : AppColors.textHint,
+                              ),
                             ),
                           ],
                         ),
                       ),
                     ),
-                    _navButton(Icons.chevron_right_rounded, _goNextDay),
+                    _navButton(
+                      Icons.chevron_right_rounded, 
+                      widget.allowFutureDates ? _goNextDay : () {},
+                      color: widget.allowFutureDates ? AppColors.textPrimary : AppColors.textHint,
+                    ),
                   ],
                 ),
               ),
@@ -366,17 +383,17 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
     );
   }
 
-  Widget _navButton(IconData icon, VoidCallback onTap) {
+  Widget _navButton(IconData icon, VoidCallback onTap, {Color color = AppColors.primary}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.08),
+          color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(10),
         ),
-        child: Icon(icon, color: AppColors.primary, size: 22),
+        child: Icon(icon, color: color, size: 22),
       ),
     );
   }

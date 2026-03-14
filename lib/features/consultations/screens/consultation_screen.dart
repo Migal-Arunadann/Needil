@@ -6,16 +6,17 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../treatments/providers/treatment_provider.dart';
-import '../../auth/providers/auth_provider.dart';
 
 class ConsultationScreen extends ConsumerStatefulWidget {
   final String patientId;
   final String patientName;
+  final String doctorId;
 
   const ConsultationScreen({
     super.key,
     required this.patientId,
     required this.patientName,
+    required this.doctorId,
   });
 
   @override
@@ -27,7 +28,24 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   bool _isSubmitting = false;
   bool _charged = false;
 
-  final _notesCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController(); // Chief Complaint / Main Problem
+  final _medicalHistoryCtrl = TextEditingController();
+  final _pastIllnessesCtrl = TextEditingController();
+  final _currentMedicationsCtrl = TextEditingController();
+  final _allergiesCtrl = TextEditingController();
+  final _chronicDiseasesCtrl = TextEditingController();
+  
+  // Lifestyle
+  final _dietPatternCtrl = TextEditingController();
+  final _sleepQualityCtrl = TextEditingController();
+  final _exerciseLevelCtrl = TextEditingController();
+  final _addictionsCtrl = TextEditingController();
+  final _stressLevelCtrl = TextEditingController();
+  
+  // Consent
+  final _pregnancyStatusCtrl = TextEditingController();
+  bool _consentGiven = false;
+
   final _bpCtrl = TextEditingController();
   final _pulseCtrl = TextEditingController();
   final _chargeCtrl = TextEditingController();
@@ -38,6 +56,17 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   @override
   void dispose() {
     _notesCtrl.dispose();
+    _medicalHistoryCtrl.dispose();
+    _pastIllnessesCtrl.dispose();
+    _currentMedicationsCtrl.dispose();
+    _allergiesCtrl.dispose();
+    _chronicDiseasesCtrl.dispose();
+    _dietPatternCtrl.dispose();
+    _sleepQualityCtrl.dispose();
+    _exerciseLevelCtrl.dispose();
+    _addictionsCtrl.dispose();
+    _stressLevelCtrl.dispose();
+    _pregnancyStatusCtrl.dispose();
     _bpCtrl.dispose();
     _pulseCtrl.dispose();
     _chargeCtrl.dispose();
@@ -69,13 +98,25 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      final auth = ref.read(authProvider);
       final service = ref.read(treatmentServiceProvider);
 
       final consultation = await service.createConsultation(
         patientId: widget.patientId,
-        doctorId: auth.userId!,
+        doctorId: widget.doctorId,
         notes: _notesCtrl.text.trim(),
+        chiefComplaint: _notesCtrl.text.trim(),
+        medicalHistory: _medicalHistoryCtrl.text.trim(),
+        pastIllnesses: _pastIllnessesCtrl.text.trim(),
+        currentMedications: _currentMedicationsCtrl.text.trim(),
+        allergies: _allergiesCtrl.text.trim(),
+        chronicDiseases: _chronicDiseasesCtrl.text.trim(),
+        dietPattern: _dietPatternCtrl.text.trim(),
+        sleepQuality: _sleepQualityCtrl.text.trim(),
+        exerciseLevel: _exerciseLevelCtrl.text.trim(),
+        addictions: _addictionsCtrl.text.trim(),
+        stressLevel: _stressLevelCtrl.text.trim(),
+        pregnancyStatus: _pregnancyStatusCtrl.text.trim(),
+        consentGiven: _consentGiven,
         bpLevel: _bpCtrl.text.trim(),
         pulse: _pulseCtrl.text.isNotEmpty
             ? int.tryParse(_pulseCtrl.text.trim())
@@ -155,19 +196,68 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // Notes
-                Text('Consultation Notes', style: AppTextStyles.label),
-                const SizedBox(height: 8),
+                // ─── Conversational / Medical ───
+                _buildSectionHeader('Consulting Conversations', Icons.chat_bubble_outline_rounded),
+                
                 AppTextField(
                   controller: _notesCtrl,
-                  label: '',
-                  hint: 'Symptoms, observations, diagnosis...',
-                  maxLines: 5,
+                  label: 'Chief Complaint / Main Problem',
+                  hint: 'As discussed with the client...',
+                  maxLines: 3,
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _medicalHistoryCtrl,
+                  label: 'Medical & Treatment History',
+                  hint: 'Previous treatments...',
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _pastIllnessesCtrl,
+                  label: 'Past Major Illnesses / Surgeries',
+                  hint: 'Hospitalizations, surgeries...',
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _currentMedicationsCtrl,
+                  label: 'Current Medications',
+                  hint: 'Allopathic, herbal, etc.',
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _allergiesCtrl,
+                  label: 'Known Allergies / Contraindications',
+                  hint: 'Skin reactions, drug allergies...',
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _chronicDiseasesCtrl,
+                  label: 'Chronic Diseases',
+                  hint: 'Diabetes, BP, Heart, Thyroid...',
+                  maxLines: 2,
+                ),
+                const SizedBox(height: 32),
 
-                // Vitals
-                Text('Vitals', style: AppTextStyles.label),
+                // ─── Lifestyle & Habits ───
+                _buildSectionHeader('Lifestyle & Habits', Icons.accessibility_new_rounded),
+                
+                AppTextField(controller: _dietPatternCtrl, label: 'Diet Pattern', hint: 'Vegetarian, timely meals...'),
+                const SizedBox(height: 16),
+                AppTextField(controller: _sleepQualityCtrl, label: 'Sleep Quality & Duration', hint: '7 hours, disturbed...'),
+                const SizedBox(height: 16),
+                AppTextField(controller: _exerciseLevelCtrl, label: 'Exercise / Physical Activity', hint: 'Sedentary, active...'),
+                const SizedBox(height: 16),
+                AppTextField(controller: _addictionsCtrl, label: 'Smoking / Alcohol / Tobacco', hint: 'Occasional, non-smoker...'),
+                const SizedBox(height: 16),
+                AppTextField(controller: _stressLevelCtrl, label: 'Stress / Mental Health Notes', hint: 'High stress, relaxed...', maxLines: 2),
+                const SizedBox(height: 32),
+
+                // ─── Vitals ───
+                _buildSectionHeader('Vitals', Icons.monitor_heart_outlined),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -195,22 +285,56 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Photos
-                Text('Photos', style: AppTextStyles.label),
-                const SizedBox(height: 8),
+                // ─── Investigations & Photos ───
+                _buildSectionHeader('Recent Investigations', Icons.science_outlined),
+                Text('Upload X-Rays, MRI, Blood Test Reports', style: AppTextStyles.caption),
+                const SizedBox(height: 12),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 12,
+                  runSpacing: 12,
                   children: [
                     ..._photos.asMap().entries.map((e) => _photoThumb(e.key)),
                     _addPhotoBtn(Icons.camera_alt_rounded, 'Camera', _pickPhoto),
-                    _addPhotoBtn(
-                        Icons.photo_library_rounded, 'Gallery', _pickFromGallery),
+                    _addPhotoBtn(Icons.photo_library_rounded, 'Gallery', _pickFromGallery),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 32),
+                
+                // ─── Consent & Safety ───
+                _buildSectionHeader('Consent & Safety', Icons.verified_user_outlined),
+                AppTextField(
+                  controller: _pregnancyStatusCtrl,
+                  label: 'Pregnancy Status (if applicable)',
+                  hint: 'Months, N/A...',
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Informed consent obtained for touch-based treatments / exercises.',
+                          style: AppTextStyles.bodyMedium,
+                        ),
+                      ),
+                      Switch(
+                        value: _consentGiven,
+                        onChanged: (v) => setState(() => _consentGiven = v),
+                        activeColor: AppColors.primary,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
 
-                // Charge
+                // ─── Charge ───
+                _buildSectionHeader('Consultation Fee', Icons.payments_outlined),
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -262,6 +386,19 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.primary),
+          const SizedBox(width: 8),
+          Text(title, style: AppTextStyles.h3),
+        ],
       ),
     );
   }

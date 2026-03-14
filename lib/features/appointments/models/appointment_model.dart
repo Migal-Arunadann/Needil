@@ -15,6 +15,8 @@ class AppointmentModel {
   final AppointmentStatus status;
   final String? patientName; // For call-by placeholder
   final String? patientPhone; // For call-by placeholder
+  final DateTime? checkInTime;
+  final DateTime? checkOutTime;
   final DateTime? created;
   final DateTime? updated;
 
@@ -33,6 +35,8 @@ class AppointmentModel {
     required this.status,
     this.patientName,
     this.patientPhone,
+    this.checkInTime,
+    this.checkOutTime,
     this.created,
     this.updated,
     this.doctorName,
@@ -44,16 +48,20 @@ class AppointmentModel {
     String? doctorName;
     String? expandedPatientName;
 
-    final expandData = record.get<Map<String, dynamic>>('expand');
-    if (expandData.isNotEmpty) {
-      if (expandData.containsKey('doctor')) {
-        final doc = expandData['doctor'];
-        if (doc is Map) doctorName = doc['name'] as String?;
+    try {
+      final expandData = record.get<Map<String, dynamic>>('expand');
+      if (expandData.isNotEmpty) {
+        if (expandData.containsKey('doctor')) {
+          final doc = expandData['doctor'];
+          if (doc is Map) doctorName = doc['name'] as String?;
+        }
+        if (expandData.containsKey('patient')) {
+          final pat = expandData['patient'];
+          if (pat is Map) expandedPatientName = pat['full_name'] as String?;
+        }
       }
-      if (expandData.containsKey('patient')) {
-        final pat = expandData['patient'];
-        if (pat is Map) expandedPatientName = pat['full_name'] as String?;
-      }
+    } catch (_) {
+      // expand might not be present or might throw if called on something missing
     }
 
     return AppointmentModel(
@@ -69,11 +77,18 @@ class AppointmentModel {
       status: _parseStatus(record.getStringValue('status')),
       patientName: record.getStringValue('patient_name'),
       patientPhone: record.getStringValue('patient_phone'),
+      checkInTime: _parseDateTimeOrNull(record.getStringValue('check_in_time')),
+      checkOutTime: _parseDateTimeOrNull(record.getStringValue('check_out_time')),
       created: DateTime.tryParse(record.get<String>('created')),
       updated: DateTime.tryParse(record.get<String>('updated')),
       doctorName: doctorName,
       expandedPatientName: expandedPatientName,
     );
+  }
+
+  static DateTime? _parseDateTimeOrNull(String val) {
+    if (val.isEmpty) return null;
+    return DateTime.tryParse(val);
   }
 
   Map<String, dynamic> toJson() {
@@ -87,6 +102,8 @@ class AppointmentModel {
       'status': statusToString(status),
       if (patientName != null) 'patient_name': patientName,
       if (patientPhone != null) 'patient_phone': patientPhone,
+      if (checkInTime != null) 'check_in_time': checkInTime!.toUtc().toIso8601String(),
+      if (checkOutTime != null) 'check_out_time': checkOutTime!.toUtc().toIso8601String(),
     };
   }
 

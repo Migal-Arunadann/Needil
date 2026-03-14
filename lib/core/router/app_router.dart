@@ -66,6 +66,7 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
         ConsultationScreen(
           patientId: args['patientId']!,
           patientName: args['patientName']!,
+          doctorId: args['doctorId']!,
         ),
         settings,
       );
@@ -76,6 +77,7 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
         CreateTreatmentPlanScreen(
           patientId: args['patientId']!,
           patientName: args['patientName']!,
+          doctorId: args['doctorId']!,
           consultationId: args['consultationId'],
         ),
         settings,

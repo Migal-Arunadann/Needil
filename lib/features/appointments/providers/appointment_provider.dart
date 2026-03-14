@@ -129,6 +129,10 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     required String time,
     String? patientName,
     String? patientPhone,
+    String? dateOfBirth,
+    String? address,
+    String? emergencyContact,
+    String? allergiesConditions,
   }) async {
     try {
       final schedulingService = _ref.read(schedulingServiceProvider);
@@ -138,6 +142,21 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
         return null;
       }
 
+      String? patientId;
+      if (patientName != null && patientName.isNotEmpty) {
+        final patient = await _service.createPatient(
+          fullName: patientName,
+          phone: patientPhone ?? '',
+          doctorId: doctorId,
+          clinicId: clinicId,
+          dateOfBirth: dateOfBirth,
+          address: address,
+          emergencyContact: emergencyContact,
+          allergiesConditions: allergiesConditions,
+        );
+        patientId = patient.id;
+      }
+
       final appointment = await _service.createWalkInAppointment(
         doctorId: doctorId,
         clinicId: clinicId,
@@ -145,7 +164,14 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
         time: time,
         patientName: patientName,
         patientPhone: patientPhone,
+        patientId: patientId, // Pass patientId here
       );
+      
+      // Auto-link patient to appointment if one was created
+      if (patientId != null) {
+        await _service.linkPatient(appointment.id, patientId);
+      }
+
       await loadAppointments();
       return appointment;
     } catch (e) {

@@ -32,6 +32,12 @@ class _CreateAppointmentScreenState
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
 
+  // Extended Patient fields (for walk-in only)
+  final _dobCtrl = TextEditingController();
+  final _addressCtrl = TextEditingController();
+  final _emergencyCtrl = TextEditingController();
+  final _allergiesCtrl = TextEditingController();
+
   // Slot selection
   DateTime? _selectedDate;
   String? _selectedTimeStr; // e.g. "09:00" — raw string from AvailableSlotsScreen
@@ -50,7 +56,12 @@ class _CreateAppointmentScreenState
     if (auth.role == UserRole.clinic && auth.userId != null) {
       final service = ref.read(appointmentServiceProvider);
       final docs = await service.getClinicDoctors(auth.userId!);
-      setState(() => _doctors = docs);
+      setState(() {
+        _doctors = docs;
+        if (_doctors.length == 1) {
+          _selectedDoctorId = _doctors.first['id'];
+        }
+      });
     } else {
       // Doctor role — only themselves
       setState(() {
@@ -63,7 +74,34 @@ class _CreateAppointmentScreenState
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
+    _dobCtrl.dispose();
+    _addressCtrl.dispose();
+    _emergencyCtrl.dispose();
+    _allergiesCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickDob() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(1990),
+      firstDate: DateTime(1920),
+      lastDate: DateTime.now(),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: ColorScheme.light(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+            surface: AppColors.surface,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      _dobCtrl.text =
+          '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+    }
   }
 
   String _formatDate(DateTime d) =>
@@ -88,6 +126,7 @@ class _CreateAppointmentScreenState
           doctorId: doctorId,
           clinicId: isClinic ? auth.userId : auth.clinic?.id,
           treatmentDuration: 30,
+          allowFutureDates: _isCallBy,
         ),
       ),
     );
@@ -151,6 +190,12 @@ class _CreateAppointmentScreenState
         time: _selectedTimeStr!,
         patientName: _nameCtrl.text.trim(),
         patientPhone: _phoneCtrl.text.trim(),
+        dateOfBirth: _dobCtrl.text.isNotEmpty ? _dobCtrl.text : null,
+        address: _addressCtrl.text.isNotEmpty ? _addressCtrl.text : null,
+        emergencyContact:
+            _emergencyCtrl.text.isNotEmpty ? _emergencyCtrl.text : null,
+        allergiesConditions:
+            _allergiesCtrl.text.isNotEmpty ? _allergiesCtrl.text : null,
       );
       success = result != null;
     }
@@ -408,6 +453,37 @@ class _CreateAppointmentScreenState
                   keyboardType: TextInputType.phone,
                   validator: Validators.phone,
                 ),
+                
+                if (!_isCallBy) ...[
+                  const SizedBox(height: 14),
+                  AppTextField(
+                    controller: _dobCtrl,
+                    label: 'Date of Birth (Optional)',
+                    prefixIcon: const Icon(Icons.cake_outlined, color: AppColors.textHint),
+                    readOnly: true,
+                    onTap: _pickDob,
+                  ),
+                  const SizedBox(height: 14),
+                  AppTextField(
+                    controller: _addressCtrl,
+                    label: 'Address (Optional)',
+                    prefixIcon: const Icon(Icons.home_outlined, color: AppColors.textHint),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 14),
+                  AppTextField(
+                    controller: _emergencyCtrl,
+                    label: 'Emergency Contact (Optional)',
+                    prefixIcon: const Icon(Icons.medical_services_outlined, color: AppColors.textHint),
+                  ),
+                  const SizedBox(height: 14),
+                  AppTextField(
+                    controller: _allergiesCtrl,
+                    label: 'Allergies / Conditions (Optional)',
+                    prefixIcon: const Icon(Icons.warning_amber_rounded, color: AppColors.textHint),
+                    maxLines: 2,
+                  ),
+                ],
                 const SizedBox(height: 28),
 
                 // Submit

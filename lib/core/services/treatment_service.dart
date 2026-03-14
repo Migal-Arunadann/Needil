@@ -12,11 +12,27 @@ class TreatmentService {
 
   // ─── Consultations ─────────────────────────────────────────
 
-  /// Create a consultation for a patient.
   Future<ConsultationModel> createConsultation({
     required String patientId,
     required String doctorId,
     String? notes,
+    // Conversational / Medical
+    String? chiefComplaint,
+    String? medicalHistory,
+    String? pastIllnesses,
+    String? currentMedications,
+    String? allergies,
+    String? chronicDiseases,
+    // Lifestyle
+    String? dietPattern,
+    String? sleepQuality,
+    String? exerciseLevel,
+    String? addictions,
+    String? stressLevel,
+    // Consent
+    String? pregnancyStatus,
+    bool consentGiven = true,
+    // Vitals & Charge
     String? bpLevel,
     int? pulse,
     bool charged = false,
@@ -27,6 +43,19 @@ class TreatmentService {
       'patient': patientId,
       'doctor': doctorId,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
+      if (chiefComplaint != null && chiefComplaint.isNotEmpty) 'chief_complaint': chiefComplaint,
+      if (medicalHistory != null && medicalHistory.isNotEmpty) 'medical_history': medicalHistory,
+      if (pastIllnesses != null && pastIllnesses.isNotEmpty) 'past_illnesses': pastIllnesses,
+      if (currentMedications != null && currentMedications.isNotEmpty) 'current_medications': currentMedications,
+      if (allergies != null && allergies.isNotEmpty) 'allergies': allergies,
+      if (chronicDiseases != null && chronicDiseases.isNotEmpty) 'chronic_diseases': chronicDiseases,
+      if (dietPattern != null && dietPattern.isNotEmpty) 'diet_pattern': dietPattern,
+      if (sleepQuality != null && sleepQuality.isNotEmpty) 'sleep_quality': sleepQuality,
+      if (exerciseLevel != null && exerciseLevel.isNotEmpty) 'exercise_level': exerciseLevel,
+      if (addictions != null && addictions.isNotEmpty) 'addictions': addictions,
+      if (stressLevel != null && stressLevel.isNotEmpty) 'stress_level': stressLevel,
+      if (pregnancyStatus != null && pregnancyStatus.isNotEmpty) 'pregnancy_status': pregnancyStatus,
+      'consent_given': consentGiven,
       if (bpLevel != null && bpLevel.isNotEmpty) 'bp_level': bpLevel,
       if (pulse != null) 'pulse': pulse,
       'charged': charged,
@@ -58,17 +87,31 @@ class TreatmentService {
 
   // ─── Treatment Plans ───────────────────────────────────────
 
-  /// Create a treatment plan and auto-generate session records.
-  Future<TreatmentPlanModel> createTreatmentPlan({
+  /// Create a treatment plan and auto-generate session records using smart scheduling.
+  Future<TreatmentPlanModel> createSmartTreatmentPlan({
     required String patientId,
     required String doctorId,
     String? consultationId,
     required String treatmentType,
     required String startDate,
+    required String preferredTime,
     required int totalSessions,
     required int intervalDays,
     required double sessionFee,
   }) async {
+    // Attempt to fetch clinic bed count (fallback to default 3)
+    int maxBeds = 3;
+    try {
+      final docId = doctorId;
+      final docRec = await pb.collection('doctors').getOne(docId);
+      final clinicRelId = docRec.getStringValue('clinicId');
+      if (clinicRelId.isNotEmpty) {
+        final clinicRec = await pb.collection('clinics').getOne(clinicRelId);
+        maxBeds = clinicRec.getIntValue('bed_count');
+        if (maxBeds <= 0) maxBeds = 3;
+      }
+    } catch (_) {}
+
     // Create the plan
     final planBody = {
       'patient': patientId,
@@ -83,21 +126,57 @@ class TreatmentService {
       'status': 'active',
     };
 
-    final planRecord = await pb
-        .collection(PBCollections.treatmentPlans)
-        .create(body: planBody);
+    final planRecord = await pb.collection(PBCollections.treatmentPlans).create(body: planBody);
     final plan = TreatmentPlanModel.fromRecord(planRecord);
 
     // Auto-generate sessions
     final start = DateTime.parse(startDate);
+    
+    // Parse preferred time, e.g. "10:30"
+    final timeParts = preferredTime.split(':');
+    final pTimeHr = int.parse(timeParts[0]);
+    final pTimeMn = int.parse(timeParts[1]);
+
     for (int i = 0; i < totalSessions; i++) {
       final sessionDate = start.add(Duration(days: i * intervalDays));
+      final sessionDateStr = _formatDate(sessionDate);
+      
+      // Smart slot finder finding a valid time
+      String resolvedTimeStr = preferredTime;
+      bool foundSlot = false;
+      
+      // We will try up to 8 offset slots (e.g. 10:00 -> 10:30 -> 11:00) before ignoring overlap rules
+      DateTime slotAttempt = DateTime(sessionDate.year, sessionDate.month, sessionDate.day, pTimeHr, pTimeMn);
+
+      for (int attempt = 0; attempt < 8; attempt++) {
+        final checkTimeHrStr = slotAttempt.hour.toString().padLeft(2, "0");
+        final checkTimeMnStr = slotAttempt.minute.toString().padLeft(2, "0");
+        final checkTimeStr = '$checkTimeHrStr:$checkTimeMnStr';
+        // See how many sessions are exactly at this time
+        final existing = await pb.collection(PBCollections.sessions).getList(
+          filter: 'scheduled_date = "\$sessionDateStr" && scheduled_time = "\$checkTimeStr"',
+        );
+        
+        if (existing.totalItems < maxBeds) {
+          resolvedTimeStr = checkTimeStr;
+          foundSlot = true;
+          break;
+        }
+        
+        // Bump by 30 mins
+        slotAttempt = slotAttempt.add(const Duration(minutes: 30));
+      }
+      
+      // If we literally couldn't find a slot, fallback to preferredTime anyway (force overlap)
+      if (!foundSlot) resolvedTimeStr = preferredTime;
+
       final sessionBody = {
         'treatment_plan': plan.id,
         'patient': patientId,
         'doctor': doctorId,
         'session_number': i + 1,
-        'scheduled_date': _formatDate(sessionDate),
+        'scheduled_date': sessionDateStr,
+        'scheduled_time': resolvedTimeStr,
         'status': 'upcoming',
       };
       await pb.collection(PBCollections.sessions).create(body: sessionBody);

@@ -77,6 +77,7 @@ class DoctorModel {
   final List<TreatmentConfig> treatments;
   final bool sharePastPatients;
   final bool shareFuturePatients;
+  final bool verified;
   final DateTime? created;
   final DateTime? updated;
 
@@ -92,6 +93,7 @@ class DoctorModel {
     required this.treatments,
     this.sharePastPatients = false,
     this.shareFuturePatients = false,
+    this.verified = false,
     this.created,
     this.updated,
   });
@@ -135,6 +137,7 @@ class DoctorModel {
       treatments: treatments,
       sharePastPatients: record.getBoolValue('share_past_patients'),
       shareFuturePatients: record.getBoolValue('share_future_patients'),
+      verified: record.getBoolValue('verified'),
       created: DateTime.tryParse(record.get<String>('created')),
       updated: DateTime.tryParse(record.get<String>('updated')),
     );

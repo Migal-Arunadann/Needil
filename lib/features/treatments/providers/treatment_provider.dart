@@ -67,17 +67,19 @@ class TreatmentPlansNotifier extends StateNotifier<TreatmentPlansState> {
     String? consultationId,
     required String treatmentType,
     required String startDate,
+    required String preferredTime,
     required int totalSessions,
     required int intervalDays,
     required double sessionFee,
   }) async {
     try {
-      final plan = await _service.createTreatmentPlan(
+      final plan = await _service.createSmartTreatmentPlan(
         patientId: patientId,
         doctorId: doctorId,
         consultationId: consultationId,
         treatmentType: treatmentType,
         startDate: startDate,
+        preferredTime: preferredTime,
         totalSessions: totalSessions,
         intervalDays: intervalDays,
         sessionFee: sessionFee,

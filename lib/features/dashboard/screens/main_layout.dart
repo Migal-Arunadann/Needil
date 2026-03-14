@@ -89,7 +89,7 @@ class _MainLayoutState extends ConsumerState<MainLayout> {
                 _buildNavItem(1, Icons.calendar_today_rounded, 'Appts'),
                 _buildNavItem(2, Icons.analytics_rounded, 'Analytics'),
                 _buildNavItem(3, Icons.people_rounded, 'Patients'),
-                _buildNavItem(4, Icons.settings_rounded, 'Settings'),
+                _buildNavItem(4, Icons.person_rounded, 'Profile'),
               ],
             ),
           ),

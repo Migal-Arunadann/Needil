@@ -69,6 +69,7 @@ class AppointmentService {
     required String time,
     String? patientName,
     String? patientPhone,
+    String? patientId,
   }) async {
     final body = {
       'doctor': doctorId,
@@ -77,10 +78,13 @@ class AppointmentService {
       'date': date,
       'time': time,
       'status': 'in_progress',
+      'check_in_time': DateTime.now().toUtc().toIso8601String(),
       if (patientName != null && patientName.isNotEmpty)
         'patient_name': patientName,
       if (patientPhone != null && patientPhone.isNotEmpty)
         'patient_phone': patientPhone,
+      if (patientId != null && patientId.isNotEmpty)
+        'patient': patientId,
     };
 
     final record =
@@ -93,7 +97,11 @@ class AppointmentService {
       String appointmentId, String patientId) async {
     final record = await pb.collection(PBCollections.appointments).update(
       appointmentId,
-      body: {'patient': patientId, 'status': 'in_progress'},
+      body: {
+        'patient': patientId, 
+        'status': 'in_progress',
+        'check_in_time': DateTime.now().toUtc().toIso8601String(),
+      },
     );
     return AppointmentModel.fromRecord(record);
   }
@@ -101,9 +109,19 @@ class AppointmentService {
   /// Update appointment status.
   Future<AppointmentModel> updateStatus(
       String appointmentId, AppointmentStatus status) async {
+    final body = <String, dynamic>{
+      'status': AppointmentModel.statusToString(status),
+    };
+    
+    if (status == AppointmentStatus.inProgress) {
+      body['check_in_time'] = DateTime.now().toUtc().toIso8601String();
+    } else if (status == AppointmentStatus.completed) {
+      body['check_out_time'] = DateTime.now().toUtc().toIso8601String();
+    }
+
     final record = await pb.collection(PBCollections.appointments).update(
       appointmentId,
-      body: {'status': AppointmentModel.statusToString(status)},
+      body: body,
     );
     return AppointmentModel.fromRecord(record);
   }

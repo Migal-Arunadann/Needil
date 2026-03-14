@@ -26,41 +26,41 @@ class _AppointmentListScreenState
 
   final _dateScrollCtrl = ScrollController();
 
-  // Dates window
-  final int _pastDays = 7;
-  final int _futureDays = 30;
-  late final List<DateTime> _dates;
+  late List<DateTime> _dates;
 
   @override
   void initState() {
     super.initState();
     _selectedDate = DateTime.now();
-    _dates = List.generate(
-      _pastDays + _futureDays + 1,
-      (index) => DateTime.now()
-          .subtract(Duration(days: _pastDays))
-          .add(Duration(days: index)),
-    );
+    _generateDates();
 
-    // Initial scroll to today after render
+    // Initial scroll
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToToday();
+      _scrollToSelectedDate();
     });
   }
 
-  void _scrollToToday() {
+  void _generateDates() {
+    final year = _selectedDate.year;
+    final month = _selectedDate.month;
+    final lastDay = DateTime(year, month + 1, 0).day;
+    _dates = List.generate(
+      lastDay,
+      (index) => DateTime(year, month, index + 1),
+    );
+  }
+
+  void _scrollToSelectedDate() {
     if (!_dateScrollCtrl.hasClients) return;
-    final int todayIndex = _dates.indexWhere(
-        (d) => d.year == DateTime.now().year && d.month == DateTime.now().month && d.day == DateTime.now().day);
-    if (todayIndex != -1) {
-      // Approximate 64 width + 12 margin per item
-      final offset = (todayIndex * 76.0) - (MediaQuery.of(context).size.width / 2) + 38;
-      _dateScrollCtrl.animateTo(
-        offset.clamp(0, _dateScrollCtrl.position.maxScrollExtent),
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
+    // We want yesterday (index = selectedDate.day - 2) to be at the left edge.
+    // Since day is 1-indexed, today's index is day - 1. Yesterday's index is day - 2.
+    // Each item is 64 wide + 12 margin = 76 width
+    final offset = ((_selectedDate.day - 2) * 76.0);
+    _dateScrollCtrl.animateTo(
+      offset.clamp(0.0, _dateScrollCtrl.position.maxScrollExtent),
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
   }
 
   @override
@@ -89,7 +89,13 @@ class _AppointmentListScreenState
       ),
     );
     if (picked != null) {
-      setState(() => _selectedDate = picked);
+      setState(() {
+        _selectedDate = picked;
+        _generateDates();
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToSelectedDate();
+      });
       ref.read(appointmentListProvider.notifier).changeDate(_formatDate(picked));
     }
   }
@@ -174,8 +180,12 @@ class _AppointmentListScreenState
                       d.day == _selectedDate.day;
 
                   final now = DateTime.now();
-                  final isToday = d.year == now.year && d.month == now.month && d.day == now.day;
-                  final isYesterday = d.year == now.year && d.month == now.month && d.day == (now.day - 1);
+                  final today = DateTime(now.year, now.month, now.day);
+                  final yesterday = today.subtract(const Duration(days: 1));
+                  final dDate = DateTime(d.year, d.month, d.day);
+
+                  final isToday = dDate == today;
+                  final isYesterday = dDate == yesterday;
 
                   String dayLabel = DateFormat('E').format(d);
                   if (isToday) dayLabel = 'Today';

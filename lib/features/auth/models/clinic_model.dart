@@ -7,6 +7,7 @@ class ClinicModel {
   final String? email;
   final int bedCount;
   final String clinicId; // Unique code for doctor joining
+  final bool verified;
   final DateTime? created;
   final DateTime? updated;
 
@@ -17,6 +18,7 @@ class ClinicModel {
     this.email,
     required this.bedCount,
     required this.clinicId,
+    this.verified = false,
     this.created,
     this.updated,
   });
@@ -29,6 +31,7 @@ class ClinicModel {
       email: record.getStringValue('email'),
       bedCount: record.getIntValue('bed_count'),
       clinicId: record.getStringValue('clinic_id'),
+      verified: record.getBoolValue('verified'),
       created: DateTime.tryParse(record.get<String>('created')),
       updated: DateTime.tryParse(record.get<String>('updated')),
     );

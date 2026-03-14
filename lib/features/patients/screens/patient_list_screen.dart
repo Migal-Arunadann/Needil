@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../models/patient_model.dart';
 import '../providers/patient_provider.dart';
+import 'patient_profile_screen.dart';
 
 class PatientListScreen extends ConsumerStatefulWidget {
   const PatientListScreen({super.key});
@@ -142,12 +143,19 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
   }
 
   Widget _patientCard(PatientModel patient) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => PatientProfileScreen(patient: patient)),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.border),
+        ),
       child: Column(
         children: [
           Padding(
@@ -228,7 +236,8 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
           ),
         ],
       ),
-    );
+    ),
+   );
   }
 
   Widget _emptyView() {
