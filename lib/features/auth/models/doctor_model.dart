@@ -143,6 +143,18 @@ class DoctorModel {
     );
   }
 
+  List<int> get workingDays {
+    final Map<String, int> dayMap = {
+      'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4,
+      'Friday': 5, 'Saturday': 6, 'Sunday': 7
+    };
+    return workingSchedule
+        .map((s) => dayMap[s.day])
+        .where((d) => d != null)
+        .cast<int>()
+        .toList();
+  }
+
   Map<String, dynamic> toJson() {
     return {
       'name': name,

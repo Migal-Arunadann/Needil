@@ -61,24 +61,26 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       return _slide(PatientInfoScreen(appointment: apt), settings);
 
     case '/consultation':
-      final args = settings.arguments as Map<String, String>;
+      final args = settings.arguments as Map<String, dynamic>;
       return _slide(
         ConsultationScreen(
-          patientId: args['patientId']!,
-          patientName: args['patientName']!,
-          doctorId: args['doctorId']!,
+          patientId: args['patientId'] as String,
+          patientName: args['patientName'] as String,
+          doctorId: args['doctorId'] as String,
+          consultationId: args['consultationId'] as String?,
+          isViewMode: args['isViewMode'] as bool? ?? false,
         ),
         settings,
       );
 
     case '/treatment-plan/create':
-      final args = settings.arguments as Map<String, String>;
+      final args = settings.arguments as Map<String, dynamic>;
       return _slide(
         CreateTreatmentPlanScreen(
-          patientId: args['patientId']!,
-          patientName: args['patientName']!,
-          doctorId: args['doctorId']!,
-          consultationId: args['consultationId'],
+          patientId: args['patientId'] as String,
+          patientName: args['patientName'] as String,
+          doctorId: args['doctorId'] as String,
+          consultationId: args['consultationId'] as String?,
         ),
         settings,
       );

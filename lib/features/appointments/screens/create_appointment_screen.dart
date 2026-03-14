@@ -26,6 +26,7 @@ class _CreateAppointmentScreenState
     extends ConsumerState<CreateAppointmentScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isCallBy = true;
+  bool _forceWalkIn = false;
   bool _isSubmitting = false;
 
   // Patient fields (shared by both call-by and walk-in)
@@ -33,14 +34,19 @@ class _CreateAppointmentScreenState
   final _phoneCtrl = TextEditingController();
 
   // Extended Patient fields (for walk-in only)
-  final _dobCtrl = TextEditingController();
+  final _dobCtrl = TextEditingController(); // Or Age
+  final _ageCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
   final _emergencyCtrl = TextEditingController();
   final _allergiesCtrl = TextEditingController();
+  final _occupationCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  String? _selectedGender;
 
   // Slot selection
   DateTime? _selectedDate;
   String? _selectedTimeStr; // e.g. "09:00" — raw string from AvailableSlotsScreen
+  DateTime? _callByDate;
   String? _selectedDoctorId;
   List<Map<String, String>> _doctors = [];
 
@@ -75,9 +81,12 @@ class _CreateAppointmentScreenState
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _dobCtrl.dispose();
+    _ageCtrl.dispose();
     _addressCtrl.dispose();
     _emergencyCtrl.dispose();
     _allergiesCtrl.dispose();
+    _occupationCtrl.dispose();
+    _emailCtrl.dispose();
     super.dispose();
   }
 
@@ -104,6 +113,35 @@ class _CreateAppointmentScreenState
     }
   }
 
+  Future<void> _pickCallByDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _callByDate ?? DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 90)),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: ColorScheme.light(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+            surface: AppColors.surface,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      setState(() {
+        _callByDate = picked;
+        // Reset selected slot since date changed
+        _selectedDate = null;
+        _selectedTimeStr = null;
+      });
+      // Automatically open slot picker for the new date
+      _pickSlot();
+    }
+  }
+
   String _formatDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
@@ -127,6 +165,7 @@ class _CreateAppointmentScreenState
           clinicId: isClinic ? auth.userId : auth.clinic?.id,
           treatmentDuration: 30,
           allowFutureDates: _isCallBy,
+          initialDate: _isCallBy ? (_callByDate ?? DateTime.now()) : DateTime.now(),
         ),
       ),
     );
@@ -139,7 +178,10 @@ class _CreateAppointmentScreenState
     }
   }
 
-  bool get _hasSlotSelected => _selectedDate != null && _selectedTimeStr != null;
+  bool get _hasSlotSelected {
+    if (!_isCallBy && _forceWalkIn) return true;
+    return _selectedDate != null && _selectedTimeStr != null;
+  }
 
   String get _slotDisplayText {
     if (!_hasSlotSelected) return 'Tap to select a slot';
@@ -183,11 +225,20 @@ class _CreateAppointmentScreenState
       );
       success = result != null;
     } else {
+      // For Walk-In, override the strict interval string and save as the exact submission time
+      final now = DateTime.now();
+      final exactTimeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+
+      if (_forceWalkIn) {
+        _selectedDate = now;
+        _selectedTimeStr = exactTimeStr;
+      }
+
       final result = await notifier.createWalkIn(
         doctorId: doctorId,
         clinicId: clinicId,
         date: _formatDate(_selectedDate!),
-        time: _selectedTimeStr!,
+        time: exactTimeStr,
         patientName: _nameCtrl.text.trim(),
         patientPhone: _phoneCtrl.text.trim(),
         dateOfBirth: _dobCtrl.text.isNotEmpty ? _dobCtrl.text : null,
@@ -196,6 +247,10 @@ class _CreateAppointmentScreenState
             _emergencyCtrl.text.isNotEmpty ? _emergencyCtrl.text : null,
         allergiesConditions:
             _allergiesCtrl.text.isNotEmpty ? _allergiesCtrl.text : null,
+        gender: _selectedGender,
+        occupation: _occupationCtrl.text.isNotEmpty ? _occupationCtrl.text : null,
+        email: _emailCtrl.text.isNotEmpty ? _emailCtrl.text : null,
+        age: int.tryParse(_ageCtrl.text),
       );
       success = result != null;
     }
@@ -325,6 +380,36 @@ class _CreateAppointmentScreenState
                 ),
                 const SizedBox(height: 24),
 
+                if (!_isCallBy) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Force Immediate Walk-In', style: AppTextStyles.bodyMedium),
+                              Text('Overrides schedule, books exactly right now', style: AppTextStyles.caption),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _forceWalkIn,
+                          onChanged: (v) => setState(() => _forceWalkIn = v),
+                          activeColor: AppColors.primary,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
                 // Doctor selector (clinic only)
                 if (isClinic && _doctors.isNotEmpty) ...[
                   Text('Select Doctor', style: AppTextStyles.label),
@@ -358,74 +443,96 @@ class _CreateAppointmentScreenState
                   const SizedBox(height: 20),
                 ],
 
-                // Date & Time (Unified Slot Picker)
-                Text('Appointment Slot', style: AppTextStyles.label),
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: _pickSlot,
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: _hasSlotSelected
-                            ? AppColors.primary.withValues(alpha: 0.3)
-                            : AppColors.border,
+                // Call-By Date Selection
+                if (_isCallBy) ...[
+                  Text('Appointment Date', style: AppTextStyles.label),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: _pickCallByDate,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.calendar_month_rounded, color: AppColors.primary, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _callByDate == null 
+                                ? 'Tap to pick a date from Calendar' 
+                                : DateFormat('EEEE, MMM d, yyyy').format(_callByDate!),
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: _callByDate == null ? AppColors.textHint : AppColors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          const Icon(Icons.edit_calendar_rounded, color: AppColors.textHint, size: 18),
+                        ],
                       ),
                     ),
-                    child: Row(
+                  ),
+                  const SizedBox(height: 20),
+                ],
+
+                // Date & Time (Unified Slot Picker)
+                if (!_forceWalkIn) ...[
+                  Text('Appointment Slot', style: AppTextStyles.label),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: _pickSlot,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _hasSlotSelected ? Icons.check_circle_rounded : Icons.access_time_filled_rounded,
+                            color: _hasSlotSelected ? AppColors.success : AppColors.primary,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              _slotDisplayText,
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: _hasSlotSelected ? AppColors.textPrimary : AppColors.textHint,
+                              ),
+                            ),
+                          ),
+                          const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textHint, size: 14),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ] else ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
                       children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            _hasSlotSelected
-                                ? Icons.event_available_rounded
-                                : Icons.access_time_rounded,
-                            color: AppColors.primary,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _hasSlotSelected
-                                    ? 'Slot Selected'
-                                    : 'Select Slot',
-                                style: AppTextStyles.caption.copyWith(
-                                    fontSize: 11,
-                                    color: _hasSlotSelected
-                                        ? AppColors.primary
-                                        : AppColors.textHint),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _slotDisplayText,
-                                style: AppTextStyles.bodyMedium.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: _hasSlotSelected
-                                      ? AppColors.textPrimary
-                                      : AppColors.textHint,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Icon(Icons.chevron_right_rounded,
-                            color: AppColors.textHint),
+                        const Icon(Icons.flash_on_rounded, color: AppColors.success, size: 28),
+                        const SizedBox(height: 8),
+                        Text('Booking Immediately', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.success, fontWeight: FontWeight.bold)),
+                        Text('Time: ${TimeUtils.formatStringTime(DateFormat("HH:mm").format(DateTime.now()))}', style: AppTextStyles.caption.copyWith(color: AppColors.success)),
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
+                  const SizedBox(height: 24),
+                ],
 
                 // Patient fields (both call-by and walk-in)
                 Text('Patient Info', style: AppTextStyles.h3),
@@ -456,19 +563,67 @@ class _CreateAppointmentScreenState
                 
                 if (!_isCallBy) ...[
                   const SizedBox(height: 14),
-                  AppTextField(
-                    controller: _dobCtrl,
-                    label: 'Date of Birth (Optional)',
-                    prefixIcon: const Icon(Icons.cake_outlined, color: AppColors.textHint),
-                    readOnly: true,
-                    onTap: _pickDob,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: AppTextField(
+                          controller: _ageCtrl,
+                          label: 'Age',
+                          prefixIcon: const Icon(Icons.cake_outlined, color: AppColors.textHint),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: AppTextField(
+                          controller: _dobCtrl,
+                          label: 'DOB (Optional)',
+                          prefixIcon: const Icon(Icons.calendar_today_rounded, color: AppColors.textHint, size: 18),
+                          readOnly: true,
+                          onTap: _pickDob,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: _selectedGender,
+                        isExpanded: true,
+                        hint: Text('Gender (Optional)', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
+                        items: ['Male', 'Female', 'Other']
+                            .map((g) => DropdownMenuItem(value: g, child: Text(g, style: AppTextStyles.bodyMedium)))
+                            .toList(),
+                        onChanged: (v) => setState(() => _selectedGender = v),
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 14),
                   AppTextField(
                     controller: _addressCtrl,
-                    label: 'Address (Optional)',
+                    label: 'Address (City / Area)',
                     prefixIcon: const Icon(Icons.home_outlined, color: AppColors.textHint),
                     maxLines: 2,
+                  ),
+                  const SizedBox(height: 14),
+                  AppTextField(
+                    controller: _occupationCtrl,
+                    label: 'Occupation (Optional)',
+                    prefixIcon: const Icon(Icons.work_outline_rounded, color: AppColors.textHint),
+                  ),
+                  const SizedBox(height: 14),
+                  AppTextField(
+                    controller: _emailCtrl,
+                    label: 'Email (Optional)',
+                    prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textHint),
+                    keyboardType: TextInputType.emailAddress,
                   ),
                   const SizedBox(height: 14),
                   AppTextField(

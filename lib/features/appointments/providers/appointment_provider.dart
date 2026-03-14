@@ -133,6 +133,10 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     String? address,
     String? emergencyContact,
     String? allergiesConditions,
+    String? gender,
+    String? occupation,
+    String? email,
+    int? age,
   }) async {
     try {
       final schedulingService = _ref.read(schedulingServiceProvider);
@@ -153,6 +157,10 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
           address: address,
           emergencyContact: emergencyContact,
           allergiesConditions: allergiesConditions,
+          gender: gender,
+          occupation: occupation,
+          email: email,
+          age: age,
         );
         patientId = patient.id;
       }

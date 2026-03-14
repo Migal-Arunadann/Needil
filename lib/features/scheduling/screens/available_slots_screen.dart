@@ -16,6 +16,7 @@ class AvailableSlotsScreen extends ConsumerStatefulWidget {
   final int treatmentDuration;
   final bool isSelectionMode;
   final bool allowFutureDates;
+  final DateTime? initialDate;
 
   const AvailableSlotsScreen({
     super.key,
@@ -25,6 +26,7 @@ class AvailableSlotsScreen extends ConsumerStatefulWidget {
     required this.treatmentDuration,
     this.isSelectionMode = false,
     this.allowFutureDates = true,
+    this.initialDate,
   });
 
   @override
@@ -33,7 +35,7 @@ class AvailableSlotsScreen extends ConsumerStatefulWidget {
 }
 
 class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
-  DateTime _selectedDate = DateTime.now();
+  late DateTime _selectedDate;
   String? _selectedSlot;
   int _slotDuration = 30;
 
@@ -50,6 +52,8 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
   @override
   void initState() {
     super.initState();
+    final initial = widget.initialDate ?? DateTime.now();
+    _selectedDate = DateTime(initial.year, initial.month, initial.day);
     _slotDuration = widget.treatmentDuration;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSlots();
@@ -341,6 +345,11 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
 
   Widget _slotChip(TimeSlot slot) {
     final isSelected = _selectedSlot == slot.time;
+    
+    // Both Walk-in and Call-by must obey availability (past/booked are unselectable)
+    // Users who want to force it can use "Force Walk-In" directly on the booking page.
+    final bool canSelect = slot.isAvailable;
+
     Color bg;
     Color textColor;
     Border? border;
@@ -348,9 +357,9 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
     if (slot.isDuringBreak) {
       bg = AppColors.warning.withValues(alpha: 0.08);
       textColor = AppColors.warning;
-    } else if (!slot.isAvailable) {
-      bg = AppColors.error.withValues(alpha: 0.08);
-      textColor = AppColors.textHint;
+    } else if (slot.isPast || !slot.isAvailable) {
+      bg = AppColors.textHint.withValues(alpha: 0.05);
+      textColor = AppColors.textHint.withValues(alpha: 0.5);
     } else if (isSelected) {
       bg = AppColors.primary;
       textColor = Colors.white;
@@ -361,7 +370,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen> {
     }
 
     return GestureDetector(
-      onTap: slot.isAvailable
+      onTap: canSelect
           ? () => setState(() => _selectedSlot = slot.time)
           : null,
       child: AnimatedContainer(

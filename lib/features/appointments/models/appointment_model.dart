@@ -1,6 +1,6 @@
 import 'package:pocketbase/pocketbase.dart';
 
-enum AppointmentType { callBy, walkIn }
+enum AppointmentType { callBy, walkIn, session }
 
 enum AppointmentStatus { scheduled, inProgress, completed, cancelled }
 
@@ -69,9 +69,7 @@ class AppointmentModel {
       patientId: record.getStringValue('patient'),
       doctorId: record.getStringValue('doctor'),
       clinicId: record.getStringValue('clinic'),
-      type: record.getStringValue('type') == 'walk_in'
-          ? AppointmentType.walkIn
-          : AppointmentType.callBy,
+      type: _parseType(record.getStringValue('type')),
       date: record.getStringValue('date'),
       time: record.getStringValue('time'),
       status: _parseStatus(record.getStringValue('status')),
@@ -96,7 +94,7 @@ class AppointmentModel {
       if (patientId != null && patientId!.isNotEmpty) 'patient': patientId,
       'doctor': doctorId,
       if (clinicId != null && clinicId!.isNotEmpty) 'clinic': clinicId,
-      'type': type == AppointmentType.walkIn ? 'walk_in' : 'call_by',
+      'type': typeToString(type),
       'date': date,
       'time': time,
       'status': statusToString(status),
@@ -110,6 +108,18 @@ class AppointmentModel {
   /// Display name: expanded patient name > placeholder name
   String get displayName =>
       expandedPatientName ?? patientName ?? 'Unknown Patient';
+
+  static AppointmentType _parseType(String t) {
+    if (t == 'walk_in') return AppointmentType.walkIn;
+    if (t == 'session') return AppointmentType.session;
+    return AppointmentType.callBy;
+  }
+
+  static String typeToString(AppointmentType t) {
+    if (t == AppointmentType.walkIn) return 'walk_in';
+    if (t == AppointmentType.session) return 'session';
+    return 'call_by';
+  }
 
   static AppointmentStatus _parseStatus(String s) {
     switch (s) {

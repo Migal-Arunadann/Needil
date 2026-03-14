@@ -136,6 +136,10 @@ class AppointmentService {
     String? address,
     String? emergencyContact,
     String? allergiesConditions,
+    String? gender,
+    String? occupation,
+    String? email,
+    int? age,
   }) async {
     final body = {
       'full_name': fullName,
@@ -147,8 +151,11 @@ class AppointmentService {
       if (address != null && address.isNotEmpty) 'address': address,
       if (emergencyContact != null && emergencyContact.isNotEmpty)
         'emergency_contact': emergencyContact,
-      if (allergiesConditions != null && allergiesConditions.isNotEmpty)
         'allergies_conditions': allergiesConditions,
+      if (gender != null && gender.isNotEmpty) 'gender': gender,
+      if (occupation != null && occupation.isNotEmpty) 'occupation': occupation,
+      if (email != null && email.isNotEmpty) 'email': email,
+      if (age != null) 'age': age,
       'consent_given': true,
       'consent_date': _todayString(),
     };

@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/constants/app_text_styles.dart';
+import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
-import '../../auth/providers/auth_provider.dart';
 import '../../auth/models/doctor_model.dart';
 import '../providers/treatment_provider.dart';
 
@@ -39,6 +40,36 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
   final _intervalCtrl = TextEditingController(text: '1');
   final _feeCtrl = TextEditingController();
 
+  List<TreatmentConfig> _doctorTreatments = [];
+  List<int> _doctorWorkingDays = [];
+  bool _isLoadingTreatments = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadTreatments();
+  }
+
+  Future<void> _loadTreatments() async {
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      // Can't use PBCollections if we didn't import it, let's use string 'doctors'
+      final record = await pb.collection('doctors').getOne(widget.doctorId);
+      final doc = DoctorModel.fromRecord(record);
+      if (mounted) {
+        setState(() {
+          _doctorTreatments = doc.treatments;
+          _doctorWorkingDays = doc.workingDays;
+          _isLoadingTreatments = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingTreatments = false);
+      }
+    }
+  }
+
   @override
   void dispose() {
     _sessionsCtrl.dispose();
@@ -53,6 +84,10 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
       initialDate: _startDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+      selectableDayPredicate: (day) {
+        if (_doctorWorkingDays.isEmpty) return true; // Fallback
+        return _doctorWorkingDays.contains(day.weekday);
+      },
     );
     if (d != null) {
       setState(() => _startDate = d);
@@ -89,9 +124,10 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
       final preferredTimeStr = '$hr:$mn';
       
       // Auto-schedule sessions considering clinic beds
-      final numSessions = int.parse(_sessionsCtrl.text.trim());
-      final interval = int.parse(_intervalCtrl.text.trim());
-      final fee = double.parse(_feeCtrl.text.trim());
+      final numSessions = int.tryParse(_sessionsCtrl.text.trim()) ?? 5;
+      final interval = int.tryParse(_intervalCtrl.text.trim()) ?? 1;
+      final feeStr = _feeCtrl.text.trim();
+      final fee = feeStr.isEmpty ? 0.0 : (double.tryParse(feeStr) ?? 0.0);
 
       await service.createSmartTreatmentPlan(
         patientId: widget.patientId,
@@ -119,7 +155,7 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to schedule plan: \$e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('Failed to schedule plan: $e'), backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -129,9 +165,6 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
 
   @override
   Widget build(BuildContext context) {
-    // Watch doctor data for available treatments
-    final doctorState = ref.watch(authProvider).doctor;
-    final treatments = doctorState?.treatments ?? [];
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -187,8 +220,8 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
                     child: DropdownButton<TreatmentConfig>(
                       isExpanded: true,
                       value: _selectedTreatment,
-                      hint: Text('Select Treatment', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
-                      items: treatments.map((t) {
+                      hint: Text(_isLoadingTreatments ? 'Loading treatments...' : 'Select Treatment', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
+                      items: _doctorTreatments.map((t) {
                         return DropdownMenuItem(
                           value: t,
                           child: Text(t.type, style: AppTextStyles.bodyMedium),

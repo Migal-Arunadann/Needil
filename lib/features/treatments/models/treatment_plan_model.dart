@@ -37,11 +37,15 @@ class TreatmentPlanModel {
 
   factory TreatmentPlanModel.fromRecord(RecordModel record) {
     String? patientName;
-    final expandData = record.get<Map<String, dynamic>>('expand');
-    if (expandData.isNotEmpty && expandData.containsKey('patient')) {
-      final pat = expandData['patient'];
-      if (pat is Map) patientName = pat['full_name'] as String?;
-    }
+    try {
+      final dynExpand = record.data['expand'];
+      if (dynExpand != null && dynExpand is Map) {
+        final pat = dynExpand['patient'];
+        if (pat != null && pat is Map) {
+          patientName = pat['full_name'] as String?;
+        }
+      }
+    } catch (_) {}
 
     return TreatmentPlanModel(
       id: record.id,
@@ -54,8 +58,8 @@ class TreatmentPlanModel {
       intervalDays: record.getIntValue('interval_days'),
       sessionFee: record.getDoubleValue('session_fee'),
       status: _parseStatus(record.getStringValue('status')),
-      created: DateTime.tryParse(record.get<String>('created')),
-      updated: DateTime.tryParse(record.get<String>('updated')),
+      created: DateTime.tryParse(record.getStringValue('created')),
+      updated: DateTime.tryParse(record.getStringValue('updated')),
       patientName: patientName,
     );
   }

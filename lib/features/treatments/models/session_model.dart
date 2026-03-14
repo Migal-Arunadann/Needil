@@ -52,8 +52,8 @@ class SessionModel {
       pulse: record.getIntValue('pulse'),
       photos: record.getListValue<String>('photos'),
       remarks: record.getStringValue('remarks'),
-      created: DateTime.tryParse(record.get<String>('created')),
-      updated: DateTime.tryParse(record.get<String>('updated')),
+      created: DateTime.tryParse(record.getStringValue('created')),
+      updated: DateTime.tryParse(record.getStringValue('updated')),
     );
   }
 

@@ -375,7 +375,23 @@ class _AppointmentListScreenState
        statusIcon = Icons.access_time_filled;
     }
 
+    // Type styling
     final isCallBy = apt.type == AppointmentType.callBy;
+    final isSession = apt.type == AppointmentType.session;
+    
+    IconData typeIcon = Icons.person_rounded;
+    Color typeColor = AppColors.accent;
+    String typeLabel = 'Walk-In Patient';
+    
+    if (isCallBy) {
+      typeIcon = Icons.phone_rounded;
+      typeColor = AppColors.info;
+      typeLabel = 'Call-By Consultation';
+    } else if (isSession) {
+      typeIcon = Icons.healing_rounded;
+      typeColor = AppColors.primary;
+      typeLabel = 'Treatment Session';
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -400,8 +416,8 @@ class _AppointmentListScreenState
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
-                    isCallBy ? Icons.phone_rounded : Icons.person_rounded,
-                    color: isCallBy ? AppColors.info : AppColors.accent,
+                    typeIcon,
+                    color: typeColor,
                     size: 20,
                   ),
                 ),
@@ -419,8 +435,8 @@ class _AppointmentListScreenState
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        isCallBy ? 'Call-By Consultation' : 'Walk-In Patient',
-                        style: AppTextStyles.caption,
+                        typeLabel,
+                        style: AppTextStyles.caption.copyWith(color: typeColor),
                       ),
                     ],
                   ),

@@ -60,6 +60,7 @@ class TreatmentService {
       if (pulse != null) 'pulse': pulse,
       'charged': charged,
       if (chargeAmount != null) 'charge_amount': chargeAmount,
+      'status': 'ongoing',
     };
 
     final files = <http.MultipartFile>[];
@@ -68,6 +69,68 @@ class TreatmentService {
     }
 
     final record = await pb.collection(PBCollections.consultations).create(
+      body: body,
+      files: files,
+    );
+    return ConsultationModel.fromRecord(record);
+  }
+
+  Future<ConsultationModel> updateConsultation({
+    required String consultationId,
+    String? notes,
+    // Conversational / Medical
+    String? chiefComplaint,
+    String? medicalHistory,
+    String? pastIllnesses,
+    String? currentMedications,
+    String? allergies,
+    String? chronicDiseases,
+    // Lifestyle
+    String? dietPattern,
+    String? sleepQuality,
+    String? exerciseLevel,
+    String? addictions,
+    String? stressLevel,
+    // Consent
+    String? pregnancyStatus,
+    bool? consentGiven,
+    // Vitals & Charge
+    String? bpLevel,
+    int? pulse,
+    bool? charged,
+    double? chargeAmount,
+    List<String> newPhotoPaths = const [],
+  }) async {
+    final body = <String, dynamic>{
+      if (notes != null) 'notes': notes,
+      if (chiefComplaint != null) 'chief_complaint': chiefComplaint,
+      if (medicalHistory != null) 'medical_history': medicalHistory,
+      if (pastIllnesses != null) 'past_illnesses': pastIllnesses,
+      if (currentMedications != null) 'current_medications': currentMedications,
+      if (allergies != null) 'allergies': allergies,
+      if (chronicDiseases != null) 'chronic_diseases': chronicDiseases,
+      if (dietPattern != null) 'diet_pattern': dietPattern,
+      if (sleepQuality != null) 'sleep_quality': sleepQuality,
+      if (exerciseLevel != null) 'exercise_level': exerciseLevel,
+      if (addictions != null) 'addictions': addictions,
+      if (stressLevel != null) 'stress_level': stressLevel,
+      if (pregnancyStatus != null) 'pregnancy_status': pregnancyStatus,
+      if (consentGiven != null) 'consent_given': consentGiven,
+      if (bpLevel != null) 'bp_level': bpLevel,
+      if (pulse != null) 'pulse': pulse,
+      if (charged != null) 'charged': charged,
+      if (chargeAmount != null) 'charge_amount': chargeAmount,
+    };
+
+    final files = <http.MultipartFile>[];
+    for (final path in newPhotoPaths) {
+      if (!path.startsWith('http')) {
+        files.add(await http.MultipartFile.fromPath('photos', path));
+      }
+    }
+
+    final record = await pb.collection(PBCollections.consultations).update(
+      consultationId,
       body: body,
       files: files,
     );
@@ -154,7 +217,7 @@ class TreatmentService {
         final checkTimeStr = '$checkTimeHrStr:$checkTimeMnStr';
         // See how many sessions are exactly at this time
         final existing = await pb.collection(PBCollections.sessions).getList(
-          filter: 'scheduled_date = "\$sessionDateStr" && scheduled_time = "\$checkTimeStr"',
+          filter: 'scheduled_date = "$sessionDateStr" && scheduled_time = "$checkTimeStr"',
         );
         
         if (existing.totalItems < maxBeds) {
@@ -174,12 +237,28 @@ class TreatmentService {
         'treatment_plan': plan.id,
         'patient': patientId,
         'doctor': doctorId,
+        if (consultationId != null && consultationId.isNotEmpty)
+          'consultation': consultationId,
         'session_number': i + 1,
         'scheduled_date': sessionDateStr,
         'scheduled_time': resolvedTimeStr,
         'status': 'upcoming',
       };
       await pb.collection(PBCollections.sessions).create(body: sessionBody);
+
+      // Create a synced appointment to block the doctor's calendar
+      final apptBody = {
+        'patient': patientId,
+        'doctor': doctorId,
+        'type': 'session',
+        'date': sessionDateStr,
+        'time': resolvedTimeStr,
+        'status': 'scheduled',
+      };
+      // Ignore errors if appointment creation fails so we don't break the session loop
+      try {
+        await pb.collection('appointments').create(body: apptBody);
+      } catch (_) {}
     }
 
     return plan;

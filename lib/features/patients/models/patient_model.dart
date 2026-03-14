@@ -12,6 +12,10 @@ class PatientModel {
   final String? clinicId;
   final bool consentGiven;
   final String? consentDate;
+  final String? gender;
+  final String? occupation;
+  final String? email;
+  final int? age;
   final DateTime? created;
   final DateTime? updated;
 
@@ -25,6 +29,10 @@ class PatientModel {
     this.allergiesConditions,
     required this.doctorId,
     this.clinicId,
+    this.gender,
+    this.occupation,
+    this.email,
+    this.age,
     this.consentGiven = false,
     this.consentDate,
     this.created,
@@ -42,6 +50,10 @@ class PatientModel {
       allergiesConditions: record.getStringValue('allergies_conditions'),
       doctorId: record.getStringValue('doctor'),
       clinicId: record.getStringValue('clinic'),
+      gender: record.getStringValue('gender'),
+      occupation: record.getStringValue('occupation'),
+      email: record.getStringValue('email'),
+      age: record.getIntValue('age'),
       consentGiven: record.getBoolValue('consent_given'),
       consentDate: record.getStringValue('consent_date'),
       created: DateTime.tryParse(record.get<String>('created')),
@@ -62,6 +74,10 @@ class PatientModel {
         'allergies_conditions': allergiesConditions,
       'doctor': doctorId,
       if (clinicId != null && clinicId!.isNotEmpty) 'clinic': clinicId,
+      if (gender != null && gender!.isNotEmpty) 'gender': gender,
+      if (occupation != null && occupation!.isNotEmpty) 'occupation': occupation,
+      if (email != null && email!.isNotEmpty) 'email': email,
+      if (age != null) 'age': age,
       'consent_given': consentGiven,
       if (consentDate != null && consentDate!.isNotEmpty)
         'consent_date': consentDate,

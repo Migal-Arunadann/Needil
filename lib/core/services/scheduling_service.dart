@@ -7,11 +7,13 @@ class TimeSlot {
   final String time; // "HH:mm"
   final bool isAvailable;
   final bool isDuringBreak;
+  final bool isPast;
 
   const TimeSlot({
     required this.time,
     this.isAvailable = true,
     this.isDuringBreak = false,
+    this.isPast = false,
   });
 }
 
@@ -74,7 +76,7 @@ class SchedulingService {
     if (schedule == null) return []; // Doctor doesn't work this day
 
     // Generate all time slots for the working day
-    final allSlots = _generateSlots(schedule, slotDurationMinutes);
+    final allSlots = _generateSlots(schedule, slotDurationMinutes, date);
 
     // Get existing appointments for this doctor on this date
     final dateStr = _formatDate(date);
@@ -85,15 +87,16 @@ class SchedulingService {
       final booked = bookedTimes.contains(slot.time);
       return TimeSlot(
         time: slot.time,
-        isAvailable: !booked && !slot.isDuringBreak,
+        isAvailable: !booked && !slot.isDuringBreak && !slot.isPast,
         isDuringBreak: slot.isDuringBreak,
+        isPast: slot.isPast,
       );
     }).toList();
   }
 
   /// Generate all possible time slots within working hours.
   List<TimeSlot> _generateSlots(
-      WorkingSchedule schedule, int durationMinutes) {
+      WorkingSchedule schedule, int durationMinutes, DateTime targetDate) {
     final slots = <TimeSlot>[];
     var current = _parseTime(schedule.startTime);
     final end = _parseTime(schedule.endTime);
@@ -104,16 +107,25 @@ class SchedulingService {
         ? _parseTime(schedule.breakEnd!)
         : null;
 
+    final now = DateTime.now();
+    final isToday = targetDate.year == now.year &&
+        targetDate.month == now.month &&
+        targetDate.day == now.day;
+    final currentMinutes = now.hour * 60 + now.minute;
+
     while (current + durationMinutes <= end) {
       final isDuringBreak = breakStart != null &&
           breakEnd != null &&
           current >= breakStart &&
           current < breakEnd;
+          
+      final isPast = isToday && current < currentMinutes;
 
       slots.add(TimeSlot(
         time: _minutesToTimeStr(current),
-        isAvailable: !isDuringBreak,
+        isAvailable: !isDuringBreak && !isPast,
         isDuringBreak: isDuringBreak,
+        isPast: isPast,
       ));
 
       current += durationMinutes;
