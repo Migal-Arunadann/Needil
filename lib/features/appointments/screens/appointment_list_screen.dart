@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
@@ -6,6 +7,9 @@ import '../../../core/constants/app_text_styles.dart';
 import '../models/appointment_model.dart';
 import '../providers/appointment_provider.dart';
 import '../../../core/utils/time_utils.dart';
+import '../../patients/models/patient_model.dart';
+import '../../../core/providers/pocketbase_provider.dart';
+import '../../../core/constants/pb_collections.dart';
 import 'patient_info_screen.dart';
 
 class AppointmentListScreen extends ConsumerStatefulWidget {
@@ -17,15 +21,9 @@ class AppointmentListScreen extends ConsumerStatefulWidget {
 }
 
 class _AppointmentListScreenState
-    extends ConsumerState<AppointmentListScreen> {
+    extends ConsumerState<AppointmentListScreen> with TickerProviderStateMixin {
   late DateTime _selectedDate;
-  String _searchQuery = '';
-  // Built-in fixed filters replacing the modal Enum mapping
-  final List<String> _filters = ['All', 'Scheduled', 'Done', 'Missed'];
-  String _activeFilter = 'All';
-
   final _dateScrollCtrl = ScrollController();
-
   late List<DateTime> _dates;
 
   @override
@@ -33,8 +31,6 @@ class _AppointmentListScreenState
     super.initState();
     _selectedDate = DateTime.now();
     _generateDates();
-
-    // Initial scroll
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToSelectedDate();
     });
@@ -44,17 +40,11 @@ class _AppointmentListScreenState
     final year = _selectedDate.year;
     final month = _selectedDate.month;
     final lastDay = DateTime(year, month + 1, 0).day;
-    _dates = List.generate(
-      lastDay,
-      (index) => DateTime(year, month, index + 1),
-    );
+    _dates = List.generate(lastDay, (i) => DateTime(year, month, i + 1));
   }
 
   void _scrollToSelectedDate() {
     if (!_dateScrollCtrl.hasClients) return;
-    // We want yesterday (index = selectedDate.day - 2) to be at the left edge.
-    // Since day is 1-indexed, today's index is day - 1. Yesterday's index is day - 2.
-    // Each item is 64 wide + 12 margin = 76 width
     final offset = ((_selectedDate.day - 2) * 76.0);
     _dateScrollCtrl.animateTo(
       offset.clamp(0.0, _dateScrollCtrl.position.maxScrollExtent),
@@ -79,7 +69,7 @@ class _AppointmentListScreenState
       lastDate: DateTime.now().add(const Duration(days: 365)),
       builder: (ctx, child) => Theme(
         data: Theme.of(ctx).copyWith(
-          colorScheme: ColorScheme.light(
+          colorScheme: const ColorScheme.light(
             primary: AppColors.primary,
             onPrimary: Colors.white,
             surface: AppColors.surface,
@@ -93,43 +83,136 @@ class _AppointmentListScreenState
         _selectedDate = picked;
         _generateDates();
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToSelectedDate();
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelectedDate());
       ref.read(appointmentListProvider.notifier).changeDate(_formatDate(picked));
     }
   }
 
-  List<AppointmentModel> _filtered(List<AppointmentModel> all) {
-    var list = all;
-    if (_searchQuery.isNotEmpty) {
-      final q = _searchQuery.toLowerCase();
-      list = list.where((a) => a.displayName.toLowerCase().contains(q)).toList();
-    }
-    if (_activeFilter != 'All') {
-      if (_activeFilter == 'Scheduled') {
-        list = list.where((a) => a.status == AppointmentStatus.scheduled).toList();
-      } else if (_activeFilter == 'Done') {
-        list = list.where((a) => a.status == AppointmentStatus.completed).toList();
-      } else if (_activeFilter == 'Missed') {
-        // Mapping cancelled / inProgress to missed/done logic depending on user flow.
-        list = list.where((a) => a.status == AppointmentStatus.cancelled).toList();
+  bool _isLate(AppointmentModel apt) {
+    if (apt.status != AppointmentStatus.scheduled) return false;
+    final now = DateTime.now();
+    final todayStr = _formatDate(now);
+    if (apt.date != todayStr) return false;
+    final parts = apt.time.split(':');
+    if (parts.length != 2) return false;
+    final aptTime = DateTime(now.year, now.month, now.day,
+        int.tryParse(parts[0]) ?? 0, int.tryParse(parts[1]) ?? 0);
+    return now.isAfter(aptTime);
+  }
+
+  Future<void> _markArrived(AppointmentModel apt) async {
+    try {
+      final service = ref.read(appointmentServiceProvider);
+      await service.markArrived(apt.id);
+      ref.read(appointmentListProvider.notifier).loadAppointments();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${apt.displayName} marked as arrived ✓'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+        );
       }
     }
-    return list;
+  }
+
+  Future<void> _markEnded(AppointmentModel apt) async {
+    try {
+      final service = ref.read(appointmentServiceProvider);
+      await service.markEnded(apt.id);
+      ref.read(appointmentListProvider.notifier).loadAppointments();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${apt.displayName} appointment ended ✓'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _cancelAppointment(AppointmentModel apt) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: AppColors.surface,
+        title: const Text('Cancel Appointment?', style: TextStyle(color: AppColors.error)),
+        content: Text('Cancel appointment for ${apt.displayName} at ${TimeUtils.formatStringTime(apt.time)}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Cancel', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      ref.read(appointmentListProvider.notifier).updateStatus(apt.id, AppointmentStatus.cancelled);
+    }
+  }
+
+  void _navigateToPatient(AppointmentModel apt) async {
+    if (apt.patientId == null || apt.patientId!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Patient hasn\'t arrived yet.'),
+          backgroundColor: AppColors.warning,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final record = await pb.collection(PBCollections.patients).getOne(apt.patientId!);
+      final patient = PatientModel.fromRecord(record);
+      if (mounted) {
+        Navigator.pushNamed(context, '/patient-profile', arguments: patient);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load patient: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(appointmentListProvider);
-    final filtered = _filtered(state.appointments);
+    final all = state.appointments;
+
+    // Split into consultations (call_by + walk_in) and sessions
+    final consultations = all.where((a) => a.type != AppointmentType.session).toList();
+    final sessions = all.where((a) => a.type == AppointmentType.session).toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: Column(
           children: [
-            // ── Header (Title & Calendar Icon) ───────────────────────────────────────
+            // ── Header ───────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
               child: Row(
@@ -139,7 +222,7 @@ class _AppointmentListScreenState
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Appointments', style: AppTextStyles.h1),
+                      Text('Schedule', style: AppTextStyles.h1),
                       const SizedBox(height: 4),
                       Text(
                         DateFormat('MMMM yyyy').format(_selectedDate),
@@ -150,14 +233,12 @@ class _AppointmentListScreenState
                   GestureDetector(
                     onTap: _pickDate,
                     child: Container(
-                      width: 44,
-                      height: 44,
+                      width: 44, height: 44,
                       decoration: BoxDecoration(
                         color: AppColors.surface,
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: Icon(Icons.calendar_month_rounded,
-                          size: 20, color: AppColors.primary),
+                      child: const Icon(Icons.calendar_month_rounded, size: 20, color: AppColors.primary),
                     ),
                   ),
                 ],
@@ -165,9 +246,9 @@ class _AppointmentListScreenState
             ),
             const SizedBox(height: 24),
 
-            // ── Horizontal Date Strip ────────────────────────────────
+            // ── Horizontal Date Strip ──
             SizedBox(
-              height: 84, // Approximate height for dates
+              height: 84,
               child: ListView.builder(
                 controller: _dateScrollCtrl,
                 scrollDirection: Axis.horizontal,
@@ -175,21 +256,13 @@ class _AppointmentListScreenState
                 itemCount: _dates.length,
                 itemBuilder: (context, index) {
                   final d = _dates[index];
-                  final isSelected = d.year == _selectedDate.year &&
+                  final isSelected = d.day == _selectedDate.day &&
                       d.month == _selectedDate.month &&
-                      d.day == _selectedDate.day;
-
+                      d.year == _selectedDate.year;
                   final now = DateTime.now();
-                  final today = DateTime(now.year, now.month, now.day);
-                  final yesterday = today.subtract(const Duration(days: 1));
-                  final dDate = DateTime(d.year, d.month, d.day);
-
-                  final isToday = dDate == today;
-                  final isYesterday = dDate == yesterday;
-
+                  final isToday = d.day == now.day && d.month == now.month && d.year == now.year;
                   String dayLabel = DateFormat('E').format(d);
                   if (isToday) dayLabel = 'Today';
-                  if (isYesterday) dayLabel = 'Yest';
 
                   return GestureDetector(
                     onTap: () {
@@ -207,31 +280,25 @@ class _AppointmentListScreenState
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Text(
-                            dayLabel,
-                            style: AppTextStyles.caption.copyWith(
-                              color: isSelected ? Colors.white : AppColors.textSecondary,
-                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                            ),
-                          ),
+                          Text(dayLabel, style: AppTextStyles.caption.copyWith(
+                            color: isSelected ? Colors.white : AppColors.textSecondary,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                          )),
                           const SizedBox(height: 6),
-                          Text(
-                            d.day.toString(),
-                            style: AppTextStyles.h2.copyWith(
-                              color: isSelected ? Colors.white : AppColors.textPrimary,
-                              height: 1,
-                            ),
-                          ),
+                          Text(d.day.toString(), style: AppTextStyles.h2.copyWith(
+                            color: isSelected ? Colors.white : AppColors.textPrimary,
+                            height: 1,
+                          )),
                           const SizedBox(height: 6),
-                          // Small dot indicator for active selected item
                           Container(
-                            width: 4,
-                            height: 4,
+                            width: 4, height: 4,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: isSelected ? Colors.white.withValues(alpha: 0.5) : AppColors.primary.withValues(alpha: isToday && !isSelected ? 1.0 : 0.0),
+                              color: isSelected
+                                  ? Colors.white.withValues(alpha: 0.5)
+                                  : isToday ? AppColors.primary : Colors.transparent,
                             ),
-                          )
+                          ),
                         ],
                       ),
                     ),
@@ -241,111 +308,89 @@ class _AppointmentListScreenState
             ),
             const SizedBox(height: 16),
             const Padding(
-               padding: EdgeInsets.symmetric(horizontal: 24),
-               child: Divider(color: AppColors.border, height: 1),
+              padding: EdgeInsets.symmetric(horizontal: 24),
+              child: Divider(color: AppColors.border, height: 1),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
-            // ── Inline Filter Chips ──────────────────────────
-            SizedBox(
-              height: 38,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                itemCount: _filters.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 10),
-                itemBuilder: (context, index) {
-                  final f = _filters[index];
-                  final isActive = _activeFilter == f;
-                  return GestureDetector(
-                    onTap: () => setState(() => _activeFilter = f),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: isActive ? Colors.transparent : Colors.transparent,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: isActive ? Colors.white : AppColors.border,
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        f,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: isActive ? Colors.white : AppColors.textHint,
-                          fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ── Header Subtitle count ──
-            Padding(
-               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-               child: Row(
-                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                 children: [
-                    Row(
-                      children: [
-                        Container(
-                           padding: const EdgeInsets.all(4),
-                           decoration: BoxDecoration(
-                             color: AppColors.primary.withValues(alpha: 0.1),
-                             borderRadius: BorderRadius.circular(6)
-                           ),
-                           child: Icon(Icons.assignment_ind_rounded, size: 14, color: AppColors.primary),
-                        ),
-                        const SizedBox(width: 8),
-                        Text('Consultations', style: AppTextStyles.h3),
-                      ]
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(12)
-                      ),
-                      child: Text(
-                        '${filtered.length}',
-                        style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-                      ),
-                    ),
-                 ]
-               )
-            ),
-
-            // ── List ─────────────────────────────────────────
+            // ── Main Content ──
             Expanded(
               child: state.isLoading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                          color: AppColors.primary, strokeWidth: 3))
+                  ? const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3))
                   : state.error != null
                       ? _errorView(state.error!)
-                      : filtered.isEmpty
+                      : (consultations.isEmpty && sessions.isEmpty)
                           ? _emptyView()
                           : RefreshIndicator(
                               color: AppColors.primary,
-                              onRefresh: () => ref
-                                  .read(appointmentListProvider.notifier)
-                                  .loadAppointments(),
-                              child: ListView.separated(
-                                padding: const EdgeInsets.fromLTRB(24, 0, 24, 100), // extra padding for FAB
-                                itemCount: filtered.length,
-                                separatorBuilder: (_, __) =>
-                                    const SizedBox(height: 14),
-                                itemBuilder: (context, index) {
-                                  return _AnimatedCard(
-                                    index: index,
-                                    child: _appointmentCard(filtered[index]),
-                                  );
-                                },
+                              onRefresh: () => ref.read(appointmentListProvider.notifier).loadAppointments(),
+                              child: ListView(
+                                padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
+                                children: [
+                                  // ── Consultations Section ──
+                                  _sectionHeader('Consultations', Icons.assignment_ind_rounded, consultations.length, AppColors.info),
+                                  const SizedBox(height: 12),
+                                  if (consultations.isEmpty)
+                                    _emptySectionLabel('No consultations scheduled')
+                                  else
+                                    ...consultations.asMap().entries.map((e) =>
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 14),
+                                        child: _ScheduleCard(
+                                          key: ValueKey(e.value.id),
+                                          index: e.key,
+                                          apt: e.value,
+                                          isLate: _isLate(e.value),
+                                          onArrived: () => _markArrived(e.value),
+                                          onFillDetails: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => PatientInfoScreen(appointment: e.value),
+                                              ),
+                                            ).then((_) => ref.read(appointmentListProvider.notifier).loadAppointments());
+                                          },
+                                          onEnded: () => _markEnded(e.value),
+                                          onTap: () => _navigateToPatient(e.value),
+                                          onLongPress: () => _cancelAppointment(e.value),
+                                        ),
+                                      ),
+                                    ),
+
+                                  const SizedBox(height: 24),
+                                  const Divider(color: AppColors.border),
+                                  const SizedBox(height: 16),
+
+                                  // ── Sessions Section ──
+                                  _sectionHeader('Treatment Sessions', Icons.healing_rounded, sessions.length, AppColors.primary),
+                                  const SizedBox(height: 12),
+                                  if (sessions.isEmpty)
+                                    _emptySectionLabel('No sessions scheduled')
+                                  else
+                                    ...sessions.asMap().entries.map((e) =>
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 14),
+                                        child: _ScheduleCard(
+                                          key: ValueKey(e.value.id),
+                                          index: e.key,
+                                          apt: e.value,
+                                          isLate: _isLate(e.value),
+                                          onArrived: () => _markArrived(e.value),
+                                          onFillDetails: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => PatientInfoScreen(appointment: e.value),
+                                              ),
+                                            ).then((_) => ref.read(appointmentListProvider.notifier).loadAppointments());
+                                          },
+                                          onEnded: () => _markEnded(e.value),
+                                          onTap: () => _navigateToPatient(e.value),
+                                          onLongPress: () => _cancelAppointment(e.value),
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
             ),
@@ -355,211 +400,40 @@ class _AppointmentListScreenState
     );
   }
 
-  Widget _appointmentCard(AppointmentModel apt) {
-    // Styling mapped to status and type
-    Color statusColor = AppColors.success;
-    String statusStr = 'Done';
-    IconData statusIcon = Icons.check_circle_rounded;
-    
-    if (apt.status == AppointmentStatus.cancelled) {
-       statusColor = AppColors.error;
-       statusStr = 'Missed';
-       statusIcon = Icons.cancel_rounded;
-    } else if (apt.status == AppointmentStatus.inProgress) {
-       statusColor = AppColors.warning;
-       statusStr = 'In Progress';
-       statusIcon = Icons.sync_rounded;
-    } else if (apt.status == AppointmentStatus.scheduled) {
-       statusColor = AppColors.info;
-       statusStr = 'Scheduled';
-       statusIcon = Icons.access_time_filled;
-    }
-
-    // Type styling
-    final isCallBy = apt.type == AppointmentType.callBy;
-    final isSession = apt.type == AppointmentType.session;
-    
-    IconData typeIcon = Icons.person_rounded;
-    Color typeColor = AppColors.accent;
-    String typeLabel = 'Walk-In Patient';
-    
-    if (isCallBy) {
-      typeIcon = Icons.phone_rounded;
-      typeColor = AppColors.info;
-      typeLabel = 'Call-By Consultation';
-    } else if (isSession) {
-      typeIcon = Icons.healing_rounded;
-      typeColor = AppColors.primary;
-      typeLabel = 'Treatment Session';
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        children: [
-          // Top Row: Details
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Avatar / Phone Icon box
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    typeIcon,
-                    color: typeColor,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                // Name and Detail
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        apt.displayName,
-                        style: AppTextStyles.h3.copyWith(fontSize: 16),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        typeLabel,
-                        style: AppTextStyles.caption.copyWith(color: typeColor),
-                      ),
-                    ],
-                  ),
-                ),
-                // Time
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Icon(Icons.schedule_rounded, size: 14, color: AppColors.primary),
-                    const SizedBox(height: 4),
-                    Text(
-                      TimeUtils.formatStringTime(apt.time),
-                      style: AppTextStyles.label.copyWith(
-                        color: AppColors.primary,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+  Widget _sectionHeader(String title, IconData icon, int count, Color color) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
           ),
-          // Divider
-          const Divider(color: AppColors.border, height: 1),
-          
-          // Bottom Row: Status Action Bar
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Row(
-              children: [
-                // Status Pill
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(statusIcon, size: 14, color: statusColor),
-                      const SizedBox(width: 6),
-                      Text(
-                        statusStr,
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: statusColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                // Actions
-                if (apt.status == AppointmentStatus.scheduled) ...[
-                  _iconAction(Icons.open_in_new_rounded, AppColors.primary,
-                      onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => PatientInfoScreen(appointment: apt),
-                      ),
-                    ).then((_) => ref
-                        .read(appointmentListProvider.notifier)
-                        .loadAppointments());
-                  }),
-                  const SizedBox(width: 12),
-                  _iconAction(Icons.cancel_outlined, AppColors.error,
-                      onTap: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        title: const Text('Cancel Appointment?'),
-                        content: const Text(
-                            'This appointment will be marked as cancelled.'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('No'),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            child: const Text('Yes, Cancel',
-                                style: TextStyle(color: AppColors.error)),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirm == true) {
-                      ref
-                          .read(appointmentListProvider.notifier)
-                          .updateStatus(apt.id, AppointmentStatus.cancelled);
-                    }
-                  }),
-                ] else if (apt.status == AppointmentStatus.inProgress) ...[
-                  _iconAction(Icons.check_circle_outlined, AppColors.success,
-                      onTap: () {
-                    ref
-                        .read(appointmentListProvider.notifier)
-                        .updateStatus(apt.id, AppointmentStatus.completed);
-                  }),
-                ],
-              ],
-            ),
+          child: Icon(icon, size: 16, color: color),
+        ),
+        const SizedBox(width: 10),
+        Text(title, style: AppTextStyles.h3),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
           ),
-        ],
-      ),
+          child: Text(
+            '$count',
+            style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _iconAction(IconData icon, Color defaultColor,
-      {VoidCallback? onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, size: 16, color: defaultColor.withValues(alpha: 0.8)),
+  Widget _emptySectionLabel(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Center(
+        child: Text(text, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
       ),
     );
   }
@@ -569,19 +443,11 @@ class _AppointmentListScreenState
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.event_busy_rounded,
-              size: 64, color: AppColors.textHint.withValues(alpha: 0.2)),
+          Icon(Icons.event_busy_rounded, size: 64, color: AppColors.textHint.withValues(alpha: 0.2)),
           const SizedBox(height: 16),
-          Text(
-            'No appointments found',
-            style: AppTextStyles.bodyMedium
-                .copyWith(color: AppColors.textSecondary),
-          ),
+          Text('No appointments today', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
           const SizedBox(height: 8),
-          Text(
-            'Tap the New Appointment button to create one.',
-            style: AppTextStyles.caption,
-          ),
+          Text('Tap the + button to create one.', style: AppTextStyles.caption),
         ],
       ),
     );
@@ -594,17 +460,12 @@ class _AppointmentListScreenState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline_rounded,
-                size: 48, color: AppColors.error),
+            const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
             const SizedBox(height: 12),
-            Text(error,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.bodyMedium
-                    .copyWith(color: AppColors.textSecondary)),
+            Text(error, textAlign: TextAlign.center, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
             const SizedBox(height: 16),
             TextButton(
-              onPressed: () =>
-                  ref.read(appointmentListProvider.notifier).loadAppointments(),
+              onPressed: () => ref.read(appointmentListProvider.notifier).loadAppointments(),
               child: const Text('Retry'),
             ),
           ],
@@ -614,19 +475,37 @@ class _AppointmentListScreenState
   }
 }
 
-/// Staggered slide-in animation wrapper for list cards.
-class _AnimatedCard extends StatefulWidget {
-  final Widget child;
-  final int index;
+// ════════════════════════════════════════════════════════════════════
+// Schedule Card Widget (Stateful for animations)
+// ════════════════════════════════════════════════════════════════════
 
-  const _AnimatedCard({required this.child, required this.index});
+class _ScheduleCard extends StatefulWidget {
+  final AppointmentModel apt;
+  final int index;
+  final bool isLate;
+  final VoidCallback onArrived;
+  final VoidCallback onFillDetails;
+  final VoidCallback onEnded;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  const _ScheduleCard({
+    super.key,
+    required this.apt,
+    required this.index,
+    required this.isLate,
+    required this.onArrived,
+    required this.onFillDetails,
+    required this.onEnded,
+    required this.onTap,
+    required this.onLongPress,
+  });
 
   @override
-  State<_AnimatedCard> createState() => _AnimatedCardState();
+  State<_ScheduleCard> createState() => _ScheduleCardState();
 }
 
-class _AnimatedCardState extends State<_AnimatedCard>
-    with SingleTickerProviderStateMixin {
+class _ScheduleCardState extends State<_ScheduleCard> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
   late final Animation<Offset> _slide;
@@ -634,17 +513,10 @@ class _AnimatedCardState extends State<_AnimatedCard>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 350),
-    );
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
     _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
-    _slide = Tween<Offset>(
-      begin: const Offset(0, 0.12),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-
-    // Stagger by index
+    _slide = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
     Future.delayed(Duration(milliseconds: widget.index * 60), () {
       if (mounted) _ctrl.forward();
     });
@@ -658,9 +530,279 @@ class _AnimatedCardState extends State<_AnimatedCard>
 
   @override
   Widget build(BuildContext context) {
+    final apt = widget.apt;
+
+    // Status styling
+    Color statusColor = AppColors.success;
+    String statusStr = 'Completed';
+    IconData statusIcon = Icons.check_circle_rounded;
+
+    if (apt.status == AppointmentStatus.cancelled) {
+      statusColor = AppColors.error;
+      statusStr = 'Cancelled';
+      statusIcon = Icons.cancel_rounded;
+    } else if (apt.status == AppointmentStatus.inProgress) {
+      statusColor = AppColors.warning;
+      statusStr = 'In Progress';
+      statusIcon = Icons.sync_rounded;
+    } else if (apt.status == AppointmentStatus.scheduled) {
+      statusColor = AppColors.info;
+      statusStr = 'Scheduled';
+      statusIcon = Icons.access_time_filled;
+    }
+
+    // Type styling
+    final isCallBy = apt.type == AppointmentType.callBy;
+    final isSession = apt.type == AppointmentType.session;
+    final isWalkIn = apt.type == AppointmentType.walkIn;
+
+    IconData typeIcon = Icons.person_rounded;
+    Color typeColor = AppColors.accent;
+    String typeLabel = 'Walk-In';
+
+    if (isCallBy) {
+      typeIcon = Icons.phone_rounded;
+      typeColor = AppColors.info;
+      typeLabel = 'Call-By';
+    } else if (isSession) {
+      typeIcon = Icons.healing_rounded;
+      typeColor = AppColors.primary;
+      typeLabel = 'Session';
+    }
+
+    // Determine which action buttons to show
+    final isScheduled = apt.status == AppointmentStatus.scheduled;
+    final isInProgress = apt.status == AppointmentStatus.inProgress;
+    final hasPatientLinked = apt.patientId != null && apt.patientId!.isNotEmpty;
+
+    // Walk-ins already have check_in_time set on creation, so no "Arrived" button
+    final showArrivedBtn = isScheduled && !isWalkIn;
+    final showFillDetailsBtn = isInProgress && !hasPatientLinked;
+    final showEndedBtn = isInProgress && hasPatientLinked;
+
     return FadeTransition(
       opacity: _fade,
-      child: SlideTransition(position: _slide, child: widget.child),
+      child: SlideTransition(
+        position: _slide,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          onLongPress: () {
+            HapticFeedback.mediumImpact();
+            widget.onLongPress();
+          },
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: widget.isLate ? AppColors.error.withValues(alpha: 0.5) : AppColors.border,
+                width: widget.isLate ? 1.5 : 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: (widget.isLate ? AppColors.error : Colors.black).withValues(alpha: 0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                // ── Top Row: Patient Info ──
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                  child: Row(
+                    children: [
+                      // Type Icon
+                      Container(
+                        width: 44, height: 44,
+                        decoration: BoxDecoration(
+                          color: typeColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(typeIcon, color: typeColor, size: 20),
+                      ),
+                      const SizedBox(width: 14),
+                      // Name and Type
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              apt.displayName,
+                              style: AppTextStyles.h3.copyWith(fontSize: 16),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 3),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: typeColor.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(typeLabel, style: AppTextStyles.labelSmall.copyWith(
+                                    color: typeColor, fontWeight: FontWeight.w600, fontSize: 10,
+                                  )),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(Icons.schedule_rounded, size: 12, color: AppColors.textHint),
+                                const SizedBox(width: 4),
+                                Text(
+                                  TimeUtils.formatStringTime(apt.time),
+                                  style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Status pill
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(statusIcon, size: 12, color: statusColor),
+                            const SizedBox(width: 4),
+                            Text(statusStr, style: AppTextStyles.labelSmall.copyWith(
+                              color: statusColor, fontWeight: FontWeight.w600, fontSize: 10,
+                            )),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ── Late Indicator ──
+                if (widget.isLate)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    color: AppColors.error.withValues(alpha: 0.06),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, size: 14, color: AppColors.error),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Patient is late — hasn\'t arrived yet',
+                          style: AppTextStyles.caption.copyWith(color: AppColors.error, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // ── Check-in info ──
+                if (apt.checkInTime != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.login_rounded, size: 12, color: AppColors.success),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Arrived at ${DateFormat('h:mm a').format(apt.checkInTime!.toLocal())}',
+                          style: AppTextStyles.caption.copyWith(color: AppColors.success, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // ── Action Buttons ──
+                if (showArrivedBtn || showFillDetailsBtn || showEndedBtn) ...[
+                  const Divider(color: AppColors.border, height: 1),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        if (showArrivedBtn)
+                          Expanded(
+                            child: _ActionButton(
+                              label: 'Patient Arrived',
+                              icon: Icons.how_to_reg_rounded,
+                              color: AppColors.success,
+                              onTap: widget.onArrived,
+                            ),
+                          ),
+                        if (showFillDetailsBtn)
+                          Expanded(
+                            child: _ActionButton(
+                              label: 'Fill Details',
+                              icon: Icons.badge_rounded,
+                              color: AppColors.info,
+                              onTap: widget.onFillDetails,
+                            ),
+                          ),
+                        if (showEndedBtn)
+                          Expanded(
+                            child: _ActionButton(
+                              label: 'Appointment Ended',
+                              icon: Icons.check_circle_outline_rounded,
+                              color: AppColors.success,
+                              onTap: widget.onEnded,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ActionButton({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  style: AppTextStyles.labelSmall.copyWith(color: color, fontWeight: FontWeight.w700, fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

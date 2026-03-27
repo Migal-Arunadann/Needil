@@ -5,7 +5,7 @@ void main() async {
   
   try {
     // Authenticate as admin
-    await pb.admins.authWithPassword('admin@example.com', 'admin12345'); // Replace with actual logic or a known auth bypass if we have it
+    await pb.admins.authWithPassword('admin@example.com', 'admin_password'); // Replace with actual credentials
     print('Authenticated');
   } catch (e) {
     print('Auth failed (ensure admin credentials are correct in the script or run without auth if rules allow): $e');

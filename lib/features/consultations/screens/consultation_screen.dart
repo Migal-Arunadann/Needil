@@ -467,12 +467,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                           onTap: () {
                             Navigator.pushNamed(
                               context,
-                              '/session/record',
-                              arguments: {
-                                'sessionId': session.id,
-                                'patientId': widget.patientId,
-                                'doctorId': widget.doctorId,
-                              },
+                              '/sessions/record',
+                              arguments: session,
                             ).then((_) => _loadExistingData());
                           },
                           borderRadius: BorderRadius.circular(12),

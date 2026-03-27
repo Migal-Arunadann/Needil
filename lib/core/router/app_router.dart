@@ -19,6 +19,8 @@ import '../../features/treatments/models/session_model.dart';
 import '../../features/scheduling/screens/available_slots_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../features/settings/screens/consent_screen.dart';
+import '../../features/patients/screens/patient_profile_screen.dart';
+import '../../features/patients/models/patient_model.dart';
 
 /// Named route generator for the app.
 Route<dynamic>? generateRoute(RouteSettings settings) {
@@ -103,6 +105,10 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
         ),
         settings,
       );
+
+    case '/patient-profile':
+      final patient = settings.arguments as PatientModel;
+      return _slide(PatientProfileScreen(patient: patient), settings);
 
     case '/settings':
       return _slide(const SettingsScreen(), settings);

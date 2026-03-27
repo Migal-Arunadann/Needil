@@ -190,6 +190,60 @@ class AppointmentService {
         .toList();
   }
 
+  /// Find an existing patient by phone number for the given doctor.
+  Future<PatientModel?> findPatientByPhone(String phone, String doctorId) async {
+    try {
+      final result = await pb.collection(PBCollections.patients).getList(
+        filter: 'phone = "$phone" && doctor = "$doctorId"',
+        perPage: 1,
+      );
+      if (result.items.isNotEmpty) {
+        return PatientModel.fromRecord(result.items.first);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Check if a scheduled appointment already exists for this phone + doctor + date.
+  Future<AppointmentModel?> findExistingAppointment(String phone, String doctorId, {String? date}) async {
+    try {
+      final dateFilter = date != null ? ' && date = "$date"' : '';
+      final result = await pb.collection(PBCollections.appointments).getList(
+        filter: 'patient_phone = "$phone" && doctor = "$doctorId" && status = "scheduled"$dateFilter',
+        perPage: 1,
+        sort: '-date,-time',
+      );
+      if (result.items.isNotEmpty) {
+        return AppointmentModel.fromRecord(result.items.first);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Mark a patient as arrived (set check_in_time + status to in_progress).
+  Future<AppointmentModel> markArrived(String appointmentId) async {
+    final record = await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {
+        'status': 'in_progress',
+        'check_in_time': DateTime.now().toUtc().toIso8601String(),
+      },
+    );
+    return AppointmentModel.fromRecord(record);
+  }
+
+  /// Mark appointment as ended (set check_out_time + status to completed).
+  Future<AppointmentModel> markEnded(String appointmentId) async {
+    final record = await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {
+        'status': 'completed',
+        'check_out_time': DateTime.now().toUtc().toIso8601String(),
+      },
+    );
+    return AppointmentModel.fromRecord(record);
+  }
+
   String _todayString() {
     final now = DateTime.now();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';

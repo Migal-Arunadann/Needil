@@ -3,9 +3,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 void main() async {
-  final pbUrl = 'http://pocketbase-ibzovc8gc0m0e8mt4g1pw5aa.178.16.138.198.sslip.io';
-  final adminEmail = 'admin@pms.com';
-  final adminPassword = 'admin123456';
+  final pbUrl = 'http://YOUR_POCKETBASE_URL';
+  final adminEmail = 'admin@example.com';
+  final adminPassword = 'admin_password';
   
   final client = http.Client();
   try {

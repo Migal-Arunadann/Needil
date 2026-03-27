@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -11,6 +12,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../scheduling/screens/available_slots_screen.dart';
 import '../providers/appointment_provider.dart';
 import '../../../core/services/auth_service.dart';
+import '../models/appointment_model.dart';
 
 class CreateAppointmentScreen extends ConsumerStatefulWidget {
   final bool initialIsCallBy;
@@ -28,6 +30,8 @@ class _CreateAppointmentScreenState
   bool _isCallBy = true;
   bool _forceWalkIn = false;
   bool _isSubmitting = false;
+  Timer? _phoneDebounce;
+  bool _isCheckingPhone = false;
 
   // Patient fields (shared by both call-by and walk-in)
   final _nameCtrl = TextEditingController();
@@ -55,6 +59,7 @@ class _CreateAppointmentScreenState
     super.initState();
     _isCallBy = widget.initialIsCallBy;
     _loadDoctors();
+    _phoneCtrl.addListener(_onPhoneChanged);
   }
 
   Future<void> _loadDoctors() async {
@@ -78,6 +83,7 @@ class _CreateAppointmentScreenState
 
   @override
   void dispose() {
+    _phoneDebounce?.cancel();
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _dobCtrl.dispose();
@@ -88,6 +94,114 @@ class _CreateAppointmentScreenState
     _occupationCtrl.dispose();
     _emailCtrl.dispose();
     super.dispose();
+  }
+
+  void _onPhoneChanged() {
+    _phoneDebounce?.cancel();
+    final phone = _phoneCtrl.text.trim();
+    if (phone.length < 10) return;
+    _phoneDebounce = Timer(const Duration(milliseconds: 600), () => _checkPhone(phone));
+  }
+
+  Future<void> _checkPhone(String phone) async {
+    if (_isCheckingPhone) return;
+    setState(() => _isCheckingPhone = true);
+
+    final auth = ref.read(authProvider);
+    final doctorId = _selectedDoctorId ?? auth.userId;
+    if (doctorId == null) {
+      setState(() => _isCheckingPhone = false);
+      return;
+    }
+
+    final service = ref.read(appointmentServiceProvider);
+
+    // 1. Check for existing patient record
+    final existing = await service.findPatientByPhone(phone, doctorId);
+    if (existing != null && mounted && _nameCtrl.text.isEmpty) {
+      final fill = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: AppColors.surface,
+          title: Row(
+            children: [
+              Icon(Icons.person_search_rounded, color: AppColors.info, size: 22),
+              const SizedBox(width: 10),
+              const Expanded(child: Text('Patient Found')),
+            ],
+          ),
+          content: Text('A patient record for "${existing.fullName}" already exists with this phone number.\n\nAuto-fill the details?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Yes, Auto-fill'),
+            ),
+          ],
+        ),
+      );
+
+      if (fill == true && mounted) {
+        setState(() {
+          _nameCtrl.text = existing.fullName;
+          if (existing.dateOfBirth != null && existing.dateOfBirth!.isNotEmpty) _dobCtrl.text = existing.dateOfBirth!;
+          if (existing.address != null && existing.address!.isNotEmpty) _addressCtrl.text = existing.address!;
+          if (existing.emergencyContact != null && existing.emergencyContact!.isNotEmpty) _emergencyCtrl.text = existing.emergencyContact!;
+          if (existing.allergiesConditions != null && existing.allergiesConditions!.isNotEmpty) _allergiesCtrl.text = existing.allergiesConditions!;
+          if (existing.occupation != null && existing.occupation!.isNotEmpty) _occupationCtrl.text = existing.occupation!;
+          if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
+          if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
+          if (existing.age != null) _ageCtrl.text = existing.age.toString();
+        });
+      }
+    }
+
+    // 2. Check for existing scheduled appointment (double-booking prevention)
+    final existingAppt = await service.findExistingAppointment(phone, doctorId);
+    if (existingAppt != null && mounted) {
+      final replace = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: AppColors.surface,
+          title: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 22),
+              const SizedBox(width: 10),
+              const Expanded(child: Text('Existing Appointment')),
+            ],
+          ),
+          content: Text('This patient already has a scheduled appointment on ${existingAppt.date} at ${TimeUtils.formatStringTime(existingAppt.time)}.\n\nDo you want to replace it with a new one?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning, foregroundColor: Colors.white),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Replace'),
+            ),
+          ],
+        ),
+      );
+
+      if (replace == true) {
+        // Cancel the old appointment
+        ref.read(appointmentListProvider.notifier).updateStatus(existingAppt.id, AppointmentStatus.cancelled);
+      } else if (replace == false && mounted) {
+        // User chose not to replace — clear the phone field to start fresh
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Appointment already exists. Booking cancelled.'),
+            backgroundColor: AppColors.warning,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+
+    if (mounted) setState(() => _isCheckingPhone = false);
   }
 
   Future<void> _pickDob() async {

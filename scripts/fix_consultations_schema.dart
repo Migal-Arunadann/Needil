@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'dart:convert';
 
-const String pbUrl = 'http://pocketbase-ibzovc8gc0m0e8mt4g1pw5aa.178.16.138.198.sslip.io';
+const String pbUrl = 'http://YOUR_POCKETBASE_URL';
 
 Future<void> main() async {
   final email = 'admin@example.com';
-  final pw = 'admin12345';
+  final pw = 'admin_password';
   
   final client = HttpClient();
   try {

@@ -258,7 +258,9 @@ class TreatmentService {
       // Ignore errors if appointment creation fails so we don't break the session loop
       try {
         await pb.collection('appointments').create(body: apptBody);
-      } catch (_) {}
+      } catch (e) {
+        throw Exception('Failed to sync appointment to calendar. Ensure "session" type is added to PocketBase! Error details: $e');
+      }
     }
 
     return plan;

@@ -1,11 +1,11 @@
 import 'package:pocketbase/pocketbase.dart';
 
 void main() async {
-  final pb = PocketBase('http://pocketbase-ibzovc8gc0m0e8mt4g1pw5aa.178.16.138.198.sslip.io');
+  final pb = PocketBase('http://YOUR_POCKETBASE_URL');
   
   try {
     // Auth as superuser
-    await pb.admins.authWithPassword('psairampg@gmail.com', r'Valam$13245687');
+    await pb.admins.authWithPassword('admin@example.com', 'admin_password');
     
     for (final col in ['clinics', 'doctors']) {
       // 1. Delete all existing records first to avoid unique constraint violations
