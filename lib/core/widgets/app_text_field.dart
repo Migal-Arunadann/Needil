@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
 
@@ -19,6 +20,7 @@ class AppTextField extends StatelessWidget {
   final TextInputAction? textInputAction;
   final bool readOnly;
   final VoidCallback? onTap;
+  final List<TextInputFormatter>? inputFormatters;
 
   const AppTextField({
     super.key,
@@ -37,6 +39,7 @@ class AppTextField extends StatelessWidget {
     this.textInputAction,
     this.readOnly = false,
     this.onTap,
+    this.inputFormatters,
   });
 
   @override
@@ -58,6 +61,7 @@ class AppTextField extends StatelessWidget {
           onChanged: onChanged,
           focusNode: focusNode,
           textInputAction: textInputAction,
+          inputFormatters: inputFormatters,
           style: AppTextStyles.bodyLarge,
           decoration: InputDecoration(
             hintText: hint,

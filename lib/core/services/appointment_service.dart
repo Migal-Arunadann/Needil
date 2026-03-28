@@ -244,6 +244,30 @@ class AppointmentService {
     return AppointmentModel.fromRecord(record);
   }
 
+  /// Reschedule an appointment to a new date and time.
+  Future<AppointmentModel> rescheduleAppointment(String appointmentId, String newDate, String newTime) async {
+    final record = await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {
+        'date': newDate,
+        'time': newTime,
+      },
+    );
+    return AppointmentModel.fromRecord(record);
+  }
+
+  /// Undo arrived — reset status to scheduled, clear check_in_time.
+  Future<AppointmentModel> undoArrived(String appointmentId) async {
+    final record = await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {
+        'status': 'scheduled',
+        'check_in_time': '',
+      },
+    );
+    return AppointmentModel.fromRecord(record);
+  }
+
   String _todayString() {
     final now = DateTime.now();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';

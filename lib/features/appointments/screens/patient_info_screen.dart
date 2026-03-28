@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -69,7 +70,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     );
     if (picked != null) {
       _dobCtrl.text =
-          '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+          '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
     }
   }
 
@@ -93,13 +94,24 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     try {
       final service = ref.read(appointmentServiceProvider);
 
+      // Convert DoB from display (DD/MM/YYYY) to storage (YYYY-MM-DD) format
+      String? dobForStorage;
+      if (_dobCtrl.text.isNotEmpty) {
+        final parts = _dobCtrl.text.split('/');
+        if (parts.length == 3) {
+          dobForStorage = '${parts[2]}-${parts[1]}-${parts[0]}';
+        } else {
+          dobForStorage = _dobCtrl.text;
+        }
+      }
+
       // Create patient record
       final patient = await service.createPatient(
         fullName: _nameCtrl.text.trim(),
         phone: _phoneCtrl.text.trim(),
         doctorId: widget.appointment.doctorId,
         clinicId: widget.appointment.clinicId,
-        dateOfBirth: _dobCtrl.text.isNotEmpty ? _dobCtrl.text : null,
+        dateOfBirth: dobForStorage,
         address: _addressCtrl.text.isNotEmpty ? _addressCtrl.text : null,
         emergencyContact:
             _emergencyCtrl.text.isNotEmpty ? _emergencyCtrl.text : null,
@@ -225,15 +237,16 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                     style: AppTextStyles.label
                         .copyWith(color: AppColors.textSecondary)),
                 const SizedBox(height: 12),
-                GestureDetector(
-                  onTap: _pickDob,
-                  child: AbsorbPointer(
-                    child: AppTextField(
-                      controller: _dobCtrl,
-                      label: 'Date of Birth',
-                      prefixIcon: Icon(Icons.cake_outlined, color: AppColors.textHint),
-                      hint: 'YYYY-MM-DD',
-                    ),
+                AppTextField(
+                  controller: _dobCtrl,
+                  label: 'Date of Birth',
+                  prefixIcon: Icon(Icons.cake_outlined, color: AppColors.textHint),
+                  hint: 'DD/MM/YYYY',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [_DateInputFormatter()],
+                  suffixIcon: GestureDetector(
+                    onTap: _pickDob,
+                    child: Icon(Icons.calendar_month_rounded, color: AppColors.primary),
                   ),
                 ),
                 const SizedBox(height: 14),
@@ -304,6 +317,33 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Formatter that auto-inserts '/' separators for DD/MM/YYYY input.
+class _DateInputFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Only allow digits
+    final digitsOnly = newValue.text.replaceAll(RegExp(r'[^\d]'), '');
+
+    // Max 8 digits (DDMMYYYY)
+    final trimmed = digitsOnly.length > 8 ? digitsOnly.substring(0, 8) : digitsOnly;
+
+    final buffer = StringBuffer();
+    for (int i = 0; i < trimmed.length; i++) {
+      if (i == 2 || i == 4) buffer.write('/');
+      buffer.write(trimmed[i]);
+    }
+
+    final formatted = buffer.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }

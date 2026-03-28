@@ -173,26 +173,26 @@ class _CreateAppointmentScreenState
               const Expanded(child: Text('Existing Appointment')),
             ],
           ),
-          content: Text('This patient already has a scheduled appointment on ${existingAppt.date} at ${TimeUtils.formatStringTime(existingAppt.time)}.\n\nDo you want to replace it with a new one?'),
+          content: Text('This patient already has a scheduled appointment on ${existingAppt.date} at ${TimeUtils.formatStringTime(existingAppt.time)}.\n\nDo you want to reschedule the appointment to this slot?'),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning, foregroundColor: Colors.white),
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Replace'),
+              child: const Text('Reschedule'),
             ),
           ],
         ),
       );
 
       if (replace == true) {
-        // Cancel the old appointment
+        // Cancel the old appointment so the new one takes its place
         ref.read(appointmentListProvider.notifier).updateStatus(existingAppt.id, AppointmentStatus.cancelled);
       } else if (replace == false && mounted) {
         // User chose not to replace — clear the phone field to start fresh
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Appointment already exists. Booking cancelled.'),
+            content: const Text('Keeping the existing appointment.'),
             backgroundColor: AppColors.warning,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
