@@ -7,7 +7,6 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/loading_overlay.dart';
 import '../../../core/utils/validators.dart';
 import '../providers/auth_provider.dart';
-import '../../../core/services/auth_service.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -22,21 +21,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
-  UserRole _selectedRole = UserRole.clinic;
+
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 700),
     );
-    _fadeAnimation = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOut,
-    );
+    _fadeAnimation =
+        CurvedAnimation(parent: _animController, curve: Curves.easeOut);
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
     _animController.forward();
   }
 
@@ -49,29 +51,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   void _login() {
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
-
-    final username = _usernameController.text.trim();
-    final password = _passwordController.text;
-
-    switch (_selectedRole) {
-      case UserRole.clinic:
-        ref.read(authProvider.notifier).loginClinic(username, password);
-        break;
-      case UserRole.doctor:
-        ref.read(authProvider.notifier).loginDoctor(username, password);
-        break;
-      case UserRole.receptionist:
-        ref.read(authProvider.notifier).loginReceptionist(username, password);
-        break;
-    }
+    ref.read(authProvider.notifier).loginAny(
+          _usernameController.text.trim(),
+          _passwordController.text,
+        );
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
-    // Listen for errors
     ref.listen<AuthState>(authProvider, (prev, next) {
       if (next.error != null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -97,195 +88,153 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: FadeTransition(
               opacity: _fadeAnimation,
-              child: Column(
-                children: [
-                  const SizedBox(height: 48),
-                  _buildHeader(),
-                  const SizedBox(height: 40),
-                  _buildRoleToggle(),
-                  const SizedBox(height: 32),
-                  _buildLoginForm(),
-                  const SizedBox(height: 24),
-                  AppButton(
-                    label: 'Sign In',
-                    onPressed: _login,
-                    isLoading: authState.isLoading,
-                    icon: Icons.login_rounded,
-                  ),
-                  const SizedBox(height: 24),
-                  _buildRegisterLink(),
-                  const SizedBox(height: 32),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+              child: SlideTransition(
+                position: _slideAnimation,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 56),
 
-  Widget _buildHeader() {
-    return Column(
-      children: [
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            gradient: AppColors.heroGradient,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.primary.withValues(alpha: 0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: const Icon(
-            Icons.local_hospital_rounded,
-            color: Colors.white,
-            size: 40,
-          ),
-        ),
-        const SizedBox(height: 20),
-        Text('Welcome Back', style: AppTextStyles.h1),
-        const SizedBox(height: 8),
-        Text(
-          'Sign in to manage your practice',
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: AppColors.textSecondary,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRoleToggle() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      padding: const EdgeInsets.all(4),
-      child: Row(
-        children: [
-          _roleTab('Clinic', UserRole.clinic, Icons.business_rounded),
-          _roleTab('Doctor', UserRole.doctor, Icons.person_rounded),
-          _roleTab('Staff', UserRole.receptionist, Icons.support_agent_rounded),
-        ],
-      ),
-    );
-  }
-
-  Widget _roleTab(String label, UserRole role, IconData icon) {
-    final isSelected = _selectedRole == role;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedRole = role),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            gradient: isSelected ? AppColors.primaryGradient : null,
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.25),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+                    // ── Logo & heading ──────────────────────────────
+                    Center(
+                      child: Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          gradient: AppColors.heroGradient,
+                          borderRadius: BorderRadius.circular(22),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.primary.withValues(alpha: 0.32),
+                              blurRadius: 22,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.local_hospital_rounded,
+                          color: Colors.white,
+                          size: 40,
+                        ),
+                      ),
                     ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: isSelected ? Colors.white : AppColors.textSecondary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: AppTextStyles.buttonMedium.copyWith(
-                  color: isSelected ? Colors.white : AppColors.textSecondary,
-                  fontSize: 13,
+                    const SizedBox(height: 24),
+                    Text('Welcome Back',
+                        textAlign: TextAlign.center,
+                        style: AppTextStyles.h1),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Sign in to manage your practice',
+                      textAlign: TextAlign.center,
+                      style: AppTextStyles.bodyMedium
+                          .copyWith(color: AppColors.textSecondary),
+                    ),
+
+                    const SizedBox(height: 48),
+
+                    // ── Login form ──────────────────────────────────
+                    Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          AppTextField(
+                            label: 'Username',
+                            hint: 'Enter your username',
+                            controller: _usernameController,
+                            validator: (v) =>
+                                Validators.required(v, 'Username'),
+                            prefixIcon: const Icon(
+                                Icons.person_outline_rounded,
+                                color: AppColors.textHint),
+                            textInputAction: TextInputAction.next,
+                          ),
+                          const SizedBox(height: 20),
+                          AppTextField(
+                            label: 'Password',
+                            hint: 'Enter your password',
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            validator: (v) =>
+                                Validators.required(v, 'Password'),
+                            prefixIcon: const Icon(Icons.lock_outline_rounded,
+                                color: AppColors.textHint),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                                color: AppColors.textHint,
+                              ),
+                              onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword),
+                            ),
+                            textInputAction: TextInputAction.done,
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // ── Forgot Password link ─────────────────────────
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: GestureDetector(
+                        onTap: () => Navigator.of(context)
+                            .pushNamed('/auth/forgot-password'),
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 10, bottom: 4),
+                          child: Text(
+                            'Forgot Password?',
+                            style: AppTextStyles.caption.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    AppButton(
+                      label: 'Sign In',
+                      onPressed: _login,
+                      isLoading: authState.isLoading,
+                      icon: Icons.login_rounded,
+                    ),
+
+                    const SizedBox(height: 28),
+
+                    // ── Register link ───────────────────────────────
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          "Don't have an account? ",
+                          style: AppTextStyles.bodyMedium
+                              .copyWith(color: AppColors.textSecondary),
+                        ),
+                        GestureDetector(
+                          onTap: () => Navigator.of(context)
+                              .pushNamed('/register/clinic'),
+                          child: Text(
+                            'Register Clinic',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 32),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoginForm() {
-    return Form(
-      key: _formKey,
-      child: Column(
-        children: [
-          AppTextField(
-            label: 'Username',
-            hint: 'Enter your username',
-            controller: _usernameController,
-            validator: (v) => Validators.required(v, 'Username'),
-            prefixIcon: const Icon(Icons.person_outline_rounded,
-                color: AppColors.textHint),
-            textInputAction: TextInputAction.next,
-          ),
-          const SizedBox(height: 20),
-          AppTextField(
-            label: 'Password',
-            hint: 'Enter your password',
-            controller: _passwordController,
-            obscureText: _obscurePassword,
-            validator: (v) => Validators.required(v, 'Password'),
-            prefixIcon: const Icon(Icons.lock_outline_rounded,
-                color: AppColors.textHint),
-            suffixIcon: IconButton(
-              icon: Icon(
-                _obscurePassword
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined,
-                color: AppColors.textHint,
-              ),
-              onPressed: () =>
-                  setState(() => _obscurePassword = !_obscurePassword),
-            ),
-            textInputAction: TextInputAction.done,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRegisterLink() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          "Don't have an account? ",
-          style: AppTextStyles.bodyMedium.copyWith(
-            color: AppColors.textSecondary,
-          ),
-        ),
-        GestureDetector(
-          onTap: () {
-            // Navigate directly to clinic registration (no role selection)
-            Navigator.of(context).pushNamed('/register/clinic');
-          },
-          child: Text(
-            'Register Clinic',
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.primary,
-              fontWeight: FontWeight.w600,
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 }

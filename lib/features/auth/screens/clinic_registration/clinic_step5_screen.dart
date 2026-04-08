@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -8,6 +7,7 @@ import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/loading_overlay.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/registration_cache_provider.dart';
+import '../../screens/otp_verification_screen.dart';
 
 /// Clinic Registration — Step 5 of 5: Receptionist Account.
 class ClinicStep5Screen extends ConsumerStatefulWidget {
@@ -97,19 +97,49 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
       additionalDoctors = rawAdditional.map((d) => Map<String, dynamic>.from(d as Map)).toList();
     }
 
-    await ref.read(authProvider.notifier).registerClinic(
-      clinicName: widget.clinicData['clinic_name'],
-      username: widget.clinicData['username'],
-      password: widget.clinicData['password'],
-      bedCount: widget.clinicData['bed_count'],
-      primaryDoctorData: primaryDoctorData,
-      doctorPhotoFile: photoPath != null ? File(photoPath) : null,
-      additionalDoctors: additionalDoctors,
-      receptionistData: receptionistData,
-      city: widget.clinicData['city'] as String?,
-      area: widget.clinicData['area'] as String?,
-      stateField: widget.clinicData['state'] as String?,
-      pincode: widget.clinicData['pincode'] as String?,
+    // Build the full clinic payload to hold in provider state while waiting for OTP
+    final clinicPayload = <String, dynamic>{
+      'clinic_name': widget.clinicData['clinic_name'],
+      'username': widget.clinicData['username'],
+      'password': widget.clinicData['password'],
+      'bed_count': widget.clinicData['bed_count'],
+      'city': widget.clinicData['city'],
+      'area': widget.clinicData['area'],
+      'state': widget.clinicData['state'],
+      'pincode': widget.clinicData['pincode'],
+      'primary_doctor_data': primaryDoctorData,
+      if (photoPath != null) 'doctor_photo_path': photoPath,
+      if (additionalDoctors != null) 'additional_doctors': additionalDoctors,
+      if (receptionistData != null) 'receptionist_data': receptionistData,
+    };
+
+    final email = widget.clinicData['email'] as String? ?? '';
+    if (email.isEmpty) {
+      _showSnack('Clinic email is missing. Please go back and add it.');
+      return;
+    }
+
+    // Request OTP — registration completes after OTP verified
+    await ref.read(authProvider.notifier).requestRegistrationOtp(
+      email: email,
+      clinicData: clinicPayload,
+    );
+
+    if (!mounted) return;
+    final authState = ref.read(authProvider);
+    if (authState.error != null) {
+      _showSnack(authState.error!);
+      ref.read(authProvider.notifier).clearError();
+      return;
+    }
+
+    // Navigate to OTP screen
+    Navigator.of(context).pushNamed(
+      '/auth/otp-verify',
+      arguments: {
+        'mode': OtpMode.registration,
+        'email': email,
+      },
     );
   }
 

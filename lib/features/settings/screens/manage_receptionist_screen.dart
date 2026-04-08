@@ -85,9 +85,11 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
         usernameCtrl: usernameCtrl,
         phoneCtrl: phoneCtrl,
         onSubmit: (name, username, phone) async {
+          final safe = username.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '_');
           final body = <String, dynamic>{
             'name': name,
             'username': username,
+            'email': '$safe@pms.local',
           };
           if (phone.isNotEmpty) body['phone'] = phone;
           await pb.collection(PBCollections.receptionists).update(rec['id'], body: body);

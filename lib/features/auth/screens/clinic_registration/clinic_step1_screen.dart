@@ -20,6 +20,7 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _emailController = TextEditingController();
   final _cityController = TextEditingController();
   final _areaController = TextEditingController();
   final _stateController = TextEditingController();
@@ -33,6 +34,7 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
     _usernameController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _emailController.dispose();
     _cityController.dispose();
     _areaController.dispose();
     _stateController.dispose();
@@ -49,6 +51,7 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
         'clinic_name': _nameController.text.trim(),
         'username': _usernameController.text.trim(),
         'password': _passwordController.text,
+        'email': _emailController.text.trim(),
         'city': _cityController.text.trim(),
         'area': _areaController.text.trim(),
         'state': _stateController.text.trim(),
@@ -108,6 +111,20 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
                   validator: (v) =>
                       Validators.minLength(v, 3, 'Username'),
                   prefixIcon: const Icon(Icons.person_outline_rounded,
+                      color: AppColors.textHint),
+                  textInputAction: TextInputAction.next,
+                ),
+                const SizedBox(height: 20),
+                AppTextField(
+                  label: 'Email Address',
+                  hint: 'Your clinic contact email',
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  validator: (v) {
+                    if (v == null || v.trim().isEmpty) return 'Email is required';
+                    return Validators.email(v);
+                  },
+                  prefixIcon: const Icon(Icons.email_outlined,
                       color: AppColors.textHint),
                   textInputAction: TextInputAction.next,
                 ),

@@ -23,6 +23,14 @@ class AuthState {
   final ReceptionistModel? receptionist;
   final String? error;
 
+  // ── OTP pending state ──────────────────────────────────────
+  /// The OTP ID returned by PocketBase after requestOTP.
+  final String? pendingOtpId;
+  /// The email the OTP was sent to.
+  final String? pendingEmail;
+  /// The full clinic registration payload, held while waiting for OTP.
+  final Map<String, dynamic>? pendingClinicData;
+
   const AuthState({
     this.isInitializing = true,
     this.isLoading = false,
@@ -32,6 +40,9 @@ class AuthState {
     this.doctor,
     this.receptionist,
     this.error,
+    this.pendingOtpId,
+    this.pendingEmail,
+    this.pendingClinicData,
   });
 
   AuthState copyWith({
@@ -43,6 +54,9 @@ class AuthState {
     DoctorModel? doctor,
     ReceptionistModel? receptionist,
     String? error,
+    String? pendingOtpId,
+    String? pendingEmail,
+    Map<String, dynamic>? pendingClinicData,
   }) {
     return AuthState(
       isInitializing: isInitializing ?? this.isInitializing,
@@ -53,6 +67,9 @@ class AuthState {
       doctor: doctor ?? this.doctor,
       receptionist: receptionist ?? this.receptionist,
       error: error,
+      pendingOtpId: pendingOtpId ?? this.pendingOtpId,
+      pendingEmail: pendingEmail ?? this.pendingEmail,
+      pendingClinicData: pendingClinicData ?? this.pendingClinicData,
     );
   }
 
@@ -144,6 +161,54 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Universal login — tries clinic → doctor → receptionist automatically.
+  /// The user never needs to know or select their role.
+  Future<void> loginAny(String username, String password) async {
+    state = state.copyWith(isLoading: true, error: null);
+
+    // Try clinic first
+    final clinicResult = await _authService.loginClinic(username, password);
+    if (clinicResult.success) {
+      state = AuthState(
+        isInitializing: false,
+        isAuthenticated: true,
+        role: UserRole.clinic,
+        clinic: clinicResult.user as ClinicModel,
+      );
+      return;
+    }
+
+    // Try doctor
+    final doctorResult = await _authService.loginDoctor(username, password);
+    if (doctorResult.success) {
+      state = AuthState(
+        isInitializing: false,
+        isAuthenticated: true,
+        role: UserRole.doctor,
+        doctor: doctorResult.user as DoctorModel,
+      );
+      return;
+    }
+
+    // Try receptionist
+    final recResult = await _authService.loginReceptionist(username, password);
+    if (recResult.success) {
+      state = AuthState(
+        isInitializing: false,
+        isAuthenticated: true,
+        role: UserRole.receptionist,
+        receptionist: recResult.user as ReceptionistModel,
+      );
+      return;
+    }
+
+    // All failed — show a generic message
+    state = state.copyWith(
+      isLoading: false,
+      error: 'Invalid username or password.',
+    );
+  }
+
   /// Register a clinic with primary doctor + optional additional doctors + optional receptionist.
   Future<void> registerClinic({
     required String clinicName,
@@ -158,6 +223,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     String? area,
     String? stateField,
     String? pincode,
+    String? clinicEmail,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
 
@@ -174,6 +240,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       area: area,
       state: stateField,
       pincode: pincode,
+      clinicEmail: clinicEmail,
     );
 
     if (result.success) {
@@ -197,6 +264,115 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Clear error.
   void clearError() {
     state = state.copyWith(error: null);
+  }
+
+  // ── OTP: Registration ──────────────────────────────────────
+
+  /// Step 1: Send OTP to the clinic email before creating the account.
+  /// [clinicData] is the full payload from Step 5 — held in state until OTP verified.
+  Future<void> requestRegistrationOtp({
+    required String email,
+    required Map<String, dynamic> clinicData,
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+    final result = await _authService.requestOtp(email);
+    if (result.success) {
+      state = state.copyWith(
+        isLoading: false,
+        pendingOtpId: result.otpId,
+        pendingEmail: email,
+        pendingClinicData: clinicData,
+      );
+    } else {
+      state = state.copyWith(isLoading: false, error: result.error);
+    }
+  }
+
+  /// Step 2: Verify OTP, then complete clinic registration.
+  Future<void> verifyRegistrationOtp({required String otpCode}) async {
+    if (state.pendingOtpId == null || state.pendingClinicData == null) {
+      state = state.copyWith(error: 'Session expired. Please try again.');
+      return;
+    }
+    state = state.copyWith(isLoading: true, error: null);
+    final verified = await _authService.verifyOtp(
+      otpId: state.pendingOtpId!,
+      otpCode: otpCode,
+    );
+    if (!verified.success) {
+      state = state.copyWith(isLoading: false, error: verified.error);
+      return;
+    }
+    // OTP good — now create the clinic
+    final photoPath = state.pendingClinicData!['doctor_photo_path'] as String?;
+    await registerClinic(
+      clinicName: state.pendingClinicData!['clinic_name'],
+      username: state.pendingClinicData!['username'],
+      password: state.pendingClinicData!['password'],
+      bedCount: state.pendingClinicData!['bed_count'],
+      primaryDoctorData: state.pendingClinicData!['primary_doctor_data'],
+      doctorPhotoFile: photoPath != null ? File(photoPath) : null,
+      receptionistData: state.pendingClinicData!['receptionist_data'],
+      additionalDoctors: state.pendingClinicData!['additional_doctors'] != null
+          ? List<Map<String, dynamic>>.from(
+              state.pendingClinicData!['additional_doctors'])
+          : null,
+      city: state.pendingClinicData!['city'],
+      area: state.pendingClinicData!['area'],
+      stateField: state.pendingClinicData!['state'],
+      pincode: state.pendingClinicData!['pincode'],
+      clinicEmail: state.pendingEmail,
+    );
+  }
+
+  /// Resend OTP for registration using the stored pending email.
+  Future<void> resendRegistrationOtp() async {
+    if (state.pendingEmail == null) return;
+    final result = await _authService.requestOtp(state.pendingEmail!);
+    if (result.success) {
+      state = state.copyWith(pendingOtpId: result.otpId);
+    } else {
+      state = state.copyWith(error: result.error);
+    }
+  }
+
+  // ── OTP: Forgot Password ───────────────────────────────────
+
+  /// Send OTP to a clinic email for password reset.
+  Future<void> requestForgotPasswordOtp(String email) async {
+    state = state.copyWith(isLoading: true, error: null);
+    final result = await _authService.requestOtp(email);
+    if (result.success) {
+      state = state.copyWith(
+        isLoading: false,
+        pendingOtpId: result.otpId,
+        pendingEmail: email,
+      );
+    } else {
+      state = state.copyWith(isLoading: false, error: result.error);
+    }
+  }
+
+  /// Verify OTP then update the clinic password.
+  Future<void> verifyOtpAndResetPassword({
+    required String otpCode,
+    required String newPassword,
+  }) async {
+    if (state.pendingOtpId == null) {
+      state = state.copyWith(error: 'Session expired. Please try again.');
+      return;
+    }
+    state = state.copyWith(isLoading: true, error: null);
+    final result = await _authService.verifyOtpAndResetPassword(
+      otpId: state.pendingOtpId!,
+      otpCode: otpCode,
+      newPassword: newPassword,
+    );
+    if (result.success) {
+      state = state.copyWith(isLoading: false);
+    } else {
+      state = state.copyWith(isLoading: false, error: result.error);
+    }
   }
 }
 

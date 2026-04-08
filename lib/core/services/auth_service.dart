@@ -19,6 +19,14 @@ class AuthResult {
   AuthResult({required this.success, this.error, this.role, this.user});
 }
 
+/// Result from an OTP request — carries the otpId needed for verification.
+class OtpResult {
+  final bool success;
+  final String? error;
+  final String? otpId;
+  OtpResult({required this.success, this.error, this.otpId});
+}
+
 class AuthService {
   final PocketBase pb;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
@@ -131,11 +139,17 @@ class AuthService {
   }
 
   /// Login as receptionist.
+  /// PocketBase's receptionists collection uses email as the identity field,
+  /// so we derive the same dummy email we created the record with.
   Future<AuthResult> loginReceptionist(String username, String password) async {
     try {
+      // Derive the stored dummy email from the username
+      final safe = username.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '_');
+      final email = '$safe@pms.local';
+
       final result = await pb
           .collection(PBCollections.receptionists)
-          .authWithPassword(username, password);
+          .authWithPassword(email, password);
 
       await _saveSession('receptionist', result.token, result.record.id);
 
@@ -178,6 +192,7 @@ class AuthService {
     String? area,
     String? state,
     String? pincode,
+    String? clinicEmail, // real email from registration; falls back to dummy if null
   }) async {
     try {
       // Generate unique clinic ID (6 chars)
@@ -187,6 +202,8 @@ class AuthService {
       final clinicBody = {
         'name': clinicName,
         'username': username,
+        'email': clinicEmail ?? _fakeEmail(username),
+        'emailVisibility': clinicEmail != null,
         'password': password,
         'passwordConfirm': password,
         'bed_count': bedCount,
@@ -216,6 +233,8 @@ class AuthService {
       final doctorBody = {
         ...primaryDoctorData,
         'username': internalUsername,
+        'email': _fakeEmail(internalUsername),
+        'emailVisibility': false,
         'password': internalPassword,
         'passwordConfirm': internalPassword,
         'clinic': clinicRecord.id,
@@ -240,8 +259,12 @@ class AuthService {
         for (final docData in additionalDoctors) {
           final docId = _generateUniqueId(8, prefix: 'DR');
           final photoPath = docData['photo_path'] as String?;
+          final docUsername = 'dr_${clinicCode.toLowerCase()}_$docId'.toLowerCase();
           final body = {
             ...docData,
+            'username': docUsername,
+            'email': _fakeEmail(docUsername),
+            'emailVisibility': false,
             'passwordConfirm': docData['password'],
             'clinic': clinicRecord.id,
             'is_primary': false,
@@ -268,6 +291,8 @@ class AuthService {
         final recBody = {
           'name': receptionistData['name'],
           'username': recUsername,
+          'email': _fakeEmail(recUsername),
+          'emailVisibility': false,
           'password': recPassword,
           'passwordConfirm': recPassword,
           'clinic': clinicRecord.id,
@@ -314,8 +339,69 @@ class AuthService {
 
   bool get isLoggedIn => pb.authStore.isValid;
 
-  // --- Private helpers ---
+  // ── OTP Methods ────────────────────────────────────────────────
 
+  /// Request an OTP to be sent to [email] via PocketBase's built-in OTP system.
+  /// Returns an [OtpResult] carrying the otpId needed for verification.
+  Future<OtpResult> requestOtp(String email) async {
+    try {
+      final response = await pb
+          .collection(PBCollections.clinics)
+          .requestOTP(email);
+      return OtpResult(success: true, otpId: response.otpId);
+    } on ClientException catch (e) {
+      return OtpResult(success: false, error: _parseError(e));
+    } catch (_) {
+      return OtpResult(
+          success: false, error: 'Could not send OTP. Check your email address.');
+    }
+  }
+
+  /// Verify an OTP code. On success the PocketBase auth store is updated.
+  Future<AuthResult> verifyOtp({required String otpId, required String otpCode}) async {
+    try {
+      await pb
+          .collection(PBCollections.clinics)
+          .authWithOTP(otpId, otpCode);
+      return AuthResult(success: true);
+    } on ClientException catch (_) {
+      return AuthResult(success: false, error: 'Invalid or expired code. Try again.');
+    } catch (_) {
+      return AuthResult(success: false, error: 'Verification failed. Please try again.');
+    }
+  }
+
+  /// Verify OTP and immediately update the authenticated clinic's password.
+  Future<AuthResult> verifyOtpAndResetPassword({
+    required String otpId,
+    required String otpCode,
+    required String newPassword,
+  }) async {
+    try {
+      final authResult = await pb
+          .collection(PBCollections.clinics)
+          .authWithOTP(otpId, otpCode);
+      // Now authenticated — update the password
+      await pb.collection(PBCollections.clinics).update(
+        authResult.record.id,
+        body: {
+          'password': newPassword,
+          'passwordConfirm': newPassword,
+          'oldPassword': otpCode, // PocketBase may not require this for OTP auth
+        },
+      );
+      // Clear the session — user must log in fresh with new password
+      pb.authStore.clear();
+      await _clearStorage();
+      return AuthResult(success: true);
+    } on ClientException catch (e) {
+      return AuthResult(success: false, error: _parseError(e));
+    } catch (e) {
+      return AuthResult(success: false, error: 'Reset failed. Please try again.');
+    }
+  }
+
+  // ── Generate unique ID ───────────────────────────────────────────
   Future<void> _saveSession(String role, String token, String userId) async {
     await _storage.write(key: _roleKey, value: role);
     await _storage.write(key: _tokenKey, value: token);
@@ -337,6 +423,14 @@ class AuthService {
     final random = List.generate(length, (_) => chars[rng.nextInt(chars.length)]).join();
     if (prefix != null) return '$prefix$random';
     return random;
+  }
+
+  /// Derive a dummy email from a username so PocketBase email-required
+  /// auth collections accept the record. Email is never used for login.
+  String _fakeEmail(String username) {
+    // Sanitise: lowercase, strip spaces/special chars
+    final safe = username.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_]'), '_');
+    return '$safe@pms.local';
   }
 
   String _parseError(ClientException e) {

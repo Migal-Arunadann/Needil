@@ -24,20 +24,7 @@ class MainLayout extends ConsumerStatefulWidget {
 
 class MainLayoutState extends ConsumerState<MainLayout> {
   int _currentIndex = 0;
-  late PageController _pageController;
   String? _highlightAppointmentId;
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController(initialPage: 0);
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
 
   /// Switch to a tab programmatically (e.g., from dashboard "Upcoming Today" tap).
   /// Optionally pass an appointment ID to highlight in the appointments tab.
@@ -46,11 +33,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       _currentIndex = index;
       _highlightAppointmentId = highlightAppointmentId;
     });
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeInOut,
-    );
   }
 
   /// Called by AppointmentListScreen after it consumes the highlight ID.
@@ -139,12 +121,22 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       body: Stack(
         clipBehavior: Clip.none,
         children: [
-          PageView(
-            controller: _pageController,
-            onPageChanged: (index) {
-              setState(() => _currentIndex = index);
-            },
-            children: pages,
+          // IndexedStack keeps every tab widget alive in memory — zero rebuild
+          // cost on switch. AnimatedSwitcher on the key drives a crisp 150ms
+          // fade so taps feel instant (same pattern Instagram/Facebook use).
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 150),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: child,
+            ),
+            child: IndexedStack(
+              key: ValueKey<int>(_currentIndex),
+              index: _currentIndex,
+              children: pages,
+            ),
           ),
           Positioned(
             bottom: 16,
@@ -203,12 +195,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
+        if (_currentIndex == index) return; // already here, no-op
         setState(() => _currentIndex = index);
-        _pageController.animateToPage(
-          index,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),

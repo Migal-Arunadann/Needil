@@ -5,6 +5,9 @@ import '../../features/auth/screens/clinic_registration/clinic_step2_screen.dart
 import '../../features/auth/screens/clinic_registration/clinic_step3_screen.dart';
 import '../../features/auth/screens/clinic_registration/clinic_step4_screen.dart';
 import '../../features/auth/screens/clinic_registration/clinic_step5_screen.dart';
+import '../../features/auth/screens/otp_verification_screen.dart';
+import '../../features/auth/screens/forgot_password_screen.dart';
+import '../../features/auth/screens/reset_password_screen.dart';
 import '../../features/dashboard/screens/main_layout.dart';
 import '../../features/appointments/screens/appointment_list_screen.dart';
 import '../../features/appointments/screens/create_appointment_screen.dart';
@@ -48,6 +51,30 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
     case '/register/clinic/step5':
       final args = settings.arguments as Map<String, dynamic>;
       return _slide(ClinicStep5Screen(clinicData: args), settings);
+
+    case '/auth/otp-verify':
+      final args = settings.arguments as Map<String, dynamic>;
+      return _slide(
+        OtpVerificationScreen(
+          mode: args['mode'] as OtpMode,
+          email: args['email'] as String,
+          clinicData: args['clinic_data'] as Map<String, dynamic>?,
+        ),
+        settings,
+      );
+
+    case '/auth/forgot-password':
+      return _slide(const ForgotPasswordScreen(), settings);
+
+    case '/auth/reset-password':
+      final args = settings.arguments as Map<String, dynamic>;
+      return _slide(
+        ResetPasswordScreen(
+          otpCode: args['otp_code'] as String,
+          otpId: args['otp_id'] as String?,
+        ),
+        settings,
+      );
 
     case '/dashboard':
       return _fade(MainLayout(), settings);
