@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../models/patient_model.dart';
@@ -203,8 +204,26 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
                     ],
                   ),
                 ),
+                // Phone Call Button
+                if (patient.phone.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.phone_rounded, color: AppColors.success),
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.success.withValues(alpha: 0.1),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () async {
+                      final uri = Uri.parse('tel:${patient.phone}');
+                      try {
+                        await launchUrl(uri);
+                      } catch (e) {
+                        debugPrint('Could not launch dialer: $e');
+                      }
+                    },
+                  ),
+                const SizedBox(width: 4),
                 // Forward Icon
-                Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
+                const Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
               ],
             ),
           ),

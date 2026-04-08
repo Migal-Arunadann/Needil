@@ -100,7 +100,10 @@ class ConsultationModel {
       pregnancyStatus: record.getStringValue('pregnancy_status'),
       consentGiven: record.getBoolValue('consent_given'),
       bpLevel: record.getStringValue('bp_level'),
-      pulse: record.getIntValue('pulse'),
+      // Use raw data so getIntValue's default-0 doesn't mask a truly unset pulse
+      pulse: record.data['pulse'] != null && record.data['pulse'] != 0
+          ? record.getIntValue('pulse')
+          : null,
       charged: record.getBoolValue('charged'),
       chargeAmount: record.getDoubleValue('charge_amount'),
       photos: record.getListValue<String>('photos'),

@@ -176,15 +176,43 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
       dateLabel = DateFormat('EEE, MMM d').format(date);
     }
 
+    void _navigateToRecord(SessionModel session) {
+      Navigator.pushNamed(context, '/sessions/record', arguments: session)
+          .then((_) {
+        ref
+            .read(sessionsProvider.notifier)
+            .loadPlanSessions(widget.plan.id);
+      });
+    }
+
     return GestureDetector(
       onTap: () {
         if (session.status == SessionStatus.upcoming) {
-          Navigator.pushNamed(context, '/sessions/record', arguments: session)
-              .then((_) {
-            ref
-                .read(sessionsProvider.notifier)
-                .loadPlanSessions(widget.plan.id);
-          });
+          final dt = DateTime.tryParse(session.scheduledDate);
+          final now = DateTime.now();
+          // PocketBase dates might be UTC; simple local day check:
+          if (dt != null && (dt.toLocal().year != now.year || dt.toLocal().month != now.month || dt.toLocal().day != now.day)) {
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: const Text('Date Mismatch'),
+                content: const Text('This session is not scheduled for today. Are you sure you want to record it now?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _navigateToRecord(session);
+                    },
+                    child: const Text('Proceed', style: TextStyle(color: AppColors.primary)),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            _navigateToRecord(session);
+          }
         }
       },
       child: Container(

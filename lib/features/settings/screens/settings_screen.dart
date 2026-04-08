@@ -4,13 +4,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/app_button.dart';
-import '../../../core/widgets/app_text_field.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/constants/pb_collections.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/services/auth_service.dart';
 import 'edit_profile_screen.dart';
 import 'edit_doctor_details_screen.dart';
+import 'notifications_screen.dart';
+import 'privacy_security_screen.dart';
+import 'about_screen.dart';
+import 'manage_doctors_screen.dart';
+import 'manage_receptionist_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -20,166 +24,22 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
-  bool _isJoining = false;
-  bool _isSaving = false;
-  final _clinicIdCtrl = TextEditingController();
-
-  // Data sharing preferences (doctor only)
-  late bool _sharePast;
-  late bool _shareFuture;
-
-  // Managed doctors list (clinic only)
-  List<Map<String, dynamic>> _managedDoctors = [];
-  bool _loadingDoctors = false;
 
   @override
   void initState() {
     super.initState();
-    final doctor = ref.read(authProvider).doctor;
-    _sharePast = doctor?.sharePastPatients ?? false;
-    _shareFuture = doctor?.shareFuturePatients ?? false;
-
-    final auth = ref.read(authProvider);
-    if (auth.role == UserRole.clinic) {
-      _loadManagedDoctors();
-    }
   }
 
   @override
   void dispose() {
-    _clinicIdCtrl.dispose();
     super.dispose();
   }
 
-  // ── Load doctors managed by this clinic ─────────────────────
-  Future<void> _loadManagedDoctors() async {
-    setState(() => _loadingDoctors = true);
-    try {
-      final pb = ref.read(pocketbaseProvider);
-      final auth = ref.read(authProvider);
-      final result = await pb.collection(PBCollections.doctors).getList(
-        filter: 'clinic = "${auth.userId}"',
-        sort: '-is_primary,name',
-      );
-      setState(() {
-        _managedDoctors = result.items.map((r) => {
-          'id': r.id,
-          'name': r.getStringValue('name'),
-          'username': r.getStringValue('username'),
-          'email': r.getStringValue('email'),
-          'age': r.getIntValue('age'),
-          'is_primary': r.getBoolValue('is_primary'),
-        }).toList();
-        _loadingDoctors = false;
-      });
-    } catch (e) {
-      setState(() => _loadingDoctors = false);
-    }
-  }
 
-  // ── Doctor-only: Join Clinic ────────────────────────────────
-  Future<void> _joinClinic() async {
-    final clinicCode = _clinicIdCtrl.text.trim();
-    if (clinicCode.isEmpty) {
-      _showError('Please enter a Clinic ID');
-      return;
-    }
 
-    setState(() => _isJoining = true);
-    try {
-      final pb = ref.read(pocketbaseProvider);
-      final auth = ref.read(authProvider);
-
-      final clinics = await pb.collection(PBCollections.clinics).getList(
-        filter: 'clinic_id = "$clinicCode"',
-      );
-      if (clinics.items.isEmpty) {
-        _showError('No clinic found with ID: $clinicCode');
-        setState(() => _isJoining = false);
-        return;
-      }
-      final clinicRecord = clinics.items.first;
-      await pb.collection(PBCollections.doctors).update(
-        auth.userId!,
-        body: {'clinic': clinicRecord.id},
-      );
-
-      if (mounted) {
-        _showSuccess('Joined ${clinicRecord.getStringValue('name')}!');
-        _clinicIdCtrl.clear();
-        ref.read(authProvider.notifier).restoreSession();
-      }
-    } catch (e) {
-      _showError('Failed to join clinic: $e');
-    } finally {
-      if (mounted) setState(() => _isJoining = false);
-    }
-  }
-
-  Future<void> _leaveClinic() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Leave Clinic?'),
-        content: const Text(
-            'You will no longer be associated with this clinic. Your patient data sharing settings will be preserved.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Leave', style: TextStyle(color: AppColors.error)),
-          ),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      try {
-        final pb = ref.read(pocketbaseProvider);
-        final auth = ref.read(authProvider);
-        await pb.collection(PBCollections.doctors).update(auth.userId!, body: {'clinic': ''});
-        if (mounted) {
-          _showSuccess('Left clinic');
-          ref.read(authProvider.notifier).restoreSession();
-        }
-      } catch (e) {
-        _showError('Failed: $e');
-      }
-    }
-  }
-
-  Future<void> _saveSharingPrefs() async {
-    setState(() => _isSaving = true);
-    try {
-      final pb = ref.read(pocketbaseProvider);
-      final auth = ref.read(authProvider);
-      await pb.collection(PBCollections.doctors).update(auth.userId!, body: {
-        'share_past_patients': _sharePast,
-        'share_future_patients': _shareFuture,
-      });
-      if (mounted) {
-        _showSuccess('Sharing preferences saved');
-        ref.read(authProvider.notifier).restoreSession();
-      }
-    } catch (e) {
-      _showError('Failed: $e');
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
-
-  void _showError(String msg) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
-    }
-  }
+  // _showError is intentionally removed — validation errors are now shown
+  // directly via ScaffoldMessenger.of(ctx) inside the bottom sheet to avoid
+  // cross-context widget scope issues.
 
   void _showSuccess(String msg) {
     if (mounted) {
@@ -216,6 +76,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       'Email': clinic?.email?.isNotEmpty ?? false,
       'Bed Count': (clinic?.bedCount ?? 0) > 0,
       'Clinic ID': clinic?.clinicId.isNotEmpty ?? false,
+      'Phone Number': clinic?.phone?.isNotEmpty ?? false,
+      'Address': clinic?.address?.isNotEmpty ?? false,
+      'Area': clinic?.area?.isNotEmpty ?? false,
+      'City': clinic?.city?.isNotEmpty ?? false,
+      'State': clinic?.state?.isNotEmpty ?? false,
+      'PIN Code': clinic?.pin?.isNotEmpty ?? false,
+      'Clinic GMap Link': clinic?.location?.isNotEmpty ?? false,
+      'Logo': clinic?.logoUrl?.isNotEmpty ?? false,
     };
   }
 
@@ -227,6 +95,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       'Email': doctor?.email?.isNotEmpty ?? false,
       'Age': (doctor?.age ?? 0) > 0,
       'Clinic Association': doctor?.clinicId?.isNotEmpty ?? false,
+      'Phone Number': doctor?.phone?.isNotEmpty ?? false,
+      'Date of Birth': doctor?.dateOfBirth?.isNotEmpty ?? false,
+      'Photo': doctor?.photoUrl?.isNotEmpty ?? false,
     };
   }
 
@@ -267,62 +138,62 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               const SizedBox(height: 24),
 
               if (isClinic) ...[
-                // ═══════════════════════════════════════════
-                //  CLINIC ACCOUNT SECTIONS
-                // ═══════════════════════════════════════════
+                // CLINIC ACCOUNT SECTIONS
 
-                // ── Clinic Details ──
                 _sectionHeader('Clinic Details', Icons.business_rounded),
                 const SizedBox(height: 10),
                 _buildClinicDetailsCard(),
                 const SizedBox(height: 24),
 
-                // ── Primary Doctor ──
-                _sectionHeader('Primary Doctor (Owner)', Icons.admin_panel_settings_rounded),
+                _sectionHeader('Staff Management', Icons.manage_accounts_rounded),
                 const SizedBox(height: 10),
-                _buildPrimaryDoctorCard(),
-                const SizedBox(height: 24),
 
-                // ── Managed Doctors ──
-                _sectionHeader('Managed Doctors', Icons.group_rounded),
-                const SizedBox(height: 6),
-                Text(
-                  'Doctors who have joined your clinic. You can view and manage their details.',
-                  style: AppTextStyles.caption,
+                // ── Manage Doctors button ──
+                _staffManagementTile(
+                  icon: Icons.medical_services_rounded,
+                  iconColor: AppColors.primary,
+                  title: 'Manage Doctors',
+                  subtitle: 'View schedules, set restrictions, reset passwords',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ManageDoctorsScreen()),
+                  ),
                 ),
                 const SizedBox(height: 10),
-                _buildManagedDoctorsList(),
-                const SizedBox(height: 24),
-              ] else ...[
-                // ═══════════════════════════════════════════
-                //  DOCTOR ACCOUNT SECTIONS
-                // ═══════════════════════════════════════════
 
-                // ── Personal Details ──
+                // ── Manage Receptionist button ──
+                _staffManagementTile(
+                  icon: Icons.support_agent_rounded,
+                  iconColor: AppColors.info,
+                  title: 'Manage Receptionist',
+                  subtitle: 'Edit details, toggle access, reset passwords',
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ManageReceptionistScreen()),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+              ] else if (auth.role == UserRole.doctor) ...[
+                // DOCTOR ACCOUNT SECTIONS
+
                 _sectionHeader('Personal Details', Icons.person_outline_rounded),
                 const SizedBox(height: 10),
                 _buildDoctorDetailsCard(),
                 const SizedBox(height: 24),
 
-                // ── Clinic Association ──
-                _sectionHeader('Clinic', Icons.business_rounded),
+                // Read-only clinic info
+                _sectionHeader('My Clinic', Icons.business_rounded),
                 const SizedBox(height: 10),
-                _buildClinicAssociation(),
+                _buildDoctorClinicInfo(),
                 const SizedBox(height: 24),
+              ] else if (auth.role == UserRole.receptionist) ...[
+                // RECEPTIONIST ACCOUNT SECTIONS
 
-                // ── Data Sharing (doctor in clinic only) ──
-                if (auth.doctor?.clinicId != null &&
-                    auth.doctor!.clinicId!.isNotEmpty) ...[
-                  _sectionHeader('Data Sharing', Icons.share_rounded),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Control what patient data the clinic can access.',
-                    style: AppTextStyles.caption,
-                  ),
-                  const SizedBox(height: 10),
-                  _buildDataSharing(),
-                  const SizedBox(height: 24),
-                ],
+                _sectionHeader('Staff Details', Icons.support_agent_rounded),
+                const SizedBox(height: 10),
+                _buildReceptionistDetailsCard(),
+                const SizedBox(height: 24),
               ],
 
               // ── General Settings ──
@@ -332,21 +203,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 icon: Icons.notifications_outlined,
                 title: 'Notifications',
                 subtitle: 'Manage notification preferences',
-                onTap: () => _showComingSoon('Notifications settings coming soon!'),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                ),
               ),
               const SizedBox(height: 8),
               _settingsTile(
                 icon: Icons.lock_outline_rounded,
                 title: 'Privacy & Security',
                 subtitle: 'Update password and security settings',
-                onTap: () => _showComingSoon('Privacy settings coming soon!'),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PrivacySecurityScreen()),
+                ),
               ),
               const SizedBox(height: 8),
               _settingsTile(
                 icon: Icons.info_outline_rounded,
                 title: 'About',
                 subtitle: 'App version and legal information',
-                onTap: () => _showComingSoon('About section coming soon!'),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AboutScreen()),
+                ),
               ),
               const SizedBox(height: 24),
 
@@ -373,10 +253,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   Widget _buildProfileHero(bool isClinic) {
     final auth = ref.read(authProvider);
-    final name = isClinic ? (auth.clinic?.name ?? 'Clinic') : ('Dr. ${auth.doctor?.name ?? 'Doctor'}');
-    final username = isClinic ? (auth.clinic?.username ?? '') : (auth.doctor?.username ?? '');
+    final isReceptionist = auth.role == UserRole.receptionist;
+    final name = isClinic
+        ? (auth.clinic?.name ?? 'Clinic')
+        : isReceptionist
+            ? (auth.receptionist?.name ?? 'Receptionist')
+            : ('Dr. ${auth.doctor?.name ?? "Doctor"}');
+    final username = isClinic
+        ? (auth.clinic?.username ?? '')
+        : isReceptionist
+            ? (auth.receptionist?.username ?? '')
+            : (auth.doctor?.username ?? '');
     final email = isClinic ? (auth.clinic?.email ?? '') : (auth.doctor?.email ?? '');
-    final role = isClinic ? 'Clinic Account' : 'Doctor Account';
+    final role = isClinic
+        ? 'Clinic Account'
+        : isReceptionist
+            ? 'Staff Account'
+            : 'Doctor Account';
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -400,12 +293,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             decoration: BoxDecoration(
               color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(18),
+              image: (isClinic ? auth.clinic?.logoUrl : auth.doctor?.photoUrl) != null
+                  ? DecorationImage(
+                      image: NetworkImage(isClinic ? auth.clinic!.logoUrl! : auth.doctor!.photoUrl!),
+                      fit: BoxFit.cover,
+                    )
+                  : null,
             ),
-            child: Icon(
-              isClinic ? Icons.business_rounded : Icons.medical_services_rounded,
-              color: Colors.white,
-              size: 32,
-            ),
+            child: (isClinic ? auth.clinic?.logoUrl : auth.doctor?.photoUrl) == null
+                ? Icon(
+                    isClinic ? Icons.business_rounded : Icons.medical_services_rounded,
+                    color: Colors.white,
+                    size: 32,
+                  )
+                : null,
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -512,13 +413,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           GestureDetector(
             onTap: () async {
               await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
-              // Refresh after edit
-              if (mounted) {
-                setState(() {});
-                if (ref.read(authProvider).role == UserRole.clinic) {
-                  _loadManagedDoctors();
-                }
-              }
+              if (mounted) setState(() {});
             },
             child: Container(
               width: 36,
@@ -550,280 +445,54 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ]);
   }
 
+
   // ════════════════════════════════════════════════════════════
-  //  CLINIC ACCOUNT: Primary Doctor Card
+  //  CLINIC ACCOUNT: Staff Management Nav Tile
   // ════════════════════════════════════════════════════════════
 
-  Widget _buildPrimaryDoctorCard() {
-    // The primary doctor is the one with is_primary = true
-    final primaryDoc = _managedDoctors.where((d) => d['is_primary'] == true).toList();
-
-    if (_loadingDoctors) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(20),
-          child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
-        ),
-      );
-    }
-
-    if (primaryDoc.isEmpty) {
-      return Container(
+  Widget _staffManagementTile({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.warning.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.warning.withValues(alpha: 0.2)),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 22),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                'No primary doctor found. The clinic owner should be registered as the primary doctor.',
-                style: AppTextStyles.caption.copyWith(color: AppColors.warning),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final doc = primaryDoc.first;
-    return _doctorDetailCard(doc, isPrimary: true);
-  }
-
-  // ════════════════════════════════════════════════════════════
-  //  CLINIC ACCOUNT: Managed Doctors List
-  // ════════════════════════════════════════════════════════════
-
-  Widget _buildManagedDoctorsList() {
-    if (_loadingDoctors) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(20),
-          child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2),
-        ),
-      );
-    }
-
-    final joinedDoctors = _managedDoctors.where((d) => d['is_primary'] != true).toList();
-
-    if (joinedDoctors.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppColors.border),
         ),
-        child: Column(
-          children: [
-            Icon(Icons.group_add_rounded, size: 40, color: AppColors.textHint),
-            const SizedBox(height: 10),
-            Text(
-              'No doctors have joined yet',
-              style: AppTextStyles.label.copyWith(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Share your Clinic ID with doctors so they can request to join.',
-              style: AppTextStyles.caption,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 12),
-            _clinicIdShareChip(),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      children: [
-        ...joinedDoctors.map((doc) => Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: _doctorDetailCard(doc, isPrimary: false),
-        )),
-        const SizedBox(height: 4),
-        _clinicIdShareChip(),
-      ],
-    );
-  }
-
-  Widget _clinicIdShareChip() {
-    final clinicId = ref.read(authProvider).clinic?.clinicId ?? '';
-    return GestureDetector(
-      onTap: () {
-        Clipboard.setData(ClipboardData(text: clinicId));
-        _showSuccess('Clinic ID copied: $clinicId');
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        decoration: BoxDecoration(
-          color: AppColors.info.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.info.withValues(alpha: 0.2)),
-        ),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.share_rounded, size: 14, color: AppColors.info),
-            const SizedBox(width: 6),
-            Text(
-              'Clinic ID: $clinicId',
-              style: AppTextStyles.caption.copyWith(
-                color: AppColors.info,
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: iconColor, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: AppTextStyles.label.copyWith(fontSize: 14)),
+                  const SizedBox(height: 2),
+                  Text(subtitle, style: AppTextStyles.caption.copyWith(fontSize: 11)),
+                ],
               ),
             ),
-            const SizedBox(width: 6),
-            Icon(Icons.copy_rounded, size: 13, color: AppColors.info),
+            const SizedBox(width: 8),
+            Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textHint),
           ],
         ),
       ),
     );
-  }
-
-  // ── Doctor Detail Card (used by both primary and managed) ──
-
-  Widget _doctorDetailCard(Map<String, dynamic> doc, {required bool isPrimary}) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isPrimary
-              ? AppColors.primary.withValues(alpha: 0.3)
-              : AppColors.border,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  gradient: isPrimary ? AppColors.heroGradient : null,
-                  color: isPrimary ? null : AppColors.accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  isPrimary ? Icons.star_rounded : Icons.person_rounded,
-                  color: isPrimary ? Colors.white : AppColors.accent,
-                  size: 22,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            'Dr. ${doc['name'] ?? 'Unknown'}',
-                            style: AppTextStyles.label.copyWith(fontSize: 15),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        if (isPrimary) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'OWNER',
-                              style: AppTextStyles.caption.copyWith(
-                                color: AppColors.primary,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    Text(
-                      '@${doc['username'] ?? ''}',
-                      style: AppTextStyles.caption.copyWith(fontSize: 11),
-                    ),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: () => _openDoctorEditScreen(doc),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.edit_rounded, size: 16, color: AppColors.primary),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Divider(height: 1, color: AppColors.border),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _miniInfoChip(Icons.cake_outlined, 'Age: ${doc['age'] ?? '—'}'),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _miniInfoChip(
-                  Icons.email_outlined,
-                  (doc['email'] ?? '').toString().isNotEmpty ? doc['email'] : 'No email',
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _miniInfoChip(IconData icon, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 13, color: AppColors.textHint),
-        const SizedBox(width: 4),
-        Flexible(
-          child: Text(
-            text,
-            style: AppTextStyles.caption.copyWith(fontSize: 11),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── Clinic: Navigate to full doctor edit screen ─────────────
-
-  Future<void> _openDoctorEditScreen(Map<String, dynamic> doc) async {
-    final refreshed = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => EditDoctorDetailsScreen(doctorId: doc['id'] as String),
-      ),
-    );
-    if (refreshed == true && mounted) {
-      _loadManagedDoctors();
-      ref.read(authProvider.notifier).restoreSession();
-    }
   }
 
   // ════════════════════════════════════════════════════════════
@@ -896,51 +565,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   // ════════════════════════════════════════════════════════════
-  //  DOCTOR ACCOUNT: Clinic Association
+  //  DOCTOR ACCOUNT: My Clinic (read-only)
   // ════════════════════════════════════════════════════════════
 
-  Widget _buildClinicAssociation() {
+  Widget _buildDoctorClinicInfo() {
     final doctor = ref.read(authProvider).doctor;
     final isInClinic = doctor?.clinicId != null && doctor!.clinicId!.isNotEmpty;
 
-    if (isInClinic) {
+    if (!isInClinic) {
       return Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.success.withValues(alpha: 0.06),
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
+          border: Border.all(color: AppColors.border),
         ),
         child: Row(
           children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.success.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 22),
-            ),
-            const SizedBox(width: 12),
+            Icon(Icons.info_outline_rounded, color: AppColors.textHint, size: 22),
+            const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Part of a clinic', style: AppTextStyles.label.copyWith(color: AppColors.success)),
-                  Text('Clinic ID: ${doctor.clinicId}', style: AppTextStyles.caption),
-                ],
-              ),
-            ),
-            GestureDetector(
-              onTap: _leaveClinic,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text('Leave', style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+              child: Text(
+                'Your account is managed by a clinic. Contact your clinic administrator for details.',
+                style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
               ),
             ),
           ],
@@ -948,33 +595,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
     }
 
-    // Not in a clinic — show Join form
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: AppColors.success.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text('Join a Clinic', style: AppTextStyles.label.copyWith(color: AppColors.primary)),
-          const SizedBox(height: 4),
-          Text('Enter the Clinic ID provided by your clinic administrator.', style: AppTextStyles.caption),
-          const SizedBox(height: 12),
-          AppTextField(
-            controller: _clinicIdCtrl,
-            label: 'Clinic ID',
-            hint: 'e.g. CL-XXXXXX',
-            prefixIcon: const Icon(Icons.vpn_key_rounded, color: AppColors.primary, size: 18),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.success.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 22),
           ),
-          const SizedBox(height: 12),
-          AppButton(
-            label: 'Join Clinic',
-            isLoading: _isJoining,
-            icon: Icons.link_rounded,
-            onPressed: _joinClinic,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Associated with a clinic', style: AppTextStyles.label.copyWith(color: AppColors.success)),
+                const SizedBox(height: 2),
+                Text(
+                  'Your account is managed by the clinic owner.',
+                  style: AppTextStyles.caption.copyWith(fontSize: 11),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -982,48 +633,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   // ════════════════════════════════════════════════════════════
-  //  DOCTOR ACCOUNT: Data Sharing
+  //  RECEPTIONIST ACCOUNT: Details Card
   // ════════════════════════════════════════════════════════════
 
-  Widget _buildDataSharing() {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            children: [
-              _sharingToggle(
-                title: 'Share Past Patients',
-                subtitle: 'Allow clinic to view patients you treated before joining',
-                value: _sharePast,
-                icon: Icons.history_rounded,
-                onChanged: (v) => setState(() => _sharePast = v),
-              ),
-              Divider(height: 1, color: AppColors.border),
-              _sharingToggle(
-                title: 'Share Future Patients',
-                subtitle: 'Allow clinic to view patients you treat after joining',
-                value: _shareFuture,
-                icon: Icons.upcoming_rounded,
-                onChanged: (v) => setState(() => _shareFuture = v),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        AppButton(
-          label: 'Save Sharing Preferences',
-          isLoading: _isSaving,
-          icon: Icons.save_rounded,
-          onPressed: _saveSharingPrefs,
-        ),
-      ],
-    );
+  Widget _buildReceptionistDetailsCard() {
+    final receptionist = ref.read(authProvider).receptionist;
+    return _infoCard([
+      _infoRow('Name', receptionist?.name ?? '—'),
+      _infoRow('Username', receptionist?.username ?? '—'),
+      _infoRow('Staff ID', receptionist?.receptionistId ?? '—'),
+      _infoRow('Role', 'Receptionist'),
+    ]);
   }
 
   // ════════════════════════════════════════════════════════════
@@ -1120,7 +740,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
     if (confirm == true && mounted) {
       ref.read(authProvider.notifier).logout();
-      Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
     }
   }
 
@@ -1134,10 +753,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final pctInt = (pct * 100).round();
     final missing = fields.entries.where((e) => !e.value).toList();
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: pct >= 1.0
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+        if (mounted) setState(() {});
+      },
+      child: Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          gradient: pct >= 1.0
             ? LinearGradient(colors: [
                 AppColors.success.withValues(alpha: 0.08),
                 AppColors.success.withValues(alpha: 0.02),
@@ -1234,7 +858,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ],
         ],
       ),
-    );
+    ));
   }
 
   // ════════════════════════════════════════════════════════════
@@ -1328,38 +952,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.textHint),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _sharingToggle({
-    required String title,
-    required String subtitle,
-    required bool value,
-    required IconData icon,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: AppColors.textSecondary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTextStyles.label.copyWith(fontSize: 13)),
-                Text(subtitle, style: AppTextStyles.caption.copyWith(fontSize: 11)),
-              ],
-            ),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeTrackColor: AppColors.primary,
-          ),
-        ],
       ),
     );
   }

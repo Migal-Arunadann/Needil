@@ -48,7 +48,7 @@ class _ClinicStep2ScreenState extends State<ClinicStep2Screen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SizedBox(height: 8),
-              _buildStepIndicator(2, 3),
+              _buildStepIndicator(2, 5),
               const SizedBox(height: 24),
               Text('Bed Capacity', style: AppTextStyles.h2),
               const SizedBox(height: 8),

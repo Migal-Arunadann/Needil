@@ -2,6 +2,7 @@ import 'package:pocketbase/pocketbase.dart';
 import '../constants/pb_collections.dart';
 import '../../features/appointments/models/appointment_model.dart';
 import '../../features/patients/models/patient_model.dart';
+import '../../features/consultations/models/consultation_model.dart';
 
 class AppointmentService {
   final PocketBase pb;
@@ -133,7 +134,10 @@ class AppointmentService {
     required String doctorId,
     String? clinicId,
     String? dateOfBirth,
+    String? city,
+    String? area,
     String? address,
+    String? pincode,
     String? emergencyContact,
     String? allergiesConditions,
     String? gender,
@@ -148,9 +152,13 @@ class AppointmentService {
       if (clinicId != null && clinicId.isNotEmpty) 'clinic': clinicId,
       if (dateOfBirth != null && dateOfBirth.isNotEmpty)
         'date_of_birth': dateOfBirth,
+      if (city != null && city.isNotEmpty) 'city': city,
+      if (area != null && area.isNotEmpty) 'area': area,
       if (address != null && address.isNotEmpty) 'address': address,
+      if (pincode != null && pincode.isNotEmpty) 'pincode': pincode,
       if (emergencyContact != null && emergencyContact.isNotEmpty)
         'emergency_contact': emergencyContact,
+      if (allergiesConditions != null && allergiesConditions.isNotEmpty)
         'allergies_conditions': allergiesConditions,
       if (gender != null && gender.isNotEmpty) 'gender': gender,
       if (occupation != null && occupation.isNotEmpty) 'occupation': occupation,
@@ -204,14 +212,31 @@ class AppointmentService {
     return null;
   }
 
-  /// Check if a scheduled appointment already exists for this phone + doctor + date.
-  Future<AppointmentModel?> findExistingAppointment(String phone, String doctorId, {String? date}) async {
+  /// Check if a scheduled appointment already exists for this phone + doctor on a specific date.
+  /// Only warns about double-booking on the SAME date. Different dates are freely allowed.
+  Future<AppointmentModel?> findExistingAppointment(String phone, String doctorId, {required String date}) async {
     try {
-      final dateFilter = date != null ? ' && date = "$date"' : '';
       final result = await pb.collection(PBCollections.appointments).getList(
-        filter: 'patient_phone = "$phone" && doctor = "$doctorId" && status = "scheduled"$dateFilter',
+        filter: 'patient_phone = "$phone" && doctor = "$doctorId" && status = "scheduled" && date = "$date"',
         perPage: 1,
-        sort: '-date,-time',
+        sort: 'time',
+      );
+      if (result.items.isNotEmpty) {
+        return AppointmentModel.fromRecord(result.items.first);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Check if an appointment with this phone number already exists today (any status except cancelled),
+  /// used to prevent creating a second consultation for the same patient under a different name.
+  Future<AppointmentModel?> findAnyActiveTodayByPhone(String phone, String doctorId) async {
+    try {
+      final today = _todayString();
+      final result = await pb.collection(PBCollections.appointments).getList(
+        filter: 'patient_phone = "$phone" && doctor = "$doctorId" && date = "$today" && status != "cancelled"',
+        perPage: 1,
+        sort: '-created',
       );
       if (result.items.isNotEmpty) {
         return AppointmentModel.fromRecord(result.items.first);
@@ -244,14 +269,124 @@ class AppointmentService {
     return AppointmentModel.fromRecord(record);
   }
 
-  /// Reschedule an appointment to a new date and time.
-  Future<AppointmentModel> rescheduleAppointment(String appointmentId, String newDate, String newTime) async {
+  /// Mark a SESSION appointment as arrived: sets appointment in_progress + session status = in_progress.
+  Future<AppointmentModel> markSessionArrived(String appointmentId) async {
     final record = await pb.collection(PBCollections.appointments).update(
       appointmentId,
       body: {
-        'date': newDate,
-        'time': newTime,
+        'status': 'in_progress',
+        'check_in_time': DateTime.now().toUtc().toIso8601String(),
       },
+    );
+    // Sync the linked session record's status
+    final appt = AppointmentModel.fromRecord(record);
+    if (appt.patientId != null) {
+      try {
+        final sessions = await pb.collection(PBCollections.sessions).getList(
+          filter:
+              'patient = "${appt.patientId}" && doctor = "${appt.doctorId}" && scheduled_date = "${appt.date}" && scheduled_time = "${appt.time}" && status = "upcoming"',
+          perPage: 1,
+        );
+        if (sessions.items.isNotEmpty) {
+          await pb.collection(PBCollections.sessions).update(
+            sessions.items.first.id,
+            body: {
+              'status': 'in_progress',
+              'check_in_time': DateTime.now().toUtc().toIso8601String(),
+            },
+          );
+        }
+      } catch (_) {}
+    }
+    return appt;
+  }
+
+  /// Mark a SESSION appointment as ended: sets appointment + session to completed.
+  Future<AppointmentModel> markSessionEnded(String appointmentId) async {
+    final record = await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {
+        'status': 'completed',
+        'check_out_time': DateTime.now().toUtc().toIso8601String(),
+      },
+    );
+    final appt = AppointmentModel.fromRecord(record);
+    // Sync the session record to completed
+    if (appt.patientId != null) {
+      try {
+        final sessions = await pb.collection(PBCollections.sessions).getList(
+          filter:
+              'patient = "${appt.patientId}" && doctor = "${appt.doctorId}" && scheduled_date = "${appt.date}" && scheduled_time = "${appt.time}" && (status = "upcoming" || status = "in_progress")',
+          perPage: 1,
+        );
+        if (sessions.items.isNotEmpty) {
+          await pb.collection(PBCollections.sessions).update(
+            sessions.items.first.id,
+            body: {
+              'status': 'completed',
+              'check_out_time': DateTime.now().toUtc().toIso8601String(),
+            },
+          );
+        }
+      } catch (_) {}
+    }
+    return appt;
+  }
+
+  /// Look up the session record linked to a session appointment.
+  /// Returns null if not found.
+  Future<Map<String, String>?> findSessionForAppointment(AppointmentModel apt) async {
+    if (apt.patientId == null || apt.patientId!.isEmpty) return null;
+    try {
+      final sessions = await pb.collection(PBCollections.sessions).getList(
+        filter:
+            'patient = "${apt.patientId}" && doctor = "${apt.doctorId}" && scheduled_date = "${apt.date}" && scheduled_time = "${apt.time}"',
+        perPage: 1,
+      );
+      if (sessions.items.isNotEmpty) {
+        final s = sessions.items.first;
+        return {
+          'sessionId': s.id,
+          'treatmentPlanId': s.getStringValue('treatment_plan'),
+          'consultationId': s.getStringValue('consultation'),
+        };
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Reschedule a SESSION appointment AND sync the matching session record.
+  Future<AppointmentModel> rescheduleSessionAppointment(
+      String appointmentId, AppointmentModel apt, String newDate, String newTime) async {
+    // Update appointment first
+    final record = await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {'date': newDate, 'time': newTime},
+    );
+    // Sync the linked sessions record
+    if (apt.patientId != null) {
+      try {
+        final sessions = await pb.collection(PBCollections.sessions).getList(
+          filter:
+              'patient = "${apt.patientId}" && doctor = "${apt.doctorId}" && scheduled_date = "${apt.date}" && scheduled_time = "${apt.time}" && status = "upcoming"',
+          perPage: 1,
+        );
+        for (final s in sessions.items) {
+          await pb.collection(PBCollections.sessions).update(s.id, body: {
+            'scheduled_date': newDate,
+            'scheduled_time': newTime,
+          });
+        }
+      } catch (_) {}
+    }
+    return AppointmentModel.fromRecord(record);
+  }
+
+  /// Reschedule a regular (consultation) appointment to a new date and time.
+  Future<AppointmentModel> rescheduleAppointment(String appointmentId, String newDate, String newTime) async {
+    final record = await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {'date': newDate, 'time': newTime},
     );
     return AppointmentModel.fromRecord(record);
   }
@@ -268,8 +403,90 @@ class AppointmentService {
     return AppointmentModel.fromRecord(record);
   }
 
+  /// Find an ongoing consultation for a patient + doctor.
+  Future<ConsultationModel?> findOngoingConsultation(String patientId, String doctorId) async {
+    try {
+      final result = await pb.collection(PBCollections.consultations).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" && status = "ongoing"',
+        perPage: 1,
+        sort: '-created',
+        expand: 'patient',
+      );
+      if (result.items.isNotEmpty) {
+        return ConsultationModel.fromRecord(result.items.first);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Create a new consultation (ongoing status).
+  Future<ConsultationModel> createConsultation(String patientId, String doctorId) async {
+    final record = await pb.collection(PBCollections.consultations).create(
+      body: {
+        'patient': patientId,
+        'doctor': doctorId,
+        'status': 'ongoing',
+        'consent_given': true,
+      },
+    );
+    return ConsultationModel.fromRecord(record);
+  }
+
+  /// Set the consultation_start_time on an appointment.
+  Future<void> setConsultationStartTime(String appointmentId) async {
+    await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {
+        'consultation_start_time': DateTime.now().toUtc().toIso8601String(),
+      },
+    );
+  }
+
+  /// Check if the consultation linked to this appointment's patient is completed.
+  Future<bool> isConsultationCompleted(String patientId, String doctorId) async {
+    try {
+      final result = await pb.collection(PBCollections.consultations).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" && status = "ongoing"',
+        perPage: 1,
+      );
+      // If there's no ongoing consultation, it means it's been completed (or never created)
+      return result.items.isEmpty;
+    } catch (_) {}
+    return false;
+  }
+
   String _todayString() {
     final now = DateTime.now();
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
+
+  /// For an in-progress consultation appointment, returns the ongoing consultation id
+  /// and whether a treatment plan already exists for it.
+  /// Returns null if no ongoing consultation is found.
+  Future<Map<String, dynamic>?> getConsultationPlanInfo(
+      String patientId, String doctorId) async {
+    try {
+      final result = await pb.collection(PBCollections.consultations).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" && status = "ongoing"',
+        perPage: 1,
+        sort: '-created',
+      );
+      if (result.items.isEmpty) return null;
+      final consultationId = result.items.first.id;
+
+      // Check if there's already a treatment plan for this consultation
+      bool hasPlan = false;
+      try {
+        final plans = await pb.collection(PBCollections.treatmentPlans).getList(
+          filter: 'consultation = "$consultationId"',
+          perPage: 1,
+        );
+        hasPlan = plans.items.isNotEmpty;
+      } catch (_) {}
+
+      return {'consultationId': consultationId, 'hasPlan': hasPlan};
+    } catch (_) {}
+    return null;
+  }
 }
+

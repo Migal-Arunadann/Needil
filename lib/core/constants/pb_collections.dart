@@ -8,6 +8,7 @@ class PBCollections {
   static const String consultations = 'consultations';
   static const String treatmentPlans = 'treatment_plans';
   static const String sessions = 'sessions';
+  static const String receptionists = 'receptionists';
   static const String auditLogs = 'audit_logs';
   static const String consentRecords = 'consent_records';
 }

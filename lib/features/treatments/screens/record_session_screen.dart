@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/app_button.dart';
@@ -120,6 +121,19 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
     }
   }
 
+  String _formatDateTime(String dateStr, String? timeStr) {
+    try {
+      final dt = DateTime.parse(dateStr);
+      final dateFormatted = DateFormat('MMM d, yyyy').format(dt);
+      if (timeStr != null && timeStr.isNotEmpty) {
+        return '$dateFormatted at $timeStr';
+      }
+      return dateFormatted;
+    } catch (_) {
+      return dateStr;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -158,7 +172,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                               'Session ${widget.session.sessionNumber}',
                               style: AppTextStyles.h2),
                           Text(
-                            'Scheduled: ${widget.session.scheduledDate}',
+                            'Scheduled: ${_formatDateTime(widget.session.scheduledDate, widget.session.scheduledTime)}',
                             style: AppTextStyles.caption,
                           ),
                         ],

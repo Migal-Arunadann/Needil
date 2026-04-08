@@ -3,13 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../appointments/models/appointment_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/dashboard_provider.dart';
+import '../../appointments/models/appointment_model.dart';
+import '../../../core/utils/time_utils.dart';
 import 'main_layout.dart';
 
-class DoctorDashboardScreen extends ConsumerWidget {
-  const DoctorDashboardScreen({super.key});
+class ReceptionistDashboardScreen extends ConsumerWidget {
+  const ReceptionistDashboardScreen({super.key});
 
   String _greeting() {
     final h = DateTime.now().hour;
@@ -21,7 +22,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
-    final doctor = authState.doctor;
+    final receptionist = authState.receptionist;
     final stats = ref.watch(dashboardStatsProvider);
 
     return Scaffold(
@@ -43,19 +44,11 @@ class DoctorDashboardScreen extends ConsumerWidget {
                       width: 52,
                       height: 52,
                       decoration: BoxDecoration(
-                        gradient: doctor?.photoUrl == null ? AppColors.accentGradient : null,
-                        color: doctor?.photoUrl != null ? AppColors.surface : null,
+                        gradient: AppColors.heroGradient,
                         borderRadius: BorderRadius.circular(16),
-                        image: doctor?.photoUrl != null
-                            ? DecorationImage(
-                                image: NetworkImage(doctor!.photoUrl!),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
                       ),
-                      child: doctor?.photoUrl == null
-                          ? const Icon(Icons.person_rounded, color: Colors.white, size: 26)
-                          : null,
+                      child: const Icon(Icons.support_agent_rounded,
+                          color: Colors.white, size: 26),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -68,10 +61,28 @@ class DoctorDashboardScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Dr. ${doctor?.name ?? 'Doctor'}',
+                            receptionist?.name ?? 'Receptionist',
                             style: AppTextStyles.h2,
                           ),
                         ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.info.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: AppColors.info.withValues(alpha: 0.3)),
+                      ),
+                      child: Text(
+                        'Staff',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.info,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                        ),
                       ),
                     ),
                   ],
@@ -79,11 +90,12 @@ class DoctorDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 6),
                 Text(
                   DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now()),
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+                  style:
+                      AppTextStyles.caption.copyWith(color: AppColors.textHint),
                 ),
                 const SizedBox(height: 28),
 
-                // ── Upcoming Today (Next appointment only) ──
+                // ── Upcoming Appointment ──
                 Text("Upcoming Today", style: AppTextStyles.h3),
                 const SizedBox(height: 14),
                 if (stats.isLoading)
@@ -91,7 +103,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                 else if (stats.nextAppointment == null)
                   _EmptyState(
                     icon: Icons.event_available_rounded,
-                    message: 'No upcoming appointments scheduled',
+                    message: 'No upcoming appointments',
                   )
                 else
                   GestureDetector(
@@ -99,40 +111,22 @@ class DoctorDashboardScreen extends ConsumerWidget {
                       final layout = mainLayoutKey.currentState;
                       if (layout != null) {
                         layout.switchToTab(1,
-                            highlightAppointmentId: stats.nextAppointment!.id);
+                            highlightAppointmentId:
+                                stats.nextAppointment!.id);
                       }
                     },
-                    child: _NextAppointmentCard(appt: stats.nextAppointment!),
+                    child: _NextAppointmentCard(
+                        appt: stats.nextAppointment!),
                   ),
 
                 const SizedBox(height: 28),
 
                 // ── Today's Overview ──
-                Text("Today's Overview", style: AppTextStyles.h3),
+                Text("Today's Schedule", style: AppTextStyles.h3),
                 const SizedBox(height: 14),
                 if (stats.isLoading)
                   _buildLoadingCard()
                 else ...[
-                  // Row 1: Consultations + Sessions
-                  Row(
-                    children: [
-                      _StatCard(
-                        icon: Icons.medical_information_rounded,
-                        label: 'Consultations',
-                        value: '${stats.consultationsToday}',
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(width: 12),
-                      _StatCard(
-                        icon: Icons.event_repeat_rounded,
-                        label: 'Sessions',
-                        value: '${stats.sessionAppointmentsToday}',
-                        color: AppColors.accent,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  // Row 2: Scheduled + In-Progress
                   Row(
                     children: [
                       _StatCard(
@@ -151,7 +145,6 @@ class DoctorDashboardScreen extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  // Row 3: Completed + Cancelled
                   Row(
                     children: [
                       _StatCard(
@@ -170,27 +163,33 @@ class DoctorDashboardScreen extends ConsumerWidget {
                     ],
                   ),
                 ],
-
                 const SizedBox(height: 28),
 
-                // ── Practice Overview ──
-                Text('Practice Overview', style: AppTextStyles.h3),
+                // ── Quick Stats ──
+                Text('Overview', style: AppTextStyles.h3),
                 const SizedBox(height: 14),
                 if (stats.isLoading)
                   _buildLoadingCard()
                 else ...[
                   _QuickStatRow(
-                    icon: Icons.people_rounded,
-                    label: 'Total Patients',
-                    value: '${stats.totalPatients}',
+                    icon: Icons.medical_information_rounded,
+                    label: 'Consultations Today',
+                    value: '${stats.consultationsToday}',
                     color: AppColors.primary,
                   ),
                   const SizedBox(height: 10),
                   _QuickStatRow(
-                    icon: Icons.medical_services_rounded,
-                    label: 'Active Treatment Plans',
-                    value: '${stats.activePlans}',
+                    icon: Icons.event_repeat_rounded,
+                    label: 'Sessions Today',
+                    value: '${stats.sessionAppointmentsToday}',
                     color: AppColors.accent,
+                  ),
+                  const SizedBox(height: 10),
+                  _QuickStatRow(
+                    icon: Icons.people_rounded,
+                    label: 'Total Patients',
+                    value: '${stats.totalPatients}',
+                    color: AppColors.info,
                   ),
                 ],
               ],
@@ -210,13 +209,14 @@ class DoctorDashboardScreen extends ConsumerWidget {
         border: Border.all(color: AppColors.border),
       ),
       child: const Center(
-        child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3),
+        child:
+            CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3),
       ),
     );
   }
 }
 
-// ── Shared Widgets ────────────────────────────────────────────
+// ── Shared widgets (same design as clinic dashboard) ──
 
 class _NextAppointmentCard extends StatelessWidget {
   final AppointmentModel appt;
@@ -226,18 +226,25 @@ class _NextAppointmentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isSession = appt.type == AppointmentType.session;
     final isCallBy = appt.type == AppointmentType.callBy;
-    final color = isSession ? AppColors.accent : (isCallBy ? AppColors.primary : AppColors.success);
+    final color = isSession
+        ? AppColors.accent
+        : (isCallBy ? AppColors.primary : AppColors.success);
     final icon = isSession
         ? Icons.event_repeat_rounded
         : (isCallBy ? Icons.phone_rounded : Icons.person_rounded);
-    final typeLabel = isSession ? 'Session' : (isCallBy ? 'Call-By Appointment' : 'Walk-In');
-    final name = appt.expandedPatientName ?? appt.patientName ?? 'Unknown Patient';
+    final typeLabel =
+        isSession ? 'Session' : (isCallBy ? 'Call-By' : 'Walk-In');
+    final name =
+        appt.expandedPatientName ?? appt.patientName ?? 'Unknown Patient';
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [color.withValues(alpha: 0.12), color.withValues(alpha: 0.04)],
+          colors: [
+            color.withValues(alpha: 0.12),
+            color.withValues(alpha: 0.04)
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -265,8 +272,19 @@ class _NextAppointmentCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
-                Text(typeLabel,
-                    style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w600)),
+                Row(
+                  children: [
+                    Text(typeLabel,
+                        style: AppTextStyles.caption.copyWith(
+                            color: color, fontWeight: FontWeight.w600)),
+                    if (appt.doctorName != null) ...[
+                      const SizedBox(width: 8),
+                      Text('• Dr. ${appt.doctorName}',
+                          style: AppTextStyles.caption
+                              .copyWith(color: AppColors.textHint, fontSize: 11)),
+                    ],
+                  ],
+                ),
               ],
             ),
           ),
@@ -277,8 +295,9 @@ class _NextAppointmentCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
-              appt.time,
-              style: AppTextStyles.label.copyWith(color: Colors.white, fontSize: 14),
+              TimeUtils.formatStringTime(appt.time),
+              style: AppTextStyles.label
+                  .copyWith(color: Colors.white, fontSize: 14),
             ),
           ),
         ],
@@ -292,14 +311,11 @@ class _StatCard extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-
-  const _StatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
+  const _StatCard(
+      {required this.icon,
+      required this.label,
+      required this.value,
+      required this.color});
   @override
   Widget build(BuildContext context) {
     return Expanded(
@@ -328,7 +344,8 @@ class _StatCard extends StatelessWidget {
                     .copyWith(fontSize: 28, fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
             Text(label,
-                style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+                style:
+                    AppTextStyles.caption.copyWith(color: AppColors.textHint)),
           ],
         ),
       ),
@@ -341,14 +358,11 @@ class _QuickStatRow extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-
-  const _QuickStatRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-
+  const _QuickStatRow(
+      {required this.icon,
+      required this.label,
+      required this.value,
+      required this.color});
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -370,9 +384,7 @@ class _QuickStatRow extends StatelessWidget {
             child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(width: 14),
-          Expanded(
-            child: Text(label, style: AppTextStyles.bodyMedium),
-          ),
+          Expanded(child: Text(label, style: AppTextStyles.bodyMedium)),
           Text(value,
               style: AppTextStyles.h3
                   .copyWith(fontWeight: FontWeight.w700, fontSize: 18)),
@@ -385,9 +397,7 @@ class _QuickStatRow extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   final IconData icon;
   final String message;
-
   const _EmptyState({required this.icon, required this.message});
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -400,7 +410,8 @@ class _EmptyState extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(icon, size: 40, color: AppColors.textHint.withValues(alpha: 0.3)),
+          Icon(icon,
+              size: 40, color: AppColors.textHint.withValues(alpha: 0.3)),
           const SizedBox(height: 10),
           Text(message,
               style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),

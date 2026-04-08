@@ -183,7 +183,8 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen> wit
           _detailRow('Age', p.age?.toString() ?? 'Not provided'),
           _detailRow('Date of Birth', p.dateOfBirth ?? 'Not provided'),
           _detailRow('Gender', p.gender ?? 'Not provided'),
-          _detailRow('Address', p.address ?? 'Not provided'),
+          _detailRow('City', p.city?.isNotEmpty == true ? p.city! : 'Not provided'),
+          _detailRow('Area / Locality', p.area?.isNotEmpty == true ? p.area! : 'Not provided'),
           _detailRow('Occupation', p.occupation ?? 'Not provided'),
           _detailRow('Email', p.email ?? 'Not provided'),
           _detailRow('Emergency Contact', p.emergencyContact ?? 'Not provided'),
@@ -365,102 +366,281 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen> wit
             
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: InkWell(
-                onTap: () {
-                  Navigator.pushNamed(
-                    context,
-                    '/consultation',
-                    arguments: {
-                      'patientId': widget.patient.id,
-                      'patientName': widget.patient.fullName,
-                      'doctorId': widget.patient.doctorId,
-                      'consultationId': c.id,
-                      'isViewMode': true,
-                    },
-                  ).then((_) {
-                    if (mounted) setState(() {});
-                  });
+              child: _ConsultationCard(
+                consultationId: c.id,
+                date: dt,
+                complaint: complaint,
+                isOngoing: isOngoing,
+                patientId: widget.patient.id,
+                patientName: widget.patient.fullName,
+                doctorId: widget.patient.doctorId,
+                onReturn: () {
+                  if (mounted) setState(() {});
                 },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.03),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.blueAccent.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(Icons.medical_information_rounded, color: Colors.blueAccent),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  DateFormat('MMM d, yyyy h:mm a').format(dt),
-                                  style: AppTextStyles.caption.copyWith(color: AppColors.primary),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: isOngoing 
-                                        ? AppColors.warning.withValues(alpha: 0.1)
-                                        : AppColors.success.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                      color: isOngoing 
-                                          ? AppColors.warning.withValues(alpha: 0.3)
-                                          : AppColors.success.withValues(alpha: 0.3),
-                                    ),
-                                  ),
-                                  child: Text(
-                                    isOngoing ? 'Ongoing' : 'Completed',
-                                    style: AppTextStyles.caption.copyWith(
-                                      color: isOngoing ? AppColors.warning : AppColors.success,
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              complaint.isNotEmpty ? complaint : 'General Consultation',
-                              style: AppTextStyles.h4,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
-                    ],
-                  ),
-                ),
               ),
             );
           },
         );
       },
+    );
+  }
+}
+
+/// A self-contained consultation card that fetches session info
+class _ConsultationCard extends ConsumerStatefulWidget {
+  final String consultationId;
+  final DateTime date;
+  final String complaint;
+  final bool isOngoing;
+  final String patientId;
+  final String patientName;
+  final String doctorId;
+  final VoidCallback onReturn;
+
+  const _ConsultationCard({
+    required this.consultationId,
+    required this.date,
+    required this.complaint,
+    required this.isOngoing,
+    required this.patientId,
+    required this.patientName,
+    required this.doctorId,
+    required this.onReturn,
+  });
+
+  @override
+  ConsumerState<_ConsultationCard> createState() => _ConsultationCardState();
+}
+
+class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
+  int _totalSessions = 0;
+  int _completedSessions = 0;
+  bool _session1StartedToday = false;
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSessionInfo();
+  }
+
+  Future<void> _loadSessionInfo() async {
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final todayStr = _formatDate(DateTime.now());
+      int total = 0;
+      int completed = 0;
+      bool s1Today = false;
+
+      // Sessions link to treatment_plans, not directly to consultations.
+      // Step 1: find treatment plans for this consultation
+      final plansRes = await pb.collection(PBCollections.treatmentPlans).getList(
+        filter: 'consultation = "${widget.consultationId}"',
+        perPage: 20,
+      );
+
+      // Step 2: for each plan, fetch its sessions
+      for (final plan in plansRes.items) {
+        final sessRes = await pb.collection(PBCollections.sessions).getList(
+          filter: 'treatment_plan = "${plan.id}"',
+          sort: 'session_number',
+          perPage: 200,
+        );
+        for (final s in sessRes.items) {
+          final status = s.getStringValue('status');
+          if (status != 'cancelled') total++;
+          if (status == 'completed') completed++;
+          if (s.getIntValue('session_number') == 1 &&
+              status == 'completed' &&
+              s.getStringValue('scheduled_date') == todayStr) {
+            s1Today = true;
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _totalSessions = total;
+          _completedSessions = completed;
+          _session1StartedToday = s1Today;
+          _loaded = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loaded = true);
+    }
+  }
+
+  String _formatDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        Navigator.pushNamed(
+          context,
+          '/consultation',
+          arguments: {
+            'patientId': widget.patientId,
+            'patientName': widget.patientName,
+            'doctorId': widget.doctorId,
+            'consultationId': widget.consultationId,
+            'isViewMode': true,
+          },
+        ).then((_) => widget.onReturn());
+      },
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _session1StartedToday
+                ? AppColors.success.withValues(alpha: 0.4)
+                : AppColors.border,
+            width: _session1StartedToday ? 1.5 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blueAccent.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.medical_information_rounded, color: Colors.blueAccent),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            DateFormat('MMM d, yyyy h:mm a').format(widget.date),
+                            style: AppTextStyles.caption.copyWith(color: AppColors.primary),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: widget.isOngoing 
+                                  ? AppColors.warning.withValues(alpha: 0.1)
+                                  : AppColors.success.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: widget.isOngoing 
+                                    ? AppColors.warning.withValues(alpha: 0.3)
+                                    : AppColors.success.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Text(
+                              widget.isOngoing ? 'Ongoing' : 'Completed',
+                              style: AppTextStyles.caption.copyWith(
+                                color: widget.isOngoing ? AppColors.warning : AppColors.success,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        widget.complaint.isNotEmpty ? widget.complaint : 'General Consultation',
+                        style: AppTextStyles.h4,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
+              ],
+            ),
+            // Session summary
+            if (_loaded && _totalSessions > 0) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.04),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.healing_rounded, size: 16, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      '$_completedSessions / $_totalSessions sessions completed',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            // Session #1 started today banner
+            if (_session1StartedToday) ...[
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      AppColors.success.withValues(alpha: 0.1),
+                      AppColors.success.withValues(alpha: 0.04),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.play_circle_fill_rounded, color: AppColors.success, size: 22),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Session #1 Started Today',
+                            style: AppTextStyles.label.copyWith(
+                              color: AppColors.success,
+                              fontSize: 13,
+                            ),
+                          ),
+                          Text(
+                            'First treatment session has been initiated',
+                            style: AppTextStyles.caption.copyWith(fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

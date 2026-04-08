@@ -6,6 +6,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../appointments/models/appointment_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/dashboard_provider.dart';
+import 'main_layout.dart';
 
 class ClinicDashboardScreen extends ConsumerWidget {
   const ClinicDashboardScreen({super.key});
@@ -42,11 +43,19 @@ class ClinicDashboardScreen extends ConsumerWidget {
                       width: 52,
                       height: 52,
                       decoration: BoxDecoration(
-                        gradient: AppColors.heroGradient,
+                        gradient: clinic?.logoUrl == null ? AppColors.heroGradient : null,
+                        color: clinic?.logoUrl != null ? AppColors.surface : null,
                         borderRadius: BorderRadius.circular(16),
+                        image: clinic?.logoUrl != null
+                            ? DecorationImage(
+                                image: NetworkImage(clinic!.logoUrl!),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
                       ),
-                      child: const Icon(Icons.business_rounded,
-                          color: Colors.white, size: 26),
+                      child: clinic?.logoUrl == null
+                          ? const Icon(Icons.business_rounded, color: Colors.white, size: 26)
+                          : null,
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -74,35 +83,75 @@ class ClinicDashboardScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 28),
 
+                // ── Upcoming Next Appointment ──
+                Text("Upcoming Today", style: AppTextStyles.h3),
+                const SizedBox(height: 14),
+                if (stats.isLoading)
+                  _buildLoadingCard()
+                else if (stats.nextAppointment == null)
+                  _EmptyState(
+                    icon: Icons.event_available_rounded,
+                    message: 'No upcoming appointments scheduled',
+                  )
+                else
+                  GestureDetector(
+                    onTap: () {
+                      final layout = mainLayoutKey.currentState;
+                      if (layout != null) {
+                        layout.switchToTab(1,
+                            highlightAppointmentId: stats.nextAppointment!.id);
+                      }
+                    },
+                    child: _NextAppointmentCard(appt: stats.nextAppointment!),
+                  ),
+
+                const SizedBox(height: 28),
+
                 // ── Today's Overview ──
                 Text("Today's Overview", style: AppTextStyles.h3),
                 const SizedBox(height: 14),
                 if (stats.isLoading)
-                  const Center(
-                      child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: CircularProgressIndicator(
-                        color: AppColors.primary, strokeWidth: 3),
-                  ))
+                  _buildLoadingCard()
                 else ...[
+                  // Row 1: Consultations + Sessions
                   Row(
                     children: [
                       _StatCard(
-                        icon: Icons.calendar_today_rounded,
-                        label: 'Appointments',
-                        value: '${stats.todayAppointments}',
+                        icon: Icons.medical_information_rounded,
+                        label: 'Consultations',
+                        value: '${stats.consultationsToday}',
                         color: AppColors.primary,
                       ),
                       const SizedBox(width: 12),
                       _StatCard(
-                        icon: Icons.schedule_rounded,
-                        label: 'Scheduled',
-                        value: '${stats.scheduledCount}',
+                        icon: Icons.event_repeat_rounded,
+                        label: 'Sessions',
+                        value: '${stats.sessionAppointmentsToday}',
                         color: AppColors.accent,
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
+                  // Row 2: Scheduled + In-Progress
+                  Row(
+                    children: [
+                      _StatCard(
+                        icon: Icons.schedule_rounded,
+                        label: 'Scheduled',
+                        value: '${stats.scheduledCount}',
+                        color: const Color(0xFF6366F1),
+                      ),
+                      const SizedBox(width: 12),
+                      _StatCard(
+                        icon: Icons.play_circle_rounded,
+                        label: 'In Progress',
+                        value: '${stats.inProgressCount}',
+                        color: AppColors.warning,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Row 3: Completed + Cancelled
                   Row(
                     children: [
                       _StatCard(
@@ -121,63 +170,29 @@ class ClinicDashboardScreen extends ConsumerWidget {
                     ],
                   ),
                 ],
+
                 const SizedBox(height: 28),
 
-                // ── Quick Stats ──
+                // ── Practice Overview ──
                 Text('Practice Overview', style: AppTextStyles.h3),
                 const SizedBox(height: 14),
-                _QuickStatRow(
-                  icon: Icons.people_rounded,
-                  label: 'Total Patients',
-                  value: '${stats.totalPatients}',
-                  color: AppColors.primary,
-                ),
-                const SizedBox(height: 10),
-                _QuickStatRow(
-                  icon: Icons.medical_services_rounded,
-                  label: 'Active Treatment Plans',
-                  value: '${stats.activePlans}',
-                  color: AppColors.accent,
-                ),
-                const SizedBox(height: 10),
-                _QuickStatRow(
-                  icon: Icons.event_repeat_rounded,
-                  label: 'Upcoming Sessions',
-                  value: '${stats.upcomingSessions}',
-                  color: AppColors.warning,
-                ),
-                const SizedBox(height: 28),
-
-                // ── Upcoming Appointments ──
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Upcoming Today', style: AppTextStyles.h3),
-                    GestureDetector(
-                      onTap: () {},
-                      child: Text('View All',
-                          style: AppTextStyles.labelSmall
-                              .copyWith(color: AppColors.primary)),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                if (stats.upcomingAppointments.isEmpty)
-                  _EmptyState(
-                    icon: Icons.event_available_rounded,
-                    message: 'No upcoming appointments today',
-                  )
-                else
-                  ...stats.upcomingAppointments.map(
-                    (appt) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _AppointmentPreviewCard(
-                        name: appt.patientName ?? 'Unknown Patient',
-                        time: appt.time,
-                        type: appt.type,
-                      ),
-                    ),
+                if (stats.isLoading)
+                  _buildLoadingCard()
+                else ...[
+                  _QuickStatRow(
+                    icon: Icons.people_rounded,
+                    label: 'Total Patients',
+                    value: '${stats.totalPatients}',
+                    color: AppColors.primary,
                   ),
+                  const SizedBox(height: 10),
+                  _QuickStatRow(
+                    icon: Icons.medical_services_rounded,
+                    label: 'Active Treatment Plans',
+                    value: '${stats.activePlans}',
+                    color: AppColors.accent,
+                  ),
+                ],
               ],
             ),
           ),
@@ -185,9 +200,92 @@ class ClinicDashboardScreen extends ConsumerWidget {
       ),
     );
   }
+
+  Widget _buildLoadingCard() {
+    return Container(
+      height: 80,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Center(
+        child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3),
+      ),
+    );
+  }
 }
 
 // ── Reusable Widgets ──────────────────────────────────────────
+
+class _NextAppointmentCard extends StatelessWidget {
+  final AppointmentModel appt;
+  const _NextAppointmentCard({required this.appt});
+
+  @override
+  Widget build(BuildContext context) {
+    final isSession = appt.type == AppointmentType.session;
+    final isCallBy = appt.type == AppointmentType.callBy;
+    final color = isSession ? AppColors.accent : (isCallBy ? AppColors.primary : AppColors.success);
+    final icon = isSession
+        ? Icons.event_repeat_rounded
+        : (isCallBy ? Icons.phone_rounded : Icons.person_rounded);
+    final typeLabel = isSession ? 'Session' : (isCallBy ? 'Call-By Appointment' : 'Walk-In');
+    final name = appt.expandedPatientName ?? appt.patientName ?? 'Unknown Patient';
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [color.withValues(alpha: 0.12), color.withValues(alpha: 0.04)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: color, size: 26),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: AppTextStyles.label.copyWith(fontSize: 15),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 4),
+                Text(typeLabel,
+                    style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              appt.time,
+              style: AppTextStyles.label.copyWith(color: Colors.white, fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _StatCard extends StatelessWidget {
   final IconData icon;
@@ -279,76 +377,6 @@ class _QuickStatRow extends StatelessWidget {
           Text(value,
               style: AppTextStyles.h3
                   .copyWith(fontWeight: FontWeight.w700, fontSize: 18)),
-        ],
-      ),
-    );
-  }
-}
-
-class _AppointmentPreviewCard extends StatelessWidget {
-  final String name;
-  final String time;
-  final AppointmentType type;
-
-  const _AppointmentPreviewCard({
-    required this.name,
-    required this.time,
-    required this.type,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isCallBy = type == AppointmentType.callBy;
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: (isCallBy ? AppColors.accent : AppColors.primary)
-                  .withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              isCallBy ? Icons.phone_rounded : Icons.person_rounded,
-              color: isCallBy ? AppColors.accent : AppColors.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(name,
-                    style: AppTextStyles.label.copyWith(fontSize: 14),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 2),
-                Text(
-                  isCallBy ? 'Call-By Appointment' : 'Walk-In',
-                  style: AppTextStyles.caption.copyWith(fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(time,
-                style: AppTextStyles.label
-                    .copyWith(color: AppColors.primary, fontSize: 13)),
-          ),
         ],
       ),
     );

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../../features/auth/screens/login_screen.dart';
-import '../../features/auth/screens/role_selection_screen.dart';
 import '../../features/auth/screens/clinic_registration/clinic_step1_screen.dart';
 import '../../features/auth/screens/clinic_registration/clinic_step2_screen.dart';
 import '../../features/auth/screens/clinic_registration/clinic_step3_screen.dart';
-import '../../features/auth/screens/doctor_registration/doctor_registration_screen.dart';
+import '../../features/auth/screens/clinic_registration/clinic_step4_screen.dart';
+import '../../features/auth/screens/clinic_registration/clinic_step5_screen.dart';
 import '../../features/dashboard/screens/main_layout.dart';
 import '../../features/appointments/screens/appointment_list_screen.dart';
 import '../../features/appointments/screens/create_appointment_screen.dart';
@@ -29,9 +29,7 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
     case '/login':
       return _fade(const LoginScreen(), settings);
 
-    case '/register':
-      return _slide(const RoleSelectionScreen(), settings);
-
+    // Register link now goes directly to clinic registration step 1
     case '/register/clinic':
       return _slide(const ClinicStep1Screen(), settings);
 
@@ -43,11 +41,16 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       final args = settings.arguments as Map<String, dynamic>;
       return _slide(ClinicStep3Screen(clinicData: args), settings);
 
-    case '/register/doctor':
-      return _slide(const DoctorRegistrationScreen(), settings);
+    case '/register/clinic/step4':
+      final args = settings.arguments as Map<String, dynamic>;
+      return _slide(ClinicStep4Screen(clinicData: args), settings);
+
+    case '/register/clinic/step5':
+      final args = settings.arguments as Map<String, dynamic>;
+      return _slide(ClinicStep5Screen(clinicData: args), settings);
 
     case '/dashboard':
-      return _fade(const MainLayout(), settings);
+      return _fade(MainLayout(), settings);
 
     case '/appointments':
       return _slide(const AppointmentListScreen(), settings);

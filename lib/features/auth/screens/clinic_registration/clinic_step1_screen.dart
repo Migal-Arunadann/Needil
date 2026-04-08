@@ -20,6 +20,10 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
+  final _cityController = TextEditingController();
+  final _areaController = TextEditingController();
+  final _stateController = TextEditingController();
+  final _pincodeController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
 
@@ -29,6 +33,10 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
     _usernameController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _cityController.dispose();
+    _areaController.dispose();
+    _stateController.dispose();
+    _pincodeController.dispose();
     super.dispose();
   }
 
@@ -41,6 +49,10 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
         'clinic_name': _nameController.text.trim(),
         'username': _usernameController.text.trim(),
         'password': _passwordController.text,
+        'city': _cityController.text.trim(),
+        'area': _areaController.text.trim(),
+        'state': _stateController.text.trim(),
+        'pincode': _pincodeController.text.trim(),
       },
     );
   }
@@ -69,7 +81,7 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 8),
-                _buildStepIndicator(1, 3),
+              _buildStepIndicator(1, 5),
                 const SizedBox(height: 24),
                 Text('Clinic Details', style: AppTextStyles.h2),
                 const SizedBox(height: 8),
@@ -142,6 +154,64 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
                   ),
                   textInputAction: TextInputAction.done,
                 ),
+                const SizedBox(height: 36),
+
+                // ── Clinic Location ──────────────────────────────────
+                Text('Clinic Location', style: AppTextStyles.h3),
+                const SizedBox(height: 6),
+                Text(
+                  'Required for patient records and scheduling',
+                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Expanded(
+                    child: AppTextField(
+                      label: 'City *',
+                      hint: 'e.g. Mumbai',
+                      controller: _cityController,
+                      validator: (v) => Validators.required(v, 'City'),
+                      prefixIcon: const Icon(Icons.location_city_rounded, color: AppColors.textHint),
+                      textInputAction: TextInputAction.next,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AppTextField(
+                      label: 'Area *',
+                      hint: 'e.g. Andheri West',
+                      controller: _areaController,
+                      validator: (v) => Validators.required(v, 'Area'),
+                      prefixIcon: const Icon(Icons.map_rounded, color: AppColors.textHint),
+                      textInputAction: TextInputAction.next,
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 16),
+                Row(children: [
+                  Expanded(
+                    child: AppTextField(
+                      label: 'State *',
+                      hint: 'e.g. Maharashtra',
+                      controller: _stateController,
+                      validator: (v) => Validators.required(v, 'State'),
+                      prefixIcon: const Icon(Icons.flag_rounded, color: AppColors.textHint),
+                      textInputAction: TextInputAction.next,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AppTextField(
+                      label: 'Pincode *',
+                      hint: 'e.g. 400058',
+                      controller: _pincodeController,
+                      validator: (v) => Validators.required(v, 'Pincode'),
+                      keyboardType: TextInputType.number,
+                      prefixIcon: const Icon(Icons.pin_drop_rounded, color: AppColors.textHint),
+                      textInputAction: TextInputAction.done,
+                    ),
+                  ),
+                ]),
                 const SizedBox(height: 36),
                 AppButton(label: 'Next', onPressed: _next, icon: Icons.arrow_forward_rounded),
                 const SizedBox(height: 32),

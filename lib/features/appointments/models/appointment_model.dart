@@ -17,6 +17,7 @@ class AppointmentModel {
   final String? patientPhone; // For call-by placeholder
   final DateTime? checkInTime;
   final DateTime? checkOutTime;
+  final DateTime? consultationStartTime;
   final DateTime? created;
   final DateTime? updated;
 
@@ -37,6 +38,7 @@ class AppointmentModel {
     this.patientPhone,
     this.checkInTime,
     this.checkOutTime,
+    this.consultationStartTime,
     this.created,
     this.updated,
     this.doctorName,
@@ -77,6 +79,7 @@ class AppointmentModel {
       patientPhone: record.getStringValue('patient_phone'),
       checkInTime: _parseDateTimeOrNull(record.getStringValue('check_in_time')),
       checkOutTime: _parseDateTimeOrNull(record.getStringValue('check_out_time')),
+      consultationStartTime: _parseDateTimeOrNull(record.getStringValue('consultation_start_time')),
       created: DateTime.tryParse(record.get<String>('created')),
       updated: DateTime.tryParse(record.get<String>('updated')),
       doctorName: doctorName,
@@ -102,6 +105,7 @@ class AppointmentModel {
       if (patientPhone != null) 'patient_phone': patientPhone,
       if (checkInTime != null) 'check_in_time': checkInTime!.toUtc().toIso8601String(),
       if (checkOutTime != null) 'check_out_time': checkOutTime!.toUtc().toIso8601String(),
+      if (consultationStartTime != null) 'consultation_start_time': consultationStartTime!.toUtc().toIso8601String(),
     };
   }
 

@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -45,15 +47,66 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   final _allergiesCtrl = TextEditingController();
   final _chronicDiseasesCtrl = TextEditingController();
   
-  // Lifestyle
-  final _dietPatternCtrl = TextEditingController();
-  final _sleepQualityCtrl = TextEditingController();
-  final _exerciseLevelCtrl = TextEditingController();
-  final _addictionsCtrl = TextEditingController();
-  final _stressLevelCtrl = TextEditingController();
+  // Lifestyle dropdowns
+  String? _selectedDiet;
+  String? _selectedSleepDuration;
+  String? _selectedSleepQuality;
+  String? _selectedExercise;
+  String? _selectedStress;
+
+  // Addictions Radios
+  String _smoking = 'No';
+  String _alcohol = 'No';
+  String _tobacco = 'No';
+  String _drugs = 'No';
+
+  final List<String> _dietOptions = [
+    'Standard Indian Non-Veg',
+    'Lacto-Vegetarian',
+    'Ovo-Vegetarian',
+    'Lacto-Ovo-Vegetarian',
+    'Diabetic Diet',
+    'Ketogenic Diet'
+  ];
+
+  final List<String> _sleepDurationOptions = [
+    'Very Short - Less than 4 hours',
+    'Short - 4 to 5 hours',
+    'Adequate - 6 to 7 hours',
+    'Optimal - 7 to 9 hours',
+    'Long - 9 to 10 hours',
+    'Excessive - More than 10 hours'
+  ];
+
+  final List<String> _sleepQualityOptions = [
+    'Excellent - Refreshing, uninterrupted',
+    'Good - Satisfactory, minor disruptions',
+    'Fair - Moderately restful, noticeable issues',
+    'Poor - Frequently disrupted, non-restorative',
+    'Very Poor - Chronically disturbed'
+  ];
+
+  final List<String> _exerciseOptions = [
+    'Sedentary - Little to no intentional exercise',
+    'Lightly Active - Light activity most days',
+    'Moderately Active - 2–3 days/wk or 5k-7.5k steps',
+    'Active - 3–5 days/wk moderate or 2-3 vigorous',
+    'Very Active - 5–7 days/wk structured exercise',
+    'Extremely Active / Athlete - High-volume training'
+  ];
+
+  final List<String> _stressOptions = [
+    'None / Minimal Stress',
+    'Mild Stress',
+    'Moderate Stress',
+    'Severe Stress',
+    'Extreme / Overwhelming Stress',
+    'Variable'
+  ];
   
-  // Consent
-  final _pregnancyStatusCtrl = TextEditingController();
+  // Consent & Gender
+  String _pregnancyStatus = 'No';
+  String? _patientGender;
   bool _consentGiven = false;
 
   final _bpCtrl = TextEditingController();
@@ -75,9 +128,23 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   void initState() {
     super.initState();
     _isViewing = widget.isViewMode;
+    if (widget.consultationId == null) {
+      _charged = true;
+    }
+    _fetchPatientGender();
     if (widget.consultationId != null) {
       _loadExistingData();
     }
+  }
+
+  Future<void> _fetchPatientGender() async {
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final patRec = await pb.collection(PBCollections.patients).getOne(widget.patientId);
+      if (mounted) {
+        setState(() => _patientGender = patRec.getStringValue('gender'));
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadExistingData() async {
@@ -95,24 +162,47 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       _currentMedicationsCtrl.text = _existingConsultation?.currentMedications ?? '';
       _allergiesCtrl.text = _existingConsultation?.allergies ?? '';
       _chronicDiseasesCtrl.text = _existingConsultation?.chronicDiseases ?? '';
-      _dietPatternCtrl.text = _existingConsultation?.dietPattern ?? '';
-      _sleepQualityCtrl.text = _existingConsultation?.sleepQuality ?? '';
-      _exerciseLevelCtrl.text = _existingConsultation?.exerciseLevel ?? '';
-      _addictionsCtrl.text = _existingConsultation?.addictions ?? '';
-      _stressLevelCtrl.text = _existingConsultation?.stressLevel ?? '';
-      _pregnancyStatusCtrl.text = _existingConsultation?.pregnancyStatus ?? '';
+      _selectedDiet = _dietOptions.contains(_existingConsultation?.dietPattern) ? _existingConsultation!.dietPattern : null;
+      _selectedSleepDuration = _sleepDurationOptions.contains(_existingConsultation?.sleepQuality) ? _existingConsultation!.sleepQuality : null;
+      if (_selectedSleepDuration == null && _sleepQualityOptions.contains(_existingConsultation?.sleepQuality)) {
+        _selectedSleepQuality = _existingConsultation!.sleepQuality;
+      }
+      _selectedExercise = _exerciseOptions.contains(_existingConsultation?.exerciseLevel) ? _existingConsultation!.exerciseLevel : null;
+      _selectedStress = _stressOptions.contains(_existingConsultation?.stressLevel) ? _existingConsultation!.stressLevel : null;
+      
+      if (_existingConsultation?.addictions != null) {
+        final addStr = _existingConsultation!.addictions!;
+        _smoking = addStr.contains('Smoking: Yes') ? 'Yes' : 'No';
+        _alcohol = addStr.contains('Alcohol: Yes') ? 'Yes' : 'No';
+        _tobacco = addStr.contains('Tobacco Chewing: Yes') ? 'Yes' : 'No';
+        _drugs = addStr.contains('Recreational Drugs: Yes') ? 'Yes' : 'No';
+      }
+      
+      _pregnancyStatus = (_existingConsultation?.pregnancyStatus?.isNotEmpty == true && _existingConsultation?.pregnancyStatus != 'No') ? 'Yes' : 'No';
       _bpCtrl.text = _existingConsultation?.bpLevel ?? '';
       _pulseCtrl.text = _existingConsultation?.pulse?.toString() ?? '';
       _chargeCtrl.text = _existingConsultation?.chargeAmount?.toString() ?? '';
       _charged = _existingConsultation?.charged ?? false;
       _consentGiven = _existingConsultation?.consentGiven ?? false;
 
-      // Load associated sessions
-      final sessRes = await pb.collection(PBCollections.sessions).getList(
-        filter: 'consultation = "${widget.consultationId}"',
-        sort: 'scheduled_date',
-      );
-      _existingSessions = sessRes.items.map((e) => SessionModel.fromRecord(e)).toList();
+      // Load associated sessions via treatment_plans
+      // (sessions don't have a direct 'consultation' field — they're linked via treatment_plan)
+      final List<SessionModel> allSessions = [];
+      try {
+        final plansRes = await pb.collection(PBCollections.treatmentPlans).getList(
+          filter: 'consultation = "${widget.consultationId}"',
+          perPage: 20,
+        );
+        for (final plan in plansRes.items) {
+          final sessRes = await pb.collection(PBCollections.sessions).getList(
+            filter: 'treatment_plan = "${plan.id}"',
+            sort: 'session_number',
+            perPage: 200,
+          );
+          allSessions.addAll(sessRes.items.map((e) => SessionModel.fromRecord(e)));
+        }
+      } catch (_) {}
+      _existingSessions = allSessions;
 
     } catch (e) {
       debugPrint('Error loading view mode data: $e');
@@ -129,12 +219,6 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     _currentMedicationsCtrl.dispose();
     _allergiesCtrl.dispose();
     _chronicDiseasesCtrl.dispose();
-    _dietPatternCtrl.dispose();
-    _sleepQualityCtrl.dispose();
-    _exerciseLevelCtrl.dispose();
-    _addictionsCtrl.dispose();
-    _stressLevelCtrl.dispose();
-    _pregnancyStatusCtrl.dispose();
     _bpCtrl.dispose();
     _pulseCtrl.dispose();
     _chargeCtrl.dispose();
@@ -142,37 +226,66 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   }
 
   Future<void> _pickPhoto() async {
-    final img = await _picker.pickImage(
-      source: ImageSource.camera,
-      maxWidth: 1200,
-      maxHeight: 1200,
-      imageQuality: 80,
-    );
-    if (img != null) setState(() => _photos.add(img));
+    try {
+      final img = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 80,
+      );
+      if (img != null && mounted) setState(() => _photos.add(img));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Camera error: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
   }
 
   Future<void> _pickFromGallery() async {
-    final imgs = await _picker.pickMultiImage(
-      maxWidth: 1200,
-      maxHeight: 1200,
-      imageQuality: 80,
-    );
-    if (imgs.isNotEmpty) setState(() => _photos.addAll(imgs));
+    try {
+      final imgs = await _picker.pickMultiImage(
+        maxWidth: 1200,
+        maxHeight: 1200,
+        imageQuality: 80,
+      );
+      if (imgs.isNotEmpty && mounted) setState(() => _photos.addAll(imgs));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gallery error: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
   }
 
-  Future<void> _confirmDelete() async {
+  Future<void> _confirmEndConsultation() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
-        title: const Text('Delete Consultation?', style: TextStyle(color: AppColors.error)),
-        content: const Text('Are you sure you want to permanently delete this consultation? This cannot be undone.'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.stop_circle_rounded, color: AppColors.warning, size: 24),
+            const SizedBox(width: 10),
+            const Expanded(child: Text('End Consultation?')),
+          ],
+        ),
+        content: const Text(
+          'This will:\n'
+          '• Cancel all remaining upcoming sessions\n'
+          '• Remove them from the appointment schedule\n'
+          '• Mark this consultation as completed\n\n'
+          'Already completed sessions will be preserved. This action cannot be undone.',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: const Text('End Consultation'),
           ),
         ],
       ),
@@ -180,18 +293,18 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
 
     if (confirm == true && widget.consultationId != null && mounted) {
       try {
-        final pb = ref.read(pocketbaseProvider);
-        await pb.collection(PBCollections.consultations).delete(widget.consultationId!);
+        final service = ref.read(treatmentServiceProvider);
+        await service.endConsultation(widget.consultationId!);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Consultation deleted.'), backgroundColor: AppColors.success),
+            const SnackBar(content: Text('Consultation ended. All future sessions cancelled.'), backgroundColor: AppColors.success),
           );
           Navigator.pop(context);
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete: $e'), backgroundColor: AppColors.error),
+            SnackBar(content: Text('Failed to end consultation: $e'), backgroundColor: AppColors.error),
           );
         }
       }
@@ -201,13 +314,44 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (_notesCtrl.text.trim().isEmpty ||
+        _medicalHistoryCtrl.text.trim().isEmpty ||
+        _pastIllnessesCtrl.text.trim().isEmpty ||
+        _currentMedicationsCtrl.text.trim().isEmpty ||
+        _allergiesCtrl.text.trim().isEmpty ||
+        _chronicDiseasesCtrl.text.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please fill all consulting conversations fields.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (!_consentGiven) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Consent must be given to proceed.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
       final service = ref.read(treatmentServiceProvider);
 
       ConsultationModel consultation;
-      if (widget.isViewMode && widget.consultationId != null) {
+      // Update whenever we have an existing consultationId (covers both view-mode edits
+      // AND the "start consultation" flow where a bare record was pre-created).
+      if (widget.consultationId != null) {
         consultation = await service.updateConsultation(
           consultationId: widget.consultationId!,
           notes: _notesCtrl.text.trim(),
@@ -217,12 +361,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           currentMedications: _currentMedicationsCtrl.text.trim(),
           allergies: _allergiesCtrl.text.trim(),
           chronicDiseases: _chronicDiseasesCtrl.text.trim(),
-          dietPattern: _dietPatternCtrl.text.trim(),
-          sleepQuality: _sleepQualityCtrl.text.trim(),
-          exerciseLevel: _exerciseLevelCtrl.text.trim(),
-          addictions: _addictionsCtrl.text.trim(),
-          stressLevel: _stressLevelCtrl.text.trim(),
-          pregnancyStatus: _pregnancyStatusCtrl.text.trim(),
+          dietPattern: _selectedDiet ?? '',
+          sleepQuality: [if (_selectedSleepDuration != null) _selectedSleepDuration, if (_selectedSleepQuality != null) _selectedSleepQuality].join(' | '),
+          exerciseLevel: _selectedExercise ?? '',
+          addictions: 'Smoking: $_smoking, Alcohol: $_alcohol, Tobacco Chewing: $_tobacco, Recreational Drugs: $_drugs',
+          stressLevel: _selectedStress ?? '',
+          pregnancyStatus: _pregnancyStatus,
           consentGiven: _consentGiven,
           bpLevel: _bpCtrl.text.trim(),
           pulse: _pulseCtrl.text.isNotEmpty ? int.tryParse(_pulseCtrl.text.trim()) : null,
@@ -241,12 +385,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           currentMedications: _currentMedicationsCtrl.text.trim(),
           allergies: _allergiesCtrl.text.trim(),
           chronicDiseases: _chronicDiseasesCtrl.text.trim(),
-          dietPattern: _dietPatternCtrl.text.trim(),
-          sleepQuality: _sleepQualityCtrl.text.trim(),
-          exerciseLevel: _exerciseLevelCtrl.text.trim(),
-          addictions: _addictionsCtrl.text.trim(),
-          stressLevel: _stressLevelCtrl.text.trim(),
-          pregnancyStatus: _pregnancyStatusCtrl.text.trim(),
+          dietPattern: _selectedDiet ?? '',
+          sleepQuality: [if (_selectedSleepDuration != null) _selectedSleepDuration, if (_selectedSleepQuality != null) _selectedSleepQuality].join(' | '),
+          exerciseLevel: _selectedExercise ?? '',
+          addictions: 'Smoking: $_smoking, Alcohol: $_alcohol, Tobacco Chewing: $_tobacco, Recreational Drugs: $_drugs',
+          stressLevel: _selectedStress ?? '',
+          pregnancyStatus: _pregnancyStatus,
           consentGiven: _consentGiven,
           bpLevel: _bpCtrl.text.trim(),
           pulse: _pulseCtrl.text.isNotEmpty
@@ -281,6 +425,92 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _rescheduleSession(SessionModel session) async {
+    final dt = DateTime.tryParse(session.scheduledDate) ?? DateTime.now();
+    final newDate = await showDatePicker(
+      context: context,
+      initialDate: dt,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (newDate == null || !mounted) return;
+
+    // Parse existing time or default
+    TimeOfDay initialTime = const TimeOfDay(hour: 10, minute: 0);
+    if (session.scheduledTime != null && session.scheduledTime!.contains(':')) {
+      final parts = session.scheduledTime!.split(':');
+      initialTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    }
+    
+    final newTime = await showTimePicker(context: context, initialTime: initialTime);
+    if (newTime == null || !mounted) return;
+
+    final newDateStr = '${newDate.year}-${newDate.month.toString().padLeft(2, '0')}-${newDate.day.toString().padLeft(2, '0')}';
+    final newTimeStr = '${newTime.hour.toString().padLeft(2, '0')}:${newTime.minute.toString().padLeft(2, '0')}';
+
+    try {
+      final service = ref.read(treatmentServiceProvider);
+      await service.rescheduleSession(
+        sessionId: session.id,
+        newDate: newDateStr,
+        newTime: newTimeStr,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Session ${session.sessionNumber} rescheduled to ${DateFormat('MMM d, yyyy').format(newDate)} at ${newTime.format(context)}'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        _loadExistingData();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to reschedule: $e'), backgroundColor: AppColors.error),
+        );
+      }
+    }
+  }
+
+  Future<void> _cancelSingleSession(SessionModel session) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Cancel Session #${session.sessionNumber}?'),
+        content: const Text('This will cancel this session and remove it from the appointment schedule.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Cancel Session'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true && mounted) {
+      try {
+        final service = ref.read(treatmentServiceProvider);
+        await service.cancelSession(session.id);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Session ${session.sessionNumber} cancelled.'), backgroundColor: AppColors.success),
+          );
+          _loadExistingData();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.error),
+          );
+        }
+      }
     }
   }
 
@@ -324,7 +554,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                         ],
                       ),
                     ),
-                    if (_isViewing) ...[
+                    if (_isViewing && _existingConsultation?.status != ConsultationStatus.completed) ...[ 
                       IconButton(
                         icon: const Icon(Icons.edit_rounded, color: AppColors.primary),
                         onPressed: () => setState(() {
@@ -333,8 +563,17 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                         }),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error),
-                        onPressed: _confirmDelete,
+                        icon: const Icon(Icons.stop_circle_rounded, color: AppColors.warning),
+                        tooltip: 'End Consultation',
+                        onPressed: _confirmEndConsultation,
+                      ),
+                    ] else if (_isViewing) ...[
+                      IconButton(
+                        icon: const Icon(Icons.edit_rounded, color: AppColors.primary),
+                        onPressed: () => setState(() {
+                          _isViewing = false;
+                          _isExpanded = true;
+                        }),
                       ),
                     ],
                   ],
@@ -438,77 +677,157 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                           const SizedBox(height: 12),
                           Text('No active treatment plan.', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
                           const SizedBox(height: 16),
-                          AppButton(
-                            label: 'Create Treatment Plan',
-                            icon: Icons.add_rounded,
-                            onPressed: () async {
-                              await Navigator.pushNamed(
-                                context,
-                                '/treatment-plan/create',
-                                arguments: {
-                                  'patientId': widget.patientId,
-                                  'patientName': widget.patientName,
-                                  'doctorId': widget.doctorId,
-                                  'consultationId': widget.consultationId,
-                                },
-                              );
-                              _loadExistingData(); // Reload sessions after returning
-                            },
-                          ),
+                          if (_existingConsultation?.status != ConsultationStatus.completed)
+                            AppButton(
+                              label: 'Create Treatment Plan',
+                              icon: Icons.add_rounded,
+                              onPressed: () async {
+                                await Navigator.pushNamed(
+                                  context,
+                                  '/treatment-plan/create',
+                                  arguments: {
+                                    'patientId': widget.patientId,
+                                    'patientName': widget.patientName,
+                                    'doctorId': widget.doctorId,
+                                    'consultationId': widget.consultationId,
+                                  },
+                                );
+                                _loadExistingData();
+                              },
+                            ),
                         ],
                       ),
                     )
                   else
                     ..._existingSessions.map((session) {
                       final dt = DateTime.tryParse(session.scheduledDate) ?? DateTime.now();
+                      final isCompleted = session.status == SessionStatus.completed;
+                      final isCancelled = session.status == SessionStatus.cancelled;
+                      final isUpcoming = session.status == SessionStatus.upcoming;
+                      final isMissed = session.status == SessionStatus.missed;
+                      
+                      Color statusColor = AppColors.info;
+                      if (isCompleted) statusColor = AppColors.success;
+                      if (isCancelled) statusColor = AppColors.textHint;
+                      if (isMissed) statusColor = AppColors.error;
+                      
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: InkWell(
-                          onTap: () {
-                            Navigator.pushNamed(
-                              context,
-                              '/sessions/record',
-                              arguments: session,
-                            ).then((_) => _loadExistingData());
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: AppColors.border),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.success.withValues(alpha: 0.1),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(Icons.healing_rounded, color: AppColors.success, size: 20),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        DateFormat('MMM d, yyyy').format(dt),
-                                        style: AppTextStyles.h4,
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isCancelled ? AppColors.surface.withValues(alpha: 0.5) : AppColors.surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: isUpcoming ? AppColors.info.withValues(alpha: 0.3) : AppColors.border),
+                          ),
+                          child: Column(
+                            children: [
+                              InkWell(
+                                onTap: isCancelled ? null : () {
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/sessions/record',
+                                    arguments: session,
+                                  ).then((_) => _loadExistingData());
+                                },
+                                child: Row(
+                                  children: [
+                                    // Session number badge
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: statusColor.withValues(alpha: 0.1),
+                                        shape: BoxShape.circle,
                                       ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        'Status: ${session.status}',
-                                        style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '#${session.sessionNumber}',
+                                        style: AppTextStyles.label.copyWith(color: statusColor, fontSize: 14),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Session ${session.sessionNumber} — ${DateFormat('MMM d, yyyy').format(dt)}',
+                                            style: AppTextStyles.bodyMedium.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                              decoration: isCancelled ? TextDecoration.lineThrough : null,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Row(
+                                            children: [
+                                              if (session.scheduledTime?.isNotEmpty == true) ...[
+                                                Icon(Icons.access_time_rounded, size: 12, color: AppColors.textHint),
+                                                const SizedBox(width: 4),
+                                                Text(session.scheduledTime!, style: AppTextStyles.caption.copyWith(fontSize: 11)),
+                                                const SizedBox(width: 10),
+                                              ],
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: statusColor.withValues(alpha: 0.1),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  SessionModel.statusToString(session.status).toUpperCase(),
+                                                  style: AppTextStyles.caption.copyWith(
+                                                    color: statusColor,
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (!isCancelled)
+                                      const Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 20),
+                                  ],
                                 ),
-                                const Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
+                              ),
+                              // Reschedule option for upcoming sessions
+                              if (isUpcoming) ...[
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        icon: const Icon(Icons.edit_calendar_rounded, size: 16),
+                                        label: const Text('Reschedule', style: TextStyle(fontSize: 12)),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: AppColors.info,
+                                          side: BorderSide(color: AppColors.info.withValues(alpha: 0.3)),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                        ),
+                                        onPressed: () => _rescheduleSession(session),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        icon: const Icon(Icons.cancel_outlined, size: 16),
+                                        label: const Text('Cancel', style: TextStyle(fontSize: 12)),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: AppColors.error,
+                                          side: BorderSide(color: AppColors.error.withValues(alpha: 0.3)),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                          padding: const EdgeInsets.symmetric(vertical: 8),
+                                        ),
+                                        onPressed: () => _cancelSingleSession(session),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ],
-                            ),
+                            ],
                           ),
                         ),
                       );
@@ -581,15 +900,24 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         // ─── Lifestyle & Habits ───
         _buildSectionHeader('Lifestyle & Habits', Icons.accessibility_new_rounded),
         
-        AppTextField(controller: _dietPatternCtrl, label: 'Diet Pattern', hint: 'Vegetarian, timely meals...', readOnly: _isViewing),
+        _buildDropdown('Diet Pattern', 'Select your usual diet', _selectedDiet, _dietOptions, (v) => setState(() => _selectedDiet = v)),
         const SizedBox(height: 16),
-        AppTextField(controller: _sleepQualityCtrl, label: 'Sleep Quality & Duration', hint: '7 hours, disturbed...', readOnly: _isViewing),
+        _buildDropdown('Sleep Duration', 'Hours of sleep per night', _selectedSleepDuration, _sleepDurationOptions, (v) => setState(() => _selectedSleepDuration = v)),
         const SizedBox(height: 16),
-        AppTextField(controller: _exerciseLevelCtrl, label: 'Exercise / Physical Activity', hint: 'Sedentary, active...', readOnly: _isViewing),
+        _buildDropdown('Sleep Quality', 'How well do you sleep?', _selectedSleepQuality, _sleepQualityOptions, (v) => setState(() => _selectedSleepQuality = v)),
         const SizedBox(height: 16),
-        AppTextField(controller: _addictionsCtrl, label: 'Smoking / Alcohol / Tobacco', hint: 'Occasional, non-smoker...', readOnly: _isViewing),
+        _buildDropdown('Exercise / Physical Activity', 'Level of activity', _selectedExercise, _exerciseOptions, (v) => setState(() => _selectedExercise = v)),
+        const SizedBox(height: 32),
+
+        Text('Substance Use', style: AppTextStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        _buildRadioGroup('Smoking', _smoking, (v) => setState(() => _smoking = v!)),
+        _buildRadioGroup('Alcohol', _alcohol, (v) => setState(() => _alcohol = v!)),
+        _buildRadioGroup('Tobacco Chewing', _tobacco, (v) => setState(() => _tobacco = v!)),
+        _buildRadioGroup('Recreational Drugs', _drugs, (v) => setState(() => _drugs = v!)),
         const SizedBox(height: 16),
-        AppTextField(controller: _stressLevelCtrl, label: 'Stress / Mental Health Notes', hint: 'High stress, relaxed...', maxLines: 2, readOnly: _isViewing),
+
+        _buildDropdown('Stress / Mental Health Notes', 'Current stress level', _selectedStress, _stressOptions, (v) => setState(() => _selectedStress = v)),
         const SizedBox(height: 32),
 
         // ─── Vitals ───
@@ -605,6 +933,19 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                 prefixIcon: const Icon(Icons.favorite_outline_rounded,
                     color: AppColors.error, size: 18),
                 readOnly: _isViewing,
+                onChanged: (val) {
+                  if (_isViewing) return;
+                  // Auto insert slash after 2 or 3 digits
+                  String clean = val.replaceAll(RegExp(r'[^0-9]'), '');
+                  if (clean.length >= 3 && !val.contains('/')) {
+                    if (clean.length == 3) {
+                      _bpCtrl.text = '$clean/';
+                    } else if (clean.length > 3) {
+                      _bpCtrl.text = '${clean.substring(0, 3)}/${clean.substring(3)}';
+                    }
+                    _bpCtrl.selection = TextSelection.fromPosition(TextPosition(offset: _bpCtrl.text.length));
+                  }
+                },
               ),
             ),
             const SizedBox(width: 12),
@@ -644,12 +985,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         
         // ─── Consent & Safety ───
         _buildSectionHeader('Consent & Safety', Icons.verified_user_outlined),
-        AppTextField(
-          controller: _pregnancyStatusCtrl,
-          label: 'Pregnancy Status (if applicable)',
-          hint: 'Months, N/A...',
-          readOnly: _isViewing,
-        ),
+        if (_patientGender != 'Male') ...[
+          Text('Pregnancy Status', style: AppTextStyles.label.copyWith(fontSize: 14, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          _buildRadioGroup('Are you currently pregnant?', _pregnancyStatus, (v) => setState(() => _pregnancyStatus = v!)),
+          const SizedBox(height: 16),
+        ],
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -747,13 +1088,17 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(9),
-            child: Image.network(
-              _photos[index].path,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Icon(
-                  Icons.image_rounded,
-                  color: AppColors.textHint),
-            ),
+            child: kIsWeb 
+                ? Image.network(
+                    _photos[index].path,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.image_rounded, color: AppColors.textHint),
+                  )
+                : Image.file(
+                    File(_photos[index].path),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Icon(Icons.image_rounded, color: AppColors.textHint),
+                  ),
           ),
         ),
         Positioned(
@@ -850,11 +1195,84 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           children: [
             Icon(icon, size: 22, color: AppColors.primary),
             const SizedBox(height: 2),
-            Text(label,
-                style: AppTextStyles.caption
-                    .copyWith(color: AppColors.primary, fontSize: 10)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildDropdown(String label, String hint, String? value, List<String> options, ValueChanged<String?> onChanged) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: AppTextStyles.label),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          decoration: BoxDecoration(
+            color: _isViewing ? AppColors.divider : AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              isExpanded: true,
+              value: value,
+              hint: Text(hint, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
+              items: options.map((opt) => DropdownMenuItem(value: opt, child: Text(opt, style: AppTextStyles.bodyMedium))).toList(),
+              onChanged: _isViewing ? null : onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRadioGroup(String label, String groupValue, ValueChanged<String?> onChanged) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Expanded(child: Text(label, style: AppTextStyles.bodyMedium)),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: _isViewing ? null : () => onChanged('Yes'),
+                child: Row(
+                  children: [
+                    Radio<String>(
+                      value: 'Yes',
+                      groupValue: groupValue,
+                      onChanged: _isViewing ? null : onChanged,
+                      activeColor: AppColors.primary,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    const Text('Yes'),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              GestureDetector(
+                onTap: _isViewing ? null : () => onChanged('No'),
+                child: Row(
+                  children: [
+                    Radio<String>(
+                      value: 'No',
+                      groupValue: groupValue,
+                      onChanged: _isViewing ? null : onChanged,
+                      activeColor: AppColors.primary,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    const Text('No'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

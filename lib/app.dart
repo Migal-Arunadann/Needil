@@ -45,10 +45,10 @@ class _PmsAppState extends ConsumerState<PmsApp> {
         ),
       ),
       // Route based on auth state
-      home: authState.isLoading
+      home: authState.isInitializing
           ? const _SplashScreen()
           : authState.isAuthenticated
-              ? const MainLayout()
+              ? MainLayout()
               : const LoginScreen(),
       onGenerateRoute: generateRoute,
     );

@@ -113,13 +113,20 @@ class SchedulingService {
         targetDate.day == now.day;
     final currentMinutes = now.hour * 60 + now.minute;
 
+    // A slot is considered 'past' only when the working day itself has ended.
+    // Slots within today's working hours stay selectable even if their start
+    // time has already passed — a patient can still walk in for a 4:30 slot
+    // at 4:40 as long as the clinic hasn't closed (e.g. closes at 5:00).
+    final workingDayEnded = isToday && currentMinutes >= end;
+
     while (current + durationMinutes <= end) {
       final isDuringBreak = breakStart != null &&
           breakEnd != null &&
           current >= breakStart &&
           current < breakEnd;
-          
-      final isPast = isToday && current < currentMinutes;
+
+      // Mark past only if the whole working day is over, not individual slots.
+      final isPast = workingDayEnded;
 
       slots.add(TimeSlot(
         time: _minutesToTimeStr(current),
@@ -134,13 +141,15 @@ class SchedulingService {
     return slots;
   }
 
-  /// Get booked appointment times for a doctor on a date.
+  /// Get booked consultation (non-session) appointment times for a doctor on a date.
+  /// Session appointments are excluded — session patients are occupying a bed,
+  /// not the doctor's consultation capacity, so they should not block new bookings.
   Future<Set<String>> _getBookedTimes(
       String doctorId, String date) async {
     try {
       final result = await pb.collection(PBCollections.appointments).getList(
         filter:
-            'doctor = "$doctorId" && date = "$date" && status != "cancelled"',
+            'doctor = "$doctorId" && date = "$date" && status != "cancelled" && type != "session"',
       );
       return result.items.map((r) => r.getStringValue('time')).toSet();
     } catch (_) {
@@ -187,13 +196,15 @@ class SchedulingService {
 
   // ─── Conflict Detection ────────────────────────────────────
 
-  /// Check if a specific slot is already booked.
+  /// Check if a specific slot is already booked by a consultation (non-session) appointment.
+  /// Sessions are excluded: a session patient lying on a bed doesn't block the doctor
+  /// from starting a new consultation at the same time slot.
   Future<bool> isSlotBooked(
       String doctorId, String date, String time) async {
     try {
       final result = await pb.collection(PBCollections.appointments).getList(
         filter:
-            'doctor = "$doctorId" && date = "$date" && time = "$time" && status != "cancelled"',
+            'doctor = "$doctorId" && date = "$date" && time = "$time" && status != "cancelled" && type != "session"',
       );
       return result.items.isNotEmpty;
     } catch (_) {

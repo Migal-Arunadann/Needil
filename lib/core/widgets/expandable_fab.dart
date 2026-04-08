@@ -6,7 +6,7 @@ class ExpandableFab extends StatefulWidget {
   final bool isExtended;
   final VoidCallback onCallBy;
   final VoidCallback onWalkIn;
-  final CrossAxisAlignment alignment; // Unused, kept for backward compatibility
+  final CrossAxisAlignment alignment;
 
   const ExpandableFab({
     super.key,

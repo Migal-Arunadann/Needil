@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
@@ -35,6 +34,7 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
   TreatmentConfig? _selectedTreatment;
   DateTime _startDate = DateTime.now();
   TimeOfDay _preferredTime = const TimeOfDay(hour: 10, minute: 0);
+  bool _firstSessionCompletedToday = true;
   
   final _sessionsCtrl = TextEditingController(text: '5');
   final _intervalCtrl = TextEditingController(text: '1');
@@ -79,13 +79,15 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
   }
 
   Future<void> _pickStartDate() async {
+    FocusScope.of(context).unfocus();
+    await Future.delayed(const Duration(milliseconds: 50));
     final d = await showDatePicker(
       context: context,
       initialDate: _startDate,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
       selectableDayPredicate: (day) {
-        if (_doctorWorkingDays.isEmpty) return true; // Fallback
+        if (_doctorWorkingDays.isEmpty) return true;
         return _doctorWorkingDays.contains(day.weekday);
       },
     );
@@ -95,6 +97,8 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
   }
 
   Future<void> _pickPreferredTime() async {
+    FocusScope.of(context).unfocus();
+    await Future.delayed(const Duration(milliseconds: 50));
     final t = await showTimePicker(
       context: context,
       initialTime: _preferredTime,
@@ -139,6 +143,7 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
         totalSessions: numSessions,
         intervalDays: interval,
         sessionFee: fee,
+        firstSessionCompletedToday: _firstSessionCompletedToday,
       );
 
       if (mounted) {
@@ -340,6 +345,37 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
                   ],
                 ),
                 
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline_rounded, color: AppColors.primary),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Start the 1st session today itself?', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 4),
+                            Text('Creates Session 1 today and schedules the remaining sessions', style: AppTextStyles.caption),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: _firstSessionCompletedToday,
+                        activeColor: AppColors.primary,
+                        onChanged: (val) => setState(() => _firstSessionCompletedToday = val),
+                      ),
+                    ],
+                  ),
+                ),
+
                 const Padding(
                   padding: EdgeInsets.only(top: 16),
                   child: Text(

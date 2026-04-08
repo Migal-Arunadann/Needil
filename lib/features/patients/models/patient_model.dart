@@ -5,7 +5,10 @@ class PatientModel {
   final String fullName;
   final String phone;
   final String? dateOfBirth;
-  final String? address;
+  final String? address;  // Legacy single-line address (kept for backwards-compat)
+  final String? city;
+  final String? area;
+  final String? pincode;
   final String? emergencyContact;
   final String? allergiesConditions;
   final String doctorId;
@@ -25,6 +28,9 @@ class PatientModel {
     required this.phone,
     this.dateOfBirth,
     this.address,
+    this.city,
+    this.area,
+    this.pincode,
     this.emergencyContact,
     this.allergiesConditions,
     required this.doctorId,
@@ -46,6 +52,9 @@ class PatientModel {
       phone: record.getStringValue('phone'),
       dateOfBirth: record.getStringValue('date_of_birth'),
       address: record.getStringValue('address'),
+      city: record.getStringValue('city'),
+      area: record.getStringValue('area'),
+      pincode: record.getStringValue('pincode'),
       emergencyContact: record.getStringValue('emergency_contact'),
       allergiesConditions: record.getStringValue('allergies_conditions'),
       doctorId: record.getStringValue('doctor'),
@@ -56,8 +65,8 @@ class PatientModel {
       age: record.getIntValue('age'),
       consentGiven: record.getBoolValue('consent_given'),
       consentDate: record.getStringValue('consent_date'),
-      created: DateTime.tryParse(record.get<String>('created')),
-      updated: DateTime.tryParse(record.get<String>('updated')),
+      created: DateTime.tryParse(record.getStringValue('created')),
+      updated: DateTime.tryParse(record.getStringValue('updated')),
     );
   }
 
@@ -68,6 +77,9 @@ class PatientModel {
       if (dateOfBirth != null && dateOfBirth!.isNotEmpty)
         'date_of_birth': dateOfBirth,
       if (address != null && address!.isNotEmpty) 'address': address,
+      if (city != null && city!.isNotEmpty) 'city': city,
+      if (area != null && area!.isNotEmpty) 'area': area,
+      if (pincode != null && pincode!.isNotEmpty) 'pincode': pincode,
       if (emergencyContact != null && emergencyContact!.isNotEmpty)
         'emergency_contact': emergencyContact,
       if (allergiesConditions != null && allergiesConditions!.isNotEmpty)

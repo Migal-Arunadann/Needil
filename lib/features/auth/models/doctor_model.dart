@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:pocketbase/pocketbase.dart';
+import '../../../core/providers/pocketbase_provider.dart';
 
 class WorkingSchedule {
   final String day;
@@ -78,6 +79,10 @@ class DoctorModel {
   final bool sharePastPatients;
   final bool shareFuturePatients;
   final bool verified;
+  // New profile fields
+  final String? phone;
+  final String? dateOfBirth;
+  final String? photoUrl;
   final DateTime? created;
   final DateTime? updated;
 
@@ -94,6 +99,9 @@ class DoctorModel {
     this.sharePastPatients = false,
     this.shareFuturePatients = false,
     this.verified = false,
+    this.phone,
+    this.dateOfBirth,
+    this.photoUrl,
     this.created,
     this.updated,
   });
@@ -125,6 +133,12 @@ class DoctorModel {
       }).toList();
     }
 
+    final photoFile = record.getStringValue('photo');
+    String? photoUrl;
+    if (photoFile.isNotEmpty) {
+      photoUrl = '$pbBaseUrl/api/files/${record.collectionId}/${record.id}/$photoFile';
+    }
+
     return DoctorModel(
       id: record.id,
       name: record.getStringValue('name'),
@@ -138,8 +152,11 @@ class DoctorModel {
       sharePastPatients: record.getBoolValue('share_past_patients'),
       shareFuturePatients: record.getBoolValue('share_future_patients'),
       verified: record.getBoolValue('verified'),
-      created: DateTime.tryParse(record.get<String>('created')),
-      updated: DateTime.tryParse(record.get<String>('updated')),
+      phone: record.getStringValue('phone'),
+      dateOfBirth: record.getStringValue('dob'),
+      photoUrl: photoUrl,
+      created: DateTime.tryParse(record.getStringValue('created')),
+      updated: DateTime.tryParse(record.getStringValue('updated')),
     );
   }
 
@@ -167,6 +184,8 @@ class DoctorModel {
       'treatments': treatments.map((t) => t.toJson()).toList(),
       'share_past_patients': sharePastPatients,
       'share_future_patients': shareFuturePatients,
+      if (phone != null && phone!.isNotEmpty) 'phone': phone,
+      if (dateOfBirth != null && dateOfBirth!.isNotEmpty) 'dob': dateOfBirth,
     };
   }
 }

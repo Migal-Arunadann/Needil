@@ -54,10 +54,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
 
-    if (_selectedRole == UserRole.clinic) {
-      ref.read(authProvider.notifier).loginClinic(username, password);
-    } else {
-      ref.read(authProvider.notifier).loginDoctor(username, password);
+    switch (_selectedRole) {
+      case UserRole.clinic:
+        ref.read(authProvider.notifier).loginClinic(username, password);
+        break;
+      case UserRole.doctor:
+        ref.read(authProvider.notifier).loginDoctor(username, password);
+        break;
+      case UserRole.receptionist:
+        ref.read(authProvider.notifier).loginReceptionist(username, password);
+        break;
     }
   }
 
@@ -94,16 +100,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               child: Column(
                 children: [
                   const SizedBox(height: 48),
-                  // Logo / Header
                   _buildHeader(),
                   const SizedBox(height: 40),
-                  // Role Toggle
                   _buildRoleToggle(),
                   const SizedBox(height: 32),
-                  // Login Form
                   _buildLoginForm(),
                   const SizedBox(height: 24),
-                  // Login Button
                   AppButton(
                     label: 'Sign In',
                     onPressed: _login,
@@ -111,7 +113,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     icon: Icons.login_rounded,
                   ),
                   const SizedBox(height: 24),
-                  // Register Link
                   _buildRegisterLink(),
                   const SizedBox(height: 32),
                 ],
@@ -171,6 +172,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         children: [
           _roleTab('Clinic', UserRole.clinic, Icons.business_rounded),
           _roleTab('Doctor', UserRole.doctor, Icons.person_rounded),
+          _roleTab('Staff', UserRole.receptionist, Icons.support_agent_rounded),
         ],
       ),
     );
@@ -202,14 +204,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             children: [
               Icon(
                 icon,
-                size: 20,
+                size: 18,
                 color: isSelected ? Colors.white : AppColors.textSecondary,
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
               Text(
                 label,
                 style: AppTextStyles.buttonMedium.copyWith(
                   color: isSelected ? Colors.white : AppColors.textSecondary,
+                  fontSize: 13,
                 ),
               ),
             ],
@@ -271,11 +274,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         ),
         GestureDetector(
           onTap: () {
-            // Navigate to role selection for registration
-            Navigator.of(context).pushNamed('/register');
+            // Navigate directly to clinic registration (no role selection)
+            Navigator.of(context).pushNamed('/register/clinic');
           },
           child: Text(
-            'Register',
+            'Register Clinic',
             style: AppTextStyles.bodyMedium.copyWith(
               color: AppColors.primary,
               fontWeight: FontWeight.w600,
