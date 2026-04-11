@@ -11,12 +11,15 @@ import '../../../core/utils/time_utils.dart';
 import '../../patients/models/patient_model.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/constants/pb_collections.dart';
+import '../../auth/models/doctor_model.dart';
+import '../../../core/services/scheduling_service.dart';
 import '../../scheduling/screens/available_slots_screen.dart';
 import '../../consultations/screens/consultation_screen.dart';
 import '../../treatments/screens/create_treatment_plan_screen.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/services/auth_service.dart';
 import 'patient_info_screen.dart';
+import '../../analytics/providers/analytics_provider.dart';
 
 class AppointmentListScreen extends ConsumerStatefulWidget {
   const AppointmentListScreen({super.key});
@@ -131,6 +134,24 @@ class _AppointmentListScreenState
 
   Future<void> _markArrived(AppointmentModel apt) async {
     try {
+      final pb = ref.read(pocketbaseProvider);
+      final docRec = await pb.collection('doctors').getOne(apt.doctorId);
+      final doctor = DoctorModel.fromRecord(docRec);
+      
+      final schedService = SchedulingService(pb);
+      final daySchedule = schedService.getScheduleForDay(doctor.workingSchedule, DateTime.now().weekday);
+      if (daySchedule == null) {
+        if (mounted) _showError("Doctor is not scheduled to work today.");
+        return;
+      }
+      
+      final now = DateTime.now();
+      final nowStr = '${now.hour.toString().padLeft(2,'0')}:${now.minute.toString().padLeft(2,'0')}';
+      if (!schedService.isWithinWorkingHours(daySchedule, nowStr)) {
+        if (mounted) _showError("Patient arrival can only be captured between doctor's working hours.");
+        return;
+      }
+
       final service = ref.read(appointmentServiceProvider);
       await service.markArrived(apt.id);
       ref.read(appointmentListProvider.notifier).loadAppointments();
@@ -152,6 +173,7 @@ class _AppointmentListScreenState
       final service = ref.read(appointmentServiceProvider);
       await service.markEnded(apt.id);
       ref.read(appointmentListProvider.notifier).loadAppointments();
+      ref.read(analyticsProvider.notifier).load(); // background refresh
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('${apt.displayName} — appointment ended ✓'),
@@ -266,6 +288,8 @@ class _AppointmentListScreenState
 
   Future<void> _startConsultation(AppointmentModel apt) async {
     if (apt.patientId == null || apt.patientId!.isEmpty) return;
+    // Guard: if form already saved, don't re-open it (buttons already show Create Plan / End Consultation)
+    if (apt.consultationFormSaved) return;
     try {
       final service = ref.read(appointmentServiceProvider);
       final ongoing = await service.findOngoingConsultation(apt.patientId!, apt.doctorId);
@@ -289,6 +313,7 @@ class _AppointmentListScreenState
               patientName: patientName,
               doctorId: apt.doctorId,
               consultationId: consultationId,
+              appointmentId: apt.id, // so screen can mark form saved
             ),
           ),
         );
@@ -306,7 +331,7 @@ class _AppointmentListScreenState
       final patientRecord = await pb.collection(PBCollections.patients).getOne(apt.patientId!);
       final patientName = patientRecord.getStringValue('full_name');
       if (mounted) {
-        await Navigator.push(
+        final result = await Navigator.push<bool>(
           context,
           MaterialPageRoute(
             builder: (_) => CreateTreatmentPlanScreen(
@@ -317,6 +342,26 @@ class _AppointmentListScreenState
             ),
           ),
         );
+        if (!mounted) return;
+        if (result == true) {
+          // Auto-end the consultation appointment after a plan is created
+          final service = ref.read(appointmentServiceProvider);
+          await service.markEnded(apt.id);
+          ref.read(analyticsProvider.notifier).load();
+          if (mounted) {
+            final now = DateTime.now();
+            final timeStr =
+                '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text(
+                'Treatment plan created & consultation ended. Today\'s session is waiting at $timeStr.'),
+              backgroundColor: AppColors.success,
+              duration: const Duration(seconds: 5),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ));
+          }
+        }
         ref.read(appointmentListProvider.notifier).loadAppointments();
       }
     } catch (e) {
@@ -333,8 +378,26 @@ class _AppointmentListScreenState
       ref.read(appointmentListProvider.notifier).loadAppointments();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${apt.displayName} arrived for session ✓'),
-          backgroundColor: AppColors.success,
+          content: Text('${apt.displayName} is now waiting for session ✓'),
+          backgroundColor: const Color(0xFFF59E0B),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      }
+    } catch (e) {
+      if (mounted) _showError('$e');
+    }
+  }
+
+  Future<void> _markStartSession(AppointmentModel apt) async {
+    try {
+      final service = ref.read(appointmentServiceProvider);
+      await service.startSession(apt.id);
+      ref.read(appointmentListProvider.notifier).loadAppointments();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Session started for ${apt.displayName} ✓'),
+          backgroundColor: AppColors.primary,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ));
@@ -349,6 +412,7 @@ class _AppointmentListScreenState
       final service = ref.read(appointmentServiceProvider);
       await service.markSessionEnded(apt.id);
       ref.read(appointmentListProvider.notifier).loadAppointments();
+      ref.read(analyticsProvider.notifier).load(); // background refresh
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Session for ${apt.displayName} completed ✓'),
@@ -480,8 +544,13 @@ class _AppointmentListScreenState
     final state = ref.watch(appointmentListProvider);
     final all = state.appointments;
 
+    final activeConsultationPatientIds = all
+        .where((a) => a.type != AppointmentType.session && a.status != AppointmentStatus.completed && a.status != AppointmentStatus.cancelled)
+        .map((a) => a.patientId)
+        .toSet();
+
     final consultations = all.where((a) => a.type != AppointmentType.session).toList();
-    final sessions = all.where((a) => a.type == AppointmentType.session).toList();
+    final sessions = all.where((a) => a.type == AppointmentType.session && !activeConsultationPatientIds.contains(a.patientId)).toList();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -691,7 +760,7 @@ class _AppointmentListScreenState
                                           isFutureDate: _isFutureDate(e.value),
                                           isMissed: _isMissed(e.value),
                                           onArrived: () => _markSessionArrived(e.value),
-                                          onViewSession: () => _openSessionPage(e.value),
+                                          onStartSession: () => _markStartSession(e.value),
                                           onSessionEnded: () => _markSessionEnded(e.value),
                                           onReschedule: () => _rescheduleSession(e.value),
                                           onLongPress: () => _cancelSession(e.value),
@@ -834,8 +903,8 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
     Future.delayed(Duration(milliseconds: widget.index * 60), () {
       if (mounted) _ctrl.forward();
     });
-    // If consultation has already started, fetch plan info once
-    if (widget.apt.consultationStartTime != null &&
+    // If consultation form already saved, fetch plan info once on init
+    if (widget.apt.consultationFormSaved &&
         widget.apt.patientId != null &&
         widget.apt.patientId!.isNotEmpty) {
       _loadPlanInfo();
@@ -862,17 +931,17 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
   @override
   void didUpdateWidget(_ScheduleCard old) {
     super.didUpdateWidget(old);
-    // Re-check plan when consultation is newly started
-    if (old.apt.consultationStartTime == null &&
-        widget.apt.consultationStartTime != null &&
+    // Re-check plan when consultation form is newly saved
+    if (!old.apt.consultationFormSaved &&
+        widget.apt.consultationFormSaved &&
         widget.apt.patientId != null &&
         widget.apt.patientId!.isNotEmpty) {
       _planInfoLoaded = false;
       _loadPlanInfo();
     }
-    // Also re-check if we already have a consultation going but plan state may have changed
+    // Also re-check if form already saved but plan state may have changed
     // (e.g., doctor just created a plan and returned to the list)
-    else if (widget.apt.consultationStartTime != null &&
+    else if (widget.apt.consultationFormSaved &&
         widget.apt.patientId != null &&
         widget.apt.patientId!.isNotEmpty &&
         _planInfoLoaded &&
@@ -910,25 +979,36 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
     final isWalkIn = apt.type == AppointmentType.walkIn;
     final typeColor = isCallBy ? AppColors.info : AppColors.accent;
     final typeLabel = isCallBy ? 'Call-By' : 'Walk-In';
+    final typeIcon = isCallBy ? Icons.phone_in_talk_rounded : Icons.directions_walk_rounded;
 
     final isScheduled = apt.status == AppointmentStatus.scheduled;
     final isInProgress = apt.status == AppointmentStatus.inProgress;
     final hasPatientLinked = apt.patientId != null && apt.patientId!.isNotEmpty;
-    final hasConsultationStarted = isInProgress && hasPatientLinked && apt.consultationStartTime != null;
-
     final showArrivedBtn = isScheduled && !isWalkIn && !widget.isFutureDate && !widget.isMissed;
     final showRescheduleBtn = isScheduled && widget.isFutureDate && !widget.isMissed;
     final showFillDetailsBtn = isInProgress && !hasPatientLinked;
-    final showStartConsultationBtn = isInProgress && hasPatientLinked && apt.consultationStartTime == null;
-    // After consultation started: show Create Plan (if no plan yet) + Appointment Ended
-    final showCreatePlanBtn = hasConsultationStarted && _planInfoLoaded && !_hasPlan;
-    final showEndedBtn = hasConsultationStarted;
+    // Show "Start Consultation" only when consultation has never been opened (form not yet saved)
+    final showStartConsultationBtn = isInProgress && hasPatientLinked && apt.consultationStartTime == null && !apt.consultationFormSaved;
+    // Show "Create Plan" + "End Consultation" once form has been saved (not before)
+    final showCreatePlanBtn = apt.consultationFormSaved && _planInfoLoaded && !_hasPlan;
+    final showEndedBtn = apt.consultationFormSaved;
 
-    // Role-based: receptionists cannot start consultations, create plans, or end appointments
     final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
     final effectiveShowStartConsultation = showStartConsultationBtn && !isReceptionist;
     final effectiveShowCreatePlan = showCreatePlanBtn && !isReceptionist;
     final effectiveShowEnded = showEndedBtn && !isReceptionist;
+
+    // Left accent color
+    final accentColor = widget.isMissed || apt.status == AppointmentStatus.cancelled
+        ? AppColors.error
+        : widget.isLate
+            ? AppColors.warning
+            : isInProgress
+                ? AppColors.warning
+                : statusColor;
+
+    final hasActions = showArrivedBtn || showRescheduleBtn || showFillDetailsBtn ||
+        effectiveShowStartConsultation || effectiveShowCreatePlan || effectiveShowEnded;
 
     return FadeTransition(
       opacity: _fade,
@@ -941,160 +1021,242 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
             widget.onLongPress();
           },
           child: Opacity(
-            opacity: widget.isMissed ? 0.6 : 1.0,
+            opacity: widget.isMissed || apt.status == AppointmentStatus.cancelled ? 0.65 : 1.0,
             child: Container(
               decoration: BoxDecoration(
                 color: AppColors.surface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: widget.isMissed ? AppColors.error.withValues(alpha: 0.4)
-                      : widget.isLate ? AppColors.error.withValues(alpha: 0.5)
-                      : AppColors.border,
-                  width: (widget.isLate || widget.isMissed) ? 1.5 : 1.0,
-                ),
+                borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: (widget.isLate ? AppColors.error : Colors.black).withValues(alpha: 0.04),
-                    blurRadius: 12, offset: const Offset(0, 4),
+                    color: accentColor.withValues(alpha: 0.07),
+                    blurRadius: 16,
+                    offset: const Offset(0, 5),
                   ),
                 ],
               ),
-              child: Column(
-                children: [
-                  // Patient info row
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(apt.displayName,
-                                  style: AppTextStyles.h3.copyWith(fontSize: 16),
-                                  maxLines: 1, overflow: TextOverflow.ellipsis),
-                              const SizedBox(height: 5),
-                              // Status pill
-                              Row(children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: statusColor.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                    Icon(statusIcon, size: 11, color: statusColor),
-                                    const SizedBox(width: 4),
-                                    Text(statusStr, style: AppTextStyles.labelSmall.copyWith(color: statusColor, fontWeight: FontWeight.w600, fontSize: 10)),
-                                  ]),
-                                ),
-                              ]),
-                              const SizedBox(height: 4),
-                              // Type label (Walk-In / Call-By)
-                              Row(children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: typeColor.withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(typeLabel, style: AppTextStyles.labelSmall.copyWith(color: typeColor, fontWeight: FontWeight.w600, fontSize: 10)),
-                                ),
-                                const SizedBox(width: 8),
-                                Icon(Icons.schedule_rounded, size: 12, color: AppColors.textHint),
-                                const SizedBox(width: 4),
-                                Text(TimeUtils.formatStringTime(apt.time),
-                                    style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontWeight: FontWeight.w600)),
-                              ]),
-                              // Arrived time inline if checked in
-                              if (apt.checkInTime != null) ...[
-                                const SizedBox(height: 4),
-                                Row(children: [
-                                  Icon(Icons.login_rounded, size: 12, color: AppColors.success),
-                                  const SizedBox(width: 4),
-                                  Text('Arrived ${DateFormat('h:mm a').format(apt.checkInTime!.toLocal())}',
-                                      style: AppTextStyles.caption.copyWith(color: AppColors.success, fontSize: 11, fontWeight: FontWeight.w600)),
-                                ]),
-                              ],
-                            ],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // ── Left accent strip ──
+                      Container(
+                        width: 5,
+                        decoration: BoxDecoration(
+                          color: accentColor,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(18),
+                            bottomLeft: Radius.circular(18),
                           ),
                         ),
-                        // Phone call button — extreme right
-                        if (apt.patientPhone != null && apt.patientPhone!.isNotEmpty)
-                          GestureDetector(
-                            onTap: () async {
-                              try { await launchUrl(Uri.parse('tel:${apt.patientPhone}')); } catch (_) {}
-                            },
-                            child: Container(
-                              width: 38, height: 38,
-                              decoration: BoxDecoration(
-                                color: AppColors.success.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: const Icon(Icons.phone_rounded, color: AppColors.success, size: 18),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-
-                  if (widget.isMissed)
-                    _InfoBanner(Icons.event_busy_rounded, 'Patient missed this appointment', AppColors.error),
-                  if (widget.isLate && !widget.isMissed)
-                    _InfoBanner(Icons.warning_amber_rounded, 'Patient is late — hasn\'t arrived yet', AppColors.error),
-
-                  if (showArrivedBtn || showRescheduleBtn || showFillDetailsBtn ||
-                      effectiveShowStartConsultation || effectiveShowCreatePlan || effectiveShowEnded) ...[
-                    const Divider(color: AppColors.border, height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        children: [
-                          // Row 1: pre-consultation buttons (mutually exclusive)
-                          if (showArrivedBtn || showRescheduleBtn || showFillDetailsBtn || effectiveShowStartConsultation)
-                            Row(children: [
-                              if (showArrivedBtn) Expanded(child: _ActionButton(label: 'Patient Arrived', icon: Icons.how_to_reg_rounded, color: AppColors.success, onTap: widget.onArrived)),
-                              if (showRescheduleBtn) Expanded(child: _ActionButton(label: 'Reschedule', icon: Icons.event_repeat_rounded, color: AppColors.info, onTap: widget.onReschedule)),
-                              if (showFillDetailsBtn) Expanded(child: _ActionButton(label: 'Fill Details', icon: Icons.badge_rounded, color: AppColors.info, onTap: widget.onFillDetails)),
-                              if (effectiveShowStartConsultation) Expanded(child: _ActionButton(label: 'Start Consultation', icon: Icons.medical_services_rounded, color: AppColors.primary, onTap: widget.onStartConsultation)),
-                            ]),
-                          // Row 2: post-consultation-start buttons
-                          if (effectiveShowCreatePlan || effectiveShowEnded) ...[
-                            if (showArrivedBtn || showRescheduleBtn || showFillDetailsBtn || effectiveShowStartConsultation)
-                              const SizedBox(height: 8),
-                            Row(children: [
-                              if (effectiveShowCreatePlan) ...[
-                                Expanded(child: _ActionButton(
-                                  label: 'Create Plan',
-                                  icon: Icons.add_chart_rounded,
-                                  color: AppColors.primary,
-                                  onTap: () async {
-                                    await Future.microtask(
-                                      () => widget.onCreatePlan(_consultationId ?? ''),
-                                    );
-                                    // Force re-check plan state after returning so button hides
-                                    if (mounted) {
-                                      setState(() { _planInfoLoaded = false; _hasPlan = false; });
-                                      _loadPlanInfo();
-                                    }
-                                  },
-                                )),
-                                const SizedBox(width: 8),
-                              ],
-                              Expanded(child: _ActionButton(
-                                label: 'Appointment Ended',
-                                icon: Icons.check_circle_outline_rounded,
-                                color: AppColors.success,
-                                onTap: widget.onEnded,
-                              )),
-                            ]),
-                          ],
-                        ],
                       ),
-                    ),
-                  ],
-                ],
+
+                      // ── Card body ──
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Header
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  // Avatar circle
+                                  Container(
+                                    width: 46,
+                                    height: 46,
+                                    decoration: BoxDecoration(
+                                      color: typeColor.withValues(alpha: 0.12),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(typeIcon, color: typeColor, size: 22),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  // Name + meta
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          apt.displayName,
+                                          style: AppTextStyles.h3.copyWith(fontSize: 16),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 5),
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 4,
+                                          children: [
+                                            // Status pill
+                                            _Pill(
+                                              label: statusStr,
+                                              icon: statusIcon,
+                                              color: statusColor,
+                                            ),
+                                            // Type pill
+                                            _Pill(
+                                              label: typeLabel,
+                                              icon: typeIcon,
+                                              color: typeColor,
+                                            ),
+                                          ],
+                                        ),
+                                        if (apt.checkInTime != null) ...[
+                                          const SizedBox(height: 5),
+                                          _MetaRow(
+                                            icon: Icons.login_rounded,
+                                            label: 'Arrived ${DateFormat('h:mm a').format(apt.checkInTime!.toLocal())}',
+                                            color: AppColors.success,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Right column: time badge + phone
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      // Time badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          color: accentColor.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Text(
+                                          TimeUtils.formatStringTime(apt.time),
+                                          style: TextStyle(
+                                            color: accentColor,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: -0.2,
+                                          ),
+                                        ),
+                                      ),
+                                      if (apt.patientPhone != null && apt.patientPhone!.isNotEmpty) ...[
+                                        const SizedBox(height: 6),
+                                        GestureDetector(
+                                          onTap: () async {
+                                            try { await launchUrl(Uri.parse('tel:${apt.patientPhone}')); } catch (_) {}
+                                          },
+                                          child: Container(
+                                            width: 34,
+                                            height: 34,
+                                            decoration: BoxDecoration(
+                                              color: AppColors.success.withValues(alpha: 0.1),
+                                              borderRadius: BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: AppColors.success.withValues(alpha: 0.25),
+                                              ),
+                                            ),
+                                            child: const Icon(Icons.phone_rounded,
+                                                color: AppColors.success, size: 16),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Banners
+                            if (widget.isMissed)
+                              _InfoBanner(Icons.event_busy_rounded,
+                                  'Patient missed this appointment', AppColors.error),
+                            if (widget.isLate && !widget.isMissed)
+                              _InfoBanner(Icons.warning_amber_rounded,
+                                  'Patient is late — hasn\'t arrived yet', AppColors.warning),
+
+                            // Actions
+                            if (hasActions) ...[
+                              Divider(
+                                  color: AppColors.border.withValues(alpha: 0.6),
+                                  height: 1),
+                              Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: Column(
+                                  children: [
+                                    if (showArrivedBtn || showRescheduleBtn ||
+                                        showFillDetailsBtn || effectiveShowStartConsultation)
+                                      Row(children: [
+                                        if (showArrivedBtn)
+                                          Expanded(child: _ActionButton(
+                                            label: 'Patient Arrived',
+                                            icon: Icons.how_to_reg_rounded,
+                                            color: AppColors.success,
+                                            onTap: widget.onArrived,
+                                          )),
+                                        if (showRescheduleBtn)
+                                          Expanded(child: _ActionButton(
+                                            label: 'Reschedule',
+                                            icon: Icons.event_repeat_rounded,
+                                            color: AppColors.info,
+                                            onTap: widget.onReschedule,
+                                          )),
+                                        if (showFillDetailsBtn)
+                                          Expanded(child: _ActionButton(
+                                            label: 'Fill Details',
+                                            icon: Icons.badge_rounded,
+                                            color: AppColors.info,
+                                            onTap: widget.onFillDetails,
+                                          )),
+                                        if (effectiveShowStartConsultation)
+                                          Expanded(child: _ActionButton(
+                                            label: 'Start Consultation',
+                                            icon: Icons.medical_services_rounded,
+                                            color: AppColors.primary,
+                                            onTap: widget.onStartConsultation,
+                                          )),
+                                      ]),
+                                    if (effectiveShowCreatePlan || effectiveShowEnded) ...[
+                                      if (showArrivedBtn || showRescheduleBtn ||
+                                          showFillDetailsBtn || effectiveShowStartConsultation)
+                                        const SizedBox(height: 7),
+                                      Row(children: [
+                                        if (effectiveShowCreatePlan) ...[
+                                          Expanded(child: _ActionButton(
+                                            label: 'Create Plan',
+                                            icon: Icons.add_chart_rounded,
+                                            color: AppColors.primary,
+                                            onTap: () async {
+                                              await Future.microtask(
+                                                () => widget.onCreatePlan(
+                                                    _consultationId ?? ''),
+                                              );
+                                              if (mounted) {
+                                                setState(() {
+                                                  _planInfoLoaded = false;
+                                                  _hasPlan = false;
+                                                });
+                                                _loadPlanInfo();
+                                              }
+                                            },
+                                          )),
+                                          const SizedBox(width: 7),
+                                        ],
+                                        Expanded(child: _ActionButton(
+                                          label: 'End Consultation',
+                                          icon: Icons.check_circle_outline_rounded,
+                                          color: AppColors.success,
+                                          onTap: widget.onEnded,
+                                        )),
+                                      ]),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -1114,11 +1276,11 @@ class _SessionCard extends StatefulWidget {
   final bool isLate;
   final bool isFutureDate;
   final bool isMissed;
-  final VoidCallback onArrived;      // today — patient arrived for session
-  final VoidCallback onViewSession;  // today — view session page inside consultation
-  final VoidCallback onSessionEnded; // today — mark session completed
-  final VoidCallback onReschedule;   // future — reschedule session
-  final VoidCallback onLongPress;    // any — cancel session
+  final VoidCallback onArrived;       // scheduled → patient arrived (waiting)
+  final VoidCallback onStartSession;  // waiting → start session (in progress)
+  final VoidCallback onSessionEnded;  // in progress → end session (completed)
+  final VoidCallback onReschedule;    // future — reschedule session
+  final VoidCallback onLongPress;     // any — cancel session
 
   const _SessionCard({
     super.key,
@@ -1128,7 +1290,7 @@ class _SessionCard extends StatefulWidget {
     required this.isFutureDate,
     required this.isMissed,
     required this.onArrived,
-    required this.onViewSession,
+    required this.onStartSession,
     required this.onSessionEnded,
     required this.onReschedule,
     required this.onLongPress,
@@ -1165,11 +1327,12 @@ class _SessionCardState extends State<_SessionCard> with SingleTickerProviderSta
   Widget build(BuildContext context) {
     final apt = widget.apt;
     final isScheduled = apt.status == AppointmentStatus.scheduled;
+    final isWaiting = apt.status == AppointmentStatus.waiting;
     final isInProgress = apt.status == AppointmentStatus.inProgress;
     final bool isCancelled = apt.status == AppointmentStatus.cancelled;
     final bool isCompleted = apt.status == AppointmentStatus.completed;
 
-    // Status visuals
+    const kWaiting = Color(0xFFF59E0B);
     Color statusColor;
     String statusStr;
     IconData statusIcon;
@@ -1181,29 +1344,36 @@ class _SessionCardState extends State<_SessionCard> with SingleTickerProviderSta
       statusColor = AppColors.success; statusStr = 'Completed'; statusIcon = Icons.check_circle_rounded;
     } else if (isInProgress) {
       statusColor = AppColors.warning; statusStr = 'In Progress'; statusIcon = Icons.sync_rounded;
+    } else if (isWaiting) {
+      statusColor = kWaiting; statusStr = 'Patient Waiting'; statusIcon = Icons.hourglass_empty_rounded;
     } else {
-      statusColor = AppColors.primary; statusStr = 'Scheduled'; statusIcon = Icons.healing_rounded;
+      statusColor = const Color(0xFF7C3AED); statusStr = 'Scheduled'; statusIcon = Icons.healing_rounded;
     }
 
-    // Which buttons to show
-    // Today scheduled — Patient Arrived
     final showArrivedBtn = isScheduled && !widget.isFutureDate && !widget.isMissed;
-    // Today in-progress — View Session Details + Session Ended
-    final showViewBtn = isInProgress;
-    final showEndedBtn = isInProgress;
-    // Future — Reschedule only
+    final showStartBtn   = isWaiting && !widget.isFutureDate;
+    final showEndedBtn   = isInProgress;
     final showRescheduleBtn = isScheduled && widget.isFutureDate;
 
-    // Session card has a distinct purple/teal accent
-    const sessionAccent = Color(0xFF7C3AED); // violet
+    const sessionAccent = Color(0xFF7C3AED);
+    final accentColor = widget.isMissed || isCancelled
+        ? AppColors.error
+        : widget.isLate
+            ? AppColors.warning
+            : isInProgress
+                ? AppColors.warning
+                : isWaiting
+                    ? kWaiting
+                    : sessionAccent;
+
+    final hasActions = showArrivedBtn || showStartBtn || showEndedBtn || showRescheduleBtn;
 
     return FadeTransition(
       opacity: _fade,
       child: SlideTransition(
         position: _slide,
         child: GestureDetector(
-          // Tap on session card → opens consultation/session view (today's card)
-          onTap: (isInProgress || isCompleted) ? widget.onViewSession : null,
+          onTap: null,
           onLongPress: isCancelled ? null : () {
             HapticFeedback.mediumImpact();
             widget.onLongPress();
@@ -1213,158 +1383,176 @@ class _SessionCardState extends State<_SessionCard> with SingleTickerProviderSta
             child: Container(
               decoration: BoxDecoration(
                 color: AppColors.surface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isInProgress
-                      ? sessionAccent.withValues(alpha: 0.4)
-                      : widget.isLate ? AppColors.error.withValues(alpha: 0.5)
-                      : AppColors.border,
-                  width: isInProgress ? 1.5 : 1.0,
-                ),
+                borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: isInProgress
-                        ? sessionAccent.withValues(alpha: 0.08)
-                        : Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 12, offset: const Offset(0, 4),
+                    color: accentColor.withValues(alpha: 0.07),
+                    blurRadius: 16,
+                    offset: const Offset(0, 5),
                   ),
                 ],
               ),
-              child: Column(
-                children: [
-                  // ── Header row ──
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                    child: Row(
-                      children: [
-                        // Session icon
-                        Container(
-                          width: 44, height: 44,
-                          decoration: BoxDecoration(
-                            color: sessionAccent.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(18),
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // ── Left accent strip ──
+                      Container(
+                        width: 5,
+                        decoration: BoxDecoration(
+                          color: accentColor,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(18),
+                            bottomLeft: Radius.circular(18),
                           ),
-                          child: const Icon(Icons.healing_rounded, color: sessionAccent, size: 20),
                         ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(apt.displayName,
-                                  style: AppTextStyles.h3.copyWith(fontSize: 16),
-                                  maxLines: 1, overflow: TextOverflow.ellipsis),
-                              const SizedBox(height: 3),
-                              // Use Wrap to prevent overflow when label + time don't fit
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 4,
-                                crossAxisAlignment: WrapCrossAlignment.center,
+                      ),
+
+                      // ── Card body ──
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
+                                  // Icon avatar
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    width: 46,
+                                    height: 46,
                                     decoration: BoxDecoration(
-                                      color: sessionAccent.withValues(alpha: 0.08),
-                                      borderRadius: BorderRadius.circular(6),
+                                      color: sessionAccent.withValues(alpha: 0.1),
+                                      shape: BoxShape.circle,
                                     ),
-                                    child: Text('Treatment Session', style: AppTextStyles.labelSmall.copyWith(
-                                      color: sessionAccent, fontWeight: FontWeight.w600, fontSize: 10,
-                                    )),
+                                    child: const Icon(Icons.healing_rounded,
+                                        color: sessionAccent, size: 22),
                                   ),
-                                  Row(mainAxisSize: MainAxisSize.min, children: [
-                                    Icon(Icons.schedule_rounded, size: 12, color: AppColors.textHint),
-                                    const SizedBox(width: 4),
-                                    Text(TimeUtils.formatStringTime(apt.time),
-                                        style: AppTextStyles.caption.copyWith(color: sessionAccent, fontWeight: FontWeight.w600)),
-                                  ]),
+                                  const SizedBox(width: 12),
+                                  // Name + meta
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          apt.displayName,
+                                          style: AppTextStyles.h3.copyWith(fontSize: 16),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 5),
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 4,
+                                          children: [
+                                            _Pill(
+                                              label: statusStr,
+                                              icon: statusIcon,
+                                              color: statusColor,
+                                            ),
+                                            _Pill(
+                                              label: 'Treatment',
+                                              icon: Icons.healing_rounded,
+                                              color: sessionAccent,
+                                            ),
+                                          ],
+                                        ),
+                                        if (apt.checkInTime != null) ...[
+                                          const SizedBox(height: 5),
+                                          _MetaRow(
+                                            icon: Icons.login_rounded,
+                                            label: 'Arrived ${DateFormat('h:mm a').format(apt.checkInTime!.toLocal())}',
+                                            color: AppColors.success,
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // Time badge
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: accentColor.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      TimeUtils.formatStringTime(apt.time),
+                                      style: TextStyle(
+                                        color: accentColor,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: -0.2,
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
+                            ),
+
+                            // Banners
+                            if (widget.isMissed)
+                              _InfoBanner(Icons.event_busy_rounded,
+                                  'Patient missed this session', AppColors.error),
+                            if (widget.isLate && !widget.isMissed && isScheduled)
+                              _InfoBanner(Icons.warning_amber_rounded,
+                                  'Patient is late — hasn\'t arrived yet', AppColors.warning),
+                            if (isWaiting)
+                              _InfoBanner(Icons.hourglass_empty_rounded,
+                                  'Patient waiting — tap Start Session when ready', kWaiting),
+                            if (isInProgress)
+                              _InfoBanner(Icons.sync_rounded,
+                                  'Session in progress', AppColors.warning),
+
+                            // Actions
+                            if (hasActions) ...[
+                              Divider(
+                                  color: AppColors.border.withValues(alpha: 0.6),
+                                  height: 1),
+                              Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: Row(children: [
+                                  if (showArrivedBtn)
+                                    Expanded(child: _ActionButton(
+                                      label: 'Patient Arrived',
+                                      icon: Icons.how_to_reg_rounded,
+                                      color: AppColors.success,
+                                      onTap: widget.onArrived,
+                                    )),
+                                  if (showStartBtn)
+                                    Expanded(child: _ActionButton(
+                                      label: 'Start Session',
+                                      icon: Icons.play_arrow_rounded,
+                                      color: AppColors.primary,
+                                      onTap: widget.onStartSession,
+                                    )),
+                                  if (showEndedBtn)
+                                    Expanded(child: _ActionButton(
+                                      label: 'End Session',
+                                      icon: Icons.check_circle_outline_rounded,
+                                      color: AppColors.success,
+                                      onTap: widget.onSessionEnded,
+                                    )),
+                                  if (showRescheduleBtn)
+                                    Expanded(child: _ActionButton(
+                                      label: 'Reschedule',
+                                      icon: Icons.event_repeat_rounded,
+                                      color: AppColors.info,
+                                      onTap: widget.onReschedule,
+                                    )),
+                                ]),
+                              ),
                             ],
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        // Status pill
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: statusColor.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            Icon(statusIcon, size: 12, color: statusColor),
-                            const SizedBox(width: 4),
-                            Text(statusStr, style: AppTextStyles.labelSmall.copyWith(color: statusColor, fontWeight: FontWeight.w600, fontSize: 10)),
-                          ]),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Banners
-                  if (widget.isMissed)
-                    _InfoBanner(Icons.event_busy_rounded, 'Patient missed this session', AppColors.error),
-                  if (widget.isLate && !widget.isMissed && isScheduled)
-                    _InfoBanner(Icons.warning_amber_rounded, 'Patient is late — hasn\'t arrived yet', AppColors.error),
-                  if (isInProgress)
-                    _InfoBanner(Icons.info_outline_rounded, 'Tap card to view session details', sessionAccent),
-                  if (apt.checkInTime != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      child: Row(children: [
-                        Icon(Icons.login_rounded, size: 12, color: AppColors.success),
-                        const SizedBox(width: 6),
-                        Text('Arrived at ${DateFormat('h:mm a').format(apt.checkInTime!.toLocal())}',
-                            style: AppTextStyles.caption.copyWith(color: AppColors.success, fontSize: 11)),
-                      ]),
-                    ),
-
-                  // ── Action Buttons ──
-                  if (showArrivedBtn || showViewBtn || showEndedBtn || showRescheduleBtn) ...[
-                    const Divider(color: AppColors.border, height: 1),
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        children: [
-                          // Today — scheduled state: Patient Arrived
-                          if (showArrivedBtn)
-                            Expanded(child: _ActionButton(
-                              label: 'Patient Arrived',
-                              icon: Icons.how_to_reg_rounded,
-                              color: AppColors.success,
-                              onTap: widget.onArrived,
-                            )),
-
-                          // Today — in-progress state: View Session + gap + Session Ended
-                          if (showViewBtn) ...[
-                            Expanded(child: _ActionButton(
-                              label: 'View Session',
-                              icon: Icons.open_in_new_rounded,
-                              color: sessionAccent,
-                              onTap: widget.onViewSession,
-                            )),
-                            const SizedBox(width: 8),
                           ],
-                          if (showEndedBtn)
-                            Expanded(child: _ActionButton(
-                              label: 'Session Ended',
-                              icon: Icons.check_circle_outline_rounded,
-                              color: AppColors.success,
-                              onTap: widget.onSessionEnded,
-                            )),
-
-                          // Future — reschedule
-                          if (showRescheduleBtn)
-                            Expanded(child: _ActionButton(
-                              label: 'Reschedule',
-                              icon: Icons.event_repeat_rounded,
-                              color: AppColors.info,
-                              onTap: widget.onReschedule,
-                            )),
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
-                ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
@@ -1375,6 +1563,66 @@ class _SessionCardState extends State<_SessionCard> with SingleTickerProviderSta
 }
 
 // ── Shared helpers ────────────────────────────────────────────
+
+class _Pill extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  const _Pill({required this.label, required this.icon, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 10, color: color),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetaRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  const _MetaRow({required this.icon, required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _InfoBanner extends StatelessWidget {
   final IconData icon;
@@ -1387,12 +1635,30 @@ class _InfoBanner extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: color.withValues(alpha: 0.06),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        border: Border(
+          top: BorderSide(color: color.withValues(alpha: 0.15), width: 0.8),
+        ),
+      ),
       child: Row(children: [
-        Icon(icon, size: 14, color: color),
-        const SizedBox(width: 8),
-        Expanded(child: Text(message,
-            style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w600))),
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 13, color: color),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            message,
+            style: AppTextStyles.caption.copyWith(
+                color: color, fontWeight: FontWeight.w600),
+          ),
+        ),
       ]),
     );
   }
@@ -1414,22 +1680,38 @@ class _ActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: color.withValues(alpha: 0.08),
-      borderRadius: BorderRadius.circular(12),
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(11),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        borderRadius: BorderRadius.circular(11),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.09),
+            borderRadius: BorderRadius.circular(11),
+            border: Border.all(
+              color: color.withValues(alpha: 0.22),
+              width: 0.8,
+            ),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 16, color: color),
-              const SizedBox(width: 8),
+              Icon(icon, size: 15, color: color),
+              const SizedBox(width: 7),
               Flexible(
-                child: Text(label,
-                    style: AppTextStyles.labelSmall.copyWith(color: color, fontWeight: FontWeight.w700, fontSize: 12),
-                    maxLines: 1, overflow: TextOverflow.ellipsis),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.1,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),

@@ -4,6 +4,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
+import '../../../../core/widgets/location_fields.dart';
 import '../../../../core/utils/validators.dart';
 
 /// Clinic Registration — Step 1: Clinic details (name, username, password).
@@ -21,10 +22,11 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _emailController = TextEditingController();
+  final _pincodeController = TextEditingController();
+  final _countryController = TextEditingController();
+  final _stateController = TextEditingController();
   final _cityController = TextEditingController();
   final _areaController = TextEditingController();
-  final _stateController = TextEditingController();
-  final _pincodeController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
 
@@ -35,10 +37,11 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _emailController.dispose();
+    _pincodeController.dispose();
+    _countryController.dispose();
+    _stateController.dispose();
     _cityController.dispose();
     _areaController.dispose();
-    _stateController.dispose();
-    _pincodeController.dispose();
     super.dispose();
   }
 
@@ -52,10 +55,11 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
         'username': _usernameController.text.trim(),
         'password': _passwordController.text,
         'email': _emailController.text.trim(),
+        'pincode': _pincodeController.text.trim(),
+        'country': _countryController.text.trim(),
+        'state': _stateController.text.trim(),
         'city': _cityController.text.trim(),
         'area': _areaController.text.trim(),
-        'state': _stateController.text.trim(),
-        'pincode': _pincodeController.text.trim(),
       },
     );
   }
@@ -181,54 +185,14 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
                   style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 16),
-                Row(children: [
-                  Expanded(
-                    child: AppTextField(
-                      label: 'City *',
-                      hint: 'e.g. Mumbai',
-                      controller: _cityController,
-                      validator: (v) => Validators.required(v, 'City'),
-                      prefixIcon: const Icon(Icons.location_city_rounded, color: AppColors.textHint),
-                      textInputAction: TextInputAction.next,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: AppTextField(
-                      label: 'Area *',
-                      hint: 'e.g. Andheri West',
-                      controller: _areaController,
-                      validator: (v) => Validators.required(v, 'Area'),
-                      prefixIcon: const Icon(Icons.map_rounded, color: AppColors.textHint),
-                      textInputAction: TextInputAction.next,
-                    ),
-                  ),
-                ]),
-                const SizedBox(height: 16),
-                Row(children: [
-                  Expanded(
-                    child: AppTextField(
-                      label: 'State *',
-                      hint: 'e.g. Maharashtra',
-                      controller: _stateController,
-                      validator: (v) => Validators.required(v, 'State'),
-                      prefixIcon: const Icon(Icons.flag_rounded, color: AppColors.textHint),
-                      textInputAction: TextInputAction.next,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: AppTextField(
-                      label: 'Pincode *',
-                      hint: 'e.g. 400058',
-                      controller: _pincodeController,
-                      validator: (v) => Validators.required(v, 'Pincode'),
-                      keyboardType: TextInputType.number,
-                      prefixIcon: const Icon(Icons.pin_drop_rounded, color: AppColors.textHint),
-                      textInputAction: TextInputAction.done,
-                    ),
-                  ),
-                ]),
+                LocationFields(
+                  pincodeCtrl: _pincodeController,
+                  countryCtrl: _countryController,
+                  stateCtrl: _stateController,
+                  cityCtrl: _cityController,
+                  areaCtrl: _areaController,
+                  allRequired: true,
+                ),
                 const SizedBox(height: 36),
                 AppButton(label: 'Next', onPressed: _next, icon: Icons.arrow_forward_rounded),
                 const SizedBox(height: 32),

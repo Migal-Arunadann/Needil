@@ -113,20 +113,14 @@ class SchedulingService {
         targetDate.day == now.day;
     final currentMinutes = now.hour * 60 + now.minute;
 
-    // A slot is considered 'past' only when the working day itself has ended.
-    // Slots within today's working hours stay selectable even if their start
-    // time has already passed — a patient can still walk in for a 4:30 slot
-    // at 4:40 as long as the clinic hasn't closed (e.g. closes at 5:00).
-    final workingDayEnded = isToday && currentMinutes >= end;
-
     while (current + durationMinutes <= end) {
       final isDuringBreak = breakStart != null &&
           breakEnd != null &&
           current >= breakStart &&
           current < breakEnd;
 
-      // Mark past only if the whole working day is over, not individual slots.
-      final isPast = workingDayEnded;
+      // A slot is past if today and the slot's start time has already passed.
+      final isPast = isToday && current < currentMinutes;
 
       slots.add(TimeSlot(
         time: _minutesToTimeStr(current),
@@ -137,6 +131,7 @@ class SchedulingService {
 
       current += durationMinutes;
     }
+
 
     return slots;
   }

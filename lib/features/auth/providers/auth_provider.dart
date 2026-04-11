@@ -268,30 +268,65 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   // ── OTP: Registration ──────────────────────────────────────
 
-  /// Step 1: Send OTP to the clinic email before creating the account.
-  /// [clinicData] is the full payload from Step 5 — held in state until OTP verified.
+  /// Registration OTP flow (create-first, then verify):
+  /// 1. Create the clinic account immediately (record must exist for PocketBase OTP to work).
+  /// 2. Then request OTP — now the email exists in the DB, PocketBase will accept it.
   Future<void> requestRegistrationOtp({
     required String email,
     required Map<String, dynamic> clinicData,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
-    final result = await _authService.requestOtp(email);
-    if (result.success) {
-      state = state.copyWith(
-        isLoading: false,
-        pendingOtpId: result.otpId,
-        pendingEmail: email,
-        pendingClinicData: clinicData,
-      );
-    } else {
-      state = state.copyWith(isLoading: false, error: result.error);
+
+    // Step 1: Create the clinic account first
+    final photoPath = clinicData['doctor_photo_path'] as String?;
+    final registerResult = await _authService.registerClinic(
+      clinicName: clinicData['clinic_name'],
+      username: clinicData['username'],
+      password: clinicData['password'],
+      bedCount: clinicData['bed_count'],
+      primaryDoctorData: clinicData['primary_doctor_data'],
+      doctorPhotoFile: photoPath != null ? File(photoPath) : null,
+      receptionistData: clinicData['receptionist_data'],
+      additionalDoctors: clinicData['additional_doctors'] != null
+          ? List<Map<String, dynamic>>.from(clinicData['additional_doctors'])
+          : null,
+      city: clinicData['city'],
+      area: clinicData['area'],
+      state: clinicData['state'] as String?,
+      pincode: clinicData['pincode'],
+      clinicEmail: email,
+    );
+
+    if (!registerResult.success) {
+      state = state.copyWith(isLoading: false, error: registerResult.error);
+      return;
     }
+
+    // Clinic created and logged in — store in state
+    state = state.copyWith(
+      isLoading: false,
+      isAuthenticated: true,
+      role: UserRole.clinic,
+      clinic: registerResult.user as ClinicModel,
+      pendingEmail: email,
+      pendingOtpId: null,
+    );
+
+    // Step 2: Request OTP — record now exists so PocketBase will accept this
+    final otpResult = await _authService.requestOtp(email);
+    if (otpResult.success) {
+      state = state.copyWith(pendingOtpId: otpResult.otpId);
+    }
+    // If OTP send fails, clinic is still created and logged in.
+    // User can re-verify via Forgot Password flow later.
   }
 
-  /// Step 2: Verify OTP, then complete clinic registration.
+  /// Step 2: Verify OTP after registration (email ownership verification only).
+  /// Clinic is already created — just confirm the OTP code.
   Future<void> verifyRegistrationOtp({required String otpCode}) async {
-    if (state.pendingOtpId == null || state.pendingClinicData == null) {
-      state = state.copyWith(error: 'Session expired. Please try again.');
+    if (state.pendingOtpId == null) {
+      // No OTP pending — already verified or skipped, just go to dashboard
+      state = state.copyWith(pendingEmail: null, pendingClinicData: null);
       return;
     }
     state = state.copyWith(isLoading: true, error: null);
@@ -299,30 +334,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
       otpId: state.pendingOtpId!,
       otpCode: otpCode,
     );
-    if (!verified.success) {
+    if (verified.success) {
+      // OTP confirmed — restore session cleanly
+      await restoreSession();
+      state = state.copyWith(
+        isLoading: false,
+        pendingOtpId: null,
+        pendingEmail: null,
+        pendingClinicData: null,
+      );
+    } else {
       state = state.copyWith(isLoading: false, error: verified.error);
-      return;
     }
-    // OTP good — now create the clinic
-    final photoPath = state.pendingClinicData!['doctor_photo_path'] as String?;
-    await registerClinic(
-      clinicName: state.pendingClinicData!['clinic_name'],
-      username: state.pendingClinicData!['username'],
-      password: state.pendingClinicData!['password'],
-      bedCount: state.pendingClinicData!['bed_count'],
-      primaryDoctorData: state.pendingClinicData!['primary_doctor_data'],
-      doctorPhotoFile: photoPath != null ? File(photoPath) : null,
-      receptionistData: state.pendingClinicData!['receptionist_data'],
-      additionalDoctors: state.pendingClinicData!['additional_doctors'] != null
-          ? List<Map<String, dynamic>>.from(
-              state.pendingClinicData!['additional_doctors'])
-          : null,
-      city: state.pendingClinicData!['city'],
-      area: state.pendingClinicData!['area'],
-      stateField: state.pendingClinicData!['state'],
-      pincode: state.pendingClinicData!['pincode'],
-      clinicEmail: state.pendingEmail,
-    );
   }
 
   /// Resend OTP for registration using the stored pending email.

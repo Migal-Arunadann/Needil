@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -21,6 +22,7 @@ class ConsultationScreen extends ConsumerStatefulWidget {
   final String doctorId;
   final String? consultationId;
   final bool isViewMode;
+  final String? appointmentId; // If set, mark appointment's consultation_form_saved on submit
 
   const ConsultationScreen({
     super.key,
@@ -29,6 +31,7 @@ class ConsultationScreen extends ConsumerStatefulWidget {
     required this.doctorId,
     this.consultationId,
     this.isViewMode = false,
+    this.appointmentId, // pass to mark form saved
   });
 
   @override
@@ -405,6 +408,18 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       }
 
       if (mounted) {
+        // Mark the appointment as "consultation form saved" so the card
+        // switches from "Start Consultation" to "Create Plan" + "End Consultation"
+        if (widget.appointmentId != null) {
+          try {
+            // Use PocketBase directly since we don't have appointmentServiceProvider in scope here
+            final pb = ref.read(pocketbaseProvider);
+            await pb.collection(PBCollections.appointments).update(
+              widget.appointmentId!,
+              body: {'consultation_form_saved': true},
+            );
+          } catch (_) {}
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Consultation recorded!'),
@@ -662,177 +677,6 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                     onPressed: _submit,
                   ),
 
-                if (widget.consultationId != null) ...[
-                  const SizedBox(height: 32),
-                  const Divider(),
-                  const SizedBox(height: 24),
-                  _buildSectionHeader('Treatment Plan Sessions', Icons.healing_rounded),
-                  if (_isLoadingView)
-                    const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                  else if (_existingSessions.isEmpty)
-                    Center(
-                      child: Column(
-                        children: [
-                          Icon(Icons.event_note_rounded, size: 48, color: AppColors.textHint),
-                          const SizedBox(height: 12),
-                          Text('No active treatment plan.', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
-                          const SizedBox(height: 16),
-                          if (_existingConsultation?.status != ConsultationStatus.completed)
-                            AppButton(
-                              label: 'Create Treatment Plan',
-                              icon: Icons.add_rounded,
-                              onPressed: () async {
-                                await Navigator.pushNamed(
-                                  context,
-                                  '/treatment-plan/create',
-                                  arguments: {
-                                    'patientId': widget.patientId,
-                                    'patientName': widget.patientName,
-                                    'doctorId': widget.doctorId,
-                                    'consultationId': widget.consultationId,
-                                  },
-                                );
-                                _loadExistingData();
-                              },
-                            ),
-                        ],
-                      ),
-                    )
-                  else
-                    ..._existingSessions.map((session) {
-                      final dt = DateTime.tryParse(session.scheduledDate) ?? DateTime.now();
-                      final isCompleted = session.status == SessionStatus.completed;
-                      final isCancelled = session.status == SessionStatus.cancelled;
-                      final isUpcoming = session.status == SessionStatus.upcoming;
-                      final isMissed = session.status == SessionStatus.missed;
-                      
-                      Color statusColor = AppColors.info;
-                      if (isCompleted) statusColor = AppColors.success;
-                      if (isCancelled) statusColor = AppColors.textHint;
-                      if (isMissed) statusColor = AppColors.error;
-                      
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: isCancelled ? AppColors.surface.withValues(alpha: 0.5) : AppColors.surface,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: isUpcoming ? AppColors.info.withValues(alpha: 0.3) : AppColors.border),
-                          ),
-                          child: Column(
-                            children: [
-                              InkWell(
-                                onTap: isCancelled ? null : () {
-                                  Navigator.pushNamed(
-                                    context,
-                                    '/sessions/record',
-                                    arguments: session,
-                                  ).then((_) => _loadExistingData());
-                                },
-                                child: Row(
-                                  children: [
-                                    // Session number badge
-                                    Container(
-                                      width: 40,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: statusColor.withValues(alpha: 0.1),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      alignment: Alignment.center,
-                                      child: Text(
-                                        '#${session.sessionNumber}',
-                                        style: AppTextStyles.label.copyWith(color: statusColor, fontSize: 14),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Session ${session.sessionNumber} — ${DateFormat('MMM d, yyyy').format(dt)}',
-                                            style: AppTextStyles.bodyMedium.copyWith(
-                                              fontWeight: FontWeight.w600,
-                                              decoration: isCancelled ? TextDecoration.lineThrough : null,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Row(
-                                            children: [
-                                              if (session.scheduledTime?.isNotEmpty == true) ...[
-                                                Icon(Icons.access_time_rounded, size: 12, color: AppColors.textHint),
-                                                const SizedBox(width: 4),
-                                                Text(session.scheduledTime!, style: AppTextStyles.caption.copyWith(fontSize: 11)),
-                                                const SizedBox(width: 10),
-                                              ],
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                                decoration: BoxDecoration(
-                                                  color: statusColor.withValues(alpha: 0.1),
-                                                  borderRadius: BorderRadius.circular(4),
-                                                ),
-                                                child: Text(
-                                                  SessionModel.statusToString(session.status).toUpperCase(),
-                                                  style: AppTextStyles.caption.copyWith(
-                                                    color: statusColor,
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    if (!isCancelled)
-                                      const Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 20),
-                                  ],
-                                ),
-                              ),
-                              // Reschedule option for upcoming sessions
-                              if (isUpcoming) ...[
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: OutlinedButton.icon(
-                                        icon: const Icon(Icons.edit_calendar_rounded, size: 16),
-                                        label: const Text('Reschedule', style: TextStyle(fontSize: 12)),
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor: AppColors.info,
-                                          side: BorderSide(color: AppColors.info.withValues(alpha: 0.3)),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                          padding: const EdgeInsets.symmetric(vertical: 8),
-                                        ),
-                                        onPressed: () => _rescheduleSession(session),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: OutlinedButton.icon(
-                                        icon: const Icon(Icons.cancel_outlined, size: 16),
-                                        label: const Text('Cancel', style: TextStyle(fontSize: 12)),
-                                        style: OutlinedButton.styleFrom(
-                                          foregroundColor: AppColors.error,
-                                          side: BorderSide(color: AppColors.error.withValues(alpha: 0.3)),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                          padding: const EdgeInsets.symmetric(vertical: 8),
-                                        ),
-                                        onPressed: () => _cancelSingleSession(session),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                      );
-                    }),
-                ],
               ],
             ),
           ),
@@ -840,6 +684,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       ),
     );
   }
+
 
   Widget _buildFormContent() {
     return Column(
@@ -930,6 +775,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                 controller: _bpCtrl,
                 label: 'BP Level',
                 hint: '120/80',
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[0-9/]')),
+                ],
                 prefixIcon: const Icon(Icons.favorite_outline_rounded,
                     color: AppColors.error, size: 18),
                 readOnly: _isViewing,

@@ -86,7 +86,7 @@ class _EditDoctorDetailsScreenState
 
     for (final t in _treatmentTypes) {
       _durationCtrls[t] = TextEditingController(text: '30');
-      _feeCtrls[t] = TextEditingController(text: '500');
+      _feeCtrls[t] = TextEditingController(text: '');
     }
 
     _loadDoctorData();

@@ -215,7 +215,7 @@ class TreatmentService {
 
     for (int i = 0; i < totalSessions; i++) {
       if (firstSessionCompletedToday && i == 0) {
-        // First session was completed today in the consultation
+        // First session created today — create as waiting so it requires manual start
         final now = DateTime.now();
         final nowStr = _formatDate(now);
         final timeStr = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
@@ -231,11 +231,12 @@ class TreatmentService {
           'session_number': 1,
           'scheduled_date': nowStr,
           'scheduled_time': timeStr,
-          'status': 'completed',
+          'status': 'waiting',
+          'check_in_time': DateTime.now().toUtc().toIso8601String(),
         };
         await pb.collection(PBCollections.sessions).create(body: sessionBody);
 
-        // Sync a completed appointment so this session appears in today's schedule
+        // Sync a waiting appointment so this session appears in today's schedule
         try {
           await pb.collection('appointments').create(body: {
             'patient': patientId,
@@ -245,9 +246,8 @@ class TreatmentService {
             'type': 'session',
             'date': nowStr,
             'time': timeStr,
-            'status': 'completed',
+            'status': 'waiting',
             'check_in_time': DateTime.now().toUtc().toIso8601String(),
-            'check_out_time': DateTime.now().toUtc().toIso8601String(),
           });
         } catch (_) {}
         

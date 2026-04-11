@@ -2,7 +2,7 @@ import 'package:pocketbase/pocketbase.dart';
 
 enum AppointmentType { callBy, walkIn, session }
 
-enum AppointmentStatus { scheduled, inProgress, completed, cancelled }
+enum AppointmentStatus { scheduled, waiting, inProgress, completed, cancelled }
 
 class AppointmentModel {
   final String id;
@@ -18,6 +18,7 @@ class AppointmentModel {
   final DateTime? checkInTime;
   final DateTime? checkOutTime;
   final DateTime? consultationStartTime;
+  final bool consultationFormSaved; // true once the consultation form has been filled & saved
   final DateTime? created;
   final DateTime? updated;
 
@@ -39,6 +40,7 @@ class AppointmentModel {
     this.checkInTime,
     this.checkOutTime,
     this.consultationStartTime,
+    this.consultationFormSaved = false,
     this.created,
     this.updated,
     this.doctorName,
@@ -80,6 +82,7 @@ class AppointmentModel {
       checkInTime: _parseDateTimeOrNull(record.getStringValue('check_in_time')),
       checkOutTime: _parseDateTimeOrNull(record.getStringValue('check_out_time')),
       consultationStartTime: _parseDateTimeOrNull(record.getStringValue('consultation_start_time')),
+      consultationFormSaved: record.getBoolValue('consultation_form_saved'),
       created: DateTime.tryParse(record.get<String>('created')),
       updated: DateTime.tryParse(record.get<String>('updated')),
       doctorName: doctorName,
@@ -106,6 +109,7 @@ class AppointmentModel {
       if (checkInTime != null) 'check_in_time': checkInTime!.toUtc().toIso8601String(),
       if (checkOutTime != null) 'check_out_time': checkOutTime!.toUtc().toIso8601String(),
       if (consultationStartTime != null) 'consultation_start_time': consultationStartTime!.toUtc().toIso8601String(),
+      'consultation_form_saved': consultationFormSaved,
     };
   }
 
@@ -127,6 +131,8 @@ class AppointmentModel {
 
   static AppointmentStatus _parseStatus(String s) {
     switch (s) {
+      case 'waiting':
+        return AppointmentStatus.waiting;
       case 'in_progress':
         return AppointmentStatus.inProgress;
       case 'completed':
@@ -140,6 +146,8 @@ class AppointmentModel {
 
   static String statusToString(AppointmentStatus s) {
     switch (s) {
+      case AppointmentStatus.waiting:
+        return 'waiting';
       case AppointmentStatus.inProgress:
         return 'in_progress';
       case AppointmentStatus.completed:

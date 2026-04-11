@@ -33,8 +33,11 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
 
   TreatmentConfig? _selectedTreatment;
   DateTime _startDate = DateTime.now();
-  TimeOfDay _preferredTime = const TimeOfDay(hour: 10, minute: 0);
+  String _preferredTimeStr = '10:00'; // stored as HH:mm to match slot format
   bool _firstSessionCompletedToday = true;
+  List<WorkingSchedule> _doctorSchedules = [];
+  int get _slotDurationMinutes =>
+      _selectedTreatment?.durationMinutes ?? 30;
   
   final _sessionsCtrl = TextEditingController(text: '5');
   final _intervalCtrl = TextEditingController(text: '1');
@@ -60,6 +63,7 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
         setState(() {
           _doctorTreatments = doc.treatments;
           _doctorWorkingDays = doc.workingDays;
+          _doctorSchedules = doc.workingSchedule;
           _isLoadingTreatments = false;
         });
       }
@@ -96,16 +100,87 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
     }
   }
 
-  Future<void> _pickPreferredTime() async {
-    FocusScope.of(context).unfocus();
-    await Future.delayed(const Duration(milliseconds: 50));
-    final t = await showTimePicker(
-      context: context,
-      initialTime: _preferredTime,
-    );
-    if (t != null) {
-      setState(() => _preferredTime = t);
+  /// Generate slot strings ("HH:mm") from the doctor's schedule matching
+  /// the selected start date, using the treatment duration as interval.
+  List<String> _generateSlots() {
+    if (_doctorSchedules.isEmpty) return [];
+
+    // Convert weekday int to day name (DateTime.weekday: 1=Mon … 7=Sun)
+    const dayNames = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+        'Friday', 'Saturday', 'Sunday'];
+    final selectedDayName = dayNames[_startDate.weekday];
+
+    // Find schedule for the selected day, fall back to first available
+    WorkingSchedule? daySchedule;
+    for (final s in _doctorSchedules) {
+      if (s.day == selectedDayName) { daySchedule = s; break; }
     }
+    daySchedule ??= _doctorSchedules.first;
+
+    final duration = _selectedTreatment?.durationMinutes ?? _slotDurationMinutes;
+    final slots = <String>[];
+
+    TimeOfDay parseTime(String t) {
+      final parts = t.split(':');
+      return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    }
+
+    var current = parseTime(daySchedule.startTime);
+    final end = parseTime(daySchedule.endTime);
+
+    final breakStart = daySchedule.breakStart != null
+        ? parseTime(daySchedule.breakStart!)
+        : null;
+    final breakEnd = daySchedule.breakEnd != null
+        ? parseTime(daySchedule.breakEnd!)
+        : null;
+
+    int toMinutes(TimeOfDay t) => t.hour * 60 + t.minute;
+    String fmt(TimeOfDay t) =>
+        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+    while (toMinutes(current) + duration <= toMinutes(end)) {
+      final cMin = toMinutes(current);
+      final isDuringBreak = breakStart != null &&
+          breakEnd != null &&
+          cMin >= toMinutes(breakStart) &&
+          cMin < toMinutes(breakEnd);
+
+      if (!isDuringBreak) slots.add(fmt(current));
+
+      final nextMin = cMin + duration;
+      current = TimeOfDay(hour: nextMin ~/ 60, minute: nextMin % 60);
+    }
+    return slots;
+  }
+
+  void _showSlotPicker() {
+    FocusScope.of(context).unfocus();
+    final slots = _generateSlots();
+
+    if (slots.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No slots available — ensure a treatment is selected and doctor has a schedule'),
+          backgroundColor: AppColors.warning,
+        ),
+      );
+      return;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => _SlotPickerSheet(
+        slots: slots,
+        selectedSlot: _preferredTimeStr,
+        onSelected: (slot) {
+          setState(() => _preferredTimeStr = slot);
+          Navigator.pop(ctx);
+        },
+      ),
+    );
   }
 
   Future<void> _submit() async {
@@ -123,9 +198,7 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
       final service = ref.read(treatmentServiceProvider);
       
       final startDateStr = DateFormat('yyyy-MM-dd').format(_startDate);
-      final hr = _preferredTime.hour.toString().padLeft(2, "0");
-      final mn = _preferredTime.minute.toString().padLeft(2, "0");
-      final preferredTimeStr = '$hr:$mn';
+      final preferredTimeStr = _preferredTimeStr;
       
       // Auto-schedule sessions considering clinic beds
       final numSessions = int.tryParse(_sessionsCtrl.text.trim()) ?? 5;
@@ -317,13 +390,17 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
                     const SizedBox(width: 16),
                     Expanded(
                       child: GestureDetector(
-                        onTap: _pickPreferredTime,
+                        onTap: _showSlotPicker,
                         child: Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color: AppColors.surface,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.border),
+                            border: Border.all(
+                              color: _preferredTimeStr.isNotEmpty
+                                  ? AppColors.primary.withValues(alpha: 0.5)
+                                  : AppColors.border,
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -332,9 +409,19 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
                               const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  const Icon(Icons.access_time_rounded, size: 18, color: AppColors.primary),
+                                  const Icon(Icons.access_time_rounded,
+                                      size: 18, color: AppColors.primary),
                                   const SizedBox(width: 8),
-                                  Text(_preferredTime.format(context), style: AppTextStyles.bodyMedium),
+                                  Text(
+                                    _preferredTimeStr.isEmpty
+                                        ? 'Pick a slot'
+                                        : _formatSlot(_preferredTimeStr),
+                                    style: AppTextStyles.bodyMedium.copyWith(
+                                      color: _preferredTimeStr.isEmpty
+                                          ? AppColors.textHint
+                                          : AppColors.textPrimary,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -396,6 +483,134 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  String _formatSlot(String hhmm) {
+    final parts = hhmm.split(':');
+    if (parts.length != 2) return hhmm;
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts[1]) ?? 0;
+    final period = h >= 12 ? 'PM' : 'AM';
+    final h12 = h % 12 == 0 ? 12 : h % 12;
+    final mStr = m.toString().padLeft(2, '0');
+    return '$h12:$mStr $period';
+  }
+}
+
+// ── Slot Picker Bottom Sheet ────────────────────────────────────────────────
+class _SlotPickerSheet extends StatelessWidget {
+  final List<String> slots;
+  final String selectedSlot;
+  final void Function(String) onSelected;
+
+  const _SlotPickerSheet({
+    required this.slots,
+    required this.selectedSlot,
+    required this.onSelected,
+  });
+
+  String _fmt(String hhmm) {
+    final parts = hhmm.split(':');
+    final h = int.tryParse(parts[0]) ?? 0;
+    final m = int.tryParse(parts[1]) ?? 0;
+    final period = h >= 12 ? 'PM' : 'AM';
+    final h12 = h % 12 == 0 ? 12 : h % 12;
+    return '$h12:${m.toString().padLeft(2, '0')} $period';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 14),
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: AppColors.border,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          Text('Choose a Preferred Slot',
+              style: AppTextStyles.h3),
+          const SizedBox(height: 4),
+          Text(
+            'Based on doctor\'s schedule & treatment duration',
+            style: AppTextStyles.caption
+                .copyWith(color: AppColors.textSecondary),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          // Slot grid
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate:
+                const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              childAspectRatio: 2.2,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+            ),
+            itemCount: slots.length,
+            itemBuilder: (context, i) {
+              final s = slots[i];
+              final isSelected = s == selectedSlot;
+              return GestureDetector(
+                onTap: () => onSelected(s),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppColors.primary
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.primary
+                          : AppColors.border,
+                      width: isSelected ? 0 : 0.8,
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primary
+                                  .withValues(alpha: 0.30),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            )
+                          ]
+                        : null,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _fmt(s),
+                    style: TextStyle(
+                      color: isSelected
+                          ? Colors.white
+                          : AppColors.textPrimary,
+                      fontSize: 13,
+                      fontWeight: isSelected
+                          ? FontWeight.w700
+                          : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }

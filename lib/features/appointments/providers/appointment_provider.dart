@@ -141,6 +141,7 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     String? occupation,
     String? email,
     int? age,
+    String? existingPatientId, // If set, skip patient creation and reuse this ID
   }) async {
     try {
       final schedulingService = _ref.read(schedulingServiceProvider);
@@ -150,8 +151,9 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
         return null;
       }
 
-      String? patientId;
-      if (patientName != null && patientName.isNotEmpty) {
+      String? patientId = existingPatientId; // reuse existing patient record
+      if (patientId == null && patientName != null && patientName.isNotEmpty) {
+        // Only create a new patient record if no existing one was found
         final patient = await _service.createPatient(
           fullName: patientName,
           phone: patientPhone ?? '',

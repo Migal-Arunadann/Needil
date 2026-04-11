@@ -269,22 +269,32 @@ class AppointmentService {
     return AppointmentModel.fromRecord(record);
   }
 
-  /// Mark a SESSION appointment as arrived: sets appointment in_progress + session status = in_progress.
+  /// Mark a SESSION appointment as arrived: sets appointment status = waiting.
+  /// The session does NOT start until startSession() is called.
   Future<AppointmentModel> markSessionArrived(String appointmentId) async {
     final record = await pb.collection(PBCollections.appointments).update(
       appointmentId,
       body: {
-        'status': 'in_progress',
+        'status': 'waiting',
         'check_in_time': DateTime.now().toUtc().toIso8601String(),
       },
     );
-    // Sync the linked session record's status
+    return AppointmentModel.fromRecord(record);
+  }
+
+  /// Start the session: sets appointment status = in_progress,
+  /// syncs the linked session record to in_progress.
+  Future<AppointmentModel> startSession(String appointmentId) async {
+    final record = await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {'status': 'in_progress'},
+    );
     final appt = AppointmentModel.fromRecord(record);
     if (appt.patientId != null) {
       try {
         final sessions = await pb.collection(PBCollections.sessions).getList(
           filter:
-              'patient = "${appt.patientId}" && doctor = "${appt.doctorId}" && scheduled_date = "${appt.date}" && scheduled_time = "${appt.time}" && status = "upcoming"',
+              'patient = "${appt.patientId}" && doctor = "${appt.doctorId}" && scheduled_date = "${appt.date}" && scheduled_time = "${appt.time}" && (status = "upcoming" || status = "in_progress")',
           perPage: 1,
         );
         if (sessions.items.isNotEmpty) {
@@ -439,6 +449,15 @@ class AppointmentService {
       body: {
         'consultation_start_time': DateTime.now().toUtc().toIso8601String(),
       },
+    );
+  }
+
+  /// Mark consultation_form_saved = true on an appointment, so the card
+  /// shows "Create Plan" + "End Consultation" and blocks re-opening the form.
+  Future<void> markConsultationFormSaved(String appointmentId) async {
+    await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {'consultation_form_saved': true},
     );
   }
 

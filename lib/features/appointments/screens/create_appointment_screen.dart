@@ -8,12 +8,16 @@ import '../../../core/constants/pb_collections.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../../core/widgets/location_fields.dart';
 import '../../../core/utils/validators.dart';
 import '../../../core/utils/time_utils.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../auth/models/doctor_model.dart';
+import '../../../core/services/scheduling_service.dart';
 import '../../scheduling/screens/available_slots_screen.dart';
 import '../providers/appointment_provider.dart';
 import '../../../core/services/auth_service.dart';
+import '../../patients/models/patient_model.dart';
 
 class CreateAppointmentScreen extends ConsumerStatefulWidget {
   final bool initialIsCallBy;
@@ -41,10 +45,12 @@ class _CreateAppointmentScreenState
   // Extended Patient fields (for walk-in only)
   final _dobCtrl = TextEditingController(); // Or Age
   final _ageCtrl = TextEditingController();
+  final _pincodeCtrl = TextEditingController();
+  final _countryCtrl = TextEditingController();
+  final _stateCtrl = TextEditingController();
   final _cityCtrl = TextEditingController();
   final _areaCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
-  final _pincodeCtrl = TextEditingController();
   final _emergencyCtrl = TextEditingController();
   final _allergiesCtrl = TextEditingController();
   final _occupationCtrl = TextEditingController();
@@ -57,9 +63,12 @@ class _CreateAppointmentScreenState
   // Slot selection
   DateTime? _selectedDate;
   String? _selectedTimeStr; // e.g. "09:00" — raw string from AvailableSlotsScreen
-  DateTime? _callByDate;
   String? _selectedDoctorId;
   List<Map<String, String>> _doctors = [];
+
+  // Phone lookup state
+  PatientModel? _existingPatient; // non-null if phone matched a patient record
+  bool _isRegisteredPatient = false; // true when walk-in phone matches existing
 
   @override
   void initState() {
@@ -103,10 +112,12 @@ class _CreateAppointmentScreenState
     _phoneCtrl.dispose();
     _dobCtrl.dispose();
     _ageCtrl.dispose();
+    _pincodeCtrl.dispose();
+    _countryCtrl.dispose();
+    _stateCtrl.dispose();
     _cityCtrl.dispose();
     _areaCtrl.dispose();
     _addressCtrl.dispose();
-    _pincodeCtrl.dispose();
     _emergencyCtrl.dispose();
     _allergiesCtrl.dispose();
     _occupationCtrl.dispose();
@@ -133,105 +144,31 @@ class _CreateAppointmentScreenState
     }
 
     final service = ref.read(appointmentServiceProvider);
-
-    // 1. Check for existing patient record
     final existing = await service.findPatientByPhone(phone, doctorId);
-    if (existing != null && mounted && _nameCtrl.text.isEmpty) {
-      final fill = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          backgroundColor: AppColors.surface,
-          title: Row(
-            children: [
-              Icon(Icons.person_search_rounded, color: AppColors.info, size: 22),
-              const SizedBox(width: 10),
-              const Expanded(child: Text('Patient Found')),
-            ],
-          ),
-          content: Text('A patient record for "${existing.fullName}" already exists with this phone number.\n\nAuto-fill the details?'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Yes, Auto-fill'),
-            ),
-          ],
-        ),
-      );
 
-      if (fill == true && mounted) {
-        setState(() {
-          _nameCtrl.text = existing.fullName;
-          if (existing.dateOfBirth != null && existing.dateOfBirth!.isNotEmpty) _dobCtrl.text = existing.dateOfBirth!;
-          if (existing.city != null && existing.city!.isNotEmpty) _cityCtrl.text = existing.city!;
-          if (existing.area != null && existing.area!.isNotEmpty) _areaCtrl.text = existing.area!;
-          if (existing.address != null && existing.address!.isNotEmpty && _cityCtrl.text.isEmpty) _addressCtrl.text = existing.address!;
-          if (existing.emergencyContact != null && existing.emergencyContact!.isNotEmpty) _emergencyCtrl.text = existing.emergencyContact!;
-          if (existing.allergiesConditions != null && existing.allergiesConditions!.isNotEmpty) _allergiesCtrl.text = existing.allergiesConditions!;
-          if (existing.occupation != null && existing.occupation!.isNotEmpty) _occupationCtrl.text = existing.occupation!;
-          if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
-          if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
-          if (existing.age != null) _ageCtrl.text = existing.age.toString();
-        });
+    if (mounted) {
+      setState(() {
+        _existingPatient = existing;
+        _isRegisteredPatient = !_isCallBy && existing != null;
+      });
+
+      if (existing != null) {
+        // Always silently auto-fill shared fields
+        _nameCtrl.text = existing.fullName;
+        if (existing.dateOfBirth != null && existing.dateOfBirth!.isNotEmpty) _dobCtrl.text = existing.dateOfBirth!;
+        if (existing.city != null && existing.city!.isNotEmpty) _cityCtrl.text = existing.city!;
+        if (existing.area != null && existing.area!.isNotEmpty) _areaCtrl.text = existing.area!;
+        if (existing.address != null && existing.address!.isNotEmpty) _addressCtrl.text = existing.address!;
+        if (existing.emergencyContact != null && existing.emergencyContact!.isNotEmpty) _emergencyCtrl.text = existing.emergencyContact!;
+        if (existing.allergiesConditions != null && existing.allergiesConditions!.isNotEmpty) _allergiesCtrl.text = existing.allergiesConditions!;
+        if (existing.occupation != null && existing.occupation!.isNotEmpty) _occupationCtrl.text = existing.occupation!;
+        if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
+        if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
+        if (existing.age != null) _ageCtrl.text = existing.age.toString();
       }
     }
 
     if (mounted) setState(() => _isCheckingPhone = false);
-  }
-
-  Future<void> _pickDob() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime(1990),
-      firstDate: DateTime(1920),
-      lastDate: DateTime.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: ColorScheme.light(
-            primary: AppColors.primary,
-            onPrimary: Colors.white,
-            surface: AppColors.surface,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) {
-      _dobCtrl.text =
-          '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-    }
-  }
-
-  Future<void> _pickCallByDate() async {
-    // Dismiss keyboard/cursor before navigating
-    FocusScope.of(context).unfocus();
-    await Future.delayed(const Duration(milliseconds: 50));
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _callByDate ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 90)),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: ColorScheme.light(
-            primary: AppColors.primary,
-            onPrimary: Colors.white,
-            surface: AppColors.surface,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) {
-      setState(() {
-        _callByDate = picked;
-        _selectedDate = null;
-        _selectedTimeStr = null;
-      });
-      _pickSlot();
-    }
   }
 
   String _formatDate(DateTime d) =>
@@ -260,8 +197,8 @@ class _CreateAppointmentScreenState
           doctorId: doctorId,
           clinicId: isClinic ? auth.userId : auth.clinic?.id,
           treatmentDuration: 30,
-          allowFutureDates: _isCallBy,
-          initialDate: _isCallBy ? (_callByDate ?? DateTime.now()) : DateTime.now(),
+          allowFutureDates: _isCallBy, // call-by allows future; walk-in = today only
+          initialDate: DateTime.now(),  // slot screen calendar handles date picking
         ),
       ),
     );
@@ -271,6 +208,29 @@ class _CreateAppointmentScreenState
         _selectedDate = result['date'] as DateTime;
         _selectedTimeStr = result['time'] as String;
       });
+    }
+  }
+
+  Future<void> _pickDob() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(1990),
+      firstDate: DateTime(1920),
+      lastDate: DateTime.now(),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.primary,
+            onPrimary: Colors.white,
+            surface: AppColors.surface,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) {
+      _dobCtrl.text =
+          '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
     }
   }
 
@@ -440,6 +400,28 @@ class _CreateAppointmentScreenState
       final exactTimeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
       if (_forceWalkIn) {
+        final pb = ref.read(pocketbaseProvider);
+        final docRec = await pb.collection('doctors').getOne(doctorId);
+        final doctor = DoctorModel.fromRecord(docRec);
+        
+        final schedService = SchedulingService(pb);
+        final daySchedule = schedService.getScheduleForDay(doctor.workingSchedule, DateTime.now().weekday);
+        if (daySchedule == null) {
+          setState(() => _isSubmitting = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Doctor is not scheduled to work today.'), backgroundColor: AppColors.error));
+          }
+          return;
+        }
+        
+        if (!schedService.isWithinWorkingHours(daySchedule, exactTimeStr)) {
+          setState(() => _isSubmitting = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Walk-in appointments can only be created during doctor\'s working hours.'), backgroundColor: AppColors.error));
+          }
+          return;
+        }
+
         _selectedDate = now;
         _selectedTimeStr = exactTimeStr;
       }
@@ -467,6 +449,8 @@ class _CreateAppointmentScreenState
         occupation: _occupationCtrl.text.isNotEmpty ? _occupationCtrl.text : null,
         email: _emailCtrl.text.isNotEmpty ? _emailCtrl.text : null,
         age: int.tryParse(_ageCtrl.text),
+        // If phone matched an existing patient, reuse their ID — no duplicate created
+        existingPatientId: _existingPatient?.id,
       );
       success = result != null;
     }
@@ -662,41 +646,8 @@ class _CreateAppointmentScreenState
                   const SizedBox(height: 20),
                 ],
 
-                // Call-By Date Selection
-                if (_isCallBy) ...[
-                  Text('Appointment Date', style: AppTextStyles.label),
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: _pickCallByDate,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.calendar_month_rounded, color: AppColors.primary, size: 20),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _callByDate == null 
-                                ? 'Tap to pick a date from Calendar' 
-                                : DateFormat('EEEE, MMM d, yyyy').format(_callByDate!),
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: _callByDate == null ? AppColors.textHint : AppColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                          const Icon(Icons.edit_calendar_rounded, color: AppColors.textHint, size: 18),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
-
+                // Call-by: slot picker directly (no separate date field)
+                // Walk-in: slot picker (today only) or Force Walk-In
                 // Date & Time (Unified Slot Picker)
                 if (!_forceWalkIn) ...[
                   Text('Appointment Slot', style: AppTextStyles.label),
@@ -763,21 +714,83 @@ class _CreateAppointmentScreenState
                   style: AppTextStyles.caption,
                 ),
                 const SizedBox(height: 14),
+
+                // Phone first — triggers lookup
+                Stack(
+                  children: [
+                    AppTextField(
+                      controller: _phoneCtrl,
+                      label: 'Phone Number',
+                      prefixIcon: Icon(Icons.phone_outlined, color: AppColors.textHint),
+                      keyboardType: TextInputType.phone,
+                      validator: Validators.phone,
+                    ),
+                    if (_isCheckingPhone)
+                      const Positioned(
+                        right: 14, top: 0, bottom: 0,
+                        child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+                      ),
+                  ],
+                ),
+
+                // Walk-in: show "Patient already registered" banner if phone matched
+                if (!_isCallBy && _isRegisteredPatient) ...[ 
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.info.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.info.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.verified_user_rounded, color: AppColors.info, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Patient already registered — details auto-filled. No duplicate will be created.',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.info),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                // Call-by: show info chip when name was auto-filled
+                if (_isCallBy && _existingPatient != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.person_rounded, color: AppColors.success, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Returning patient — name auto-filled.',
+                            style: AppTextStyles.caption.copyWith(color: AppColors.success),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                const SizedBox(height: 14),
                 AppTextField(
                   controller: _nameCtrl,
                   label: 'Patient Name',
-                  prefixIcon: Icon(Icons.person_outline_rounded,
-                      color: AppColors.textHint),
+                  prefixIcon: Icon(Icons.person_outline_rounded, color: AppColors.textHint),
                   validator: Validators.required,
-                ),
-                const SizedBox(height: 14),
-                AppTextField(
-                  controller: _phoneCtrl,
-                  label: 'Phone Number',
-                  prefixIcon:
-                      Icon(Icons.phone_outlined, color: AppColors.textHint),
-                  keyboardType: TextInputType.phone,
-                  validator: Validators.phone,
+                  // Read-only for call-by when a patient was found (name locked to existing record)
+                  readOnly: _isCallBy && _existingPatient != null,
                 ),
                 
                 if (!_isCallBy) ...[
@@ -843,37 +856,15 @@ class _CreateAppointmentScreenState
                     ],
                   ),
                   const SizedBox(height: 14),
-                  // City — pre-filled from clinic, mandatory
-                  Row(
-                    children: [
-                      Expanded(
-                        child: AppTextField(
-                          controller: _cityCtrl,
-                          label: 'City *',
-                          prefixIcon: const Icon(Icons.location_city_outlined, color: AppColors.textHint),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'City is required' : null,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: AppTextField(
-                          controller: _pincodeCtrl,
-                          label: 'Pincode *',
-                          prefixIcon: const Icon(Icons.pin_drop_outlined, color: AppColors.textHint),
-                          keyboardType: TextInputType.number,
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Pincode is required' : null,
-                        ),
-                      ),
-                    ],
+                  // ─ Location fields (pincode auto-fill) ───────────
+                  LocationFields(
+                    pincodeCtrl: _pincodeCtrl,
+                    countryCtrl: _countryCtrl,
+                    stateCtrl: _stateCtrl,
+                    cityCtrl: _cityCtrl,
+                    areaCtrl: _areaCtrl,
+                    allRequired: true,
                   ),
-                  const SizedBox(height: 14),
-                  AppTextField(
-                    controller: _areaCtrl,
-                    label: 'Area / Locality *',
-                    prefixIcon: const Icon(Icons.map_outlined, color: AppColors.textHint),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Area is required' : null,
-                  ),
-                  const SizedBox(height: 14),
                   // Full address — optional
                   AppTextField(
                     controller: _addressCtrl,

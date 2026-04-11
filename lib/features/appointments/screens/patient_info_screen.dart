@@ -3,12 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/constants/pb_collections.dart';
+import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../../core/widgets/location_fields.dart';
 import '../../../core/utils/validators.dart';
 import '../providers/appointment_provider.dart';
 import '../models/appointment_model.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../patients/models/patient_model.dart';
 
 /// Screen shown when a call-by patient arrives — collect full details
 /// and link the patient record to the appointment.
@@ -30,12 +34,13 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _dobCtrl = TextEditingController();
+  final _pincodeCtrl = TextEditingController();
+  final _countryCtrl = TextEditingController();
+  final _stateCtrl = TextEditingController();
   final _cityCtrl = TextEditingController();
   final _areaCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
-  final _pincodeCtrl = TextEditingController();
   final _emergencyCtrl = TextEditingController();
-  final _allergiesCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -45,9 +50,12 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     // Pre-fill city from clinic profile
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final city = ref.read(authProvider).clinic?.city;
-      if (city != null && city.isNotEmpty && _cityCtrl.text.isEmpty) {
-        _cityCtrl.text = city;
+      final clinic = ref.read(authProvider).clinic;
+      if (clinic?.city != null && clinic!.city!.isNotEmpty && _cityCtrl.text.isEmpty) {
+        _cityCtrl.text = clinic.city!;
+      }
+      if (clinic?.pin != null && clinic!.pin!.isNotEmpty && _pincodeCtrl.text.isEmpty) {
+        _pincodeCtrl.text = clinic.pin!;
       }
     });
   }
@@ -57,12 +65,13 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _dobCtrl.dispose();
+    _pincodeCtrl.dispose();
+    _countryCtrl.dispose();
+    _stateCtrl.dispose();
     _cityCtrl.dispose();
     _areaCtrl.dispose();
     _addressCtrl.dispose();
-    _pincodeCtrl.dispose();
     _emergencyCtrl.dispose();
-    _allergiesCtrl.dispose();
     super.dispose();
   }
 
@@ -116,6 +125,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
 
     try {
       final service = ref.read(appointmentServiceProvider);
+      final phone = _phoneCtrl.text.trim();
 
       String? dobForStorage;
       if (_dobCtrl.text.isNotEmpty) {
@@ -127,33 +137,62 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
         }
       }
 
-      final patient = await service.createPatient(
-        fullName: _nameCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim(),
-        doctorId: widget.appointment.doctorId,
-        clinicId: widget.appointment.clinicId,
-        dateOfBirth: dobForStorage,
-        gender: _selectedGender,
-        city: _cityCtrl.text.isNotEmpty ? _cityCtrl.text : null,
-        area: _areaCtrl.text.isNotEmpty ? _areaCtrl.text : null,
-        address: _addressCtrl.text.isNotEmpty ? _addressCtrl.text : null,
-        pincode: _pincodeCtrl.text.isNotEmpty ? _pincodeCtrl.text : null,
-        emergencyContact:
-            _emergencyCtrl.text.isNotEmpty ? _emergencyCtrl.text : null,
-        allergiesConditions:
-            _allergiesCtrl.text.isNotEmpty ? _allergiesCtrl.text : null,
-      );
+      // ── Dedup: reuse existing patient with the same phone number ──
+      PatientModel? existingPatient;
+      try {
+        final pb = ref.read(pocketbaseProvider);
+        final result = await pb.collection(PBCollections.patients).getList(
+          filter: 'phone = "$phone"',
+          perPage: 1,
+        );
+        if (result.items.isNotEmpty) {
+          existingPatient = PatientModel.fromRecord(result.items.first);
+        }
+      } catch (_) {}
+
+      final PatientModel patient;
+      if (existingPatient != null) {
+        patient = existingPatient;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'Returning patient "${existingPatient.fullName}" linked ✓'),
+            backgroundColor: AppColors.info,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ));
+        }
+      } else {
+        patient = await service.createPatient(
+          fullName: _nameCtrl.text.trim(),
+          phone: phone,
+          doctorId: widget.appointment.doctorId,
+          clinicId: widget.appointment.clinicId,
+          dateOfBirth: dobForStorage,
+          gender: _selectedGender,
+          city: _cityCtrl.text.isNotEmpty ? _cityCtrl.text : null,
+          area: _areaCtrl.text.isNotEmpty ? _areaCtrl.text : null,
+          address: _addressCtrl.text.isNotEmpty ? _addressCtrl.text : null,
+          pincode: _pincodeCtrl.text.isNotEmpty ? _pincodeCtrl.text : null,
+          emergencyContact:
+              _emergencyCtrl.text.isNotEmpty ? _emergencyCtrl.text : null,
+        );
+      }
 
       await service.linkPatient(widget.appointment.id, patient.id);
       ref.read(appointmentListProvider.notifier).loadAppointments();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Patient registered!'),
-          backgroundColor: AppColors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ));
+        if (existingPatient == null) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: const Text('Patient registered!'),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+          ));
+        }
         Navigator.pop(context);
       }
     } catch (e) {
@@ -278,36 +317,14 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                // City — pre-filled from clinic, mandatory
-                Row(
-                  children: [
-                    Expanded(
-                      child: AppTextField(
-                        controller: _cityCtrl,
-                        label: 'City *',
-                        prefixIcon: Icon(Icons.location_city_outlined, color: AppColors.textHint),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'City is required' : null,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: AppTextField(
-                        controller: _pincodeCtrl,
-                        label: 'Pincode *',
-                        prefixIcon: Icon(Icons.pin_drop_outlined, color: AppColors.textHint),
-                        keyboardType: TextInputType.number,
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Pincode is required' : null,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-
-                AppTextField(
-                  controller: _areaCtrl,
-                  label: 'Area / Locality *',
-                  prefixIcon: Icon(Icons.map_outlined, color: AppColors.textHint),
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Area is required' : null,
+                // ── Location fields (pincode auto-fill) ──
+                LocationFields(
+                  pincodeCtrl: _pincodeCtrl,
+                  countryCtrl: _countryCtrl,
+                  stateCtrl: _stateCtrl,
+                  cityCtrl: _cityCtrl,
+                  areaCtrl: _areaCtrl,
+                  allRequired: true,
                 ),
                 const SizedBox(height: 14),
 
@@ -347,12 +364,6 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                 ),
                 const SizedBox(height: 14),
 
-                AppTextField(
-                  controller: _allergiesCtrl,
-                  label: 'Allergies / Conditions (Optional)',
-                  prefixIcon: Icon(Icons.warning_amber_rounded, color: AppColors.textHint),
-                  maxLines: 2,
-                ),
                 const SizedBox(height: 24),
 
                 // Consent

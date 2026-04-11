@@ -105,7 +105,7 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
       for (final t in _availableTreatments) {
         doc.selectedTreatments[t] = cached.selectedTreatments[t] ?? false;
         doc.durationControllers[t] = TextEditingController(text: cached.treatmentDurations[t] ?? '30');
-        doc.feeControllers[t] = TextEditingController(text: cached.treatmentFees[t] ?? '500');
+        doc.feeControllers[t] = TextEditingController(text: cached.treatmentFees[t] ?? '');
       }
       restored.add(doc);
     }
@@ -143,7 +143,7 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
     for (final t in _availableTreatments) {
       doc.selectedTreatments[t] = false;
       doc.durationControllers[t] = TextEditingController(text: '30');
-      doc.feeControllers[t] = TextEditingController(text: '500');
+      doc.feeControllers[t] = TextEditingController(text: ''); // null default
     }
     setState(() {
       _doctors.add(doc);

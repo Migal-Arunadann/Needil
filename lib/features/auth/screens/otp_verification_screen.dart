@@ -106,8 +106,21 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
 
     if (widget.mode == OtpMode.registration) {
       await notifier.verifyRegistrationOtp(otpCode: _otp);
+      if (!mounted) return;
+      final authState = ref.read(authProvider);
+      if (authState.error != null) {
+        setState(() { _isVerifying = false; _error = authState.error; });
+        ref.read(authProvider.notifier).clearError();
+        for (final c in _controllers) c.clear();
+        _focusNodes[0].requestFocus();
+      } else {
+        // OTP verified — app.dart reactively switches home to MainLayout.
+        // Do NOT call Navigator.pushNamedAndRemoveUntil here — it causes a black screen.
+        setState(() => _isVerifying = false);
+      }
+      return;
     } else {
-      // Navigate to reset-password screen with OTP code
+      // Forgot-password mode: navigate to reset-password screen with OTP code
       final authState = ref.read(authProvider);
       if (!mounted) return;
       setState(() => _isVerifying = false);
@@ -117,17 +130,6 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
       );
       return;
     }
-
-    if (!mounted) return;
-    final authState = ref.read(authProvider);
-    if (authState.error != null) {
-      setState(() { _isVerifying = false; _error = authState.error; });
-      ref.read(authProvider.notifier).clearError();
-      // Clear the OTP boxes for retry
-      for (final c in _controllers) c.clear();
-      _focusNodes[0].requestFocus();
-    }
-    // If registration succeeded, navigation is handled reactively by app.dart
   }
 
   Future<void> _resend() async {

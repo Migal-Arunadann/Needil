@@ -8,6 +8,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../../core/widgets/location_fields.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/constants/pb_collections.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -36,6 +37,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _cityCtrl = TextEditingController();
   final _stateCtrl = TextEditingController();
   final _pinCtrl = TextEditingController();
+  final _countryCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
   File? _logoFile;
   String? _existingLogoUrl;
@@ -62,6 +64,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       _cityCtrl.text = c.city ?? '';
       _stateCtrl.text = c.state ?? '';
       _pinCtrl.text = c.pin ?? '';
+      _countryCtrl.text = 'India'; // default; update when country saved to PB model
       _locationCtrl.text = c.location ?? '';
       _existingLogoUrl = c.logoUrl;
     } else if (auth.role == UserRole.doctor && auth.doctor != null) {
@@ -73,7 +76,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       _dobCtrl.text = d.dateOfBirth ?? '';
       _existingPhotoUrl = d.photoUrl;
     }
-    _pinCtrl.addListener(_onPinChanged);
+    _pinCtrl.addListener(_onPinChanged); // keep for backward compat but LocationFields handles this now
   }
 
   void _onPinChanged() async {
@@ -109,6 +112,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _cityCtrl.dispose();
     _stateCtrl.dispose();
     _pinCtrl.dispose();
+    _countryCtrl.dispose();
     _locationCtrl.dispose();
     _ageCtrl.dispose();
     _doctorPhoneCtrl.dispose();
@@ -350,45 +354,14 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       prefixIcon: const Icon(Icons.home_outlined, color: AppColors.textHint),
                     ),
                     const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: AppTextField(
-                            controller: _areaCtrl,
-                            label: 'Area / Locality',
-                            prefixIcon: const Icon(Icons.map_outlined, color: AppColors.textHint),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: AppTextField(
-                            controller: _cityCtrl,
-                            label: 'City',
-                            prefixIcon: const Icon(Icons.location_city_outlined, color: AppColors.textHint),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: AppTextField(
-                            controller: _stateCtrl,
-                            label: 'State',
-                            prefixIcon: const Icon(Icons.flag_outlined, color: AppColors.textHint),
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: AppTextField(
-                            controller: _pinCtrl,
-                            label: 'PIN Code',
-                            keyboardType: TextInputType.number,
-                            prefixIcon: const Icon(Icons.pin_outlined, color: AppColors.textHint),
-                          ),
-                        ),
-                      ],
+                    // Pincode-first auto-fill location
+                    LocationFields(
+                      pincodeCtrl: _pinCtrl,
+                      countryCtrl: _countryCtrl,
+                      stateCtrl: _stateCtrl,
+                      cityCtrl: _cityCtrl,
+                      areaCtrl: _areaCtrl,
+                      allRequired: false,
                     ),
                     const SizedBox(height: 14),
                     AppTextField(

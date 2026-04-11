@@ -82,7 +82,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
     for (final t in _availableTreatments) {
       _selectedTreatments[t] = cache.selectedTreatments[t] ?? false;
       _durationControllers[t] = TextEditingController(text: cache.treatmentDurations[t] ?? '30');
-      _feeControllers[t] = TextEditingController(text: cache.treatmentFees[t] ?? '500');
+      _feeControllers[t] = TextEditingController(text: cache.treatmentFees[t] ?? '');
     }
 
     // Restore simple fields
@@ -428,7 +428,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
 
                   // Name
                   AppTextField(
-                    label: 'Doctor Name', hint: 'e.g. Dr. Sharma',
+                    label: 'Doctor Name *', hint: 'e.g. Dr. Sharma',
                     controller: _doctorNameController,
                     validator: (v) => Validators.required(v, 'Name'),
                     prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.textHint),

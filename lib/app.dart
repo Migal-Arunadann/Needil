@@ -27,7 +27,7 @@ class _PmsAppState extends ConsumerState<PmsApp> {
     final authState = ref.watch(authProvider);
 
     return MaterialApp(
-      title: 'PMS - Healthcare CRM',
+      title: 'Needil',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
