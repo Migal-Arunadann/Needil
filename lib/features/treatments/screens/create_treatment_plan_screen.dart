@@ -1,9 +1,12 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/providers/pocketbase_provider.dart';
+import '../../appointments/providers/appointment_provider.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../auth/models/doctor_model.dart';
@@ -14,6 +17,7 @@ class CreateTreatmentPlanScreen extends ConsumerStatefulWidget {
   final String patientName;
   final String doctorId;
   final String? consultationId;
+  final String? appointmentId; // If set, tracks partial/linked plan state
 
   const CreateTreatmentPlanScreen({
     super.key,
@@ -21,6 +25,7 @@ class CreateTreatmentPlanScreen extends ConsumerStatefulWidget {
     required this.patientName,
     required this.doctorId,
     this.consultationId,
+    this.appointmentId,
   });
 
   @override
@@ -47,10 +52,74 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
   List<int> _doctorWorkingDays = [];
   bool _isLoadingTreatments = true;
 
+  bool _formSubmitted = false; // prevents draft save on dispose
+
+  /// SharedPreferences key for draft caching.
+  String get _draftKey => 'treatment_plan_draft_${widget.appointmentId ?? widget.consultationId ?? "new"}';
+
   @override
   void initState() {
     super.initState();
     _loadTreatments();
+    // Mark the appointment as having the plan form partially opened
+    if (widget.appointmentId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        try {
+          final service = ref.read(appointmentServiceProvider);
+          await service.markTreatmentPlanPartial(widget.appointmentId!);
+        } catch (_) {}
+        // Try loading a saved draft
+        await _loadDraft();
+      });
+    }
+  }
+
+  /// Restore a previously saved draft.
+  Future<void> _loadDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null || !mounted) return;
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      setState(() {
+        _sessionsCtrl.text = data['sessions'] ?? '5';
+        _intervalCtrl.text = data['interval'] ?? '1';
+        _feeCtrl.text = data['fee'] ?? '';
+        _firstSessionCompletedToday = data['firstToday'] ?? true;
+        if (data['startDate'] != null) {
+          _startDate = DateTime.tryParse(data['startDate']) ?? _startDate;
+        }
+        if (data['preferredTime'] != null) {
+          _preferredTimeStr = data['preferredTime'];
+        }
+      });
+    } catch (_) {}
+  }
+
+  /// Save current form state as a draft.
+  Future<void> _saveDraft() async {
+    if (widget.appointmentId == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = {
+        'sessions':   _sessionsCtrl.text,
+        'interval':   _intervalCtrl.text,
+        'fee':        _feeCtrl.text,
+        'firstToday': _firstSessionCompletedToday,
+        'startDate':  DateFormat('yyyy-MM-dd').format(_startDate),
+        'preferredTime': _preferredTimeStr,
+      };
+      await prefs.setString(_draftKey, jsonEncode(data));
+    } catch (_) {}
+  }
+
+  /// Delete the draft.
+  Future<void> _clearDraft() async {
+    if (widget.appointmentId == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftKey);
+    } catch (_) {}
   }
 
   Future<void> _loadTreatments() async {
@@ -76,6 +145,10 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
 
   @override
   void dispose() {
+    // Save draft on close if not submitted
+    if (!_formSubmitted && widget.appointmentId != null) {
+      _saveDraft();
+    }
     _sessionsCtrl.dispose();
     _intervalCtrl.dispose();
     _feeCtrl.dispose();
@@ -206,7 +279,7 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
       final feeStr = _feeCtrl.text.trim();
       final fee = feeStr.isEmpty ? 0.0 : (double.tryParse(feeStr) ?? 0.0);
 
-      await service.createSmartTreatmentPlan(
+      final plan = await service.createSmartTreatmentPlan(
         patientId: widget.patientId,
         doctorId: widget.doctorId,
         consultationId: widget.consultationId,
@@ -218,6 +291,18 @@ class _CreateTreatmentPlanScreenState extends ConsumerState<CreateTreatmentPlanS
         sessionFee: fee,
         firstSessionCompletedToday: _firstSessionCompletedToday,
       );
+
+      // Link the created plan to the appointment (prevents duplicates + clears partial flag)
+      if (widget.appointmentId != null) {
+        try {
+          final aptService = ref.read(appointmentServiceProvider);
+          await aptService.markLinkedPlan(widget.appointmentId!, plan.id);
+        } catch (_) {}
+      }
+
+      // Clear draft on success
+      _formSubmitted = true;
+      await _clearDraft();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

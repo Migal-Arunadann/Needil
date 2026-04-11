@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -5,12 +6,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/pb_collections.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../core/providers/pocketbase_provider.dart';
+import '../../appointments/providers/appointment_provider.dart';
 import '../../treatments/providers/treatment_provider.dart';
 import '../../treatments/models/session_model.dart';
 import '../models/consultation_model.dart';
@@ -118,14 +121,19 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
 
   final List<XFile> _photos = [];
   final ImagePicker _picker = ImagePicker();
-  
+
   bool _isLoadingView = false;
+  bool _draftLoaded = false;   // true once we attempted to restore draft
+  bool _formSubmitted = false; // true on successful submit — prevents draft save on dispose
   RecordModel? _existingRecord;
   ConsultationModel? _existingConsultation;
   List<SessionModel> _existingSessions = [];
 
   late bool _isViewing;
   bool _isExpanded = false;
+
+  /// SharedPreferences key for draft caching.
+  String get _draftKey => 'consultation_draft_${widget.appointmentId ?? widget.consultationId ?? "new"}';
 
   @override
   void initState() {
@@ -137,7 +145,87 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     _fetchPatientGender();
     if (widget.consultationId != null) {
       _loadExistingData();
+    } else if (widget.appointmentId != null) {
+      // New consultation from appointment — try restoring a saved draft
+      _loadDraft();
     }
+  }
+
+  /// Load a previously saved draft into the form fields.
+  Future<void> _loadDraft() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_draftKey);
+      if (raw == null || !mounted) return;
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      setState(() {
+        _notesCtrl.text              = data['notes']              ?? '';
+        _medicalHistoryCtrl.text     = data['medicalHistory']     ?? '';
+        _pastIllnessesCtrl.text      = data['pastIllnesses']      ?? '';
+        _currentMedicationsCtrl.text = data['currentMedications'] ?? '';
+        _allergiesCtrl.text          = data['allergies']          ?? '';
+        _chronicDiseasesCtrl.text    = data['chronicDiseases']    ?? '';
+        _bpCtrl.text                 = data['bp']                 ?? '';
+        _pulseCtrl.text              = data['pulse']              ?? '';
+        _chargeCtrl.text             = data['charge']             ?? '';
+        _selectedDiet          = data['diet']          as String?;
+        _selectedSleepDuration = data['sleepDuration'] as String?;
+        _selectedSleepQuality  = data['sleepQuality']  as String?;
+        _selectedExercise      = data['exercise']      as String?;
+        _selectedStress        = data['stress']        as String?;
+        _smoking  = data['smoking']  ?? 'No';
+        _alcohol  = data['alcohol']  ?? 'No';
+        _tobacco  = data['tobacco']  ?? 'No';
+        _drugs    = data['drugs']    ?? 'No';
+        _pregnancyStatus = data['pregnancy'] ?? 'No';
+        _consentGiven    = data['consent']   ?? false;
+        _charged         = data['charged']   ?? true;
+        _draftLoaded = true;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _draftLoaded = true);
+    }
+  }
+
+  /// Save current form state as a draft.
+  Future<void> _saveDraft() async {
+    if (widget.appointmentId == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final data = {
+        'notes':              _notesCtrl.text,
+        'medicalHistory':     _medicalHistoryCtrl.text,
+        'pastIllnesses':      _pastIllnessesCtrl.text,
+        'currentMedications': _currentMedicationsCtrl.text,
+        'allergies':          _allergiesCtrl.text,
+        'chronicDiseases':    _chronicDiseasesCtrl.text,
+        'bp':                 _bpCtrl.text,
+        'pulse':              _pulseCtrl.text,
+        'charge':             _chargeCtrl.text,
+        'diet':          _selectedDiet,
+        'sleepDuration': _selectedSleepDuration,
+        'sleepQuality':  _selectedSleepQuality,
+        'exercise':      _selectedExercise,
+        'stress':        _selectedStress,
+        'smoking':   _smoking,
+        'alcohol':   _alcohol,
+        'tobacco':   _tobacco,
+        'drugs':     _drugs,
+        'pregnancy': _pregnancyStatus,
+        'consent':   _consentGiven,
+        'charged':   _charged,
+      };
+      await prefs.setString(_draftKey, jsonEncode(data));
+    } catch (_) {}
+  }
+
+  /// Delete the draft from SharedPreferences.
+  Future<void> _clearDraft() async {
+    if (widget.appointmentId == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_draftKey);
+    } catch (_) {}
   }
 
   Future<void> _fetchPatientGender() async {
@@ -216,6 +304,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
 
   @override
   void dispose() {
+    // Save draft if the form was opened for a new consultation but not submitted
+    if (!_formSubmitted && widget.appointmentId != null && !_isViewing) {
+      _saveDraft(); // fire-and-forget is fine here
+    }
     _notesCtrl.dispose();
     _medicalHistoryCtrl.dispose();
     _pastIllnessesCtrl.dispose();
@@ -407,26 +499,25 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         );
       }
 
+      // Mark form saved + record consultation_end_time on the appointment
+      if (widget.appointmentId != null) {
+        try {
+          final aptService = ref.read(appointmentServiceProvider);
+          await aptService.markConsultationEndTime(widget.appointmentId!);
+        } catch (_) {}
+      }
+
+      // Clear the draft now that the form is fully submitted
+      _formSubmitted = true;
+      await _clearDraft();
+
       if (mounted) {
-        // Mark the appointment as "consultation form saved" so the card
-        // switches from "Start Consultation" to "Create Plan" + "End Consultation"
-        if (widget.appointmentId != null) {
-          try {
-            // Use PocketBase directly since we don't have appointmentServiceProvider in scope here
-            final pb = ref.read(pocketbaseProvider);
-            await pb.collection(PBCollections.appointments).update(
-              widget.appointmentId!,
-              body: {'consultation_form_saved': true},
-            );
-          } catch (_) {}
-        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Consultation recorded!'),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
         // Return the consultation so the caller can create a treatment plan

@@ -18,7 +18,12 @@ class AppointmentModel {
   final DateTime? checkInTime;
   final DateTime? checkOutTime;
   final DateTime? consultationStartTime;
-  final bool consultationFormSaved; // true once the consultation form has been filled & saved
+  final DateTime? consultationEndTime;       // Set when consultation form is submitted
+  final bool consultationFormSaved;          // true once the consultation form has been filled & saved
+  final bool patientDetailsSaved;            // true once PatientInfoScreen form is submitted
+  final bool patientDetailsPartial;          // true once PatientInfoScreen form is opened (but not yet submitted)
+  final bool treatmentPlanPartial;           // true once treatment plan form opened but not submitted
+  final String? linkedTreatmentPlanId;       // ID of created treatment plan (prevents duplicates)
   final DateTime? created;
   final DateTime? updated;
 
@@ -40,7 +45,12 @@ class AppointmentModel {
     this.checkInTime,
     this.checkOutTime,
     this.consultationStartTime,
+    this.consultationEndTime,
     this.consultationFormSaved = false,
+    this.patientDetailsSaved = false,
+    this.patientDetailsPartial = false,
+    this.treatmentPlanPartial = false,
+    this.linkedTreatmentPlanId,
     this.created,
     this.updated,
     this.doctorName,
@@ -82,7 +92,14 @@ class AppointmentModel {
       checkInTime: _parseDateTimeOrNull(record.getStringValue('check_in_time')),
       checkOutTime: _parseDateTimeOrNull(record.getStringValue('check_out_time')),
       consultationStartTime: _parseDateTimeOrNull(record.getStringValue('consultation_start_time')),
+      consultationEndTime: _parseDateTimeOrNull(record.getStringValue('consultation_end_time')),
       consultationFormSaved: record.getBoolValue('consultation_form_saved'),
+      patientDetailsSaved: record.getBoolValue('patient_details_saved'),
+      patientDetailsPartial: record.getBoolValue('patient_details_partial'),
+      treatmentPlanPartial: record.getBoolValue('treatment_plan_partial'),
+      linkedTreatmentPlanId: record.getStringValue('linked_treatment_plan_id').isNotEmpty
+          ? record.getStringValue('linked_treatment_plan_id')
+          : null,
       created: DateTime.tryParse(record.get<String>('created')),
       updated: DateTime.tryParse(record.get<String>('updated')),
       doctorName: doctorName,
@@ -109,7 +126,13 @@ class AppointmentModel {
       if (checkInTime != null) 'check_in_time': checkInTime!.toUtc().toIso8601String(),
       if (checkOutTime != null) 'check_out_time': checkOutTime!.toUtc().toIso8601String(),
       if (consultationStartTime != null) 'consultation_start_time': consultationStartTime!.toUtc().toIso8601String(),
+      if (consultationEndTime != null) 'consultation_end_time': consultationEndTime!.toUtc().toIso8601String(),
       'consultation_form_saved': consultationFormSaved,
+      'patient_details_saved': patientDetailsSaved,
+      'patient_details_partial': patientDetailsPartial,
+      'treatment_plan_partial': treatmentPlanPartial,
+      if (linkedTreatmentPlanId != null && linkedTreatmentPlanId!.isNotEmpty)
+        'linked_treatment_plan_id': linkedTreatmentPlanId,
     };
   }
 

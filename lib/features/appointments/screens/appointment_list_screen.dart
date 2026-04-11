@@ -288,6 +288,11 @@ class _AppointmentListScreenState
 
   Future<void> _startConsultation(AppointmentModel apt) async {
     if (apt.patientId == null || apt.patientId!.isEmpty) return;
+    // Guard: patient details must be saved first
+    if (!apt.patientDetailsSaved) {
+      if (mounted) _showError('Please fill and submit patient details before starting a consultation.');
+      return;
+    }
     // Guard: if form already saved, don't re-open it (buttons already show Create Plan / End Consultation)
     if (apt.consultationFormSaved) return;
     try {
@@ -313,7 +318,7 @@ class _AppointmentListScreenState
               patientName: patientName,
               doctorId: apt.doctorId,
               consultationId: consultationId,
-              appointmentId: apt.id, // so screen can mark form saved
+              appointmentId: apt.id, // so screen can mark form saved + end time
             ),
           ),
         );
@@ -339,6 +344,7 @@ class _AppointmentListScreenState
               patientName: patientName,
               doctorId: apt.doctorId,
               consultationId: consultationId,
+              appointmentId: apt.id, // enables draft cache + plan linking
             ),
           ),
         );
@@ -976,7 +982,6 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
     }
 
     final isCallBy = apt.type == AppointmentType.callBy;
-    final isWalkIn = apt.type == AppointmentType.walkIn;
     final typeColor = isCallBy ? AppColors.info : AppColors.accent;
     final typeLabel = isCallBy ? 'Call-By' : 'Walk-In';
     final typeIcon = isCallBy ? Icons.phone_in_talk_rounded : Icons.directions_walk_rounded;
@@ -984,19 +989,46 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
     final isScheduled = apt.status == AppointmentStatus.scheduled;
     final isInProgress = apt.status == AppointmentStatus.inProgress;
     final hasPatientLinked = apt.patientId != null && apt.patientId!.isNotEmpty;
-    final showArrivedBtn = isScheduled && !isWalkIn && !widget.isFutureDate && !widget.isMissed;
+
+    // ── Workflow state flags ──────────────────────────────────────────────────
+
+    // Step 1: Patient Arrived
+    final showArrivedBtn = isScheduled && !widget.isFutureDate && !widget.isMissed;
     final showRescheduleBtn = isScheduled && widget.isFutureDate && !widget.isMissed;
-    final showFillDetailsBtn = isInProgress && !hasPatientLinked;
-    // Show "Start Consultation" only when consultation has never been opened (form not yet saved)
-    final showStartConsultationBtn = isInProgress && hasPatientLinked && apt.consultationStartTime == null && !apt.consultationFormSaved;
-    // Show "Create Plan" + "End Consultation" once form has been saved (not before)
-    final showCreatePlanBtn = apt.consultationFormSaved && _planInfoLoaded && !_hasPlan;
-    final showEndedBtn = apt.consultationFormSaved;
+
+    // Step 2: Fill Patient Details (only for call-by — walk-in already has patient linked)
+    final showFillDetailsBtn = isInProgress && !hasPatientLinked && isCallBy;
+    // Once opened but not submitted → show "Resume"
+    final fillDetailsLabel = apt.patientDetailsPartial && !apt.patientDetailsSaved
+        ? 'Resume Filling Details'
+        : 'Fill Patient Details';
+    final fillDetailsIcon = apt.patientDetailsPartial && !apt.patientDetailsSaved
+        ? Icons.edit_note_rounded
+        : Icons.badge_rounded;
+
+    // Step 3: Start/Resume Consultation (only after details saved)
+    final showStartConsultationBtn = isInProgress &&
+        hasPatientLinked &&
+        apt.patientDetailsSaved &&
+        !apt.consultationFormSaved;
+    // Once opened but not submitted → show "Resume"
+    final consultationLabel = apt.consultationStartTime != null && !apt.consultationFormSaved
+        ? 'Resume Consultation'
+        : 'Start Consultation';
+    final consultationIcon = apt.consultationStartTime != null && !apt.consultationFormSaved
+        ? Icons.restart_alt_rounded
+        : Icons.medical_services_rounded;
+
+    // Step 4: Create/Resume Treatment Plan + End Appointment
+    //   Show only after consultation form is saved AND plan not yet fully linked
+    final showPlanSection = apt.consultationFormSaved && apt.linkedTreatmentPlanId == null;
+    final planLabel = apt.treatmentPlanPartial ? 'Resume Treatment Plan' : 'Create Plan';
+    final planIcon = apt.treatmentPlanPartial ? Icons.restart_alt_rounded : Icons.add_chart_rounded;
 
     final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
     final effectiveShowStartConsultation = showStartConsultationBtn && !isReceptionist;
-    final effectiveShowCreatePlan = showCreatePlanBtn && !isReceptionist;
-    final effectiveShowEnded = showEndedBtn && !isReceptionist;
+    final effectiveShowPlanSection = showPlanSection && !isReceptionist;
+    final showEndedBtn = apt.consultationFormSaved && !isReceptionist;
 
     // Left accent color
     final accentColor = widget.isMissed || apt.status == AppointmentStatus.cancelled
@@ -1008,7 +1040,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                 : statusColor;
 
     final hasActions = showArrivedBtn || showRescheduleBtn || showFillDetailsBtn ||
-        effectiveShowStartConsultation || effectiveShowCreatePlan || effectiveShowEnded;
+        effectiveShowStartConsultation || effectiveShowPlanSection || showEndedBtn;
 
     return FadeTransition(
       opacity: _fade,
@@ -1104,11 +1136,40 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                             ),
                                           ],
                                         ),
+                                        // Workflow progress indicators
                                         if (apt.checkInTime != null) ...[
                                           const SizedBox(height: 5),
                                           _MetaRow(
                                             icon: Icons.login_rounded,
                                             label: 'Arrived ${DateFormat('h:mm a').format(apt.checkInTime!.toLocal())}',
+                                            color: AppColors.success,
+                                          ),
+                                        ],
+                                        if (apt.patientDetailsSaved) ...[
+                                          const SizedBox(height: 3),
+                                          _MetaRow(
+                                            icon: Icons.badge_rounded,
+                                            label: 'Patient details filled ✓',
+                                            color: AppColors.success,
+                                          ),
+                                        ],
+                                        if (apt.consultationStartTime != null) ...[
+                                          const SizedBox(height: 3),
+                                          _MetaRow(
+                                            icon: Icons.medical_services_rounded,
+                                            label: apt.consultationFormSaved
+                                                ? 'Consultation recorded ✓'
+                                                : 'Consultation started ${DateFormat('h:mm a').format(apt.consultationStartTime!.toLocal())}',
+                                            color: apt.consultationFormSaved
+                                                ? AppColors.success
+                                                : AppColors.primary,
+                                          ),
+                                        ],
+                                        if (apt.linkedTreatmentPlanId != null) ...[
+                                          const SizedBox(height: 3),
+                                          _MetaRow(
+                                            icon: Icons.check_circle_rounded,
+                                            label: 'Treatment plan created ✓',
                                             color: AppColors.success,
                                           ),
                                         ],
@@ -1181,6 +1242,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                 padding: const EdgeInsets.all(10),
                                 child: Column(
                                   children: [
+                                    // Row 1: Arrived / Reschedule / Fill Details / Start Consultation
                                     if (showArrivedBtn || showRescheduleBtn ||
                                         showFillDetailsBtn || effectiveShowStartConsultation)
                                       Row(children: [
@@ -1200,29 +1262,53 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                           )),
                                         if (showFillDetailsBtn)
                                           Expanded(child: _ActionButton(
-                                            label: 'Fill Details',
-                                            icon: Icons.badge_rounded,
-                                            color: AppColors.info,
+                                            label: fillDetailsLabel,
+                                            icon: fillDetailsIcon,
+                                            color: apt.patientDetailsPartial
+                                                ? AppColors.warning
+                                                : AppColors.info,
                                             onTap: widget.onFillDetails,
                                           )),
-                                        if (effectiveShowStartConsultation)
+                                        if (effectiveShowStartConsultation) ...[
+                                          if (showFillDetailsBtn) const SizedBox(width: 7),
                                           Expanded(child: _ActionButton(
-                                            label: 'Start Consultation',
-                                            icon: Icons.medical_services_rounded,
-                                            color: AppColors.primary,
+                                            label: consultationLabel,
+                                            icon: consultationIcon,
+                                            color: apt.consultationStartTime != null
+                                                ? AppColors.warning
+                                                : AppColors.primary,
                                             onTap: widget.onStartConsultation,
                                           )),
+                                        ],
                                       ]),
-                                    if (effectiveShowCreatePlan || effectiveShowEnded) ...[
+
+                                    // Row 2: Undo Arrived (inline undo for inProgress with no details yet)
+                                    if (isInProgress && apt.checkInTime != null &&
+                                        !apt.patientDetailsSaved && !apt.consultationFormSaved) ...[
+                                      const SizedBox(height: 7),
+                                      Row(children: [
+                                        Expanded(child: _ActionButton(
+                                          label: 'Undo Arrival',
+                                          icon: Icons.undo_rounded,
+                                          color: AppColors.textSecondary,
+                                          onTap: widget.onUndoArrived,
+                                        )),
+                                      ]),
+                                    ],
+
+                                    // Row 3: Create/Resume Treatment Plan + End Appointment
+                                    if (effectiveShowPlanSection || showEndedBtn) ...[
                                       if (showArrivedBtn || showRescheduleBtn ||
                                           showFillDetailsBtn || effectiveShowStartConsultation)
                                         const SizedBox(height: 7),
                                       Row(children: [
-                                        if (effectiveShowCreatePlan) ...[
+                                        if (effectiveShowPlanSection) ...[
                                           Expanded(child: _ActionButton(
-                                            label: 'Create Plan',
-                                            icon: Icons.add_chart_rounded,
-                                            color: AppColors.primary,
+                                            label: planLabel,
+                                            icon: planIcon,
+                                            color: apt.treatmentPlanPartial
+                                                ? AppColors.warning
+                                                : AppColors.primary,
                                             onTap: () async {
                                               await Future.microtask(
                                                 () => widget.onCreatePlan(
@@ -1239,12 +1325,13 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                           )),
                                           const SizedBox(width: 7),
                                         ],
-                                        Expanded(child: _ActionButton(
-                                          label: 'End Consultation',
-                                          icon: Icons.check_circle_outline_rounded,
-                                          color: AppColors.success,
-                                          onTap: widget.onEnded,
-                                        )),
+                                        if (showEndedBtn)
+                                          Expanded(child: _ActionButton(
+                                            label: 'End Appointment',
+                                            icon: Icons.check_circle_outline_rounded,
+                                            color: AppColors.success,
+                                            onTap: widget.onEnded,
+                                          )),
                                       ]),
                                     ],
                                   ],

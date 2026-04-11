@@ -48,7 +48,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     _nameCtrl.text = widget.appointment.patientName ?? '';
     _phoneCtrl.text = widget.appointment.patientPhone ?? '';
     // Pre-fill city from clinic profile
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final clinic = ref.read(authProvider).clinic;
       if (clinic?.city != null && clinic!.city!.isNotEmpty && _cityCtrl.text.isEmpty) {
@@ -56,6 +56,13 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
       }
       if (clinic?.pin != null && clinic!.pin!.isNotEmpty && _pincodeCtrl.text.isEmpty) {
         _pincodeCtrl.text = clinic.pin!;
+      }
+      // Mark form as partially opened (enables "Resume Filling" button label)
+      if (!widget.appointment.patientDetailsSaved) {
+        try {
+          final service = ref.read(appointmentServiceProvider);
+          await service.markPatientDetailsPartial(widget.appointment.id);
+        } catch (_) {}
       }
     });
   }
@@ -181,6 +188,8 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
       }
 
       await service.linkPatient(widget.appointment.id, patient.id);
+      // Mark patient details as fully saved
+      await service.markPatientDetailsSaved(widget.appointment.id);
       ref.read(appointmentListProvider.notifier).loadAppointments();
 
       if (mounted) {

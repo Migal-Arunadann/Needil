@@ -335,10 +335,18 @@ class AuthNotifier extends StateNotifier<AuthState> {
       otpCode: otpCode,
     );
     if (verified.success) {
-      // OTP confirmed — restore session cleanly
-      await restoreSession();
-      state = state.copyWith(
+      // OTP confirmed — mark as authenticated using the already-stored clinic data.
+      // Do NOT call restoreSession() here — it sets isInitializing=true which
+      // flickers the splash and never pops the OTP screen.
+      state = AuthState(
+        isInitializing: false,
         isLoading: false,
+        isAuthenticated: true,
+        role: state.role,
+        clinic: state.clinic,
+        doctor: state.doctor,
+        receptionist: state.receptionist,
+        // Clear OTP pending fields
         pendingOtpId: null,
         pendingEmail: null,
         pendingClinicData: null,

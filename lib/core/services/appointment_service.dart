@@ -507,5 +507,70 @@ class AppointmentService {
     } catch (_) {}
     return null;
   }
+
+  /// Mark that the patient details form has been OPENED but not yet submitted.
+  Future<void> markPatientDetailsPartial(String appointmentId) async {
+    await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {
+        'patient_details_partial': true,
+        'patient_details_saved': false,
+      },
+    );
+  }
+
+  /// Mark that the patient details form has been fully submitted.
+  Future<void> markPatientDetailsSaved(String appointmentId) async {
+    await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {
+        'patient_details_saved': true,
+        'patient_details_partial': false,
+      },
+    );
+  }
+
+  /// Record the consultation end time when the consultation form is submitted.
+  Future<void> markConsultationEndTime(String appointmentId) async {
+    await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {
+        'consultation_end_time': DateTime.now().toUtc().toIso8601String(),
+        'consultation_form_saved': true,
+      },
+    );
+  }
+
+  /// Mark that the treatment plan form has been opened but not yet submitted.
+  Future<void> markTreatmentPlanPartial(String appointmentId) async {
+    await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {'treatment_plan_partial': true},
+    );
+  }
+
+  /// Link a created treatment plan to the appointment and clear the partial flag.
+  Future<void> markLinkedPlan(String appointmentId, String planId) async {
+    await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {
+        'linked_treatment_plan_id': planId,
+        'treatment_plan_partial': false,
+      },
+    );
+  }
+
+  /// Fetch the treatment plan linked to a given consultation (one-plan guard).
+  /// Returns the plan ID if one already exists, null otherwise.
+  Future<String?> getExistingPlanForConsultation(String consultationId) async {
+    try {
+      final plans = await pb.collection(PBCollections.treatmentPlans).getList(
+        filter: 'consultation = "$consultationId"',
+        perPage: 1,
+      );
+      if (plans.items.isNotEmpty) return plans.items.first.id;
+    } catch (_) {}
+    return null;
+  }
 }
 

@@ -4,6 +4,12 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Needil needs access to your photo library to attach images to consultation records.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Needil needs camera access to capture patient progress photos for consultation records.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Needil needs permission to save photos to your library.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
