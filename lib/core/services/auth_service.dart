@@ -477,6 +477,26 @@ class AuthService {
 
   // ── OTP Methods ────────────────────────────────────────────────
 
+  /// Delete the currently authenticated shell clinic record if it is unfilled
+  /// (i.e. the name field is empty — created purely for OTP verification).
+  /// Called when the user wants to change their email after OTP.
+  /// Requires the clinics Delete API rule to be `@request.auth.id = id`.
+  Future<bool> deleteShellClinic() async {
+    try {
+      final record = pb.authStore.record;
+      if (record == null) return false;
+
+      // Safety guard: only delete shells (name is empty = not yet registered)
+      final name = record.getStringValue('name');
+      if (name.isNotEmpty) return false; // fully registered — never auto-delete
+
+      await pb.collection(PBCollections.clinics).delete(record.id);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// After a successful authWithOTP call, the PB auth store holds the clinic
   /// record and token. This method persists the session to secure storage and
   /// returns an [AuthResult] so the UI can set state correctly.

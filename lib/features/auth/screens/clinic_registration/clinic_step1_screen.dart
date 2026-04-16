@@ -30,6 +30,7 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
   final _areaController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+  bool _isChangingEmail = false;
 
   @override
   void dispose() {
@@ -43,6 +44,40 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
     _cityController.dispose();
     _areaController.dispose();
     super.dispose();
+  }
+
+  Future<void> _changeEmail(WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: AppColors.surface,
+        title: const Text('Change Email?'),
+        content: const Text(
+          'This will remove the current email from our system and take you back to start. You can then register with a different email.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep This Email'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, Change Email',
+                style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isChangingEmail = true);
+    await ref.read(authProvider.notifier).deleteShellAndRestart();
+    if (!mounted) return;
+
+    // Pop all the way back to the root — app.dart will render LoginScreen
+    // because auth state is now unauthenticated.
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   void _next() {
@@ -123,12 +158,39 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
                 Consumer(builder: (context, ref, _) {
                   final auth = ref.watch(authProvider);
                   _lockedEmail = auth.clinic?.email;
-                  return AppTextField(
-                    label: 'Email Address',
-                    hint: 'Verified',
-                    controller: TextEditingController(text: _lockedEmail ?? 'Verified Email'),
-                    enabled: false,
-                    prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textHint),
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppTextField(
+                        label: 'Email Address',
+                        hint: 'Verified',
+                        controller: TextEditingController(text: _lockedEmail ?? 'Verified Email'),
+                        enabled: false,
+                        prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textHint),
+                      ),
+                      const SizedBox(height: 6),
+                      // Change email — deletes shell record and restarts
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: _isChangingEmail
+                            ? const SizedBox(
+                                width: 16, height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                              )
+                            : GestureDetector(
+                                onTap: () => _changeEmail(ref),
+                                child: Text(
+                                  'Use a different email?',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.w600,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: AppColors.primary,
+                                  ),
+                                ),
+                              ),
+                      ),
+                    ],
                   );
                 }),
                 const SizedBox(height: 20),

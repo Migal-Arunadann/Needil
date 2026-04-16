@@ -312,6 +312,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = const AuthState(isInitializing: false);
   }
 
+  /// Delete the current shell clinic record (unfilled, name='') then log out.
+  /// Used when the user wants to change their email after OTP verification
+  /// but before completing registration. Returns true if record was deleted.
+  Future<bool> deleteShellAndRestart() async {
+    final deleted = await _authService.deleteShellClinic();
+    await _authService.logout();
+    state = const AuthState(isInitializing: false);
+    return deleted;
+  }
+
   /// Clear error.
   void clearError() {
     state = state.copyWith(error: null);
