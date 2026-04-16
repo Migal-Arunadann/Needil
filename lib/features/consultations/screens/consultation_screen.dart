@@ -444,11 +444,25 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       final service = ref.read(treatmentServiceProvider);
 
       ConsultationModel consultation;
-      // Update whenever we have an existing consultationId (covers both view-mode edits
-      // AND the "start consultation" flow where a bare record was pre-created).
-      if (widget.consultationId != null) {
+      String resolvedId = widget.consultationId ?? '';
+
+      // If no ID was passed (shouldn't happen, but safety net): look up ongoing first
+      if (resolvedId.isEmpty) {
+        final pb = ref.read(pocketbaseProvider);
+        final existing = await pb.collection(PBCollections.consultations).getList(
+          filter: 'patient = "${widget.patientId}" && doctor = "${widget.doctorId}" && status = "ongoing"',
+          perPage: 1,
+          sort: '-created',
+        );
+        if (existing.items.isNotEmpty) {
+          resolvedId = existing.items.first.id;
+        }
+      }
+
+      if (resolvedId.isNotEmpty) {
+        // Always UPDATE the existing consultation — never create a duplicate
         consultation = await service.updateConsultation(
-          consultationId: widget.consultationId!,
+          consultationId: resolvedId,
           notes: _notesCtrl.text.trim(),
           chiefComplaint: _notesCtrl.text.trim(),
           medicalHistory: _medicalHistoryCtrl.text.trim(),
@@ -470,34 +484,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           newPhotoPaths: _photos.map((p) => p.path).toList(),
         );
       } else {
-        consultation = await service.createConsultation(
-          patientId: widget.patientId,
-          doctorId: widget.doctorId,
-          notes: _notesCtrl.text.trim(),
-          chiefComplaint: _notesCtrl.text.trim(),
-          medicalHistory: _medicalHistoryCtrl.text.trim(),
-          pastIllnesses: _pastIllnessesCtrl.text.trim(),
-          currentMedications: _currentMedicationsCtrl.text.trim(),
-          allergies: _allergiesCtrl.text.trim(),
-          chronicDiseases: _chronicDiseasesCtrl.text.trim(),
-          dietPattern: _selectedDiet ?? '',
-          sleepQuality: [if (_selectedSleepDuration != null) _selectedSleepDuration, if (_selectedSleepQuality != null) _selectedSleepQuality].join(' | '),
-          exerciseLevel: _selectedExercise ?? '',
-          addictions: 'Smoking: $_smoking, Alcohol: $_alcohol, Tobacco Chewing: $_tobacco, Recreational Drugs: $_drugs',
-          stressLevel: _selectedStress ?? '',
-          pregnancyStatus: _pregnancyStatus,
-          consentGiven: _consentGiven,
-          bpLevel: _bpCtrl.text.trim(),
-          pulse: _pulseCtrl.text.isNotEmpty
-              ? int.tryParse(_pulseCtrl.text.trim())
-              : null,
-          charged: _charged,
-          chargeAmount: _charged && _chargeCtrl.text.isNotEmpty
-              ? double.tryParse(_chargeCtrl.text.trim())
-              : null,
-          photoPaths: _photos.map((p) => p.path).toList(),
-        );
+        // No consultation ID and no ongoing consultation found —
+        // this shouldn't happen with the current flow (we always pre-create before opening this screen).
+        throw Exception('No consultation record found. Please go back and start the consultation again.');
       }
+
 
       // Mark form saved + record consultation_end_time on the appointment
       if (widget.appointmentId != null) {

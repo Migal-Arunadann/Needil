@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/pb_collections.dart';
 import '../../../core/providers/pocketbase_provider.dart';
+import '../../appointments/providers/appointment_provider.dart';
 import '../models/patient_model.dart';
 import '../../consultations/models/consultation_model.dart';
 import '../../treatments/models/treatment_plan_model.dart';
@@ -67,86 +68,82 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen> wit
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          // 1. Intercept to check if there is an ongoing consultation
-          final pb = ref.read(pocketbaseProvider);
+          final aptService = ref.read(appointmentServiceProvider);
           try {
-            final ongoingRes = await pb.collection(PBCollections.consultations).getList(
-              filter: 'patient = "${widget.patient.id}" && status = "ongoing"',
-              perPage: 1,
+            // Find if there's already an ongoing consultation for this patient+doctor
+            final ongoing = await aptService.findOngoingConsultation(
+              widget.patient.id,
+              widget.patient.doctorId,
             );
 
-            if (ongoingRes.items.isNotEmpty) {
-              if (mounted) {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    backgroundColor: AppColors.surface,
-                    title: const Text('Action Restricted', style: TextStyle(color: AppColors.error)),
-                    content: const Text('There is already an ongoing consultation for this patient. Please complete it before creating a new one.'),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK')),
-                    ],
-                  )
+            String consultationId;
+            if (ongoing != null) {
+              // Resume the existing one — same as "Resume Consultation" on the appointment card
+              consultationId = ongoing.id;
+            } else {
+              // Create a new stub and open it
+              final newC = await aptService.createConsultation(
+                widget.patient.id,
+                widget.patient.doctorId,
+              );
+              consultationId = newC.id;
+            }
+
+            if (!mounted) return;
+            final consultation = await Navigator.pushNamed(
+              context,
+              '/consultation',
+              arguments: {
+                'patientId': widget.patient.id,
+                'patientName': widget.patient.fullName,
+                'doctorId': widget.patient.doctorId,
+                'consultationId': consultationId,
+              },
+            ) as ConsultationModel?;
+
+            if (consultation != null && mounted) {
+              final shouldCreatePlan = await showDialog<bool>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  backgroundColor: AppColors.surface,
+                  title: Text('Consultation Saved', style: AppTextStyles.h3),
+                  content: Text(
+                    'Would you like to auto-schedule a Treatment Plan with sessions based on this consultation?',
+                    style: AppTextStyles.bodyMedium,
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Create Plan'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (shouldCreatePlan == true && mounted) {
+                await Navigator.pushNamed(
+                  context,
+                  '/treatment-plan/create',
+                  arguments: {
+                    'patientId': widget.patient.id,
+                    'patientName': widget.patient.fullName,
+                    'doctorId': widget.patient.doctorId,
+                    'consultationId': consultation.id,
+                  },
                 );
               }
-              return;
+              // Refresh
+              setState(() {});
             }
           } catch (e) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text('Error checking consultations: $e', style: const TextStyle(color: Colors.white)),
+                content: Text('Error: $e', style: const TextStyle(color: Colors.white)),
                 backgroundColor: AppColors.error,
               ));
             }
-            return;
-          }
-
-          // 2. If no ongoing consultation, proceed to create a new one
-          final consultation = await Navigator.pushNamed(
-            context,
-            '/consultation',
-            arguments: {
-              'patientId': widget.patient.id,
-              'patientName': widget.patient.fullName,
-              'doctorId': widget.patient.doctorId,
-            },
-          ) as ConsultationModel?;
-
-          if (consultation != null && mounted) {
-            final shouldCreatePlan = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                backgroundColor: AppColors.surface,
-                title: Text('Consultation Saved', style: AppTextStyles.h3),
-                content: Text(
-                  'Would you like to auto-schedule a Treatment Plan with sessions based on this consultation?',
-                  style: AppTextStyles.bodyMedium,
-                ),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Later')),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: Colors.white),
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text('Create Plan'),
-                  ),
-                ],
-              ),
-            );
-
-            if (shouldCreatePlan == true && mounted) {
-              await Navigator.pushNamed(
-                context,
-                '/treatment-plan/create',
-                arguments: {
-                  'patientId': widget.patient.id,
-                  'patientName': widget.patient.fullName,
-                  'doctorId': widget.patient.doctorId,
-                  'consultationId': consultation.id,
-                },
-              );
-            }
-            // Refresh
-            setState(() {});
           }
         },
         backgroundColor: AppColors.primary,
