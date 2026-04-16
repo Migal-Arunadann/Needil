@@ -996,7 +996,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
     final showArrivedBtn = isScheduled && !widget.isFutureDate && !widget.isMissed;
     final showRescheduleBtn = isScheduled && widget.isFutureDate && !widget.isMissed;
 
-    // Step 2: Fill Patient Details (only for call-by — walk-in already has patient linked)
+    // Step 2: Fill Patient Details (only for call-by — walk-in details are collected at creation)
     final showFillDetailsBtn = isInProgress && !hasPatientLinked && isCallBy;
     // Once opened but not submitted → show "Resume"
     final fillDetailsLabel = apt.patientDetailsPartial && !apt.patientDetailsSaved
@@ -1006,10 +1006,15 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
         ? Icons.edit_note_rounded
         : Icons.badge_rounded;
 
+    // Walk-in: patient details were collected upfront in the creation form.
+    // Treat as always saved when the patient is linked (covers legacy records too).
+    final effectivePatientDetailsSaved = apt.patientDetailsSaved ||
+        (!isCallBy && hasPatientLinked);
+
     // Step 3: Start/Resume Consultation (only after details saved)
     final showStartConsultationBtn = isInProgress &&
         hasPatientLinked &&
-        apt.patientDetailsSaved &&
+        effectivePatientDetailsSaved &&
         !apt.consultationFormSaved;
     // Once opened but not submitted → show "Resume"
     final consultationLabel = apt.consultationStartTime != null && !apt.consultationFormSaved
@@ -1029,6 +1034,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
     final effectiveShowStartConsultation = showStartConsultationBtn && !isReceptionist;
     final effectiveShowPlanSection = showPlanSection && !isReceptionist;
     final showEndedBtn = apt.consultationFormSaved && !isReceptionist;
+
 
     // Left accent color
     final accentColor = widget.isMissed || apt.status == AppointmentStatus.cancelled
@@ -1145,7 +1151,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                             color: AppColors.success,
                                           ),
                                         ],
-                                        if (apt.patientDetailsSaved) ...[
+                                        if (effectivePatientDetailsSaved) ...[
                                           const SizedBox(height: 3),
                                           _MetaRow(
                                             icon: Icons.badge_rounded,

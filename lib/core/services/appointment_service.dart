@@ -80,6 +80,9 @@ class AppointmentService {
       'time': time,
       'status': 'in_progress',
       'check_in_time': DateTime.now().toUtc().toIso8601String(),
+      // Walk-in details are collected upfront in the creation form, so mark as saved immediately
+      'patient_details_saved': true,
+      'patient_details_partial': false,
       if (patientName != null && patientName.isNotEmpty)
         'patient_name': patientName,
       if (patientPhone != null && patientPhone.isNotEmpty)
@@ -92,6 +95,7 @@ class AppointmentService {
         await pb.collection(PBCollections.appointments).create(body: body);
     return AppointmentModel.fromRecord(record);
   }
+
 
   /// Link a patient record to an appointment (for call-by after patient arrives).
   Future<AppointmentModel> linkPatient(
