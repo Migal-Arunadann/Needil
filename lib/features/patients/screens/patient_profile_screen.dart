@@ -7,6 +7,9 @@ import '../../../core/constants/pb_collections.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../models/patient_model.dart';
 import '../../consultations/models/consultation_model.dart';
+import '../../treatments/models/treatment_plan_model.dart';
+import '../../treatments/screens/session_list_screen.dart';
+import '../../treatments/screens/create_treatment_plan_screen.dart';
 
 class PatientProfileScreen extends ConsumerStatefulWidget {
   final PatientModel patient;
@@ -86,13 +89,16 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen> wit
                   )
                 );
               }
-              return; // Stop execution, do not create a new one!
+              return;
             }
           } catch (e) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error checking consultations: $e', style: const TextStyle(color: Colors.white)), backgroundColor: AppColors.error));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text('Error checking consultations: $e', style: const TextStyle(color: Colors.white)),
+                backgroundColor: AppColors.error,
+              ));
             }
-            return; // Block creation if check fails
+            return;
           }
 
           // 2. If no ongoing consultation, proceed to create a new one
@@ -139,13 +145,13 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen> wit
                 },
               );
             }
-            // Refresh history
+            // Refresh
             setState(() {});
           }
         },
         backgroundColor: AppColors.primary,
         icon: const Icon(Icons.add_comment_rounded, color: Colors.white),
-        label: const Text('Consult', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: const Text('New Consult', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }
@@ -173,9 +179,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen> wit
             ),
           ),
           const SizedBox(height: 16),
-          Center(
-            child: Text(p.fullName, style: AppTextStyles.h3),
-          ),
+          Center(child: Text(p.fullName, style: AppTextStyles.h3)),
           Center(
             child: Text(p.phone, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
           ),
@@ -232,30 +236,29 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen> wit
           final status = a.getStringValue('status');
           final checkInStr = a.getStringValue('check_in_time');
           final checkOutStr = a.getStringValue('check_out_time');
-          
+
           // Drop un-arrived (scheduled-only) appointments
           if (status == 'scheduled' && checkInStr.isEmpty) continue;
 
           final dateStr = a.getStringValue('date');
           final timeStr = a.getStringValue('time');
           final typeVal = a.getStringValue('type');
-          
+
           final dt = DateTime.tryParse('$dateStr $timeStr') ?? DateTime.tryParse(a.getStringValue('created'));
-          
+
           String title = 'Scheduled Appointment';
           if (typeVal == 'walk_in') title = 'Walk-In Patient';
           if (typeVal == 'session') title = 'Treatment Session';
 
-          // Format check-in/out explicitly based on Common Form (in) and Done Button (out)
           String? details1;
           String? details2;
           if (checkInStr.isNotEmpty) {
-            details1 = 'Check-in (Form Filled): ${DateFormat("h:mm a").format(DateTime.parse(checkInStr).toLocal())}';
+            details1 = 'Check-in: ${DateFormat("h:mm a").format(DateTime.parse(checkInStr).toLocal())}';
           }
           if (checkOutStr.isNotEmpty) {
-            details2 = 'Check-out (Done): ${DateFormat("h:mm a").format(DateTime.parse(checkOutStr).toLocal())}';
+            details2 = 'Check-out: ${DateFormat("h:mm a").format(DateTime.parse(checkOutStr).toLocal())}';
           }
-          
+
           events.add(_HistoryEvent(
             type: 'Appointment',
             date: dt ?? DateTime.now(),
@@ -286,7 +289,6 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen> wit
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Timeline line & icon
                   Column(
                     children: [
                       Container(
@@ -299,7 +301,6 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen> wit
                     ],
                   ),
                   const SizedBox(width: 16),
-                  // Content
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -363,7 +364,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen> wit
             final complaint = c.getStringValue('chief_complaint');
             final statusStr = c.getStringValue('status');
             final isOngoing = statusStr != 'completed';
-            
+
             return Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: _ConsultationCard(
@@ -386,7 +387,8 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen> wit
   }
 }
 
-/// A self-contained consultation card that fetches session info
+// ─── Consultation Card with Treatment Plan access ─────────────────────────────
+
 class _ConsultationCard extends ConsumerStatefulWidget {
   final String consultationId;
   final DateTime date;
@@ -418,10 +420,15 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   bool _session1StartedToday = false;
   bool _loaded = false;
 
+  // Treatment plan info for this consultation
+  TreatmentPlanModel? _treatmentPlan;
+  bool _planLoaded = false;
+
   @override
   void initState() {
     super.initState();
     _loadSessionInfo();
+    _loadTreatmentPlan();
   }
 
   Future<void> _loadSessionInfo() async {
@@ -432,14 +439,12 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       int completed = 0;
       bool s1Today = false;
 
-      // Sessions link to treatment_plans, not directly to consultations.
-      // Step 1: find treatment plans for this consultation
+      // Sessions link to treatment_plans; first find plans for this consultation
       final plansRes = await pb.collection(PBCollections.treatmentPlans).getList(
         filter: 'consultation = "${widget.consultationId}"',
         perPage: 20,
       );
 
-      // Step 2: for each plan, fetch its sessions
       for (final plan in plansRes.items) {
         final sessRes = await pb.collection(PBCollections.sessions).getList(
           filter: 'treatment_plan = "${plan.id}"',
@@ -471,175 +476,294 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     }
   }
 
+  Future<void> _loadTreatmentPlan() async {
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final plansRes = await pb.collection(PBCollections.treatmentPlans).getList(
+        filter: 'consultation = "${widget.consultationId}"',
+        perPage: 1,
+        sort: '-created',
+        expand: 'patient',
+      );
+      if (plansRes.items.isNotEmpty && mounted) {
+        setState(() {
+          _treatmentPlan = TreatmentPlanModel.fromRecord(plansRes.items.first);
+          _planLoaded = true;
+        });
+      } else if (mounted) {
+        setState(() => _planLoaded = true);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _planLoaded = true);
+    }
+  }
+
   String _formatDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  Future<void> _navigateToTreatmentPlan(BuildContext context) async {
+    if (_treatmentPlan != null) {
+      // View existing plan's sessions
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => SessionListScreen(plan: _treatmentPlan!)),
+      );
+      widget.onReturn();
+      setState(() {
+        _loaded = false;
+        _planLoaded = false;
+      });
+      _loadSessionInfo();
+      _loadTreatmentPlan();
+    } else {
+      // Create a new treatment plan
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CreateTreatmentPlanScreen(
+            patientId: widget.patientId,
+            patientName: widget.patientName,
+            doctorId: widget.doctorId,
+            consultationId: widget.consultationId,
+          ),
+        ),
+      );
+      widget.onReturn();
+      setState(() {
+        _loaded = false;
+        _planLoaded = false;
+      });
+      _loadSessionInfo();
+      _loadTreatmentPlan();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () {
-        Navigator.pushNamed(
-          context,
-          '/consultation',
-          arguments: {
-            'patientId': widget.patientId,
-            'patientName': widget.patientName,
-            'doctorId': widget.doctorId,
-            'consultationId': widget.consultationId,
-            'isViewMode': true,
-          },
-        ).then((_) => widget.onReturn());
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: _session1StartedToday
-                ? AppColors.success.withValues(alpha: 0.4)
-                : AppColors.border,
-            width: _session1StartedToday ? 1.5 : 1,
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _session1StartedToday
+              ? AppColors.success.withValues(alpha: 0.4)
+              : AppColors.border,
+          width: _session1StartedToday ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blueAccent.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.medical_information_rounded, color: Colors.blueAccent),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            DateFormat('MMM d, yyyy h:mm a').format(widget.date),
-                            style: AppTextStyles.caption.copyWith(color: AppColors.primary),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: widget.isOngoing 
-                                  ? AppColors.warning.withValues(alpha: 0.1)
-                                  : AppColors.success.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: widget.isOngoing 
-                                    ? AppColors.warning.withValues(alpha: 0.3)
-                                    : AppColors.success.withValues(alpha: 0.3),
-                              ),
-                            ),
-                            child: Text(
-                              widget.isOngoing ? 'Ongoing' : 'Completed',
-                              style: AppTextStyles.caption.copyWith(
-                                color: widget.isOngoing ? AppColors.warning : AppColors.success,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.complaint.isNotEmpty ? widget.complaint : 'General Consultation',
-                        style: AppTextStyles.h4,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right_rounded, color: AppColors.textHint),
-              ],
-            ),
-            // Session summary
-            if (_loaded && _totalSessions > 0) ...[
-              const SizedBox(height: 12),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header: date, status, complaint ──
+          Row(
+            children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.04),
-                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.blueAccent.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
                 ),
-                child: Row(
+                child: const Icon(Icons.medical_information_rounded, color: Colors.blueAccent),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.healing_rounded, size: 16, color: AppColors.primary),
-                    const SizedBox(width: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          DateFormat('MMM d, yyyy h:mm a').format(widget.date),
+                          style: AppTextStyles.caption.copyWith(color: AppColors.primary),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: widget.isOngoing
+                                ? AppColors.warning.withValues(alpha: 0.1)
+                                : AppColors.success.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: widget.isOngoing
+                                  ? AppColors.warning.withValues(alpha: 0.3)
+                                  : AppColors.success.withValues(alpha: 0.3),
+                            ),
+                          ),
+                          child: Text(
+                            widget.isOngoing ? 'Ongoing' : 'Completed',
+                            style: AppTextStyles.caption.copyWith(
+                              color: widget.isOngoing ? AppColors.warning : AppColors.success,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
                     Text(
-                      '$_completedSessions / $_totalSessions sessions completed',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12,
-                      ),
+                      widget.complaint.isNotEmpty ? widget.complaint : 'General Consultation',
+                      style: AppTextStyles.h4,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
             ],
-            // Session #1 started today banner
-            if (_session1StartedToday) ...[
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      AppColors.success.withValues(alpha: 0.1),
-                      AppColors.success.withValues(alpha: 0.04),
-                    ],
+          ),
+
+          // ── Session progress bar ──
+          if (_loaded && _totalSessions > 0) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.04),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.healing_rounded, size: 16, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    '$_completedSessions / $_totalSessions sessions completed',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
+                ],
+              ),
+            ),
+          ],
+
+          // ── Session #1 started today banner ──
+          if (_session1StartedToday) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.success.withValues(alpha: 0.1),
+                    AppColors.success.withValues(alpha: 0.04),
+                  ],
                 ),
-                child: Row(
-                  children: [
-                    Icon(Icons.play_circle_fill_rounded, color: AppColors.success, size: 22),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Session #1 Started Today',
-                            style: AppTextStyles.label.copyWith(
-                              color: AppColors.success,
-                              fontSize: 13,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.play_circle_fill_rounded, color: AppColors.success, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Session #1 Started Today',
+                          style: AppTextStyles.label.copyWith(color: AppColors.success, fontSize: 13),
+                        ),
+                        Text(
+                          'First treatment session has been initiated',
+                          style: AppTextStyles.caption.copyWith(fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: AppColors.border),
+          const SizedBox(height: 12),
+
+          // ── Action buttons row ──
+          Row(
+            children: [
+              // View Treatment Record (consultation form)
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.pushNamed(
+                      context,
+                      '/consultation',
+                      arguments: {
+                        'patientId': widget.patientId,
+                        'patientName': widget.patientName,
+                        'doctorId': widget.doctorId,
+                        'consultationId': widget.consultationId,
+                        'isViewMode': true,
+                      },
+                    ).then((_) => widget.onReturn());
+                  },
+                  icon: const Icon(Icons.description_rounded, size: 16),
+                  label: const Text('Treatment Record'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.info,
+                    side: BorderSide(color: AppColors.info.withValues(alpha: 0.5)),
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Treatment Plan / Sessions button
+              Expanded(
+                child: _planLoaded
+                    ? ElevatedButton.icon(
+                        onPressed: () => _navigateToTreatmentPlan(context),
+                        icon: Icon(
+                          _treatmentPlan != null
+                              ? Icons.format_list_numbered_rounded
+                              : Icons.add_chart_rounded,
+                          size: 16,
+                        ),
+                        label: Text(
+                          _treatmentPlan != null ? 'View Sessions' : 'Create Plan',
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _treatmentPlan != null
+                              ? const Color(0xFF7C3AED)
+                              : AppColors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          elevation: 0,
+                        ),
+                      )
+                    : SizedBox(
+                        height: 38,
+                        child: Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                              strokeWidth: 2,
                             ),
                           ),
-                          Text(
-                            'First treatment session has been initiated',
-                            style: AppTextStyles.caption.copyWith(fontSize: 11),
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
               ),
             ],
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

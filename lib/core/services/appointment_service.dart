@@ -457,12 +457,14 @@ class AppointmentService {
     );
   }
 
-  /// Mark consultation_form_saved = true on an appointment, so the card
-  /// shows "Create Plan" + "End Consultation" and blocks re-opening the form.
+  /// Mark consultation form as saved by recording the consultation_end_time.
+  /// (consultation_form_saved is a computed getter backed by consultationEndTime)
   Future<void> markConsultationFormSaved(String appointmentId) async {
     await pb.collection(PBCollections.appointments).update(
       appointmentId,
-      body: {'consultation_form_saved': true},
+      body: {
+        'consultation_end_time': DateTime.now().toUtc().toIso8601String(),
+      },
     );
   }
 
@@ -573,6 +575,53 @@ class AppointmentService {
         perPage: 1,
       );
       if (plans.items.isNotEmpty) return plans.items.first.id;
+    } catch (_) {}
+    return null;
+  }
+
+  /// Look up the session_number for a session-type appointment.
+  /// Returns 0 if the session record cannot be found.
+  Future<int> getSessionNumberForAppointment(AppointmentModel apt) async {
+    if (apt.patientId == null || apt.patientId!.isEmpty) return 0;
+    try {
+      final sessions = await pb.collection(PBCollections.sessions).getList(
+        filter:
+            'patient = "${apt.patientId}" && scheduled_date = "${apt.date}" && scheduled_time = "${apt.time}"',
+        perPage: 1,
+        sort: 'session_number',
+      );
+      if (sessions.items.isNotEmpty) {
+        return sessions.items.first.getIntValue('session_number');
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  /// Fetch a treatment plan linked to a patient's ongoing consultation, if any.
+  /// Returns the plan or null.
+  Future<Map<String, dynamic>?> getLinkedTreatmentPlan(String patientId, String doctorId) async {
+    try {
+      // Find ongoing consultation
+      final consRes = await pb.collection(PBCollections.consultations).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" && status = "ongoing"',
+        perPage: 1,
+        sort: '-created',
+      );
+      if (consRes.items.isEmpty) return null;
+      final consultationId = consRes.items.first.id;
+      // Find plan for this consultation
+      final planRes = await pb.collection(PBCollections.treatmentPlans).getList(
+        filter: 'consultation = "$consultationId"',
+        perPage: 1,
+      );
+      if (planRes.items.isEmpty) return null;
+      final plan = planRes.items.first;
+      return {
+        'planId': plan.id,
+        'consultationId': consultationId,
+        'treatmentType': plan.getStringValue('treatment_type'),
+        'totalSessions': plan.getIntValue('total_sessions'),
+      };
     } catch (_) {}
     return null;
   }

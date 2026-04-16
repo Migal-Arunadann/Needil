@@ -1357,17 +1357,17 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
 // Treatment Session Card — distinct flow from consultation cards
 // ════════════════════════════════════════════════════════════════════
 
-class _SessionCard extends StatefulWidget {
+class _SessionCard extends ConsumerStatefulWidget {
   final AppointmentModel apt;
   final int index;
   final bool isLate;
   final bool isFutureDate;
   final bool isMissed;
-  final VoidCallback onArrived;       // scheduled → patient arrived (waiting)
-  final VoidCallback onStartSession;  // waiting → start session (in progress)
-  final VoidCallback onSessionEnded;  // in progress → end session (completed)
-  final VoidCallback onReschedule;    // future — reschedule session
-  final VoidCallback onLongPress;     // any — cancel session
+  final VoidCallback onArrived;
+  final VoidCallback onStartSession;
+  final VoidCallback onSessionEnded;
+  final VoidCallback onReschedule;
+  final VoidCallback onLongPress;
 
   const _SessionCard({
     super.key,
@@ -1384,13 +1384,16 @@ class _SessionCard extends StatefulWidget {
   });
 
   @override
-  State<_SessionCard> createState() => _SessionCardState();
+  ConsumerState<_SessionCard> createState() => _SessionCardState();
 }
 
-class _SessionCardState extends State<_SessionCard> with SingleTickerProviderStateMixin {
+class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
   late final Animation<Offset> _slide;
+
+  int _sessionNumber = 0;
+  bool _sessionNumLoaded = false;
 
   @override
   void initState() {
@@ -1402,6 +1405,15 @@ class _SessionCardState extends State<_SessionCard> with SingleTickerProviderSta
     Future.delayed(Duration(milliseconds: widget.index * 60), () {
       if (mounted) _ctrl.forward();
     });
+    _loadSessionNumber();
+  }
+
+  Future<void> _loadSessionNumber() async {
+    try {
+      final service = ref.read(appointmentServiceProvider);
+      final num = await service.getSessionNumberForAppointment(widget.apt);
+      if (mounted && num > 0) setState(() => _sessionNumber = num);
+    } catch (_) {}
   }
 
   @override
@@ -1541,7 +1553,9 @@ class _SessionCardState extends State<_SessionCard> with SingleTickerProviderSta
                                               color: statusColor,
                                             ),
                                             _Pill(
-                                              label: 'Treatment',
+                                              label: _sessionNumber > 0
+                                                  ? 'Session #$_sessionNumber'
+                                                  : 'Treatment',
                                               icon: Icons.healing_rounded,
                                               color: sessionAccent,
                                             ),
