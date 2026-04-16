@@ -114,9 +114,23 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
         for (final c in _controllers) c.clear();
         _focusNodes[0].requestFocus();
       } else {
-        // OTP verified — app.dart reactively switches home to MainLayout.
-        // Do NOT call Navigator.pushNamedAndRemoveUntil here — it causes a black screen.
         setState(() => _isVerifying = false);
+        
+        // If the clinic is already fully registered, we can show a brief message
+        // before popping to the dashboard.
+        if (authState.clinic?.name.isNotEmpty == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Welcome back! You are already registered.'),
+              backgroundColor: AppColors.success,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+
+        // Pop all overlayed screens (Step 0, OTP screen) so app.dart's root home takes over
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
       return;
     } else {

@@ -42,49 +42,8 @@ class _ClinicStep0OtpScreenState extends ConsumerState<ClinicStep0OtpScreen> {
     final auth = ref.read(authProvider.notifier);
 
     try {
-      // 1. Check if the email already exists in the clinics collection
-      final existing = await pb.collection(PBCollections.clinics).getList(
-        filter: 'email = "$email"',
-        perPage: 1,
-      );
-
-      if (existing.items.isNotEmpty) {
-        if (!mounted) return;
-        setState(() => _isChecking = false);
-        // Clinic exists -> give options
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('Clinic Already Exists'),
-            content: const Text(
-              'An account with this email is already registered. Would you like to log in or reset your password?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pushReplacementNamed('/auth/login');
-                },
-                child: const Text('Login'),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pushNamed(
-                    '/auth/forgot-password',
-                  );
-                },
-                child: const Text('Forgot Password'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
+      // We can't check email existence anonymously due to PB security.
+      // Request OTP to sign in or sign up automatically.
 
       // 2. Email doesn't exist -> Request OTP to create the shell clinic
       await auth.requestRegistrationOtp(email: email, clinicData: {});
