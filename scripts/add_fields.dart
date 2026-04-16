@@ -27,20 +27,33 @@ Future<void> main(List<String> args) async {
     final clinicsId = clinicsCol['id'] as String;
 
     final clinicsFields = List<Map<String, dynamic>>.from(
-        clinicsCol['fields'] as List? ?? []);
+      clinicsCol['fields'] as List? ?? [],
+    );
 
     _addIfMissing(clinicsFields, {
-      'name': 'name', 'type': 'text', 'required': true,
-      'presentable': false, 'hidden': false, 'system': false,
+      'name': 'name',
+      'type': 'text',
+      'required': true,
+      'presentable': false,
+      'hidden': false,
+      'system': false,
     });
     _addIfMissing(clinicsFields, {
-      'name': 'bed_count', 'type': 'number', 'required': true,
-      'presentable': false, 'hidden': false, 'system': false,
+      'name': 'bed_count',
+      'type': 'number',
+      'required': true,
+      'presentable': false,
+      'hidden': false,
+      'system': false,
       'min': 1,
     });
     _addIfMissing(clinicsFields, {
-      'name': 'clinic_id', 'type': 'text', 'required': true,
-      'presentable': false, 'hidden': false, 'system': false,
+      'name': 'clinic_id',
+      'type': 'text',
+      'required': true,
+      'presentable': false,
+      'hidden': false,
+      'system': false,
     });
 
     await _patchCollection(client, token, clinicsId, clinicsFields);
@@ -52,41 +65,69 @@ Future<void> main(List<String> args) async {
     final doctorsId = doctorsCol['id'] as String;
 
     final doctorsFields = List<Map<String, dynamic>>.from(
-        doctorsCol['fields'] as List? ?? []);
+      doctorsCol['fields'] as List? ?? [],
+    );
 
     _addIfMissing(doctorsFields, {
-      'name': 'name', 'type': 'text', 'required': true,
-      'presentable': false, 'hidden': false, 'system': false,
+      'name': 'name',
+      'type': 'text',
+      'required': true,
+      'presentable': false,
+      'hidden': false,
+      'system': false,
     });
     _addIfMissing(doctorsFields, {
-      'name': 'age', 'type': 'number', 'required': true,
-      'presentable': false, 'hidden': false, 'system': false,
+      'name': 'age',
+      'type': 'number',
+      'required': true,
+      'presentable': false,
+      'hidden': false,
+      'system': false,
     });
     _addIfMissing(doctorsFields, {
-      'name': 'clinic', 'type': 'relation',
-      'required': false, 'presentable': false, 'hidden': false, 'system': false,
+      'name': 'clinic',
+      'type': 'relation',
+      'required': false,
+      'presentable': false,
+      'hidden': false,
+      'system': false,
       'collectionId': clinicsId,
       'maxSelect': 1,
     });
     _addIfMissing(doctorsFields, {
-      'name': 'is_primary', 'type': 'bool',
-      'presentable': false, 'hidden': false, 'system': false,
+      'name': 'is_primary',
+      'type': 'bool',
+      'presentable': false,
+      'hidden': false,
+      'system': false,
     });
     _addIfMissing(doctorsFields, {
-      'name': 'working_schedule', 'type': 'json',
-      'presentable': false, 'hidden': false, 'system': false,
+      'name': 'working_schedule',
+      'type': 'json',
+      'presentable': false,
+      'hidden': false,
+      'system': false,
     });
     _addIfMissing(doctorsFields, {
-      'name': 'treatments', 'type': 'json',
-      'presentable': false, 'hidden': false, 'system': false,
+      'name': 'treatments',
+      'type': 'json',
+      'presentable': false,
+      'hidden': false,
+      'system': false,
     });
     _addIfMissing(doctorsFields, {
-      'name': 'share_past_patients', 'type': 'bool',
-      'presentable': false, 'hidden': false, 'system': false,
+      'name': 'share_past_patients',
+      'type': 'bool',
+      'presentable': false,
+      'hidden': false,
+      'system': false,
     });
     _addIfMissing(doctorsFields, {
-      'name': 'share_future_patients', 'type': 'bool',
-      'presentable': false, 'hidden': false, 'system': false,
+      'name': 'share_future_patients',
+      'type': 'bool',
+      'presentable': false,
+      'hidden': false,
+      'system': false,
     });
 
     await _patchCollection(client, token, doctorsId, doctorsFields);
@@ -105,41 +146,190 @@ Future<void> main(List<String> args) async {
 }
 
 Future<void> _patchBaseCollections(
-    HttpClient client, String token, String clinicsId, String doctorsId) async {
+  HttpClient client,
+  String token,
+  String clinicsId,
+  String doctorsId,
+) async {
   // patients
   print('📦 Updating patients...');
   final pCol = await _getCollection(client, token, 'patients');
-  final pFields = List<Map<String, dynamic>>.from(pCol['fields'] as List? ?? []);
-  _addIfMissing(pFields, {'name': 'full_name', 'type': 'text', 'required': true, 'presentable': false, 'hidden': false, 'system': false});
-  _addIfMissing(pFields, {'name': 'phone', 'type': 'text', 'required': true, 'presentable': false, 'hidden': false, 'system': false});
-  _addIfMissing(pFields, {'name': 'date_of_birth', 'type': 'text', 'required': false, 'presentable': false, 'hidden': false, 'system': false});
-  _addIfMissing(pFields, {'name': 'address', 'type': 'text', 'required': false, 'presentable': false, 'hidden': false, 'system': false});
-  _addIfMissing(pFields, {'name': 'emergency_contact', 'type': 'text', 'required': false, 'presentable': false, 'hidden': false, 'system': false});
-  _addIfMissing(pFields, {'name': 'allergies_conditions', 'type': 'text', 'required': false, 'presentable': false, 'hidden': false, 'system': false});
-  _addIfMissing(pFields, {'name': 'doctor', 'type': 'relation', 'required': true, 'presentable': false, 'hidden': false, 'system': false, 'collectionId': doctorsId, 'maxSelect': 1});
-  _addIfMissing(pFields, {'name': 'clinic', 'type': 'relation', 'required': false, 'presentable': false, 'hidden': false, 'system': false, 'collectionId': clinicsId, 'maxSelect': 1});
-  _addIfMissing(pFields, {'name': 'consent_given', 'type': 'bool', 'required': false, 'presentable': false, 'hidden': false, 'system': false});
+  final pFields = List<Map<String, dynamic>>.from(
+    pCol['fields'] as List? ?? [],
+  );
+  _addIfMissing(pFields, {
+    'name': 'full_name',
+    'type': 'text',
+    'required': true,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+  });
+  _addIfMissing(pFields, {
+    'name': 'phone',
+    'type': 'text',
+    'required': true,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+  });
+  _addIfMissing(pFields, {
+    'name': 'date_of_birth',
+    'type': 'text',
+    'required': false,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+  });
+  _addIfMissing(pFields, {
+    'name': 'address',
+    'type': 'text',
+    'required': false,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+  });
+  _addIfMissing(pFields, {
+    'name': 'emergency_contact',
+    'type': 'text',
+    'required': false,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+  });
+  _addIfMissing(pFields, {
+    'name': 'allergies_conditions',
+    'type': 'text',
+    'required': false,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+  });
+  _addIfMissing(pFields, {
+    'name': 'doctor',
+    'type': 'relation',
+    'required': true,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+    'collectionId': doctorsId,
+    'maxSelect': 1,
+  });
+  _addIfMissing(pFields, {
+    'name': 'clinic',
+    'type': 'relation',
+    'required': false,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+    'collectionId': clinicsId,
+    'maxSelect': 1,
+  });
+  _addIfMissing(pFields, {
+    'name': 'consent_given',
+    'type': 'bool',
+    'required': false,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+  });
   await _patchCollection(client, token, pCol['id'] as String, pFields);
   print('   ✅ patients updated');
 
   // appointments
   print('📦 Updating appointments...');
   final aCol = await _getCollection(client, token, 'appointments');
-  final aFields = List<Map<String, dynamic>>.from(aCol['fields'] as List? ?? []);
-  _addIfMissing(aFields, {'name': 'patient', 'type': 'relation', 'required': false, 'presentable': false, 'hidden': false, 'system': false, 'collectionId': pCol['id'], 'maxSelect': 1});
-  _addIfMissing(aFields, {'name': 'doctor', 'type': 'relation', 'required': true, 'presentable': false, 'hidden': false, 'system': false, 'collectionId': doctorsId, 'maxSelect': 1});
-  _addIfMissing(aFields, {'name': 'clinic', 'type': 'relation', 'required': false, 'presentable': false, 'hidden': false, 'system': false, 'collectionId': clinicsId, 'maxSelect': 1});
-  _addIfMissing(aFields, {'name': 'type', 'type': 'select', 'required': true, 'presentable': false, 'hidden': false, 'system': false, 'values': ['call_by', 'walk_in']});
-  _addIfMissing(aFields, {'name': 'date', 'type': 'text', 'required': true, 'presentable': false, 'hidden': false, 'system': false});
-  _addIfMissing(aFields, {'name': 'time', 'type': 'text', 'required': true, 'presentable': false, 'hidden': false, 'system': false});
-  _addIfMissing(aFields, {'name': 'status', 'type': 'select', 'required': true, 'presentable': false, 'hidden': false, 'system': false, 'values': ['scheduled', 'in_progress', 'completed', 'cancelled']});
-  _addIfMissing(aFields, {'name': 'patient_name', 'type': 'text', 'required': false, 'presentable': false, 'hidden': false, 'system': false});
-  _addIfMissing(aFields, {'name': 'patient_phone', 'type': 'text', 'required': false, 'presentable': false, 'hidden': false, 'system': false});
+  final aFields = List<Map<String, dynamic>>.from(
+    aCol['fields'] as List? ?? [],
+  );
+  _addIfMissing(aFields, {
+    'name': 'patient',
+    'type': 'relation',
+    'required': false,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+    'collectionId': pCol['id'],
+    'maxSelect': 1,
+  });
+  _addIfMissing(aFields, {
+    'name': 'doctor',
+    'type': 'relation',
+    'required': true,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+    'collectionId': doctorsId,
+    'maxSelect': 1,
+  });
+  _addIfMissing(aFields, {
+    'name': 'clinic',
+    'type': 'relation',
+    'required': false,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+    'collectionId': clinicsId,
+    'maxSelect': 1,
+  });
+  _addIfMissing(aFields, {
+    'name': 'type',
+    'type': 'select',
+    'required': true,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+    'values': ['call_by', 'walk_in'],
+  });
+  _addIfMissing(aFields, {
+    'name': 'date',
+    'type': 'text',
+    'required': true,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+  });
+  _addIfMissing(aFields, {
+    'name': 'time',
+    'type': 'text',
+    'required': true,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+  });
+  _addIfMissing(aFields, {
+    'name': 'status',
+    'type': 'select',
+    'required': true,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+    'values': ['scheduled', 'in_progress', 'completed', 'cancelled'],
+  });
+  _addIfMissing(aFields, {
+    'name': 'patient_name',
+    'type': 'text',
+    'required': false,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+  });
+  _addIfMissing(aFields, {
+    'name': 'patient_phone',
+    'type': 'text',
+    'required': false,
+    'presentable': false,
+    'hidden': false,
+    'system': false,
+  });
   await _patchCollection(client, token, aCol['id'] as String, aFields);
   print('   ✅ appointments updated');
 }
 
-void _addIfMissing(List<Map<String, dynamic>> fields, Map<String, dynamic> field) {
+void _addIfMissing(
+  List<Map<String, dynamic>> fields,
+  Map<String, dynamic> field,
+) {
   final name = field['name'] as String;
   if (!fields.any((f) => f['name'] == name)) {
     fields.add(field);
@@ -150,9 +340,11 @@ void _addIfMissing(List<Map<String, dynamic>> fields, Map<String, dynamic> field
 }
 
 Future<Map<String, dynamic>> _getCollection(
-    HttpClient client, String token, String name) async {
-  final req = await client.getUrl(
-      Uri.parse('$pbUrl/api/collections/$name'));
+  HttpClient client,
+  String token,
+  String name,
+) async {
+  final req = await client.getUrl(Uri.parse('$pbUrl/api/collections/$name'));
   req.headers.set('Authorization', token);
   final res = await req.close();
   final body = await res.transform(utf8.decoder).join();
@@ -160,10 +352,16 @@ Future<Map<String, dynamic>> _getCollection(
   return jsonDecode(body) as Map<String, dynamic>;
 }
 
-Future<void> _patchCollection(HttpClient client, String token,
-    String id, List<Map<String, dynamic>> fields) async {
+Future<void> _patchCollection(
+  HttpClient client,
+  String token,
+  String id,
+  List<Map<String, dynamic>> fields,
+) async {
   final req = await client.openUrl(
-      'PATCH', Uri.parse('$pbUrl/api/collections/$id'));
+    'PATCH',
+    Uri.parse('$pbUrl/api/collections/$id'),
+  );
   req.headers.contentType = ContentType.json;
   req.headers.set('Authorization', token);
   req.write(jsonEncode({'fields': fields}));
@@ -174,7 +372,8 @@ Future<void> _patchCollection(HttpClient client, String token,
 
 Future<String> _adminAuth(HttpClient c, String email, String pw) async {
   final req = await c.postUrl(
-      Uri.parse('$pbUrl/api/collections/_superusers/auth-with-password'));
+    Uri.parse('$pbUrl/api/collections/_superusers/auth-with-password'),
+  );
   req.headers.contentType = ContentType.json;
   req.write(jsonEncode({'identity': email, 'password': pw}));
   final res = await req.close();

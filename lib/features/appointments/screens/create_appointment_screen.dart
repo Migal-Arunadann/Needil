@@ -144,7 +144,11 @@ class _CreateAppointmentScreenState
     }
 
     final service = ref.read(appointmentServiceProvider);
-    final existing = await service.findPatientByPhone(phone, doctorId);
+    final existing = await service.findPatientByPhone(
+      phone, 
+      doctorId, 
+      clinicId: auth.clinicId,
+    );
 
     if (mounted) {
       setState(() {

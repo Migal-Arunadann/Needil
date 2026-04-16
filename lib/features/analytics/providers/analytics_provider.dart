@@ -99,8 +99,9 @@ class AnalyticsData {
 
   int get lowHour {
     if (hourlyDistribution.isEmpty) return 14;
-    final nonZero =
-        hourlyDistribution.entries.where((e) => e.value > 0).toList();
+    final nonZero = hourlyDistribution.entries
+        .where((e) => e.value > 0)
+        .toList();
     if (nonZero.isEmpty) return 14;
     return nonZero.reduce((a, b) => a.value <= b.value ? a : b).key;
   }
@@ -128,8 +129,9 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
 
     final isClinic = auth.role == UserRole.clinic;
     final ownerField = isClinic ? 'clinic' : 'doctor';
-    final planOwnerFilter =
-        isClinic ? 'doctor.clinic = "$userId"' : 'doctor = "$userId"';
+    final planOwnerFilter = isClinic
+        ? 'doctor.clinic = "$userId"'
+        : 'doctor = "$userId"';
 
     final now = DateTime.now();
     final todayStr =
@@ -156,51 +158,82 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
     // ── Parallel KPI counts ──────────────────────────────────────────────────
     final kpis = await Future.wait([
       safeCount(PBCollections.patients, '$ownerField = "$userId"'), // 0
-      safeCount(PBCollections.appointments,
-          '$ownerField = "$userId" && date >= "$fromStr"'), // 1 total 30d
-      safeCount(PBCollections.appointments,
-          '$ownerField = "$userId" && date >= "$fromStr" && status = "completed"'), // 2
-      safeCount(PBCollections.appointments,
-          '$ownerField = "$userId" && date >= "$fromStr" && status = "cancelled"'), // 3
-      safeCount(PBCollections.treatmentPlans,
-          '$planOwnerFilter && status = "active"'), // 4
+      safeCount(
+        PBCollections.appointments,
+        '$ownerField = "$userId" && date >= "$fromStr"',
+      ), // 1 total 30d
+      safeCount(
+        PBCollections.appointments,
+        '$ownerField = "$userId" && date >= "$fromStr" && status = "completed"',
+      ), // 2
+      safeCount(
+        PBCollections.appointments,
+        '$ownerField = "$userId" && date >= "$fromStr" && status = "cancelled"',
+      ), // 3
+      safeCount(
+        PBCollections.treatmentPlans,
+        '$planOwnerFilter && status = "active"',
+      ), // 4
       // consultation type
-      safeCount(PBCollections.appointments,
-          '$ownerField = "$userId" && date >= "$fromStr" && (type = "call_by" || type = "walk_in")'), // 5
-      safeCount(PBCollections.appointments,
-          '$ownerField = "$userId" && date >= "$fromStr" && type = "session"'), // 6
+      safeCount(
+        PBCollections.appointments,
+        '$ownerField = "$userId" && date >= "$fromStr" && (type = "call_by" || type = "walk_in")',
+      ), // 5
+      safeCount(
+        PBCollections.appointments,
+        '$ownerField = "$userId" && date >= "$fromStr" && type = "session"',
+      ), // 6
       // today
-      safeCount(PBCollections.appointments,
-          '$ownerField = "$userId" && date = "$todayStr" && status = "scheduled"'), // 7
-      safeCount(PBCollections.appointments,
-          '$ownerField = "$userId" && date = "$todayStr" && status = "completed"'), // 8
-      safeCount(PBCollections.appointments,
-          '$ownerField = "$userId" && date = "$todayStr" && status = "cancelled"'), // 9
+      safeCount(
+        PBCollections.appointments,
+        '$ownerField = "$userId" && date = "$todayStr" && status = "scheduled"',
+      ), // 7
+      safeCount(
+        PBCollections.appointments,
+        '$ownerField = "$userId" && date = "$todayStr" && status = "completed"',
+      ), // 8
+      safeCount(
+        PBCollections.appointments,
+        '$ownerField = "$userId" && date = "$todayStr" && status = "cancelled"',
+      ), // 9
       // sessions
-      safeCount(PBCollections.sessions,
-          '$ownerField = "$userId" && status = "completed"'), // 10
-      safeCount(PBCollections.sessions,
-          '$ownerField = "$userId" && status = "missed"'), // 11
-      safeCount(PBCollections.sessions,
-          '$ownerField = "$userId" && status = "cancelled"'), // 12
+      safeCount(
+        PBCollections.sessions,
+        '$ownerField = "$userId" && status = "completed"',
+      ), // 10
+      safeCount(
+        PBCollections.sessions,
+        '$ownerField = "$userId" && status = "missed"',
+      ), // 11
+      safeCount(
+        PBCollections.sessions,
+        '$ownerField = "$userId" && status = "cancelled"',
+      ), // 12
       // consultations
-      safeCount(PBCollections.consultations,
-          '$ownerField = "$userId"'), // 13 total consultations
-      safeCount(PBCollections.treatmentPlans,
-          '$planOwnerFilter'), // 14 consultations with plan (approx)
+      safeCount(
+        PBCollections.consultations,
+        '$ownerField = "$userId"',
+      ), // 13 total consultations
+      safeCount(
+        PBCollections.treatmentPlans,
+        planOwnerFilter,
+      ), // 14 consultations with plan (approx)
     ]);
 
     // ── Fetch raw appointments for hourly + 7-day analysis ──────────────────
     List<AppointmentModel> recentAppointments = [];
     try {
       // Fetch up to 500 appointments in the last 30 days for local analysis
-      final r = await pb.collection(PBCollections.appointments).getList(
+      final r = await pb
+          .collection(PBCollections.appointments)
+          .getList(
             filter: '$ownerField = "$userId" && date >= "$fromStr"',
             perPage: 500,
             skipTotal: true,
           );
-      recentAppointments =
-          r.items.map((e) => AppointmentModel.fromRecord(e)).toList();
+      recentAppointments = r.items
+          .map((e) => AppointmentModel.fromRecord(e))
+          .toList();
     } catch (e) {
       debugPrint('[Analytics] fetch appointments error: $e');
     }
@@ -208,7 +241,9 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
     // ── Fetch patients for demographics ─────────────────────────────────────
     List<PatientModel> patients = [];
     try {
-      final r = await pb.collection(PBCollections.patients).getList(
+      final r = await pb
+          .collection(PBCollections.patients)
+          .getList(
             filter: '$ownerField = "$userId"',
             perPage: 500,
             skipTotal: true,
@@ -230,14 +265,16 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
       final dStr =
           '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
       dayLabels.add(days[d.weekday - 1]);
-      final dayAppts =
-          recentAppointments.where((a) => a.date == dStr).toList();
+      final dayAppts = recentAppointments.where((a) => a.date == dStr).toList();
       weeklyScheduled.add(
-          dayAppts.where((a) => a.status == AppointmentStatus.scheduled).length);
+        dayAppts.where((a) => a.status == AppointmentStatus.scheduled).length,
+      );
       weeklyCompleted.add(
-          dayAppts.where((a) => a.status == AppointmentStatus.completed).length);
+        dayAppts.where((a) => a.status == AppointmentStatus.completed).length,
+      );
       weeklyCancelled.add(
-          dayAppts.where((a) => a.status == AppointmentStatus.cancelled).length);
+        dayAppts.where((a) => a.status == AppointmentStatus.cancelled).length,
+      );
     }
 
     // ── Build hourly distribution ────────────────────────────────────────────
@@ -254,12 +291,7 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
 
     // ── Patient demographics ─────────────────────────────────────────────────
     final gender = <String, int>{'Male': 0, 'Female': 0, 'Other': 0};
-    final ageGroup = <String, int>{
-      '<20': 0,
-      '20-40': 0,
-      '40-60': 0,
-      '>60': 0
-    };
+    final ageGroup = <String, int>{'<20': 0, '20-40': 0, '40-60': 0, '>60': 0};
     final location = <String, int>{};
 
     for (final p in patients) {
@@ -287,7 +319,11 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
 
       // Location (prefer city, fallback area, fallback address)
       final loc =
-          (p.city?.trim().isNotEmpty == true ? p.city! : p.area?.trim().isNotEmpty == true ? p.area! : 'Unknown')
+          (p.city?.trim().isNotEmpty == true
+                  ? p.city!
+                  : p.area?.trim().isNotEmpty == true
+                  ? p.area!
+                  : 'Unknown')
               .trim();
       if (loc.isNotEmpty) {
         location[loc] = (location[loc] ?? 0) + 1;
@@ -331,7 +367,7 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
 
 final analyticsProvider =
     StateNotifierProvider<AnalyticsNotifier, AnalyticsData>((ref) {
-  final n = AnalyticsNotifier(ref);
-  n.load();
-  return n;
-});
+      final n = AnalyticsNotifier(ref);
+      n.load();
+      return n;
+    });

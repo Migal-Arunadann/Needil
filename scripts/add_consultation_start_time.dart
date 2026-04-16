@@ -2,6 +2,8 @@
 /// Run this with: dart run scripts/add_consultation_start_time.dart
 ///
 /// Make sure to set the correct PocketBase URL and admin credentials below.
+library;
+
 import 'package:pocketbase/pocketbase.dart';
 
 void main() async {
@@ -27,7 +29,9 @@ void main() async {
 
     // Check if field already exists
     final existingFields = apptCollection.schema;
-    final hasField = existingFields.any((f) => f['name'] == 'consultation_start_time');
+    final hasField = existingFields.any(
+      (f) => f['name'] == 'consultation_start_time',
+    );
 
     if (hasField) {
       print('Field consultation_start_time already exists. Skipping.');
@@ -41,16 +45,14 @@ void main() async {
         'name': 'consultation_start_time',
         'type': 'date',
         'required': false,
-        'options': {
-          'min': '',
-          'max': '',
-        },
+        'options': {'min': '', 'max': ''},
       },
     ];
 
-    await pb.collections.update(apptCollection.id, body: {
-      'schema': updatedSchema,
-    });
+    await pb.collections.update(
+      apptCollection.id,
+      body: {'schema': updatedSchema},
+    );
 
     print('✓ consultation_start_time field added successfully!');
   } catch (e) {

@@ -1,77 +1,77 @@
-/// Migration script: adds new workflow tracking fields to the 'appointments' collection.
-///
-/// Run with: dart run scripts/add_appointment_workflow_fields.dart
-///
-/// New fields added:
-///   consultation_end_time  (date)   - when consultation form was submitted
-///   patient_details_saved  (bool)   - patient details form fully submitted
-///   patient_details_partial (bool)  - patient details form opened but not completed
-///   treatment_plan_partial  (bool)  - treatment plan form opened but not submitted
-///   linked_treatment_plan_id (text) - ID of the treatment plan linked to this appointment
+library;
 
-import 'package:pocketbase/pocketbase.dart';
+import 'dart:io';
+import 'dart:convert';
 
-const _pbUrl = 'http://127.0.0.1:8090';
-const _adminEmail = 'YOUR_ADMIN_EMAIL';
-const _adminPassword = 'YOUR_ADMIN_PASSWORD';
+const String pbUrl = 'http://127.0.0.1:8090';
 
-void main() async {
-  final pb = PocketBase(_pbUrl);
-
-  print('🔐 Authenticating...');
-  await pb.admins.authWithPassword(_adminEmail, _adminPassword);
-  print('✅ Authenticated');
-
-  // Fetch appointments collection schema
-  final collections = await pb.collections.getFullList();
-  final apptCollection = collections.firstWhere(
-    (c) => c.name == 'appointments',
-    orElse: () => throw Exception('appointments collection not found'),
-  );
-
-  print('\n📋 Current appointments schema fields:');
-  final existingFieldNames = <String>{};
-  for (final f in apptCollection.schema) {
-    existingFieldNames.add(f.name);
-    print('  - ${f.name} (${f.type})');
+Future<void> main(List<String> args) async {
+  if (args.length < 2) {
+    print('Usage: dart run scripts/add_appointment_workflow_fields.dart <admin_email> <admin_password>');
+    exit(1);
   }
+  
+  final client = HttpClient();
+  try {
+    print('🔐 Authenticating as Admin...');
+    final token = await _adminAuth(client, args[0], args[1]);
+    print('✅ Authenticated\n');
 
-  // Define new fields to add
-  final newFields = <Map<String, dynamic>>[];
+    print('📦 Fetching appointments collection...');
+    final aCol = await _getCollection(client, token, 'appointments');
+    final aFields = List<Map<String, dynamic>>.from(aCol['fields'] as List? ?? []);
 
-  void addFieldIfMissing(String name, String type, [Map<String, dynamic> extra = const {}]) {
-    if (!existingFieldNames.contains(name)) {
-      newFields.add({'name': name, 'type': type, 'required': false, ...extra});
-      print('  ➕ Queued: $name ($type)');
-    } else {
-      print('  ✓ Already exists: $name');
-    }
+    _addIfMissing(aFields, {'name': 'consultation_end_time', 'type': 'date', 'required': false});
+    _addIfMissing(aFields, {'name': 'patient_details_saved', 'type': 'bool', 'required': false});
+    _addIfMissing(aFields, {'name': 'patient_details_partial', 'type': 'bool', 'required': false});
+    _addIfMissing(aFields, {'name': 'treatment_plan_partial', 'type': 'bool', 'required': false});
+    _addIfMissing(aFields, {'name': 'linked_treatment_plan_id', 'type': 'text', 'required': false});
+
+    await _patchCollection(client, token, aCol['id'] as String, aFields);
+    print('\n🎉 All workflow fields added to appointments collection!');
+  } catch (e) {
+    print('\n❌ Error: $e');
+    exit(1);
+  } finally {
+    client.close();
   }
+}
 
-  print('\n🔍 Checking fields to add...');
-  addFieldIfMissing('consultation_end_time', 'date');
-  addFieldIfMissing('patient_details_saved', 'bool');
-  addFieldIfMissing('patient_details_partial', 'bool');
-  addFieldIfMissing('treatment_plan_partial', 'bool');
-  addFieldIfMissing('linked_treatment_plan_id', 'text');
-
-  if (newFields.isEmpty) {
-    print('\n✅ All fields already exist. Nothing to do.');
-    return;
+void _addIfMissing(List<Map<String, dynamic>> fields, Map<String, dynamic> field) {
+  final name = field['name'] as String;
+  if (!fields.any((f) => f['name'] == name)) {
+    fields.add(field);
+    print('   + Queueing field: $name (${field['type']})');
+  } else {
+    print('   ✓ Already exists: $name');
   }
+}
 
-  // Build updated schema
-  final updatedSchema = [
-    ...apptCollection.schema.map((f) => f.toJson()),
-    ...newFields,
-  ];
+Future<Map<String, dynamic>> _getCollection(HttpClient client, String token, String name) async {
+  final req = await client.getUrl(Uri.parse('$pbUrl/api/collections/$name'));
+  req.headers.set('Authorization', token);
+  final res = await req.close();
+  final body = await res.transform(utf8.decoder).join();
+  if (res.statusCode != 200) throw 'GET $name failed: $body';
+  return jsonDecode(body) as Map<String, dynamic>;
+}
 
-  print('\n💾 Updating appointments collection...');
-  await pb.collections.update(
-    apptCollection.id,
-    body: {'schema': updatedSchema},
-  );
+Future<void> _patchCollection(HttpClient client, String token, String id, List<Map<String, dynamic>> fields) async {
+  final req = await client.openUrl('PATCH', Uri.parse('$pbUrl/api/collections/$id'));
+  req.headers.contentType = ContentType.json;
+  req.headers.set('Authorization', token);
+  req.write(jsonEncode({'fields': fields}));
+  final res = await req.close();
+  final body = await res.transform(utf8.decoder).join();
+  if (res.statusCode != 200) throw 'PATCH failed: $body';
+}
 
-  print('\n✅ Done! Added ${newFields.length} field(s) to appointments collection.');
-  print('   Fields added: ${newFields.map((f) => f['name']).join(', ')}');
+Future<String> _adminAuth(HttpClient c, String email, String pw) async {
+  final req = await c.postUrl(Uri.parse('$pbUrl/api/collections/_superusers/auth-with-password'));
+  req.headers.contentType = ContentType.json;
+  req.write(jsonEncode({'identity': email, 'password': pw}));
+  final res = await req.close();
+  final body = await res.transform(utf8.decoder).join();
+  if (res.statusCode != 200) throw 'Auth failed: $body';
+  return (jsonDecode(body))['token'] as String;
 }

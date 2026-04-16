@@ -1,4 +1,3 @@
-import 'package:pocketbase/pocketbase.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -6,17 +5,14 @@ void main() async {
   final pbUrl = 'http://YOUR_POCKETBASE_URL';
   final adminEmail = 'admin@example.com';
   final adminPassword = 'admin_password';
-  
+
   final client = http.Client();
   try {
     // 1. Authenticate as admin
     final authRes = await client.post(
       Uri.parse('$pbUrl/api/collections/_superusers/auth-with-password'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'identity': adminEmail,
-        'password': adminPassword,
-      }),
+      body: jsonEncode({'identity': adminEmail, 'password': adminPassword}),
     );
 
     if (authRes.statusCode != 200) {
@@ -46,20 +42,15 @@ void main() async {
     }
 
     final colId = consultationsCol['id'];
-    
+
     // 3. Update the deleteRule to empty string (public) or specific rule
     // We will set deleteRule to "" (allow all authenticated/unauthenticated depending on other rules, usually "" means anyone can delete) or "@request.auth.id != ''"
     // To match other collections usually it's ""
-    final updateBody = {
-      'deleteRule': '',
-    };
+    final updateBody = {'deleteRule': ''};
 
     final updateRes = await client.patch(
       Uri.parse('$pbUrl/api/collections/$colId'),
-      headers: {
-        'Authorization': token,
-        'Content-Type': 'application/json',
-      },
+      headers: {'Authorization': token, 'Content-Type': 'application/json'},
       body: jsonEncode(updateBody),
     );
 

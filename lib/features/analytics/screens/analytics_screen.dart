@@ -28,15 +28,13 @@ class AnalyticsScreen extends ConsumerWidget {
             ? const _LoadingView()
             : RefreshIndicator(
                 color: _kPrimary,
-                onRefresh: () =>
-                    ref.read(analyticsProvider.notifier).load(),
+                onRefresh: () => ref.read(analyticsProvider.notifier).load(),
                 child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   slivers: [
                     _AnalyticsAppBar(),
                     SliverPadding(
-                      padding:
-                          const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
                       sliver: SliverList(
                         delegate: SliverChildListDelegate([
                           const SizedBox(height: 8),
@@ -45,22 +43,25 @@ class AnalyticsScreen extends ConsumerWidget {
                           const SizedBox(height: 16),
                           // ── Today's Snapshot ───────────────────────
                           _SectionHeader(
-                              icon: Icons.today_rounded,
-                              title: "Today's Snapshot"),
+                            icon: Icons.today_rounded,
+                            title: "Today's Snapshot",
+                          ),
                           const SizedBox(height: 10),
                           _TodaySnapshotRow(data: data),
                           const SizedBox(height: 20),
                           // ── 7-Day Activity Chart ───────────────────
                           _SectionHeader(
-                              icon: Icons.bar_chart_rounded,
-                              title: '7-Day Activity'),
+                            icon: Icons.bar_chart_rounded,
+                            title: '7-Day Activity',
+                          ),
                           const SizedBox(height: 10),
                           _WeeklyBarChart(data: data),
                           const SizedBox(height: 20),
                           // ── Peak Hours ─────────────────────────────
                           _SectionHeader(
-                              icon: Icons.access_time_rounded,
-                              title: 'Appointment Volume by Hour'),
+                            icon: Icons.access_time_rounded,
+                            title: 'Appointment Volume by Hour',
+                          ),
                           const SizedBox(height: 10),
                           _HourlyHeatBar(data: data),
                           const SizedBox(height: 8),
@@ -68,44 +69,49 @@ class AnalyticsScreen extends ConsumerWidget {
                           const SizedBox(height: 20),
                           // ── Appointment Type Split ─────────────────
                           _SectionHeader(
-                              icon: Icons.pie_chart_rounded,
-                              title: 'Appointment Type Split'),
+                            icon: Icons.pie_chart_rounded,
+                            title: 'Appointment Type Split',
+                          ),
                           const SizedBox(height: 10),
                           _TypeSplitRow(data: data),
                           const SizedBox(height: 20),
                           // ── Session Performance ────────────────────
                           _SectionHeader(
-                              icon: Icons.healing_rounded,
-                              title: 'Session Performance'),
+                            icon: Icons.healing_rounded,
+                            title: 'Session Performance',
+                          ),
                           const SizedBox(height: 10),
                           _SessionPerformanceRow(data: data),
                           const SizedBox(height: 20),
                           // ── Plan Conversion ────────────────────────
                           _SectionHeader(
-                              icon: Icons.assignment_turned_in_rounded,
-                              title:
-                                  'Consultation → Treatment Plan Conversion'),
+                            icon: Icons.assignment_turned_in_rounded,
+                            title: 'Consultation → Treatment Plan Conversion',
+                          ),
                           const SizedBox(height: 10),
                           _PlanConversionCard(data: data),
                           const SizedBox(height: 20),
                           // ── Patient Demographics ───────────────────
                           _SectionHeader(
-                              icon: Icons.people_rounded,
-                              title: 'Patient Demographics'),
+                            icon: Icons.people_rounded,
+                            title: 'Patient Demographics',
+                          ),
                           const SizedBox(height: 10),
                           _DemographicsRow(data: data),
                           const SizedBox(height: 20),
                           // ── Geographic Distribution ────────────────
                           _SectionHeader(
-                              icon: Icons.location_on_rounded,
-                              title: 'Patient Locations'),
+                            icon: Icons.location_on_rounded,
+                            title: 'Patient Locations',
+                          ),
                           const SizedBox(height: 10),
                           _LocationCard(data: data),
                           const SizedBox(height: 20),
                           // ── Completion Rate ────────────────────────
                           _SectionHeader(
-                              icon: Icons.speed_rounded,
-                              title: 'Overall Performance'),
+                            icon: Icons.speed_rounded,
+                            title: 'Overall Performance',
+                          ),
                           const SizedBox(height: 10),
                           _PerformanceMetricsCard(data: data),
                           const SizedBox(height: 8),
@@ -133,8 +139,7 @@ class _AnalyticsAppBar extends StatelessWidget {
           gradient: AppColors.heroGradient,
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
         ),
-        padding:
-            const EdgeInsets.fromLTRB(20, 20, 20, 28),
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -146,22 +151,29 @@ class _AnalyticsAppBar extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: const Icon(Icons.analytics_rounded,
-                      color: Colors.white, size: 26),
+                  child: const Icon(
+                    Icons.analytics_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
                 ),
                 const SizedBox(width: 14),
                 const Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Analytics',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700)),
-                      Text('Last 30 days · Live data',
-                          style: TextStyle(
-                              color: Colors.white70, fontSize: 12)),
+                      Text(
+                        'Analytics',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        'Last 30 days · Live data',
+                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                      ),
                     ],
                   ),
                 ),
@@ -189,11 +201,14 @@ class _SectionHeader extends StatelessWidget {
       children: [
         Icon(icon, color: _kPrimary, size: 18),
         const SizedBox(width: 8),
-        Text(title,
-            style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 15,
-                fontWeight: FontWeight.w700)),
+        Text(
+          title,
+          style: const TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ],
     );
   }
@@ -214,8 +229,10 @@ class _LoadingView extends StatelessWidget {
         children: [
           CircularProgressIndicator(color: _kPrimary),
           SizedBox(height: 16),
-          Text('Loading analytics…',
-              style: TextStyle(color: AppColors.textSecondary)),
+          Text(
+            'Loading analytics…',
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
         ],
       ),
     );
@@ -246,7 +263,8 @@ class _KpiRow extends StatelessWidget {
           icon: Icons.people_rounded,
           color: _kPrimary,
           gradient: const LinearGradient(
-              colors: [Color(0xFF1565C0), Color(0xFF42A5F5)]),
+            colors: [Color(0xFF1565C0), Color(0xFF42A5F5)],
+          ),
         ),
         _KpiCard(
           label: 'Appointments (30d)',
@@ -254,7 +272,8 @@ class _KpiRow extends StatelessWidget {
           icon: Icons.calendar_month_rounded,
           color: _kAccent,
           gradient: const LinearGradient(
-              colors: [Color(0xFF7C3AED), Color(0xFFA78BFA)]),
+            colors: [Color(0xFF7C3AED), Color(0xFFA78BFA)],
+          ),
         ),
         _KpiCard(
           label: 'Completed',
@@ -262,7 +281,8 @@ class _KpiRow extends StatelessWidget {
           icon: Icons.check_circle_rounded,
           color: _kCompleted,
           gradient: const LinearGradient(
-              colors: [Color(0xFF059669), Color(0xFF34D399)]),
+            colors: [Color(0xFF059669), Color(0xFF34D399)],
+          ),
         ),
         _KpiCard(
           label: 'Active Plans',
@@ -270,7 +290,8 @@ class _KpiRow extends StatelessWidget {
           icon: Icons.assignment_rounded,
           color: _kMissed,
           gradient: const LinearGradient(
-              colors: [Color(0xFFD97706), Color(0xFFFBBF24)]),
+            colors: [Color(0xFFD97706), Color(0xFFFBBF24)],
+          ),
         ),
       ],
     );
@@ -301,9 +322,10 @@ class _KpiCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-              color: color.withValues(alpha: 0.25),
-              blurRadius: 12,
-              offset: const Offset(0, 4)),
+            color: color.withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Column(
@@ -314,16 +336,22 @@ class _KpiCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(value,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800)),
-              Text(label,
-                  style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500)),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.8),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ],
           ),
         ],
@@ -350,37 +378,45 @@ class _TodaySnapshotRow extends StatelessWidget {
         border: Border.all(color: AppColors.border),
         boxShadow: [
           BoxShadow(
-              color: AppColors.textPrimary.withValues(alpha: 0.04),
-              blurRadius: 12,
-              offset: const Offset(0, 2)),
+            color: AppColors.textPrimary.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
         ],
       ),
       child: Row(
         children: [
           _TodayTile(
-              label: 'Scheduled',
-              value: data.todayScheduled,
-              color: _kScheduled,
-              icon: Icons.schedule_rounded),
+            label: 'Scheduled',
+            value: data.todayScheduled,
+            color: _kScheduled,
+            icon: Icons.schedule_rounded,
+          ),
           _divider(),
           _TodayTile(
-              label: 'Completed',
-              value: data.todayCompleted,
-              color: _kCompleted,
-              icon: Icons.check_circle_outline_rounded),
+            label: 'Completed',
+            value: data.todayCompleted,
+            color: _kCompleted,
+            icon: Icons.check_circle_outline_rounded,
+          ),
           _divider(),
           _TodayTile(
-              label: 'Cancelled',
-              value: data.todayCancelled,
-              color: _kCancelled,
-              icon: Icons.cancel_outlined),
+            label: 'Cancelled',
+            value: data.todayCancelled,
+            color: _kCancelled,
+            icon: Icons.cancel_outlined,
+          ),
         ],
       ),
     );
   }
 
   Widget _divider() => Container(
-      width: 1, height: 50, color: AppColors.border, margin: const EdgeInsets.symmetric(horizontal: 8));
+    width: 1,
+    height: 50,
+    color: AppColors.border,
+    margin: const EdgeInsets.symmetric(horizontal: 8),
+  );
 }
 
 class _TodayTile extends StatelessWidget {
@@ -388,11 +424,12 @@ class _TodayTile extends StatelessWidget {
   final int value;
   final Color color;
   final IconData icon;
-  const _TodayTile(
-      {required this.label,
-      required this.value,
-      required this.color,
-      required this.icon});
+  const _TodayTile({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -401,14 +438,22 @@ class _TodayTile extends StatelessWidget {
         children: [
           Icon(icon, color: color, size: 22),
           const SizedBox(height: 6),
-          Text('$value',
-              style: TextStyle(
-                  color: color, fontSize: 22, fontWeight: FontWeight.w800)),
-          Text(label,
-              style: const TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500)),
+          Text(
+            '$value',
+            style: TextStyle(
+              color: color,
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
         ],
       ),
     );
@@ -437,26 +482,29 @@ class _WeeklyBarChart extends StatelessWidget {
         barsSpace: 3,
         barRods: [
           BarChartRodData(
-              toY: data.weeklyCompleted.length > i
-                  ? data.weeklyCompleted[i].toDouble()
-                  : 0,
-              color: _kCompleted,
-              width: 7,
-              borderRadius: BorderRadius.circular(4)),
+            toY: data.weeklyCompleted.length > i
+                ? data.weeklyCompleted[i].toDouble()
+                : 0,
+            color: _kCompleted,
+            width: 7,
+            borderRadius: BorderRadius.circular(4),
+          ),
           BarChartRodData(
-              toY: data.weeklyScheduled.length > i
-                  ? data.weeklyScheduled[i].toDouble()
-                  : 0,
-              color: _kScheduled,
-              width: 7,
-              borderRadius: BorderRadius.circular(4)),
+            toY: data.weeklyScheduled.length > i
+                ? data.weeklyScheduled[i].toDouble()
+                : 0,
+            color: _kScheduled,
+            width: 7,
+            borderRadius: BorderRadius.circular(4),
+          ),
           BarChartRodData(
-              toY: data.weeklyCancelled.length > i
-                  ? data.weeklyCancelled[i].toDouble()
-                  : 0,
-              color: _kCancelled,
-              width: 7,
-              borderRadius: BorderRadius.circular(4)),
+            toY: data.weeklyCancelled.length > i
+                ? data.weeklyCancelled[i].toDouble()
+                : 0,
+            color: _kCancelled,
+            width: 7,
+            borderRadius: BorderRadius.circular(4),
+          ),
         ],
       );
     });
@@ -492,10 +540,12 @@ class _WeeklyBarChart extends StatelessWidget {
                 ),
                 borderData: FlBorderData(show: false),
                 titlesData: FlTitlesData(
-                  topTitles:
-                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles:
-                      const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
@@ -503,8 +553,9 @@ class _WeeklyBarChart extends StatelessWidget {
                       getTitlesWidget: (v, _) => Text(
                         '${v.toInt()}',
                         style: const TextStyle(
-                            fontSize: 10,
-                            color: AppColors.textHint),
+                          fontSize: 10,
+                          color: AppColors.textHint,
+                        ),
                       ),
                     ),
                   ),
@@ -521,9 +572,10 @@ class _WeeklyBarChart extends StatelessWidget {
                           child: Text(
                             data.weeklyDayLabels[i],
                             style: const TextStyle(
-                                fontSize: 10,
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w600),
+                              fontSize: 10,
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         );
                       },
@@ -576,23 +628,25 @@ class _HourlyHeatBar extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 2),
                     child: Tooltip(
-                      message: '${_fmt(h)} – ${count} appt${count == 1 ? '' : 's'}',
+                      message:
+                          '${_fmt(h)} – $count appt${count == 1 ? '' : 's'}',
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
                           AnimatedContainer(
                             duration: Duration(
-                                milliseconds: 400 + (h - _start) * 30),
+                              milliseconds: 400 + (h - _start) * 30,
+                            ),
                             height: math.max(4, ratio * 44),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(4),
                               color: isPeak
                                   ? _kCancelled
                                   : ratio > 0.6
-                                      ? _kPrimary
-                                      : ratio > 0.3
-                                          ? AppColors.primaryLight
-                                          : AppColors.border,
+                                  ? _kPrimary
+                                  : ratio > 0.3
+                                  ? AppColors.primaryLight
+                                  : AppColors.border,
                             ),
                           ),
                         ],
@@ -607,12 +661,18 @@ class _HourlyHeatBar extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(_fmt(_start),
-                  style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
-              Text(_fmt((_start + _end) ~/ 2),
-                  style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
-              Text(_fmt(_end),
-                  style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
+              Text(
+                _fmt(_start),
+                style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+              ),
+              Text(
+                _fmt((_start + _end) ~/ 2),
+                style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+              ),
+              Text(
+                _fmt(_end),
+                style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+              ),
             ],
           ),
         ],
@@ -632,7 +692,9 @@ class _PeakInsightRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final peakFmt = DateFormat('h a').format(DateTime(2024, 1, 1, data.peakHour));
+    final peakFmt = DateFormat(
+      'h a',
+    ).format(DateTime(2024, 1, 1, data.peakHour));
     final lowFmt = DateFormat('h a').format(DateTime(2024, 1, 1, data.lowHour));
     return Row(
       children: [
@@ -663,11 +725,12 @@ class _InsightChip extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  const _InsightChip(
-      {required this.icon,
-      required this.label,
-      required this.value,
-      required this.color});
+  const _InsightChip({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -685,16 +748,22 @@ class _InsightChip extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w500)),
-              Text(value,
-                  style: TextStyle(
-                      fontSize: 16,
-                      color: color,
-                      fontWeight: FontWeight.w700)),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ],
@@ -714,10 +783,8 @@ class _TypeSplitRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = data.consultationCount + data.sessionAppointmentCount;
-    final consultPct =
-        total == 0 ? 0.0 : data.consultationCount / total;
-    final sessionPct =
-        total == 0 ? 0.0 : data.sessionAppointmentCount / total;
+    final consultPct = total == 0 ? 0.0 : data.consultationCount / total;
+    final sessionPct = total == 0 ? 0.0 : data.sessionAppointmentCount / total;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -758,22 +825,27 @@ class _TypeSplitRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _TypeRow(
-                    color: _kPrimary,
-                    label: 'Consultations',
-                    count: data.consultationCount,
-                    pct: consultPct),
+                  color: _kPrimary,
+                  label: 'Consultations',
+                  count: data.consultationCount,
+                  pct: consultPct,
+                ),
                 const SizedBox(height: 14),
                 _TypeRow(
-                    color: _kAccent,
-                    label: 'Sessions',
-                    count: data.sessionAppointmentCount,
-                    pct: sessionPct),
+                  color: _kAccent,
+                  label: 'Sessions',
+                  count: data.sessionAppointmentCount,
+                  pct: sessionPct,
+                ),
                 const Divider(height: 20),
-                Text('Total: $total',
-                    style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600)),
+                Text(
+                  'Total: $total',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
@@ -788,11 +860,12 @@ class _TypeRow extends StatelessWidget {
   final String label;
   final int count;
   final double pct;
-  const _TypeRow(
-      {required this.color,
-      required this.label,
-      required this.count,
-      required this.pct});
+  const _TypeRow({
+    required this.color,
+    required this.label,
+    required this.count,
+    required this.pct,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -801,15 +874,29 @@ class _TypeRow extends StatelessWidget {
       children: [
         Row(
           children: [
-            Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            ),
             const SizedBox(width: 6),
             Expanded(
-              child: Text(label,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-            Text('$count',
-                style: TextStyle(
-                    color: color, fontSize: 14, fontWeight: FontWeight.w700)),
+            Text(
+              '$count',
+              style: TextStyle(
+                color: color,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 4),
@@ -821,8 +908,10 @@ class _TypeRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
         ),
         const SizedBox(height: 2),
-        Text('${(pct * 100).toStringAsFixed(1)}%',
-            style: const TextStyle(fontSize: 10, color: AppColors.textHint)),
+        Text(
+          '${(pct * 100).toStringAsFixed(1)}%',
+          style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+        ),
       ],
     );
   }
@@ -838,9 +927,8 @@ class _SessionPerformanceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total = data.sessionsCompleted +
-        data.sessionsMissed +
-        data.sessionsCancelled;
+    final total =
+        data.sessionsCompleted + data.sessionsMissed + data.sessionsCancelled;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: _cardDeco(),
@@ -849,22 +937,25 @@ class _SessionPerformanceRow extends StatelessWidget {
           Row(
             children: [
               _SessionStat(
-                  label: 'Completed',
-                  value: data.sessionsCompleted,
-                  total: total,
-                  color: _kCompleted),
+                label: 'Completed',
+                value: data.sessionsCompleted,
+                total: total,
+                color: _kCompleted,
+              ),
               const SizedBox(width: 8),
               _SessionStat(
-                  label: 'Missed',
-                  value: data.sessionsMissed,
-                  total: total,
-                  color: _kMissed),
+                label: 'Missed',
+                value: data.sessionsMissed,
+                total: total,
+                color: _kMissed,
+              ),
               const SizedBox(width: 8),
               _SessionStat(
-                  label: 'Cancelled',
-                  value: data.sessionsCancelled,
-                  total: total,
-                  color: _kCancelled),
+                label: 'Cancelled',
+                value: data.sessionsCancelled,
+                total: total,
+                color: _kCancelled,
+              ),
             ],
           ),
           if (total > 0) ...[
@@ -877,16 +968,19 @@ class _SessionPerformanceRow extends StatelessWidget {
                   children: [
                     if (data.sessionsCompleted > 0)
                       Expanded(
-                          flex: data.sessionsCompleted,
-                          child: Container(color: _kCompleted)),
+                        flex: data.sessionsCompleted,
+                        child: Container(color: _kCompleted),
+                      ),
                     if (data.sessionsMissed > 0)
                       Expanded(
-                          flex: data.sessionsMissed,
-                          child: Container(color: _kMissed)),
+                        flex: data.sessionsMissed,
+                        child: Container(color: _kMissed),
+                      ),
                     if (data.sessionsCancelled > 0)
                       Expanded(
-                          flex: data.sessionsCancelled,
-                          child: Container(color: _kCancelled)),
+                        flex: data.sessionsCancelled,
+                        child: Container(color: _kCancelled),
+                      ),
                   ],
                 ),
               ),
@@ -903,11 +997,12 @@ class _SessionStat extends StatelessWidget {
   final int value;
   final int total;
   final Color color;
-  const _SessionStat(
-      {required this.label,
-      required this.value,
-      required this.total,
-      required this.color});
+  const _SessionStat({
+    required this.label,
+    required this.value,
+    required this.total,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -922,23 +1017,32 @@ class _SessionStat extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Text('$value',
-                style: TextStyle(
-                    color: color,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800)),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 10,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w500)),
+            Text(
+              '$value',
+              style: TextStyle(
+                color: color,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 10,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
             if (total > 0) ...[
               const SizedBox(height: 4),
-              Text('${(pct * 100).toStringAsFixed(0)}%',
-                  style: TextStyle(
-                      fontSize: 11,
-                      color: color,
-                      fontWeight: FontWeight.w600)),
+              Text(
+                '${(pct * 100).toStringAsFixed(0)}%',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ],
         ),
@@ -982,11 +1086,14 @@ class _PlanConversionCard extends StatelessWidget {
                     strokeCap: StrokeCap.round,
                   ),
                 ),
-                Text('$pctDisplay%',
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: _kCompleted)),
+                Text(
+                  '$pctDisplay%',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: _kCompleted,
+                  ),
+                ),
               ],
             ),
           ),
@@ -995,27 +1102,33 @@ class _PlanConversionCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Conversion Rate',
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary)),
+                const Text(
+                  'Conversion Rate',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 const SizedBox(height: 8),
                 _StatRow(
-                    label: 'Total Consultations',
-                    value: '${data.totalConsultations}',
-                    color: _kPrimary),
+                  label: 'Total Consultations',
+                  value: '${data.totalConsultations}',
+                  color: _kPrimary,
+                ),
                 const SizedBox(height: 4),
                 _StatRow(
-                    label: 'With Treatment Plan',
-                    value: '${data.consultationsWithPlan}',
-                    color: _kCompleted),
+                  label: 'With Treatment Plan',
+                  value: '${data.consultationsWithPlan}',
+                  color: _kCompleted,
+                ),
                 const SizedBox(height: 4),
                 _StatRow(
-                    label: 'Without Plan',
-                    value:
-                        '${(data.totalConsultations - data.consultationsWithPlan).clamp(0, 9999)}',
-                    color: _kMissed),
+                  label: 'Without Plan',
+                  value:
+                      '${(data.totalConsultations - data.consultationsWithPlan).clamp(0, 9999)}',
+                  color: _kMissed,
+                ),
               ],
             ),
           ),
@@ -1029,21 +1142,28 @@ class _StatRow extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  const _StatRow(
-      {required this.label, required this.value, required this.color});
+  const _StatRow({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label,
-            style: const TextStyle(
-                fontSize: 12, color: AppColors.textSecondary)),
-        Text(value,
-            style: TextStyle(
-                fontSize: 13,
-                color: color,
-                fontWeight: FontWeight.w700)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            color: color,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       ],
     );
   }
@@ -1084,11 +1204,14 @@ class _GenderDonut extends StatelessWidget {
       decoration: _cardDeco(),
       child: Column(
         children: [
-          const Text('Gender',
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary)),
+          const Text(
+            'Gender',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 10),
           SizedBox(
             height: 100,
@@ -1113,31 +1236,37 @@ class _GenderDonut extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           ...entries.asMap().entries.map((e) {
-            final pct = total == 0
-                ? 0.0
-                : e.value.value / total * 100;
+            final pct = total == 0 ? 0.0 : e.value.value / total * 100;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 2),
               child: Row(
                 children: [
                   Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                          color: colors[e.key % colors.length],
-                          shape: BoxShape.circle)),
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: colors[e.key % colors.length],
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                   const SizedBox(width: 5),
                   Expanded(
-                    child: Text(e.value.key,
-                        style: const TextStyle(
-                            fontSize: 11,
-                            color: AppColors.textSecondary)),
-                  ),
-                  Text('${pct.toStringAsFixed(0)}%',
+                    child: Text(
+                      e.value.key,
                       style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary)),
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${pct.toStringAsFixed(0)}%',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
                 ],
               ),
             );
@@ -1154,8 +1283,7 @@ class _AgeGroupBars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total =
-        data.ageGroupDistribution.values.fold(0, (a, b) => a + b);
+    final total = data.ageGroupDistribution.values.fold(0, (a, b) => a + b);
     final colors = [_kAccent, _kPrimary, _kCompleted, _kMissed];
     final entries = data.ageGroupDistribution.entries.toList();
 
@@ -1164,17 +1292,19 @@ class _AgeGroupBars extends StatelessWidget {
       decoration: _cardDeco(),
       child: Column(
         children: [
-          const Text('Age Groups',
-              style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary)),
+          const Text(
+            'Age Groups',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.textPrimary,
+            ),
+          ),
           const SizedBox(height: 12),
           ...entries.asMap().entries.map((e) {
             final idx = e.key;
             final entry = e.value;
-            final pct =
-                total == 0 ? 0.0 : entry.value / total;
+            final pct = total == 0 ? 0.0 : entry.value / total;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 5),
               child: Column(
@@ -1183,16 +1313,22 @@ class _AgeGroupBars extends StatelessWidget {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(entry.key,
-                          style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textSecondary)),
-                      Text('${entry.value}',
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              color: colors[idx % colors.length])),
+                      Text(
+                        entry.key,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      Text(
+                        '${entry.value}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: colors[idx % colors.length],
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 3),
@@ -1225,16 +1361,17 @@ class _LocationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final sorted = data.locationDistribution.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-    final maxVal =
-        sorted.isEmpty ? 1 : sorted.first.value;
+    final maxVal = sorted.isEmpty ? 1 : sorted.first.value;
 
     if (sorted.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(24),
         decoration: _cardDeco(),
         child: const Center(
-          child: Text('No location data yet',
-              style: TextStyle(color: AppColors.textHint)),
+          child: Text(
+            'No location data yet',
+            style: TextStyle(color: AppColors.textHint),
+          ),
         ),
       );
     }
@@ -1264,16 +1401,20 @@ class _LocationCard extends StatelessWidget {
                   width: 26,
                   height: 26,
                   decoration: BoxDecoration(
-                    color: barColors[idx % barColors.length]
-                        .withValues(alpha: 0.12),
+                    color: barColors[idx % barColors.length].withValues(
+                      alpha: 0.12,
+                    ),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Center(
-                    child: Text('${idx + 1}',
-                        style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: barColors[idx % barColors.length])),
+                    child: Text(
+                      '${idx + 1}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: barColors[idx % barColors.length],
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -1282,9 +1423,10 @@ class _LocationCard extends StatelessWidget {
                   child: Text(
                     entry.key,
                     style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textPrimary),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -1308,9 +1450,10 @@ class _LocationCard extends StatelessWidget {
                 Text(
                   '${entry.value}',
                   style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: barColors[idx % barColors.length]),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: barColors[idx % barColors.length],
+                  ),
                 ),
               ],
             ),
@@ -1404,15 +1547,21 @@ class _MetricTile extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label,
-                  style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary)),
-              Text(subtitle,
-                  style: const TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textSecondary)),
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: AppColors.textSecondary,
+                ),
+              ),
               const SizedBox(height: 6),
               LinearProgressIndicator(
                 value: progress,
@@ -1425,11 +1574,14 @@ class _MetricTile extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        Text(value,
-            style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: color)),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
       ],
     );
   }
@@ -1446,9 +1598,10 @@ BoxDecoration _cardDeco() {
     border: Border.all(color: AppColors.border),
     boxShadow: [
       BoxShadow(
-          color: AppColors.textPrimary.withValues(alpha: 0.04),
-          blurRadius: 14,
-          offset: const Offset(0, 3)),
+        color: AppColors.textPrimary.withValues(alpha: 0.04),
+        blurRadius: 14,
+        offset: const Offset(0, 3),
+      ),
     ],
   );
 }
@@ -1473,13 +1626,15 @@ class _Legend extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
         const SizedBox(width: 4),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 11, color: AppColors.textSecondary)),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+        ),
       ],
     );
   }

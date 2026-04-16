@@ -28,8 +28,9 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(sessionsProvider);
-    final completedCount =
-        state.sessions.where((s) => s.status == SessionStatus.completed).length;
+    final completedCount = state.sessions
+        .where((s) => s.status == SessionStatus.completed)
+        .length;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -51,8 +52,11 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: AppColors.border),
                       ),
-                      child: const Icon(Icons.arrow_back_rounded,
-                          size: 20, color: AppColors.textPrimary),
+                      child: const Icon(
+                        Icons.arrow_back_rounded,
+                        size: 20,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -60,8 +64,10 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(widget.plan.treatmentType,
-                            style: AppTextStyles.h2),
+                        Text(
+                          widget.plan.treatmentType,
+                          style: AppTextStyles.h2,
+                        ),
                         Text(
                           widget.plan.patientName ?? 'Patient',
                           style: AppTextStyles.caption,
@@ -89,13 +95,16 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Progress',
-                            style: AppTextStyles.label
-                                .copyWith(fontSize: 13)),
+                        Text(
+                          'Progress',
+                          style: AppTextStyles.label.copyWith(fontSize: 13),
+                        ),
                         Text(
                           '$completedCount / ${widget.plan.totalSessions} sessions',
                           style: AppTextStyles.label.copyWith(
-                              color: AppColors.primary, fontSize: 13),
+                            color: AppColors.primary,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -106,10 +115,12 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
                         value: widget.plan.totalSessions > 0
                             ? completedCount / widget.plan.totalSessions
                             : 0,
-                        backgroundColor:
-                            AppColors.primary.withValues(alpha: 0.1),
+                        backgroundColor: AppColors.primary.withValues(
+                          alpha: 0.1,
+                        ),
                         valueColor: const AlwaysStoppedAnimation<Color>(
-                            AppColors.primary),
+                          AppColors.primary,
+                        ),
                         minHeight: 8,
                       ),
                     ),
@@ -123,8 +134,9 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
                         ),
                         Text(
                           '₹${widget.plan.sessionFee.toInt()} / session',
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.success),
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.success,
+                          ),
                         ),
                       ],
                     ),
@@ -139,22 +151,30 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
               child: state.isLoading
                   ? const Center(
                       child: CircularProgressIndicator(
-                          color: AppColors.primary, strokeWidth: 3))
+                        color: AppColors.primary,
+                        strokeWidth: 3,
+                      ),
+                    )
                   : state.sessions.isEmpty
-                      ? Center(
-                          child: Text('No sessions found',
-                              style: AppTextStyles.bodyMedium
-                                  .copyWith(color: AppColors.textSecondary)))
-                      : ListView.separated(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 4),
-                          itemCount: state.sessions.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 8),
-                          itemBuilder: (context, index) {
-                            return _sessionCard(state.sessions[index]);
-                          },
+                  ? Center(
+                      child: Text(
+                        'No sessions found',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textSecondary,
                         ),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 4,
+                      ),
+                      itemCount: state.sessions.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 8),
+                      itemBuilder: (context, index) {
+                        return _sessionCard(state.sessions[index]);
+                      },
+                    ),
             ),
           ],
         ),
@@ -164,11 +184,10 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
 
   Widget _sessionCard(SessionModel session) {
     final statusColor = _statusColor(session.status);
-    final isPast = DateTime.tryParse(session.scheduledDate)
-            ?.isBefore(DateTime.now()) ??
+    final isPast =
+        DateTime.tryParse(session.scheduledDate)?.isBefore(DateTime.now()) ??
         false;
-    final canRecord =
-        session.status == SessionStatus.upcoming && isPast;
+    final canRecord = session.status == SessionStatus.upcoming && isPast;
 
     String dateLabel = '';
     final date = DateTime.tryParse(session.scheduledDate);
@@ -176,13 +195,12 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
       dateLabel = DateFormat('EEE, MMM d').format(date);
     }
 
-    void _navigateToRecord(SessionModel session) {
-      Navigator.pushNamed(context, '/sessions/record', arguments: session)
-          .then((_) {
-        ref
-            .read(sessionsProvider.notifier)
-            .loadPlanSessions(widget.plan.id);
-      });
+    void navigateToRecord(SessionModel session) {
+      Navigator.pushNamed(context, '/sessions/record', arguments: session).then(
+        (_) {
+          ref.read(sessionsProvider.notifier).loadPlanSessions(widget.plan.id);
+        },
+      );
     }
 
     return GestureDetector(
@@ -191,27 +209,40 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
           final dt = DateTime.tryParse(session.scheduledDate);
           final now = DateTime.now();
           // PocketBase dates might be UTC; simple local day check:
-          if (dt != null && (dt.toLocal().year != now.year || dt.toLocal().month != now.month || dt.toLocal().day != now.day)) {
+          if (dt != null &&
+              (dt.toLocal().year != now.year ||
+                  dt.toLocal().month != now.month ||
+                  dt.toLocal().day != now.day)) {
             showDialog(
               context: context,
               builder: (ctx) => AlertDialog(
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 title: const Text('Date Mismatch'),
-                content: const Text('This session is not scheduled for today. Are you sure you want to record it now?'),
+                content: const Text(
+                  'This session is not scheduled for today. Are you sure you want to record it now?',
+                ),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel'),
+                  ),
                   TextButton(
                     onPressed: () {
                       Navigator.pop(ctx);
-                      _navigateToRecord(session);
+                      navigateToRecord(session);
                     },
-                    child: const Text('Proceed', style: TextStyle(color: AppColors.primary)),
+                    child: const Text(
+                      'Proceed',
+                      style: TextStyle(color: AppColors.primary),
+                    ),
                   ),
                 ],
               ),
             );
           } else {
-            _navigateToRecord(session);
+            navigateToRecord(session);
           }
         }
       },
@@ -248,8 +279,10 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
               child: Center(
                 child: Text(
                   '#${session.sessionNumber}',
-                  style: AppTextStyles.label
-                      .copyWith(color: statusColor, fontSize: 13),
+                  style: AppTextStyles.label.copyWith(
+                    color: statusColor,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ),
@@ -258,8 +291,10 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Session ${session.sessionNumber}',
-                      style: AppTextStyles.label.copyWith(fontSize: 14)),
+                  Text(
+                    'Session ${session.sessionNumber}',
+                    style: AppTextStyles.label.copyWith(fontSize: 14),
+                  ),
                   const SizedBox(height: 2),
                   Text(dateLabel, style: AppTextStyles.caption),
                 ],
@@ -267,22 +302,26 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
             ),
             // Status pill
             Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: statusColor.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 _statusLabel(session.status),
-                style: AppTextStyles.caption
-                    .copyWith(color: statusColor, fontSize: 11),
+                style: AppTextStyles.caption.copyWith(
+                  color: statusColor,
+                  fontSize: 11,
+                ),
               ),
             ),
             if (session.status == SessionStatus.upcoming) ...[
               const SizedBox(width: 6),
-              const Icon(Icons.chevron_right_rounded,
-                  color: AppColors.textHint, size: 20),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: AppColors.textHint,
+                size: 20,
+              ),
             ],
           ],
         ),

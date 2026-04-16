@@ -148,8 +148,14 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
       PatientModel? existingPatient;
       try {
         final pb = ref.read(pocketbaseProvider);
+        final doctorId = widget.appointment.doctorId;
+        final clinicId = widget.appointment.clinicId;
+        final filter = clinicId != null && clinicId.isNotEmpty
+            ? 'phone = "$phone" && clinic = "$clinicId"'
+            : 'phone = "$phone" && doctor = "$doctorId"';
+
         final result = await pb.collection(PBCollections.patients).getList(
-          filter: 'phone = "$phone"',
+          filter: filter,
           perPage: 1,
         );
         if (result.items.isNotEmpty) {

@@ -175,10 +175,12 @@ class AppointmentService {
 
   /// Search patients by name or phone.
   Future<List<PatientModel>> searchPatients(
-      String query, String doctorId) async {
+      String query, String doctorId, {String? clinicId}) async {
+    final filter = clinicId != null && clinicId.isNotEmpty
+        ? '(full_name ~ "$query" || phone ~ "$query") && clinic = "$clinicId"'
+        : '(full_name ~ "$query" || phone ~ "$query") && doctor = "$doctorId"';
     final result = await pb.collection(PBCollections.patients).getList(
-      filter:
-          '(full_name ~ "$query" || phone ~ "$query") && doctor = "$doctorId"',
+      filter: filter,
       perPage: 20,
     );
     return result.items.map((r) => PatientModel.fromRecord(r)).toList();
@@ -198,11 +200,14 @@ class AppointmentService {
         .toList();
   }
 
-  /// Find an existing patient by phone number for the given doctor.
-  Future<PatientModel?> findPatientByPhone(String phone, String doctorId) async {
+  /// Find an existing patient by phone number for the given doctor/clinic.
+  Future<PatientModel?> findPatientByPhone(String phone, String doctorId, {String? clinicId}) async {
     try {
+      final filter = clinicId != null && clinicId.isNotEmpty
+          ? 'phone = "$phone" && clinic = "$clinicId"'
+          : 'phone = "$phone" && doctor = "$doctorId"';
       final result = await pb.collection(PBCollections.patients).getList(
-        filter: 'phone = "$phone" && doctor = "$doctorId"',
+        filter: filter,
         perPage: 1,
       );
       if (result.items.isNotEmpty) {
@@ -536,7 +541,6 @@ class AppointmentService {
       appointmentId,
       body: {
         'consultation_end_time': DateTime.now().toUtc().toIso8601String(),
-        'consultation_form_saved': true,
       },
     );
   }

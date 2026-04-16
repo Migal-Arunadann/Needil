@@ -46,7 +46,6 @@ class AppointmentModel {
     this.checkOutTime,
     this.consultationStartTime,
     this.consultationEndTime,
-    this.consultationFormSaved = false,
     this.patientDetailsSaved = false,
     this.patientDetailsPartial = false,
     this.treatmentPlanPartial = false,
@@ -56,6 +55,8 @@ class AppointmentModel {
     this.doctorName,
     this.expandedPatientName,
   });
+
+  bool get consultationFormSaved => consultationEndTime != null;
 
   factory AppointmentModel.fromRecord(RecordModel record) {
     // Try to get expanded doctor/patient names
@@ -93,7 +94,6 @@ class AppointmentModel {
       checkOutTime: _parseDateTimeOrNull(record.getStringValue('check_out_time')),
       consultationStartTime: _parseDateTimeOrNull(record.getStringValue('consultation_start_time')),
       consultationEndTime: _parseDateTimeOrNull(record.getStringValue('consultation_end_time')),
-      consultationFormSaved: record.getBoolValue('consultation_form_saved'),
       patientDetailsSaved: record.getBoolValue('patient_details_saved'),
       patientDetailsPartial: record.getBoolValue('patient_details_partial'),
       treatmentPlanPartial: record.getBoolValue('treatment_plan_partial'),
@@ -127,7 +127,6 @@ class AppointmentModel {
       if (checkOutTime != null) 'check_out_time': checkOutTime!.toUtc().toIso8601String(),
       if (consultationStartTime != null) 'consultation_start_time': consultationStartTime!.toUtc().toIso8601String(),
       if (consultationEndTime != null) 'consultation_end_time': consultationEndTime!.toUtc().toIso8601String(),
-      'consultation_form_saved': consultationFormSaved,
       'patient_details_saved': patientDetailsSaved,
       'patient_details_partial': patientDetailsPartial,
       'treatment_plan_partial': treatmentPlanPartial,
