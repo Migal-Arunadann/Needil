@@ -358,15 +358,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
       otpCode: otpCode,
     );
     if (verified.success) {
-      // OTP verified — this implicitly creates and authenticates the clinic.
-      final result = await _authService.restoreSession(); // Loads the newly created user into state
+      // OTP verified — PB authStore is now populated with the clinic record.
+      // Save the session so restoreSession() works on future app launches.
+      final result = await _authService.saveClinicSessionFromAuthStore();
 
       state = AuthState(
         isInitializing: false,
         isLoading: false,
-        isAuthenticated: true,
-        role: result?.role,
-        clinic: result?.user is ClinicModel ? result!.user : null,
+        isAuthenticated: result != null,
+        role: result?.role ?? UserRole.clinic,
+        clinic: result?.user is ClinicModel ? result!.user as ClinicModel : null,
         // Clear OTP pending fields
         pendingOtpId: null,
         pendingEmail: null,

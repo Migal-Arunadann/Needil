@@ -477,9 +477,30 @@ class AuthService {
 
   // ── OTP Methods ────────────────────────────────────────────────
 
+  /// After a successful authWithOTP call, the PB auth store holds the clinic
+  /// record and token. This method persists the session to secure storage and
+  /// returns an [AuthResult] so the UI can set state correctly.
+  Future<AuthResult?> saveClinicSessionFromAuthStore() async {
+    try {
+      final record = pb.authStore.record;
+      final token = pb.authStore.token;
+      if (record == null || token.isEmpty) return null;
+
+      await _saveSession('clinic', token, record.id);
+      return AuthResult(
+        success: true,
+        role: UserRole.clinic,
+        user: ClinicModel.fromRecord(record),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Request an OTP to be sent to [email] via PocketBase's built-in OTP system.
   /// Returns an [OtpResult] carrying the otpId needed for verification.
   Future<OtpResult> requestOtp(String email) async {
+
     try {
       final response = await pb
           .collection(PBCollections.clinics)
