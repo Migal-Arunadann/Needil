@@ -1288,8 +1288,8 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                         ],
                                       ]),
 
-                                    // Row 2: Undo Arrived (inline undo for inProgress with no details yet)
-                                    if (isInProgress && apt.checkInTime != null &&
+                                    // Row 2: Undo Arrived (call-by only — walk-in can't undo arrival)
+                                    if (isCallBy && isInProgress && apt.checkInTime != null &&
                                         !apt.patientDetailsSaved && !apt.consultationFormSaved) ...[
                                       const SizedBox(height: 7),
                                       Row(children: [
