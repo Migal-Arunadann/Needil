@@ -498,9 +498,29 @@ class AuthService {
   }
 
   /// Request an OTP to be sent to [email] via PocketBase's built-in OTP system.
-  /// Returns an [OtpResult] carrying the otpId needed for verification.
+  /// PocketBase requires a record to already exist before it sends an OTP.
+  /// For new emails we create a minimal shell record first; if the email already
+  /// exists the creation silently fails and we proceed to OTP as usual.
   Future<OtpResult> requestOtp(String email) async {
+    // ── 1. Ensure a clinic record exists for this email ──────────────────────
+    // For new registrations: create a bare shell so PB has a record to OTP.
+    // For existing accounts: this create call will fail with a duplicate-email
+    // 400 error — we swallow it and move on.
+    try {
+      final tempPw = 'TempPw!${DateTime.now().millisecondsSinceEpoch}';
+      await pb.collection(PBCollections.clinics).create(body: {
+        'email': email,
+        'emailVisibility': true,
+        'password': tempPw,
+        'passwordConfirm': tempPw,
+        'name': '',            // empty shell — filled during registration completion
+        'username': email,     // temporary, updated after OTP is verified
+      });
+    } catch (_) {
+      // Ignore — record already exists (existing user) or rule blocked it.
+    }
 
+    // ── 2. Request OTP ───────────────────────────────────────────────────────
     try {
       final response = await pb
           .collection(PBCollections.clinics)
@@ -513,6 +533,7 @@ class AuthService {
           success: false, error: 'Could not send OTP. Check your email address.');
     }
   }
+
 
   /// Verify an OTP code. On success the PocketBase auth store is updated.
   Future<AuthResult> verifyOtp({required String otpId, required String otpCode}) async {
