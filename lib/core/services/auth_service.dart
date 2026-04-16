@@ -508,16 +508,21 @@ class AuthService {
     // 400 error — we swallow it and move on.
     try {
       final tempPw = 'TempPw!${DateTime.now().millisecondsSinceEpoch}';
+      final tempUsername = 'tmp_${DateTime.now().millisecondsSinceEpoch}';
       await pb.collection(PBCollections.clinics).create(body: {
         'email': email,
         'emailVisibility': true,
         'password': tempPw,
         'passwordConfirm': tempPw,
         'name': '',            // empty shell — filled during registration completion
-        'username': email,     // temporary, updated after OTP is verified
+        'username': tempUsername, // temporary unique username
+        'bed_count': 0,
+        'clinic_id': tempUsername,
+        'subscription_tier': 'free',
+        'max_doctors': 1,
       });
     } catch (_) {
-      // Ignore — record already exists (existing user) or rule blocked it.
+      // Ignore — record already exists (existing user) or a field failed validation.
     }
 
     // ── 2. Request OTP ───────────────────────────────────────────────────────
