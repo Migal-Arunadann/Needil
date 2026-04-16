@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../features/auth/screens/login_screen.dart';
+import '../../features/auth/screens/clinic_registration/clinic_step0_otp_screen.dart';
 import '../../features/auth/screens/clinic_registration/clinic_step1_screen.dart';
 import '../../features/auth/screens/clinic_registration/clinic_step2_screen.dart';
 import '../../features/auth/screens/clinic_registration/clinic_step3_screen.dart';
@@ -32,8 +33,12 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
     case '/login':
       return _fade(const LoginScreen(), settings);
 
-    // Register link now goes directly to clinic registration step 1
+    // Register link now goes directly to clinic registration step 0
     case '/register/clinic':
+    case '/register/clinic/step0':
+      return _slide(const ClinicStep0OtpScreen(), settings);
+
+    case '/register/clinic/step1':
       return _slide(const ClinicStep1Screen(), settings);
 
     case '/register/clinic/step2':

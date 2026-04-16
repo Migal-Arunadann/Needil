@@ -19,7 +19,6 @@ class AppointmentModel {
   final DateTime? checkOutTime;
   final DateTime? consultationStartTime;
   final DateTime? consultationEndTime;       // Set when consultation form is submitted
-  final bool consultationFormSaved;          // true once the consultation form has been filled & saved
   final bool patientDetailsSaved;            // true once PatientInfoScreen form is submitted
   final bool patientDetailsPartial;          // true once PatientInfoScreen form is opened (but not yet submitted)
   final bool treatmentPlanPartial;           // true once treatment plan form opened but not submitted

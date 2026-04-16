@@ -255,6 +255,57 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Complete clinic registration using the empty clinic record
+  Future<void> completeClinicRegistration({
+    required String clinicName,
+    required String username,
+    required String password,
+    required int bedCount,
+    required Map<String, dynamic> primaryDoctorData,
+    File? doctorPhotoFile,
+    List<Map<String, dynamic>>? additionalDoctors,
+    Map<String, dynamic>? receptionistData,
+    String? city,
+    String? area,
+    String? stateField,
+    String? pincode,
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+
+    final clinicId = state.clinic?.id;
+    if (clinicId == null) {
+      state = state.copyWith(isLoading: false, error: 'Unauthorized to complete registration.');
+      return;
+    }
+
+    final result = await _authService.completeClinicRegistrationPatch(
+      recordId: clinicId,
+      clinicName: clinicName,
+      username: username,
+      password: password,
+      bedCount: bedCount,
+      primaryDoctorData: primaryDoctorData,
+      doctorPhotoFile: doctorPhotoFile,
+      additionalDoctors: additionalDoctors,
+      receptionistData: receptionistData,
+      city: city,
+      area: area,
+      state: stateField,
+      pincode: pincode,
+    );
+
+    if (result.success) {
+      state = AuthState(
+        isInitializing: false,
+        isAuthenticated: true,
+        role: UserRole.clinic,
+        clinic: result.user as ClinicModel,
+      );
+    } else {
+      state = state.copyWith(isLoading: false, error: result.error);
+    }
+  }
+
   /// Logout.
   Future<void> logout() async {
     await _authService.logout();
@@ -269,56 +320,28 @@ class AuthNotifier extends StateNotifier<AuthState> {
   // ── OTP: Registration ──────────────────────────────────────
 
   /// Registration OTP flow (create-first, then verify):
-  /// 1. Create the clinic account immediately (record must exist for PocketBase OTP to work).
-  /// 2. Then request OTP — now the email exists in the DB, PocketBase will accept it.
+  /// 1. We now just request OTP — since name and bed_count are optional, PocketBase
+  ///    will create the account when they type in the OTP code.
   Future<void> requestRegistrationOtp({
     required String email,
     required Map<String, dynamic> clinicData,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
 
-    // Step 1: Create the clinic account first
-    final photoPath = clinicData['doctor_photo_path'] as String?;
-    final registerResult = await _authService.registerClinic(
-      clinicName: clinicData['clinic_name'],
-      username: clinicData['username'],
-      password: clinicData['password'],
-      bedCount: clinicData['bed_count'],
-      primaryDoctorData: clinicData['primary_doctor_data'],
-      doctorPhotoFile: photoPath != null ? File(photoPath) : null,
-      receptionistData: clinicData['receptionist_data'],
-      additionalDoctors: clinicData['additional_doctors'] != null
-          ? List<Map<String, dynamic>>.from(clinicData['additional_doctors'])
-          : null,
-      city: clinicData['city'],
-      area: clinicData['area'],
-      state: clinicData['state'] as String?,
-      pincode: clinicData['pincode'],
-      clinicEmail: email,
-    );
-
-    if (!registerResult.success) {
-      state = state.copyWith(isLoading: false, error: registerResult.error);
-      return;
-    }
-
-    // Clinic created and logged in — store in state
-    state = state.copyWith(
-      isLoading: false,
-      isAuthenticated: true,
-      role: UserRole.clinic,
-      clinic: registerResult.user as ClinicModel,
-      pendingEmail: email,
-      pendingOtpId: null,
-    );
-
-    // Step 2: Request OTP — record now exists so PocketBase will accept this
     final otpResult = await _authService.requestOtp(email);
+    
     if (otpResult.success) {
-      state = state.copyWith(pendingOtpId: otpResult.otpId);
+      state = state.copyWith(
+        isLoading: false,
+        pendingEmail: email,
+        pendingOtpId: otpResult.otpId,
+      );
+    } else {
+      state = state.copyWith(
+        isLoading: false,
+        error: otpResult.error ?? 'Failed to send OTP.',
+      );
     }
-    // If OTP send fails, clinic is still created and logged in.
-    // User can re-verify via Forgot Password flow later.
   }
 
   /// Step 2: Verify OTP after registration (email ownership verification only).
@@ -335,17 +358,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
       otpCode: otpCode,
     );
     if (verified.success) {
-      // OTP confirmed — mark as authenticated using the already-stored clinic data.
-      // Do NOT call restoreSession() here — it sets isInitializing=true which
-      // flickers the splash and never pops the OTP screen.
+      // OTP verified — this implicitly creates and authenticates the clinic.
+      final result = await _authService.restoreSession(); // Loads the newly created user into state
+
       state = AuthState(
         isInitializing: false,
         isLoading: false,
         isAuthenticated: true,
-        role: state.role,
-        clinic: state.clinic,
-        doctor: state.doctor,
-        receptionist: state.receptionist,
+        role: result?.role,
+        clinic: result?.user is ClinicModel ? result!.user : null,
         // Clear OTP pending fields
         pendingOtpId: null,
         pendingEmail: null,

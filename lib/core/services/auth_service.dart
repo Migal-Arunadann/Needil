@@ -322,6 +322,142 @@ class AuthService {
     }
   }
 
+  /// Complete the clinic registration by patching the empty clinic record 
+  /// created during OTP verification.
+  Future<AuthResult> completeClinicRegistrationPatch({
+    required String recordId,
+    required String clinicName,
+    required String username,
+    required String password,
+    required int bedCount,
+    required Map<String, dynamic> primaryDoctorData,
+    File? doctorPhotoFile,
+    List<Map<String, dynamic>>? additionalDoctors,
+    Map<String, dynamic>? receptionistData,
+    String? city,
+    String? area,
+    String? state,
+    String? pincode,
+  }) async {
+    try {
+      final clinicCode = _generateUniqueId(6);
+
+      // ── 1. Update clinic record ──
+      final clinicBody = {
+        'name': clinicName,
+        'username': username,
+        'password': password,
+        'passwordConfirm': password,
+        'bed_count': bedCount,
+        'clinic_id': clinicCode,
+        'subscription_tier': 'free',
+        'max_doctors': 1,
+        if (city != null && city.isNotEmpty) 'city': city,
+        if (area != null && area.isNotEmpty) 'area': area,
+        if (state != null && state.isNotEmpty) 'state': state,
+        if (pincode != null && pincode.isNotEmpty) 'pincode': pincode,
+      };
+
+      await pb.collection(PBCollections.clinics).update(recordId, body: clinicBody);
+
+      // ── 2. Authenticate fresh (updating password invalidates old token) ──
+      final loginResult = await pb
+          .collection(PBCollections.clinics)
+          .authWithPassword(username, password);
+
+      final clinicId = loginResult.record.id;
+
+      // ── 3. Primary Doctor ──
+      final primaryDoctorId = _generateUniqueId(8, prefix: 'DR');
+      final internalUsername = 'dr_${clinicCode.toLowerCase()}';
+      final internalPassword = '${password}_dr_$clinicCode';
+
+      final doctorBody = {
+        ...primaryDoctorData,
+        'username': internalUsername,
+        'email': _fakeEmail(internalUsername),
+        'emailVisibility': false,
+        'password': internalPassword,
+        'passwordConfirm': internalPassword,
+        'clinic': clinicId,
+        'is_primary': true,
+        'doctor_id': primaryDoctorId,
+      };
+      doctorBody.remove('password_confirm');
+
+      if (doctorPhotoFile != null) {
+        final files = [await http.MultipartFile.fromPath('photo', doctorPhotoFile.path)];
+        await pb.collection(PBCollections.doctors).create(body: doctorBody, files: files);
+      } else {
+        await pb.collection(PBCollections.doctors).create(body: doctorBody);
+      }
+
+      // ── 4. Additional Doctors ──
+      if (additionalDoctors != null) {
+        for (final docData in additionalDoctors) {
+          final docId = _generateUniqueId(8, prefix: 'DR');
+          final photoPath = docData['photo_path'] as String?;
+          final docUsername = 'dr_${clinicCode.toLowerCase()}_$docId'.toLowerCase();
+          final body = {
+            ...docData,
+            'username': docUsername,
+            'email': _fakeEmail(docUsername),
+            'emailVisibility': false,
+            'passwordConfirm': docData['password'],
+            'clinic': clinicId,
+            'is_primary': false,
+            'doctor_id': docId,
+          };
+          body.remove('photo_path');
+
+          if (photoPath != null) {
+            final files = [await http.MultipartFile.fromPath('photo', photoPath)];
+            await pb.collection(PBCollections.doctors).create(body: body, files: files);
+          } else {
+            await pb.collection(PBCollections.doctors).create(body: body);
+          }
+        }
+      }
+
+      // ── 5. Receptionist ──
+      if (receptionistData != null) {
+        final recId = _generateUniqueId(8, prefix: 'RC');
+        final recUsername = (receptionistData['username'] as String?)?.trim() ?? '';
+        final recPassword = (receptionistData['password'] as String?)?.trim() ?? '';
+        final recBody = {
+          'name': receptionistData['name'],
+          'username': recUsername,
+          'email': _fakeEmail(recUsername),
+          'emailVisibility': false,
+          'password': recPassword,
+          'passwordConfirm': recPassword,
+          'clinic': clinicId,
+          'is_active': true,
+          'receptionist_id': recId,
+          if ((receptionistData['phone'] as String?)?.isNotEmpty == true)
+            'phone': receptionistData['phone'],
+        };
+        await pb.collection(PBCollections.receptionists).create(body: recBody);
+      }
+
+      // ── 6. Save session ──
+      await _saveSession('clinic', loginResult.token, loginResult.record.id);
+
+      return AuthResult(
+        success: true,
+        role: UserRole.clinic,
+        user: ClinicModel.fromRecord(loginResult.record),
+      );
+    } on ClientException catch (e) {
+      return AuthResult(success: false, error: _parseError(e));
+    } catch (e) {
+      return AuthResult(
+        success: false,
+        error: 'Registration patch failed: ${e.toString()}',
+      );
+    }
+  }
+
   /// Logout and clear session.
   Future<void> logout() async {
     pb.authStore.clear();

@@ -6,6 +6,7 @@ import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../../../core/widgets/location_fields.dart';
 import '../../../../core/utils/validators.dart';
+import '../../providers/auth_provider.dart';
 
 /// Clinic Registration — Step 1: Clinic details (name, username, password).
 class ClinicStep1Screen extends ConsumerStatefulWidget {
@@ -21,7 +22,7 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _emailController = TextEditingController();
+  String? _lockedEmail;
   final _pincodeController = TextEditingController();
   final _countryController = TextEditingController();
   final _stateController = TextEditingController();
@@ -36,7 +37,6 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
     _usernameController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _emailController.dispose();
     _pincodeController.dispose();
     _countryController.dispose();
     _stateController.dispose();
@@ -54,7 +54,7 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
         'clinic_name': _nameController.text.trim(),
         'username': _usernameController.text.trim(),
         'password': _passwordController.text,
-        'email': _emailController.text.trim(),
+        'email': _lockedEmail ?? '',
         'pincode': _pincodeController.text.trim(),
         'country': _countryController.text.trim(),
         'state': _stateController.text.trim(),
@@ -119,22 +119,21 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
                   textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 20),
-                AppTextField(
-                  label: 'Email Address',
-                  hint: 'Your clinic contact email',
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  validator: (v) {
-                    if (v == null || v.trim().isEmpty) return 'Email is required';
-                    return Validators.email(v);
-                  },
-                  prefixIcon: const Icon(Icons.email_outlined,
-                      color: AppColors.textHint),
-                  textInputAction: TextInputAction.next,
-                ),
+                // Show the email they used to verify
+                Consumer(builder: (context, ref, _) {
+                  final auth = ref.watch(authProvider);
+                  _lockedEmail = auth.clinic?.email;
+                  return AppTextField(
+                    label: 'Email Address',
+                    hint: 'Verified',
+                    controller: TextEditingController(text: _lockedEmail ?? 'Verified Email'),
+                    enabled: false,
+                    prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textHint),
+                  );
+                }),
                 const SizedBox(height: 20),
                 AppTextField(
-                  label: 'Password',
+                  label: 'Set Password',
                   hint: 'Min. 8 characters',
                   controller: _passwordController,
                   obscureText: _obscurePassword,
