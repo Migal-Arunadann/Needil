@@ -40,7 +40,6 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
   final _areaCtrl = TextEditingController();
   final _occupationCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
-  final _allergiesCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -83,7 +82,6 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     _areaCtrl.dispose();
     _occupationCtrl.dispose();
     _emailCtrl.dispose();
-    _allergiesCtrl.dispose();
     super.dispose();
   }
 
@@ -171,26 +169,18 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
           ));
         }
       } else {
-        final chronicStr = _selectedChronicDiseases.isEmpty
-            ? null
-            : _selectedChronicDiseases.join(', ');
-
         patient = await service.createPatient(
           fullName: _nameCtrl.text.trim(),
           phone: phone,
           doctorId: widget.appointment.doctorId,
           clinicId: widget.appointment.clinicId,
-          dateOfBirth: _dobCtrl.text,         // YYYY-MM-DD
+          dateOfBirth: _dobCtrl.text,
           gender: _selectedGender,
           city: _cityCtrl.text.isNotEmpty ? _cityCtrl.text : null,
           area: _areaCtrl.text.isNotEmpty ? _areaCtrl.text : null,
           pincode: _pincodeCtrl.text.isNotEmpty ? _pincodeCtrl.text : null,
           occupation: _occupationCtrl.text.isNotEmpty ? _occupationCtrl.text : null,
           email: _emailCtrl.text.isNotEmpty ? _emailCtrl.text : null,
-          allergiesConditions:
-              _selectedChronicDiseases.contains('Others') && _allergiesCtrl.text.isNotEmpty
-                  ? _allergiesCtrl.text
-                  : (chronicStr != null && !chronicStr.contains('Others') ? chronicStr : null),
           age: calculatedAge,
         );
       }
@@ -293,15 +283,10 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                   areaCtrl: _areaCtrl,
                   occupationCtrl: _occupationCtrl,
                   emailCtrl: _emailCtrl,
-                  allergiesCtrl: _allergiesCtrl,
                   selectedGender: _selectedGender,
                   onGenderChanged: (v) => setState(() => _selectedGender = v),
-                  selectedChronicDiseases: _selectedChronicDiseases,
-                  onChronicDiseasesChanged: (v) =>
-                      setState(() => _selectedChronicDiseases = v),
                   consentGiven: _consentGiven,
                   onConsentChanged: (v) => setState(() => _consentGiven = v),
-                  // Name locked to what came in from the appointment
                   nameLocked: (widget.appointment.patientName ?? '').isNotEmpty,
                   phoneLocked: (widget.appointment.patientPhone ?? '').isNotEmpty,
                 ),

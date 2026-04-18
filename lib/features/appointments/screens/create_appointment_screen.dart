@@ -50,11 +50,9 @@ class _CreateAppointmentScreenState
   final _stateCtrl = TextEditingController();
   final _cityCtrl = TextEditingController();
   final _areaCtrl = TextEditingController();
-  final _allergiesCtrl = TextEditingController();
   final _occupationCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   String? _selectedGender;
-  Set<String> _selectedChronicDiseases = {};
 
   // Slot selection
   DateTime? _selectedDate;
@@ -112,7 +110,6 @@ class _CreateAppointmentScreenState
     _stateCtrl.dispose();
     _cityCtrl.dispose();
     _areaCtrl.dispose();
-    _allergiesCtrl.dispose();
     _occupationCtrl.dispose();
     _emailCtrl.dispose();
     super.dispose();
@@ -155,7 +152,6 @@ class _CreateAppointmentScreenState
         if (existing.dateOfBirth != null && existing.dateOfBirth!.isNotEmpty) _dobCtrl.text = existing.dateOfBirth!;
         if (existing.city != null && existing.city!.isNotEmpty) _cityCtrl.text = existing.city!;
         if (existing.area != null && existing.area!.isNotEmpty) _areaCtrl.text = existing.area!;
-        if (existing.allergiesConditions != null && existing.allergiesConditions!.isNotEmpty) _allergiesCtrl.text = existing.allergiesConditions!;
         if (existing.occupation != null && existing.occupation!.isNotEmpty) _occupationCtrl.text = existing.occupation!;
         if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
         if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
@@ -411,10 +407,6 @@ class _CreateAppointmentScreenState
         if (calculatedAge < 0) calculatedAge = null;
       }
 
-      final chronicStr = _selectedChronicDiseases.isEmpty
-          ? null
-          : _selectedChronicDiseases.join(', ');
-
       final result = await notifier.createWalkIn(
         doctorId: doctorId,
         clinicId: clinicId,
@@ -426,15 +418,10 @@ class _CreateAppointmentScreenState
         city: _cityCtrl.text.isNotEmpty ? _cityCtrl.text : null,
         area: _areaCtrl.text.isNotEmpty ? _areaCtrl.text : null,
         pincode: _pincodeCtrl.text.isNotEmpty ? _pincodeCtrl.text : null,
-        allergiesConditions:
-            _selectedChronicDiseases.contains('Others') && _allergiesCtrl.text.isNotEmpty
-                ? _allergiesCtrl.text
-                : chronicStr,
         gender: _selectedGender,
         occupation: _occupationCtrl.text.isNotEmpty ? _occupationCtrl.text : null,
         email: _emailCtrl.text.isNotEmpty ? _emailCtrl.text : null,
         age: calculatedAge,
-        // If phone matched an existing patient, reuse their ID
         existingPatientId: _existingPatient?.id,
       );
       success = result != null;
@@ -780,13 +767,9 @@ class _CreateAppointmentScreenState
                     areaCtrl: _areaCtrl,
                     occupationCtrl: _occupationCtrl,
                     emailCtrl: _emailCtrl,
-                    allergiesCtrl: _allergiesCtrl,
                     selectedGender: _selectedGender,
                     onGenderChanged: (v) => setState(() => _selectedGender = v),
-                    selectedChronicDiseases: _selectedChronicDiseases,
-                    onChronicDiseasesChanged: (v) =>
-                        setState(() => _selectedChronicDiseases = v),
-                    consentGiven: false, // walk-in consent handled by submit guard
+                    consentGiven: false,
                     onConsentChanged: (_) {},
                     isReturningPatient: _isRegisteredPatient,
                     isCheckingPhone: _isCheckingPhone,
