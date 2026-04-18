@@ -8,8 +8,8 @@ import '../../../core/constants/pb_collections.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
-import '../../../core/widgets/location_fields.dart';
 import '../../../core/utils/validators.dart';
+import '../../../core/widgets/patient_details_form.dart';
 import '../../../core/utils/time_utils.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/models/doctor_model.dart';
@@ -43,22 +43,18 @@ class _CreateAppointmentScreenState
   final _phoneCtrl = TextEditingController();
 
   // Extended Patient fields (for walk-in only)
-  final _dobCtrl = TextEditingController(); // Or Age
-  final _ageCtrl = TextEditingController();
+  // Walk-in extended patient fields (shared via PatientDetailsForm)
+  final _dobCtrl = TextEditingController();   // YYYY-MM-DD
   final _pincodeCtrl = TextEditingController();
   final _countryCtrl = TextEditingController();
   final _stateCtrl = TextEditingController();
   final _cityCtrl = TextEditingController();
   final _areaCtrl = TextEditingController();
-  final _addressCtrl = TextEditingController();
-  final _emergencyCtrl = TextEditingController();
   final _allergiesCtrl = TextEditingController();
   final _occupationCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   String? _selectedGender;
-  // Chronic disease chips
-  static const _chronicOptions = ['Diabetes', 'BP', 'Thyroid', 'Fatty Liver', 'No Disease', 'Others'];
-  final Set<String> _selectedChronicDiseases = {};
+  Set<String> _selectedChronicDiseases = {};
 
   // Slot selection
   DateTime? _selectedDate;
@@ -111,14 +107,11 @@ class _CreateAppointmentScreenState
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
     _dobCtrl.dispose();
-    _ageCtrl.dispose();
     _pincodeCtrl.dispose();
     _countryCtrl.dispose();
     _stateCtrl.dispose();
     _cityCtrl.dispose();
     _areaCtrl.dispose();
-    _addressCtrl.dispose();
-    _emergencyCtrl.dispose();
     _allergiesCtrl.dispose();
     _occupationCtrl.dispose();
     _emailCtrl.dispose();
@@ -162,13 +155,10 @@ class _CreateAppointmentScreenState
         if (existing.dateOfBirth != null && existing.dateOfBirth!.isNotEmpty) _dobCtrl.text = existing.dateOfBirth!;
         if (existing.city != null && existing.city!.isNotEmpty) _cityCtrl.text = existing.city!;
         if (existing.area != null && existing.area!.isNotEmpty) _areaCtrl.text = existing.area!;
-        if (existing.address != null && existing.address!.isNotEmpty) _addressCtrl.text = existing.address!;
-        if (existing.emergencyContact != null && existing.emergencyContact!.isNotEmpty) _emergencyCtrl.text = existing.emergencyContact!;
         if (existing.allergiesConditions != null && existing.allergiesConditions!.isNotEmpty) _allergiesCtrl.text = existing.allergiesConditions!;
         if (existing.occupation != null && existing.occupation!.isNotEmpty) _occupationCtrl.text = existing.occupation!;
         if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
         if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
-        if (existing.age != null) _ageCtrl.text = existing.age.toString();
       }
     }
 
@@ -215,28 +205,6 @@ class _CreateAppointmentScreenState
     }
   }
 
-  Future<void> _pickDob() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: DateTime(1990),
-      firstDate: DateTime(1920),
-      lastDate: DateTime.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: AppColors.primary,
-            onPrimary: Colors.white,
-            surface: AppColors.surface,
-          ),
-        ),
-        child: child!,
-      ),
-    );
-    if (picked != null) {
-      _dobCtrl.text =
-          '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-    }
-  }
 
   bool get _hasSlotSelected {
     if (!_isCallBy && _forceWalkIn) return true;
@@ -430,6 +398,23 @@ class _CreateAppointmentScreenState
         _selectedTimeStr = exactTimeStr;
       }
 
+      // Auto-calculate age from DoB
+      final dob = DateTime.tryParse(_dobCtrl.text);
+      int? calculatedAge;
+      if (dob != null) {
+        final today = DateTime.now();
+        calculatedAge = today.year - dob.year;
+        if (today.month < dob.month ||
+            (today.month == dob.month && today.day < dob.day)) {
+          calculatedAge--;
+        }
+        if (calculatedAge < 0) calculatedAge = null;
+      }
+
+      final chronicStr = _selectedChronicDiseases.isEmpty
+          ? null
+          : _selectedChronicDiseases.join(', ');
+
       final result = await notifier.createWalkIn(
         doctorId: doctorId,
         clinicId: clinicId,
@@ -440,20 +425,16 @@ class _CreateAppointmentScreenState
         dateOfBirth: _dobCtrl.text.isNotEmpty ? _dobCtrl.text : null,
         city: _cityCtrl.text.isNotEmpty ? _cityCtrl.text : null,
         area: _areaCtrl.text.isNotEmpty ? _areaCtrl.text : null,
-        address: _addressCtrl.text.isNotEmpty ? _addressCtrl.text : null,
         pincode: _pincodeCtrl.text.isNotEmpty ? _pincodeCtrl.text : null,
-        emergencyContact:
-            _emergencyCtrl.text.isNotEmpty ? _emergencyCtrl.text : null,
         allergiesConditions:
-            _allergiesCtrl.text.isNotEmpty ? _allergiesCtrl.text : null,
-        chronicDiseases: _selectedChronicDiseases.isEmpty
-            ? null
-            : _selectedChronicDiseases.join(', '),
+            _selectedChronicDiseases.contains('Others') && _allergiesCtrl.text.isNotEmpty
+                ? _allergiesCtrl.text
+                : chronicStr,
         gender: _selectedGender,
         occupation: _occupationCtrl.text.isNotEmpty ? _occupationCtrl.text : null,
         email: _emailCtrl.text.isNotEmpty ? _emailCtrl.text : null,
-        age: int.tryParse(_ageCtrl.text),
-        // If phone matched an existing patient, reuse their ID — no duplicate created
+        age: calculatedAge,
+        // If phone matched an existing patient, reuse their ID
         existingPatientId: _existingPatient?.id,
       );
       success = result != null;
@@ -708,7 +689,6 @@ class _CreateAppointmentScreenState
                   const SizedBox(height: 24),
                 ],
 
-                // Patient fields (both call-by and walk-in)
                 Text('Patient Info', style: AppTextStyles.h3),
                 const SizedBox(height: 4),
                 Text(
@@ -719,264 +699,98 @@ class _CreateAppointmentScreenState
                 ),
                 const SizedBox(height: 14),
 
-                // Phone first — triggers lookup
-                Stack(
-                  children: [
-                    AppTextField(
-                      controller: _phoneCtrl,
-                      label: 'Phone Number',
-                      prefixIcon: Icon(Icons.phone_outlined, color: AppColors.textHint),
-                      keyboardType: TextInputType.phone,
-                      validator: Validators.phone,
-                    ),
-                    if (_isCheckingPhone)
-                      const Positioned(
-                        right: 14, top: 0, bottom: 0,
-                        child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+                // ── Call-by: quick phone + name only ─────────────────────
+                if (_isCallBy) ...[
+                  Stack(
+                    children: [
+                      AppTextField(
+                        controller: _phoneCtrl,
+                        label: 'Phone Number',
+                        prefixIcon:
+                            const Icon(Icons.phone_outlined, color: AppColors.textHint),
+                        keyboardType: TextInputType.phone,
+                        validator: Validators.phone,
                       ),
+                      if (_isCheckingPhone)
+                        const Positioned(
+                          right: 14,
+                          top: 0,
+                          bottom: 0,
+                          child: Center(
+                            child: SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2)),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (_existingPatient != null) ...[
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color:
+                                AppColors.success.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.person_rounded,
+                              color: AppColors.success, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Returning patient — name auto-filled.',
+                              style: AppTextStyles.caption
+                                  .copyWith(color: AppColors.success),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
-                ),
-
-                // Walk-in: show "Patient already registered" banner if phone matched
-                if (!_isCallBy && _isRegisteredPatient) ...[ 
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: AppColors.info.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.info.withValues(alpha: 0.4)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.verified_user_rounded, color: AppColors.info, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Patient already registered — details auto-filled. No duplicate will be created.',
-                            style: AppTextStyles.caption.copyWith(color: AppColors.info),
-                          ),
-                        ),
-                      ],
-                    ),
+                  const SizedBox(height: 14),
+                  AppTextField(
+                    controller: _nameCtrl,
+                    label: 'Patient Name',
+                    prefixIcon: const Icon(Icons.person_outline_rounded,
+                        color: AppColors.textHint),
+                    validator: Validators.required,
+                    readOnly: _existingPatient != null,
                   ),
                 ],
 
-                // Call-by: show info chip when name was auto-filled
-                if (_isCallBy && _existingPatient != null) ...[
-                  const SizedBox(height: 10),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.person_rounded, color: AppColors.success, size: 18),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Returning patient — name auto-filled.',
-                            style: AppTextStyles.caption.copyWith(color: AppColors.success),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 14),
-                AppTextField(
-                  controller: _nameCtrl,
-                  label: 'Patient Name',
-                  prefixIcon: Icon(Icons.person_outline_rounded, color: AppColors.textHint),
-                  validator: Validators.required,
-                  // Read-only for call-by when a patient was found (name locked to existing record)
-                  readOnly: _isCallBy && _existingPatient != null,
-                ),
-                
+               
                 if (!_isCallBy) ...[
                   const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: AppTextField(
-                          controller: _ageCtrl,
-                          label: 'Age *',
-                          prefixIcon: const Icon(Icons.cake_outlined, color: AppColors.textHint),
-                          keyboardType: TextInputType.number,
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Age is required' : null,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: AppTextField(
-                          controller: _dobCtrl,
-                          label: 'DOB (Optional)',
-                          prefixIcon: const Icon(Icons.calendar_today_rounded, color: AppColors.textHint, size: 18),
-                          readOnly: true,
-                          onTap: _pickDob,
-                        ),
-                      ),
-                    ],
-                  ),
-                  // Gender — mandatory for walk-in
-                  const SizedBox(height: 14),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      RichText(text: TextSpan(children: [
-                        TextSpan(text: 'Gender ', style: AppTextStyles.label),
-                        const TextSpan(text: '*', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                      ])),
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _selectedGender == null ? AppColors.border : AppColors.primary,
-                          ),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _selectedGender,
-                            isExpanded: true,
-                            hint: Text('Select Gender *',
-                                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
-                            items: ['Male', 'Female', 'Other']
-                                .map((g) => DropdownMenuItem(
-                                      value: g,
-                                      child: Text(g, style: AppTextStyles.bodyMedium),
-                                    ))
-                                .toList(),
-                            onChanged: (v) => setState(() => _selectedGender = v),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  // ─ Location fields (pincode auto-fill) ───────────
-                  LocationFields(
+                  // ── Shared Common Patient Details Form ───────────────────
+                  PatientDetailsForm(
+                    nameCtrl: _nameCtrl,
+                    phoneCtrl: _phoneCtrl,
+                    dobCtrl: _dobCtrl,
                     pincodeCtrl: _pincodeCtrl,
                     countryCtrl: _countryCtrl,
                     stateCtrl: _stateCtrl,
                     cityCtrl: _cityCtrl,
                     areaCtrl: _areaCtrl,
-                    allRequired: true,
-                  ),
-                  // Full address — optional
-                  AppTextField(
-                    controller: _addressCtrl,
-                    label: 'Full Address (Optional)',
-                    prefixIcon: const Icon(Icons.home_outlined, color: AppColors.textHint),
-                    maxLines: 2,
-                  ),
-                  const SizedBox(height: 14),
-                  AppTextField(
-                    controller: _occupationCtrl,
-                    label: 'Occupation *',
-                    prefixIcon: const Icon(Icons.work_outline_rounded, color: AppColors.textHint),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Occupation is required' : null,
-                  ),
-                  const SizedBox(height: 14),
-                  AppTextField(
-                    controller: _emailCtrl,
-                    label: 'Email (Optional)',
-                    prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textHint),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 14),
-                  // Emergency contact — optional
-                  AppTextField(
-                    controller: _emergencyCtrl,
-                    label: 'Emergency Contact (Optional)',
-                    prefixIcon: const Icon(Icons.medical_services_outlined, color: AppColors.textHint),
-                  ),
-                  const SizedBox(height: 14),
-                  // ── Chronic Diseases — chip buttons ────────────────────
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Chronic Diseases', style: AppTextStyles.label),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _CreateAppointmentScreenState._chronicOptions.map((disease) {
-                          final isSelected = _selectedChronicDiseases.contains(disease);
-                          // Distinguish primary diseases vs 'Others'
-                          final isOthers = disease == 'Others';
-                          final isNoDisease = disease == 'No Disease';
-                          Color chipColor = AppColors.primary;
-                          if (isNoDisease && isSelected) chipColor = AppColors.success;
-                          if (isOthers) chipColor = AppColors.textSecondary;
-                          return GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                if (isNoDisease) {
-                                  // Selecting 'No Disease' clears all others
-                                  _selectedChronicDiseases.clear();
-                                  _selectedChronicDiseases.add(disease);
-                                } else {
-                                  // Selecting any real disease removes 'No Disease'
-                                  _selectedChronicDiseases.remove('No Disease');
-                                  if (_selectedChronicDiseases.contains(disease)) {
-                                    _selectedChronicDiseases.remove(disease);
-                                  } else {
-                                    _selectedChronicDiseases.add(disease);
-                                  }
-                                }
-                              });
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? chipColor.withValues(alpha: 0.12)
-                                    : AppColors.surface,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: isSelected ? chipColor : AppColors.border,
-                                  width: isSelected ? 1.5 : 1.0,
-                                ),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (isSelected)
-                                    Padding(
-                                      padding: const EdgeInsets.only(right: 6),
-                                      child: Icon(Icons.check_rounded, size: 14, color: chipColor),
-                                    ),
-                                  Text(
-                                    disease,
-                                    style: AppTextStyles.bodyMedium.copyWith(
-                                      color: isSelected ? chipColor : AppColors.textSecondary,
-                                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      if (_selectedChronicDiseases.contains('Others')) ...[
-                        const SizedBox(height: 10),
-                        AppTextField(
-                          controller: _allergiesCtrl,
-                          label: 'Other Conditions (describe)',
-                          prefixIcon: const Icon(Icons.edit_note_rounded, color: AppColors.textHint),
-                          maxLines: 2,
-                        ),
-                      ],
-                    ],
+                    occupationCtrl: _occupationCtrl,
+                    emailCtrl: _emailCtrl,
+                    allergiesCtrl: _allergiesCtrl,
+                    selectedGender: _selectedGender,
+                    onGenderChanged: (v) => setState(() => _selectedGender = v),
+                    selectedChronicDiseases: _selectedChronicDiseases,
+                    onChronicDiseasesChanged: (v) =>
+                        setState(() => _selectedChronicDiseases = v),
+                    consentGiven: false, // walk-in consent handled by submit guard
+                    onConsentChanged: (_) {},
+                    isReturningPatient: _isRegisteredPatient,
+                    isCheckingPhone: _isCheckingPhone,
+                    nameLocked: _isRegisteredPatient,
                   ),
                 ],
                 const SizedBox(height: 28),
