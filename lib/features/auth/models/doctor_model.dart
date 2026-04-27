@@ -22,8 +22,8 @@ class WorkingSchedule {
     final rawBreaks = json['breaks'];
     if (rawBreaks is List && rawBreaks.isNotEmpty) {
       breaks = rawBreaks.map((b) {
-        final m = b as Map<String, dynamic>;
-        return {'start': m['start'] as String, 'end': m['end'] as String};
+        final m = b as Map;
+        return {'start': m['start'].toString(), 'end': m['end'].toString()};
       }).toList();
     } else {
       // Fall back to old flat format for backward compat
@@ -128,9 +128,9 @@ class DoctorModel {
       schedule = scheduleData.map((item) {
         if (item is String) {
           return WorkingSchedule.fromJson(
-              jsonDecode(item) as Map<String, dynamic>);
+              Map<String, dynamic>.from(jsonDecode(item) as Map));
         }
-        return WorkingSchedule.fromJson(item as Map<String, dynamic>);
+        return WorkingSchedule.fromJson(Map<String, dynamic>.from(item as Map));
       }).toList();
     }
 
@@ -141,9 +141,9 @@ class DoctorModel {
       treatments = treatmentsData.map((item) {
         if (item is String) {
           return TreatmentConfig.fromJson(
-              jsonDecode(item) as Map<String, dynamic>);
+              Map<String, dynamic>.from(jsonDecode(item) as Map));
         }
-        return TreatmentConfig.fromJson(item as Map<String, dynamic>);
+        return TreatmentConfig.fromJson(Map<String, dynamic>.from(item as Map));
       }).toList();
     }
 

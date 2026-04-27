@@ -113,6 +113,7 @@ class _EditDoctorDetailsScreenState
       final pb = ref.read(pocketbaseProvider);
       final record = await pb.collection(PBCollections.doctors).getOne(_resolvedDoctorId);
       final doc = DoctorModel.fromRecord(record);
+      print('DEBUG DOCTOR: ${doc.name}, Schedule: ${doc.workingSchedule.map((e) => e.toJson()).toList()}');
 
       // Basic info
       _originalName = doc.name;
