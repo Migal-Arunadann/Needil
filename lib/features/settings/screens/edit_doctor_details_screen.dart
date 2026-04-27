@@ -246,6 +246,17 @@ class _EditDoctorDetailsScreenState
       return;
     }
 
+    for (final e in activeTreatments) {
+      final t = e.key;
+      final dur = _durationCtrls[t]?.text.trim() ?? '';
+      final fee = _feeCtrls[t]?.text.trim() ?? '';
+      if (dur.isEmpty || fee.isEmpty) {
+        _showError('Please enter fee and duration for $t');
+        _tabController.animateTo(2);
+        return;
+      }
+    }
+
     setState(() => _isSaving = true);
     try {
       final pb = ref.read(pocketbaseProvider);

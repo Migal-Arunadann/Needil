@@ -23,6 +23,7 @@ class AppointmentModel {
   final bool patientDetailsPartial;          // true once PatientInfoScreen form is opened (but not yet submitted)
   final bool treatmentPlanPartial;           // true once treatment plan form opened but not submitted
   final String? linkedTreatmentPlanId;       // ID of created treatment plan (prevents duplicates)
+  final String? linkedConsultationId;        // ID of linked consultation stub (avoids list queries)
   final DateTime? created;
   final DateTime? updated;
 
@@ -49,6 +50,7 @@ class AppointmentModel {
     this.patientDetailsPartial = false,
     this.treatmentPlanPartial = false,
     this.linkedTreatmentPlanId,
+    this.linkedConsultationId,
     this.created,
     this.updated,
     this.doctorName,
@@ -99,6 +101,9 @@ class AppointmentModel {
       linkedTreatmentPlanId: record.getStringValue('linked_treatment_plan_id').isNotEmpty
           ? record.getStringValue('linked_treatment_plan_id')
           : null,
+      linkedConsultationId: record.getStringValue('linked_consultation_id').isNotEmpty
+          ? record.getStringValue('linked_consultation_id')
+          : null,
       created: DateTime.tryParse(record.get<String>('created')),
       updated: DateTime.tryParse(record.get<String>('updated')),
       doctorName: doctorName,
@@ -131,6 +136,8 @@ class AppointmentModel {
       'treatment_plan_partial': treatmentPlanPartial,
       if (linkedTreatmentPlanId != null && linkedTreatmentPlanId!.isNotEmpty)
         'linked_treatment_plan_id': linkedTreatmentPlanId,
+      if (linkedConsultationId != null && linkedConsultationId!.isNotEmpty)
+        'linked_consultation_id': linkedConsultationId,
     };
   }
 

@@ -183,6 +183,7 @@ class SessionsNotifier extends StateNotifier<SessionsState> {
             scheduledDate: s.scheduledDate,
             scheduledTime: s.scheduledTime,
             status: SessionStatus.missed,
+            sessionType: s.sessionType,
           );
         }
         return s;

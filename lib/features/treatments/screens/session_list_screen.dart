@@ -333,6 +333,8 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
     switch (s) {
       case SessionStatus.upcoming:
         return AppColors.info;
+      case SessionStatus.waiting:
+        return AppColors.warning;
       case SessionStatus.completed:
         return AppColors.success;
       case SessionStatus.missed:
@@ -346,6 +348,8 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
     switch (s) {
       case SessionStatus.upcoming:
         return 'Upcoming';
+      case SessionStatus.waiting:
+        return 'Waiting';
       case SessionStatus.completed:
         return 'Done';
       case SessionStatus.missed:

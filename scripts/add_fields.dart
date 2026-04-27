@@ -279,7 +279,7 @@ Future<void> _patchBaseCollections(
     'presentable': false,
     'hidden': false,
     'system': false,
-    'values': ['call_by', 'walk_in'],
+    'values': ['call_by', 'walk_in', 'session'],
   });
   _addIfMissing(aFields, {
     'name': 'date',

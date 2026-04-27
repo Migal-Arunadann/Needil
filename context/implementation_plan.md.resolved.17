@@ -1,0 +1,95 @@
+# Appointment Page Logic Fixes
+
+5 targeted fixes across 4 files.
+
+## Proposed Changes
+
+### 1. Double-Booking → Reschedule Wording
+
+#### [MODIFY] [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart)
+
+- **Line 176**: Change `"Do you want to replace it with a new one?"` → `"Do you want to reschedule the appointment to this slot?"`
+- **Line 183**: Change button text `"Replace"` → `"Reschedule"`
+- **Line 195**: Change snackbar text → `"Keeping the existing appointment."`
+
+---
+
+### 2. Future Cards → Reschedule Button + Today Cards → Patient Arrived
+
+#### [MODIFY] [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart)
+
+**Logic change in [_ScheduleCard](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#482-507) (line 573-581):**
+- Add a `isFutureDate` boolean check comparing `apt.date` to today's date
+- `showArrivedBtn` = scheduled AND today AND not walk-in (as before, but restricted to today)
+- New `showRescheduleBtn` = scheduled AND future date
+- Reschedule button opens the [AvailableSlotsScreen](file:///c:/App%20Development/PMS/lib/features/scheduling/screens/available_slots_screen.dart#12-36), and on slot selection, updates the appointment's date/time and deletes the old one
+
+**New `_rescheduleAppointment` method in the parent state class:**
+- Opens [AvailableSlotsScreen](file:///c:/App%20Development/PMS/lib/features/scheduling/screens/available_slots_screen.dart#12-36) the same way as create appointment
+- On slot selection: calls a new `rescheduleAppointment` service method to update date + time
+- Refreshes the appointment list
+
+#### [MODIFY] [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart)
+
+- Add `rescheduleAppointment(id, newDate, newTime)` — updates the appointment record's [date](file:///c:/App%20Development/PMS/lib/features/appointments/providers/appointment_provider.dart#191-200) and `time` fields
+
+---
+
+### 3. Arrived Time = Non-Clickable Info + Undo Button
+
+#### [MODIFY] [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart)
+
+**Fix the tap behavior (line 173-183 [_navigateToPatient](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#173-200)):**
+- Remove the "Patient hasn't arrived yet" snackbar when tapping a card without a linked patient
+- Instead, do nothing (or show nothing) — the card's arrived info is purely informational
+
+**Fix the check-in time row (line 703-717):**
+- Already just a [Row](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart#196-209) inside a `Padding` — it is non-clickable by itself, but the parent `GestureDetector` wraps the whole card with `onTap: widget.onTap` which triggers [_navigateToPatient](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#173-200)
+- The fix: make [_navigateToPatient](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#173-200) return early gracefully (no snackbar) if patient hasn't arrived, OR check if status is `inProgress` and patientId is empty (fill details first)
+
+**Add "Undo Arrived" option:**
+- When `apt.status == inProgress` and check-in time is shown, add a small "Undo" text button next to the arrived time
+- `_undoArrived` method: calls a new `undoArrived(id)` service method that resets status to `scheduled` and clears `check_in_time`
+
+#### [MODIFY] [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart)
+
+- Add `undoArrived(appointmentId)` — sets status back to `scheduled` and clears `check_in_time`
+
+---
+
+### 4. Missed Appointment Indicator (Past Day No-Show)
+
+#### [MODIFY] [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart)
+
+**New `_isMissed` method:**
+- Returns true if: `apt.status == scheduled` AND `apt.date` is before today
+- These are past-day appointments where the patient never arrived
+
+**Card styling for missed:**
+- Show a red "Missed" status pill instead of "Scheduled"
+- Disable action buttons for missed cards
+- Add a subtle strikethrough or grayed-out visual
+
+---
+
+### 5. DoB Format: DD/MM/YYYY + Auto-Separator
+
+#### [MODIFY] [patient_info_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/patient_info_screen.dart)
+
+- **Line 71-72**: Change format from `YYYY-MM-DD` → `DD/MM/YYYY`
+- **Line 235**: Change hint from `'YYYY-MM-DD'` → `'DD/MM/YYYY'`
+- **Line 228-237**: Remove `AbsorbPointer` wrapper, allow manual typing
+- Add a custom `TextInputFormatter` that auto-inserts `/` after DD and MM
+- Keep the calendar picker as an alternative (tap on calendar icon)
+
+## Verification Plan
+
+### Manual Verification
+- Hot reload the app
+- Test call-by booking with same phone → check reschedule wording
+- Test future date cards → check reschedule button appears
+- Test today cards → check Patient Arrived button
+- Test tapping arrived time → no snackbar, just info
+- Test undo arrived → status reverts
+- Navigate to a past date with scheduled appts → check Missed indicator
+- Test DoB field → auto `/` insertion and DD/MM/YYYY format

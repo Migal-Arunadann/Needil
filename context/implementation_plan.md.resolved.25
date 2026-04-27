@@ -1,0 +1,43 @@
+# Multi-Role Architecture & UX Overhaul (Approved)
+
+## Key Decisions from User Feedback
+- **Unique IDs** for every account type: `clinic_id`, `doctor_id`, `receptionist_id` — for production support
+- **Doctor analytics** — YES, but scoped to their own patients only
+- **Receptionist patients tab** — show patient records with timing history (in/out)
+- **Doctor visibility** — own patients only by default; clinic account has toggles per doctor (show all patients, schedules, etc.)
+- **Existing doctor accounts** — delete all, not needed
+- **Payment prep** — add `subscription_tier`, `is_trial`, `max_doctors` on clinics; `is_paid` on doctors
+- **PB receptionists collection** — user creates manually, instructions provided below
+
+---
+
+## PocketBase: Create `receptionists` Auth Collection
+
+1. Open PocketBase Admin → **Collections** → **New collection**
+2. Name: `receptionists`, Type: **Auth**
+3. Add these fields:
+   - `name` — Text (required)
+   - `phone` — Text (optional)
+   - `clinic` — Relation → `clinics` (required, single)
+   - `is_active` — Bool (default: true)  
+   - `receptionist_id` — Text (unique) — auto-generated unique ID for support
+4. **API Rules** tab:
+   - List/Search rule: `clinic = @request.auth.clinic || @request.auth.id = clinic`
+   - View rule: same as above
+   - Create rule: (leave empty — only admins/clinic-side code creates)
+   - Update rule: `id = @request.auth.id`
+   - Delete rule: (leave empty — admin only)
+5. Also add to `doctors` collection: a field `doctor_id` (Text, unique) if not present
+6. Also add to `clinics` collection (if not present): `subscription_tier` (Text, default "free"), `max_doctors` (Number, default 1)
+
+---
+
+## Execution Phases
+
+### Phase 1: Auth Core (UserRole, models, services)
+### Phase 2: Login & Registration UI
+### Phase 3: MainLayout with PageView swipe + role-based tabs
+### Phase 4: Receptionist dashboard + restricted UI
+### Phase 5: Doctor management + visibility toggles (Settings)
+### Phase 6: Notification preferences
+### Phase 7: Appointments UX (Today button, scroll, highlight)

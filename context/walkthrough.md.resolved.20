@@ -1,0 +1,40 @@
+# Appointment Page Logic Fixes — Walkthrough
+
+## Changes Made
+
+### 1. Double-Booking → Reschedule Wording
+- Dialog now says: *"Do you want to reschedule the appointment to this slot?"*
+- Button changed from "Replace" → **"Reschedule"**
+
+### 2. Future vs Today Card Actions
+- **Today's cards**: Show **"Patient Arrived"** button (as before)
+- **Future date cards**: Show **"Reschedule"** button instead — opens the slot picker, updates date/time on selection
+
+### 3. Missed Appointment Indicator
+- Past-date scheduled appointments that were never arrived → **red "Missed" status pill** + banner *"Patient missed this appointment"*
+- Card is dimmed (60% opacity) with no action buttons
+
+### 4. Arrived Time: Non-Clickable + Undo
+- "Arrived at X:XX" is now pure info — **tapping the card no longer shows the orange "hasn't arrived yet" snackbar**
+- Added an **"Undo" button** next to the arrived time (only while in-progress), which pops a confirmation dialog and resets to scheduled
+
+### 5. DoB Format: DD/MM/YYYY
+- Hint changed from `YYYY-MM-DD` → `DD/MM/YYYY`
+- **Manual typing** now supported with auto `/` separator (formatter inserts `/` after DD and MM)
+- Calendar icon retained as a **suffix tap** alternative
+- Display format → `DD/MM/YYYY`, auto-converted to `YYYY-MM-DD` for PocketBase storage
+
+## Files Modified
+
+| File | What Changed |
+|------|-------------|
+| [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart) | Added [_isMissed](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#104-111), [_isFutureDate](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#112-116), [_undoArrived](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#187-235), [_rescheduleAppointment](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#236-278); rewrote [_ScheduleCard](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#589-622) with new params |
+| [patient_info_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/patient_info_screen.dart) | DoB format → DD/MM/YYYY, added [_DateInputFormatter](file:///c:/App%20Development/PMS/lib/features/appointments/screens/patient_info_screen.dart#325-350), DoB conversion for storage |
+| [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart) | Changed "replace" → "reschedule" wording in double-booking dialog |
+| [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart) | Added [rescheduleAppointment()](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#247-258) and [undoArrived()](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#259-270) methods |
+| [app_text_field.dart](file:///c:/App%20Development/PMS/lib/core/widgets/app_text_field.dart) | Added `inputFormatters` parameter support |
+
+## Verification
+- ✅ Dart analysis: **0 errors** across all modified files
+- ✅ Pushed to GitHub: commit `19e24ad`
+- ✅ GitHub Actions will build a new APK automatically

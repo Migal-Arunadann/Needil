@@ -7,7 +7,9 @@ import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/time_slot_picker.dart';
 import '../../../../core/utils/time_utils.dart';
+import 'dart:async';
 import '../../providers/registration_cache_provider.dart';
+import '../../providers/auth_provider.dart';
 import 'clinic_step3_screen.dart' show BreakTime, DayOverride;
 
 // Full doctor data model used within step 4
@@ -16,6 +18,10 @@ class _WorkingDoctorData {
   final TextEditingController nameCtrl = TextEditingController();
   final TextEditingController usernameCtrl = TextEditingController();
   final TextEditingController passwordCtrl = TextEditingController();
+
+  Timer? debounce;
+  bool isCheckingUsername = false;
+  String? usernameError;
 
   DateTime? dateOfBirth;
   File? photoFile;
@@ -44,6 +50,7 @@ class _WorkingDoctorData {
         feeControllers = {};
 
   void dispose() {
+    debounce?.cancel();
     nameCtrl.dispose();
     usernameCtrl.dispose();
     passwordCtrl.dispose();
@@ -176,13 +183,20 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
   void _next() {
     FocusScope.of(context).unfocus();
 
+    final usedUsernames = <String>{widget.clinicData['username']};
+
     // Validate all doctors
     for (int i = 0; i < _doctors.length; i++) {
       final doc = _doctors[i];
       final label = 'Doctor ${i + 1}';
+      final username = doc.usernameCtrl.text.trim();
 
       if (doc.nameCtrl.text.trim().isEmpty) { _showSnack('$label: Name is required'); return; }
-      if (doc.usernameCtrl.text.trim().isEmpty) { _showSnack('$label: Username is required'); return; }
+      if (username.isEmpty) { _showSnack('$label: Username is required'); return; }
+      if (usedUsernames.contains(username)) { _showSnack('$label: Username "$username" is already assigned within this clinic'); return; }
+      usedUsernames.add(username);
+
+      if (doc.usernameError != null) { _showSnack('$label: ${doc.usernameError}'); return; }
       if (doc.passwordCtrl.text.trim().length < 8) { _showSnack('$label: Password must be at least 8 characters'); return; }
       if (doc.dateOfBirth == null) { _showSnack('$label: Date of birth required'); return; }
 
@@ -202,6 +216,15 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
 
       final selectedTreatments = doc.selectedTreatments.entries.where((e) => e.value).toList();
       if (selectedTreatments.isEmpty) { _showSnack('$label: Select at least one treatment'); return; }
+
+      for (final t in selectedTreatments) {
+        final dur = doc.durationControllers[t.key]!.text.trim();
+        final fee = doc.feeControllers[t.key]!.text.trim();
+        if (dur.isEmpty || fee.isEmpty) {
+          _showSnack('$label: Please enter fee and duration for ${t.key}');
+          return;
+        }
+      }
     }
 
     // Build doctor data list
@@ -445,7 +468,37 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
               const SizedBox(height: 12),
 
               // Username
-              _field('Username', 'Login username', Icons.alternate_email_rounded, controller: doc.usernameCtrl),
+              _field('Username', 'Login username', Icons.alternate_email_rounded,
+                controller: doc.usernameCtrl,
+                errorText: doc.usernameError,
+                suffixIcon: doc.isCheckingUsername
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 16, height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                        ),
+                      )
+                    : null,
+                onChanged: (val) {
+                  if (doc.debounce?.isActive ?? false) doc.debounce!.cancel();
+                  if (val.length < 3) {
+                    setState(() => doc.usernameError = null);
+                    return;
+                  }
+                  setState(() => doc.isCheckingUsername = true);
+                  doc.debounce = Timer(const Duration(milliseconds: 600), () async {
+                    final authService = ref.read(authProvider.notifier).authService;
+                    final exists = await authService.checkUsernameExists(val);
+                    if (mounted) {
+                      setState(() {
+                        doc.isCheckingUsername = false;
+                        doc.usernameError = exists ? 'Username is already taken' : null;
+                      });
+                    }
+                  });
+                },
+              ),
               const SizedBox(height: 12),
 
               // Password
@@ -518,17 +571,24 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
     );
   }
 
-  Widget _field(String label, String hint, IconData icon, {required TextEditingController controller, bool obscure = false}) {
+  Widget _field(String label, String hint, IconData icon, {required TextEditingController controller, bool obscure = false, String? errorText, void Function(String)? onChanged, Widget? suffixIcon}) {
     return TextFormField(
       controller: controller,
       obscureText: obscure,
+      onChanged: onChanged,
+      validator: (v) {
+        if (errorText != null) return errorText;
+        return null;
+      },
       style: AppTextStyles.bodyMedium,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
+        errorText: errorText,
         hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
         labelStyle: AppTextStyles.caption.copyWith(color: AppColors.textHint),
         prefixIcon: Icon(icon, color: AppColors.textHint, size: 20),
+        suffixIcon: suffixIcon,
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
         enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),

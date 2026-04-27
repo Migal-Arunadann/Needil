@@ -1,0 +1,59 @@
+# Walkthrough — Settings Refactor & Role-Based Restrictions
+
+## Changes Made
+
+### 1. Settings Screen Refactor (`settings_screen.dart`)
+
+**Removed (dead code from old doctor-invite model):**
+- `_joinClinic()` method — doctors can no longer self-join clinics
+- `_leaveClinic()` method — doctors can no longer leave clinics
+- `_saveSharingPrefs()` method — data sharing toggles removed
+- `_buildClinicAssociation()` widget — replaced with read-only card
+- `_buildDataSharing()` widget — no longer needed
+- `_sharingToggle()` helper — unused after data sharing removal
+- `_clinicIdCtrl`, `_isJoining`, `_sharePast`, `_shareFuture` state variables
+- Unused `app_text_field.dart` import
+
+**Added:**
+- `_buildDoctorClinicInfo()` — read-only card showing doctor is associated with a clinic (managed by owner)
+- `_buildReceptionistDetailsCard()` — displays name, username, staff ID, and role
+- Profile hero now supports 3 roles: Clinic Account / Doctor Account / Staff Account
+- Build method now has 3 explicit branches: `isClinic`, `UserRole.doctor`, `UserRole.receptionist`
+
+### 2. Appointment List — Role-Based Button Restrictions (`appointment_list_screen.dart`)
+
+**Added receptionist restrictions in `_ScheduleCard`:**
+- `effectiveShowStartConsultation` — hidden for receptionists
+- `effectiveShowCreatePlan` — hidden for receptionists  
+- `effectiveShowEnded` — hidden for receptionists
+
+Receptionists can still see:
+- Patient Arrived button ✅
+- Fill Details button ✅
+- Reschedule button ✅
+
+Receptionists **cannot** see:
+- Start Consultation ❌
+- Create Plan ❌
+- Appointment Ended ❌
+
+### 3. Dead Code Cleanup
+
+**Deleted files:**
+- `lib/features/auth/screens/doctor_registration/` (entire directory)
+  - Contains `doctor_registration_screen.dart` which called the removed `registerDoctor()` method
+- `lib/features/auth/screens/role_selection_screen.dart`
+  - Old "Register as Clinic / Register as Doctor" selector — no longer referenced
+
+### 4. Analysis Results
+
+- **`lib/` directory: 0 errors** ✅
+- Only remaining warnings are `_showError`/`_showComingSoon` unused (kept intentionally as utility helpers) and pre-existing deprecation warnings in scripts/
+
+## Remaining Work
+
+| Item | Status |
+|------|--------|
+| Patient list restriction for receptionists | Pending |
+| Post-registration "+ Add Doctor" in clinic settings | Pending |
+| Post-registration receptionist management in settings | Pending |

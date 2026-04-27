@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/services/appointment_service.dart';
+import '../../../core/constants/pb_collections.dart';
 import '../models/appointment_model.dart';
 import '../../scheduling/providers/scheduling_provider.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -114,6 +115,25 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
         date: date,
         time: time,
       );
+
+      // ── Returning patient auto-link ──────────────────────────────────────
+      // If a patient with this phone already exists, link them immediately
+      // so the "Fill Details" step is skipped for returning patients.
+      try {
+        final existing = await _service.findPatientByPhone(
+          patientPhone,
+          doctorId,
+          clinicId: clinicId,
+        );
+        if (existing != null) {
+          await _service.linkPatient(appointment.id, existing.id);
+          await _service.markPatientDetailsSaved(appointment.id);
+        }
+      } catch (_) {
+        // Non-fatal: if lookup fails, the receptionist can still use "Fill Details"
+      }
+      // ────────────────────────────────────────────────────────────────────
+
       await loadAppointments();
       return appointment;
     } catch (e) {

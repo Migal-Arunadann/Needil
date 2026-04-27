@@ -7,6 +7,7 @@ import 'core/services/auth_service.dart';
 import 'features/dashboard/screens/main_layout.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/clinic_registration/clinic_step1_screen.dart';
+import 'features/superadmin/screens/superadmin_shell.dart';
 
 class PmsApp extends ConsumerStatefulWidget {
   const PmsApp({super.key});
@@ -56,9 +57,9 @@ class _PmsAppState extends ConsumerState<PmsApp> {
     );
   }
   Widget _getHomeForAuth(AuthState state) {
+    if (state.role == UserRole.superadmin) return const SuperadminShell();
     if (state.role == UserRole.clinic) {
       if (state.clinic != null && state.clinic!.name.isEmpty) {
-        // Intercept: OTP confirmed, but clinic details not yet filled.
         return const ClinicStep1Screen();
       }
     }

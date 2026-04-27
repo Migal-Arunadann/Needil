@@ -255,7 +255,7 @@ class _KpiRow extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 10,
       mainAxisSpacing: 10,
-      childAspectRatio: 1.7,
+      childAspectRatio: 1.4, // Changed from 1.7 to afford more height on narrow phones
       children: [
         _KpiCard(
           label: 'Total Patients',
@@ -336,12 +336,15 @@ class _KpiCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
               Text(
@@ -351,6 +354,8 @@ class _KpiCard extends StatelessWidget {
                   fontSize: 11,
                   fontWeight: FontWeight.w500,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),

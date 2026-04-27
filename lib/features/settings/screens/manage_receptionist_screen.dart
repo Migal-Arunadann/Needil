@@ -5,6 +5,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/pb_collections.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
+import 'add_staff_receptionist_screen.dart';
 
 class ManageReceptionistScreen extends ConsumerStatefulWidget {
   const ManageReceptionistScreen({super.key});
@@ -150,6 +151,16 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary),
+            onPressed: () async {
+              final added = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(builder: (_) => const AddStaffReceptionistScreen()),
+              );
+              if (added == true && mounted) _load();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: AppColors.primary),
             onPressed: _load,

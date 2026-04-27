@@ -1,0 +1,127 @@
+# Multi-Feature Improvements
+
+## Overview
+Addresses 7 distinct bugs and feature requests across appointments, patient records, profiles, and doctor availability.
+
+---
+
+## 1. Appointment Phone Duplicate Logic (Bug Fix)
+
+**Problem:** [findExistingAppointment](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#208-224) queries for ANY scheduled appointment across ALL dates, so it incorrectly warns when a second appointment on a DIFFERENT date is created. When cancelled, the first appointment stays. After 2 slots — 3rd still gets accepted.
+
+**Fix:**
+- [findExistingAppointment](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#208-224) should only check appointments **on the same date** as the new booking (not globally).  
+- Change the check: if an existing scheduled appointment is found **for the same date**, warn and offer to reschedule.  
+- For different dates: allow freely — no warning.
+
+#### [MODIFY] [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart)
+- Remove global check; keep the date filter mandatory so duplicate prevention is scoped per-date only.
+
+#### [MODIFY] [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart)
+- Pass the selected date to [findExistingAppointment](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#208-224) call.
+
+---
+
+## 2. Phone Call Button (Bug Fix)
+
+**Problem:** Phone icon in [_ScheduleCard](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#643-678) is not functional.
+
+**Fix:**
+- Add `url_launcher` package.
+- Wrap the phone icon `GestureDetector` with `launchUrl(Uri(scheme: 'tel', path: phone))`.
+
+#### [MODIFY] [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart)
+- Find phone icon button and wire up `url_launcher`.
+
+#### [MODIFY] [pubspec.yaml](file:///c:/App%20Development/PMS/pubspec.yaml)
+- Add `url_launcher: ^6.3.0`.
+
+---
+
+## 3. Patient Address — Split into City + Area (Enhancement)
+
+**Problem:** Address is a single text field combining city and area.
+
+**Decision:** Since PocketBase schema change is needed, we'll store as two separate app-level fields and serialize them into one field as `"area, city"` or add two new PB fields. Given no schema migration tool, we'll split in the UI and store as two PocketBase fields.
+
+> [!IMPORTANT]
+> This requires **adding two new fields** (`city`, `area`) to the `patients` PocketBase collection. The user must do this manually in PocketBase admin UI: add `city` (Text) and `area` (Text) fields to the `patients` collection.
+
+#### [MODIFY] [patient_model.dart](file:///c:/App%20Development/PMS/lib/features/patients/models/patient_model.dart)
+- Add `city` and `area` fields alongside existing `address`.
+
+#### [MODIFY] [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart)
+- Add `city` and `area` to [createPatient](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#130-168).
+
+#### [MODIFY] [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart)
+- Split address field into City and Area text fields.
+
+#### [MODIFY] [patient_info_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/patient_info_screen.dart)
+- Show city and area separately.
+
+#### [MODIFY] [patient_profile_screen.dart](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart)
+- Display city and area in patient profile.
+
+---
+
+## 4. Clinic Profile New Fields (Enhancement)
+
+> [!IMPORTANT]
+> Requires new PocketBase fields in `clinics` collection: `phone` (Text), `address` (Text), `area` (Text), `city` (Text), `state` (Text), `pin` (Text), `location` (Text). Logo upload requires [logo](file:///c:/App%20Development/PMS/lib/features/auth/providers/auth_provider.dart#181-186) (File) field. User must add these manually in PocketBase admin.
+
+#### [MODIFY] [clinic_model.dart](file:///c:/App%20Development/PMS/lib/features/auth/models/clinic_model.dart)
+- Add: `phone`, `address`, `area`, `city`, `state`, `pin`, `location`, `logoUrl` fields.
+
+#### [MODIFY] [edit_profile_screen.dart](file:///c:/App%20Development/PMS/lib/features/settings/screens/edit_profile_screen.dart)
+- Add form fields for all new clinic fields including image picker for logo.
+
+#### [MODIFY] [settings_screen.dart](file:///c:/App%20Development/PMS/lib/features/settings/screens/settings_screen.dart)
+- Display new fields in the clinic details card.
+
+---
+
+## 5. Doctor Profile New Fields (Enhancement)
+
+> [!IMPORTANT]
+> Requires new PocketBase fields in `doctors` collection: `phone` (Text), `dob` (Text), [photo](file:///c:/App%20Development/PMS/lib/features/treatments/screens/record_session_screen.dart#282-319) (File). User must add these manually.
+
+#### [MODIFY] [doctor_model.dart](file:///c:/App%20Development/PMS/lib/features/auth/models/doctor_model.dart)
+- Add: `phone`, `dob`, `photoUrl` fields.
+
+#### [MODIFY] [edit_doctor_details_screen.dart](file:///c:/App%20Development/PMS/lib/features/settings/screens/edit_doctor_details_screen.dart)
+- Add Doctor Phone, DOB fields and profile photo picker in Basic Info tab.
+
+---
+
+## 6. Availability — Generic Default + Multiple Breaks (Enhancement)
+
+**Problems:**
+1. Schedule is configured per-day individually. User wants to set a default schedule once and apply to all days, then deselect non-working days.
+2. Breaktime is accepted outside of working hours — must validate break times are within start/end.
+3. Only 1 break time slot per day — needs support for multiple breaks.
+
+#### [MODIFY] [edit_doctor_details_screen.dart](file:///c:/App%20Development/PMS/lib/features/settings/screens/edit_doctor_details_screen.dart)
+- **Default schedule:** Add "Apply to All Working Days" template section at top of Availability tab with start time, end time, and breaks. Clicking "Apply to All" propagates values to all selected days.
+- **Break validation:** In [_save()](file:///c:/App%20Development/PMS/lib/features/settings/screens/edit_doctor_details_screen.dart#207-325), validate that break start/end are within working hours; show error if outside.
+- **Multiple breaks:** Change break structure from `breakStart`/`breakEnd` (single) to `List<{start, end}>` per day. Update [WorkingSchedule](file:///c:/App%20Development/PMS/lib/features/auth/models/doctor_model.dart#4-39) model and UI to support adding/removing multiple breaks.
+
+#### [MODIFY] [doctor_model.dart](file:///c:/App%20Development/PMS/lib/features/auth/models/doctor_model.dart)
+- Update [WorkingSchedule](file:///c:/App%20Development/PMS/lib/features/auth/models/doctor_model.dart#4-39) to hold `List<Map<String,String>> breaks` instead of single `breakStart`/`breakEnd`.
+
+#### [MODIFY] [scheduling_service.dart](file:///c:/App%20Development/PMS/lib/core/services/scheduling_service.dart)
+- Update slot generation to skip ALL break windows, not just one.
+
+---
+
+## Verification Plan
+
+### Manual Verification
+1. Create two appointments for the same phone on different dates → no warning shown.
+2. Create two appointments for the same phone on the same date → warning shown, cancel keeps original.
+3. Tap phone icon on an appointment card → phone app opens with number pre-filled.
+4. Create a patient with separate City and Area fields → saved and displayed separately.
+5. Clinic profile shows logo, address, phone, location fields.
+6. Doctor profile shows photo, phone, DOB fields.
+7. Set a default schedule and "Apply to All" → all selected days inherit times.
+8. Set a break outside working hours → save shows validation error.
+9. Add 2 breaks per day → both respected in slot generation.

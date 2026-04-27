@@ -30,6 +30,8 @@ class AuthState {
   final String? pendingEmail;
   /// The full clinic registration payload, held while waiting for OTP.
   final Map<String, dynamic>? pendingClinicData;
+  /// The MFA ID returned by auth-with-password if MFA is required.
+  final String? pendingMfaId;
 
   const AuthState({
     this.isInitializing = true,
@@ -43,6 +45,7 @@ class AuthState {
     this.pendingOtpId,
     this.pendingEmail,
     this.pendingClinicData,
+    this.pendingMfaId,
   });
 
   AuthState copyWith({
@@ -57,6 +60,7 @@ class AuthState {
     String? pendingOtpId,
     String? pendingEmail,
     Map<String, dynamic>? pendingClinicData,
+    String? pendingMfaId,
   }) {
     return AuthState(
       isInitializing: isInitializing ?? this.isInitializing,
@@ -70,6 +74,7 @@ class AuthState {
       pendingOtpId: pendingOtpId ?? this.pendingOtpId,
       pendingEmail: pendingEmail ?? this.pendingEmail,
       pendingClinicData: pendingClinicData ?? this.pendingClinicData,
+      pendingMfaId: pendingMfaId ?? this.pendingMfaId,
     );
   }
 
@@ -88,6 +93,8 @@ class AuthState {
 /// Manages authentication state.
 class AuthNotifier extends StateNotifier<AuthState> {
   final AuthService _authService;
+
+  AuthService get authService => _authService;
 
   AuthNotifier(this._authService) : super(const AuthState());
 
@@ -325,6 +332,61 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Clear error.
   void clearError() {
     state = state.copyWith(error: null);
+  }
+
+  /// Called by SuperadminLoginScreen after successful OTP verification.
+  /// Transitions global state to superadmin-authenticated so app.dart routes
+  /// to the SuperadminShell.
+  void setSuperadminAuthenticated() {
+    state = AuthState(
+      isInitializing: false,
+      isAuthenticated: true,
+      role: UserRole.superadmin,
+    );
+  }
+
+  // ── Superadmin Auth (kept for session restore only) ────────────────────
+
+  /// Step 1: Verify superadmin email + password, then send OTP.
+  Future<void> loginSuperadmin(String email, String password) async {
+    state = state.copyWith(isLoading: true, error: null);
+    final result = await _authService.loginSuperadmin(email, password);
+    if (result.success) {
+      state = state.copyWith(
+        isLoading: false,
+        pendingOtpId: result.otpId,
+        pendingMfaId: result.mfaId,
+        pendingEmail: email,
+      );
+    } else {
+      state = state.copyWith(isLoading: false, error: result.error);
+    }
+  }
+
+  /// Step 2: Verify superadmin OTP and complete login.
+  Future<void> verifySuperadminOtp(String otpCode) async {
+    if (state.pendingOtpId == null) {
+      state = state.copyWith(error: 'Session expired. Please try again.');
+      return;
+    }
+    state = state.copyWith(isLoading: true, error: null);
+    final result = await _authService.verifySuperadminOtp(
+      otpId: state.pendingOtpId!,
+      otpCode: otpCode,
+      mfaId: state.pendingMfaId,
+    );
+    if (result.success) {
+      state = AuthState(
+        isInitializing: false,
+        isAuthenticated: true,
+        role: UserRole.superadmin,
+        pendingOtpId: null,
+        pendingEmail: null,
+        pendingMfaId: null,
+      );
+    } else {
+      state = state.copyWith(isLoading: false, error: result.error);
+    }
   }
 
   // ── OTP: Registration ──────────────────────────────────────

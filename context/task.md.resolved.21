@@ -1,0 +1,102 @@
+# Healthcare CRM – Master Task List
+
+## Phase 0: Infrastructure & Setup
+- [x] Create Flutter project with dependencies (PocketBase SDK, Riverpod, etc.)
+- [x] Set up folder structure (clean architecture)
+- [x] Initialize Git repo and push to GitHub
+- [x] Provide PocketBase deployment steps for Coolify/Hostinger VPS
+- [x] Create PocketBase schema (collections & rules) — setup script at [scripts/setup_pocketbase.dart](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart)
+
+## Phase 1: Authentication & Registration
+- [x] Auth screens (login, role selection)
+- [x] Clinic registration flow (3 steps)
+- [x] Doctor registration flow (treatments, schedule, join/individual)
+- [x] Role-based routing after login
+
+## Phase 2: Appointments
+- [x] Call-by appointment creation
+- [x] Walk-in appointment creation
+- [x] Common patient information form
+- [ ] Doctor availability checking
+- [x] Appointment list with search/filter
+
+## Phase 3: Treatment Plans & Sessions
+- [x] First consultation form
+- [x] Treatment plan creation (auto-generate sessions)
+- [x] Session recording page
+- [x] Photo attachment with compression
+
+## Phase 4: Scheduling Logic
+- [x] Working hours & break validation
+- [x] Bed capacity checks (clinic)
+- [x] Available slot suggestions
+
+## Phase 5: Data Sharing & Settings
+- [x] Doctor joins clinic flow (settings)
+- [x] Data sharing policy (past/future/none)
+- [x] Enforce sharing policy in queries
+
+## Phase 6: Security & Compliance
+- [x] HTTPS enforcement
+- [x] RBAC rules in PocketBase
+- [x] DPDP consent collection & withdrawal
+- [x] Audit logging
+
+## Phase 7: Polish & Testing
+- [x] UI polish (theme, animations)
+- [x] Pull-to-refresh, search/filter on lists
+- [x] End-to-end testing on emulator
+- [x] Doctor availability checking (wired via available-slots screen)
+
+## Phase 8: UI Restructuring & Interval Logic
+- [x] Implement 5-tab Master Layout (Home, Appointments, Analytics, Patients, Settings)
+- [x] Standardize 30-min configurable intervals (custom Time Picker)
+- [x] Modify Registration & Settings forms to support configurable intervals
+- [x] Enforce doctor availability for all appointments
+- [x] Fix Call-By submission bug (missing navigation pop)
+- [x] Add strict server/client checks to prevent duplicate appointments (Walk-In and Call-By)
+
+## Phase 9: Home UI Simplification & Dynamic Expandable FAB
+- [x] Remove Quick Stats (beds, doctors, patients) from Clinic and Doctor dashboards
+- [x] Remove Quick Actions from Clinic and Doctor dashboards
+- [x] Add [ExpandableFab](file:///c:/App%20Development/PMS/lib/core/widgets/expandable_fab.dart#5-22) to [MainLayout](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/main_layout.dart#13-19) that transitions from pill-shaped (`extended`) on Home to circle on other tabs
+- [x] Add "Call-By" and "Walk-In" animated slide-up buttons natively to the [ExpandableFab](file:///c:/App%20Development/PMS/lib/core/widgets/expandable_fab.dart#5-22)
+- [x] Support `initialIsCallBy` parameter in [CreateAppointmentScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart#15-24) and `AppRouter` to directly jump to the specific form from the FAB
+
+## Phase 10: Redesign Appointments Screen
+- [x] Create a horizontally scrollable Date Strip replacing the bulky date selector box.
+- [x] Implement inline filter chips ([All](file:///c:/App%20Development/PMS/lib/features/auth/screens/clinic_registration/clinic_step3_screen.dart#146-156), `Scheduled`, `Completed`, `Cancelled`) replacing the modal filter.
+- [x] Redesign Appointment Cards to feature a top details row (Icon, Name, Time) and a bottom action bar (Status pill, action icons).
+- [x] Update the Header to include the Month/Year subtitle and a minimal calendar icon for arbitrary date picking.
+
+## Phase 11: Patients Tab
+- [x] Create Patient list screen retrieving records belonging to the authenticated clinic/doctor.
+- [x] Build a PatientProvider that interacts with the [patients](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#132-148) PocketBase collection.
+- [x] Connect [PatientListScreen](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_list_screen.dart#9-15) to the 4th tab in [MainLayout](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/main_layout.dart#13-19).
+
+## Phase 12: Home Dashboard Redesign & Appointment Flow Fixes
+- [x] Redesign Clinic and Doctor dashboards with rich PMS stats (Today's overview, Practice overview, Upcoming).
+- [x] Relocate sign-out to Settings with a confirmation dialog.
+- [x] Fix [CreateAppointmentScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart#15-24) slot selection capturing current time instead of selected slot.
+- [x] Add Patient Name and Phone fields to Walk-in appointment creation.
+- [x] Handle blocking navigation and errors on appointment creation failure.
+- [x] Wire up decorative action icons on [AppointmentListScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#11-18) cards (Open, Complete, Cancel).
+
+## Phase 13: Clinic Registration & Settings Overhaul
+- [x] Restrict [TimeSlotPicker](file:///c:/App%20Development/PMS/lib/core/widgets/time_slot_picker.dart#6-47) to 5AM-11PM range with `minTime` disabled-slot parameter.
+- [x] Redesign `clinic_step3_screen` — visual day chips, unified break time, From<To validation, quick selectors.
+- [x] Make `settings_screen` role-aware — remove Join Clinic for clinic accounts.
+- [x] Add Clinic Profile and Clinic Management sections for clinic accounts.
+## Phase 14: Clinic Registration Details & Settings Polish
+- [x] Add day-specific override logic to `clinic_step3_screen` (allow customizing times for specific selected days).
+- [x] Dismiss keyboard on interaction in `clinic_step3_screen`.
+- [x] Add [EditProfileScreen](file:///c:/App%20Development/PMS/lib/features/settings/screens/edit_profile_screen.dart#12-18) and wire it up in `settings_screen`.
+- [x] Fix non-working buttons in Settings (show "Coming Soon" snackbar).
+
+## Phase 15: Appointment Logic Refinements
+- [x] Fix "Bad state" error on successful appointment booking caused by parsing `expand['patient']` when linking isn't immediate.
+- [x] Auto-select doctor in [CreateAppointmentScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart#15-24) if the clinic only has one doctor attached.
+- [x] Restrict Walk-in appointment creation to the current date only (preventing future walk-ins and fixing the In-Progress logic gap).
+- [x] Auto-create Patient records on Walk-In submission so they correctly populate the Patients List tab.
+- [x] Fix endless loading bug in [AvailableSlotsScreen](file:///c:/App%20Development/PMS/lib/features/scheduling/screens/available_slots_screen.dart#12-34) for today's date by wrapping the initial load in a post-frame callback.
+- [x] Update Date Slider in [AppointmentListScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#11-18) to generate a 31-day window strictly centered around the selected date's yesterday, and dynamically rebuild and animate the scroll position when a new calendar date is picked.

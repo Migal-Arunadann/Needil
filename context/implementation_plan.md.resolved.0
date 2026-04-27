@@ -1,0 +1,432 @@
+# Healthcare CRM — Implementation Plan
+
+## Overview
+
+Build a mobile CRM app for session-based healthcare practitioners using **Flutter** (frontend) + **PocketBase** (backend, self-hosted on Hostinger VPS via Coolify). This plan covers the full project in phases, starting with **Phase 0 (Infrastructure)** and **Phase 1 (Auth & Registration)**.
+
+> [!IMPORTANT]
+> We will build and get approval for each phase before moving to the next. This plan covers Phases 0 & 1 in detail. Subsequent phases will be planned after these are implemented and tested.
+
+---
+
+## User Review Required
+
+> [!CAUTION]
+> **PocketBase URL**: I'll use a placeholder `https://pb.yourdomain.com` in all code. You'll need to replace this with your actual PocketBase URL once deployed.
+
+> [!IMPORTANT]
+> **GitHub**: Please confirm:
+> 1. Do you already have a GitHub repository created for this project, or should I create the repo from the command line?
+> 2. What should the repository name be? (e.g., `healthcare-crm`, `pms-app`)
+> 3. Should the repo be public or private?
+
+> [!WARNING]
+> **Coolify Deployment**: The PocketBase deployment steps below assume you have Coolify already installed on your Hostinger VPS and can access the Coolify dashboard. Please confirm this.
+
+---
+
+## Phase 0: Infrastructure & Project Setup
+
+### 0A. PocketBase Deployment on Coolify (Hostinger VPS)
+
+Here are the steps to deploy PocketBase on your Coolify-managed VPS:
+
+#### Option 1: Deploy via Coolify Dashboard (Recommended)
+
+1. **Log into Coolify** at `https://your-vps-ip:8000` (or your configured Coolify URL).
+2. **Create a new Resource** → Choose **"Docker Compose"**.
+3. **Paste this `docker-compose.yml`**:
+
+```yaml
+version: '3.8'
+services:
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: pocketbase
+    restart: unless-stopped
+    ports:
+      - "8090:8090"
+    volumes:
+      - pb_data:/pb/pb_data
+      - pb_migrations:/pb/pb_migrations
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8090/api/health || exit 1
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pb_data:
+  pb_migrations:
+```
+
+4. **Set domain**: In Coolify, assign a domain like `pb.yourdomain.com` to this service. Coolify auto-provisions SSL via Let's Encrypt.
+5. **Deploy** the service.
+6. **Create admin account**: Visit `https://pb.yourdomain.com/_/` to open the PocketBase admin panel. Create your admin email/password.
+
+#### Option 2: Deploy via SSH (Manual)
+
+```bash
+# SSH into your VPS
+ssh root@your-vps-ip
+
+# Create directory
+mkdir -p /opt/pocketbase && cd /opt/pocketbase
+
+# Download PocketBase (check latest version at https://pocketbase.io/docs/)
+wget https://github.com/pocketbase/pocketbase/releases/download/v0.25.9/pocketbase_0.25.9_linux_amd64.zip
+unzip pocketbase_0.25.9_linux_amd64.zip
+
+# Create systemd service
+cat > /etc/systemd/system/pocketbase.service << 'EOF'
+[Unit]
+Description=PocketBase
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/opt/pocketbase/pocketbase serve --http="0.0.0.0:8090"
+WorkingDirectory=/opt/pocketbase
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable pocketbase
+systemctl start pocketbase
+```
+
+Then configure a reverse proxy in Coolify or Nginx to point `pb.yourdomain.com` → `localhost:8090`.
+
+---
+
+### 0B. GitHub Setup
+
+```bash
+# In the project directory (c:\App Development\PMS)
+git init
+git remote add origin https://github.com/YOUR_USERNAME/REPO_NAME.git
+
+# After initial code is created:
+git add .
+git commit -m "Initial commit: Flutter project setup"
+git branch -M main
+git push -u origin main
+```
+
+I'll push code to GitHub after each phase is completed. You'll need to provide your GitHub username and repo name.
+
+---
+
+### 0C. Flutter Project Setup
+
+#### [NEW] Flutter project initialization
+
+```bash
+flutter create --org com.pms --project-name pms_app .
+```
+
+#### Key Dependencies (`pubspec.yaml`)
+
+| Package | Purpose |
+|---------|---------|
+| `pocketbase: ^0.21.1` | PocketBase Dart SDK |
+| `flutter_riverpod: ^2.6.1` | State management |
+| `go_router: ^14.8.1` | Declarative routing |
+| `image_picker: ^1.1.2` | Photo capture |
+| `flutter_image_compress: ^2.3.0` | Image compression |
+| `intl: ^0.19.0` | Date/time formatting |
+| `shared_preferences: ^2.3.4` | Local key-value storage |
+| `flutter_secure_storage: ^9.2.4` | Secure token/credential storage |
+
+#### [NEW] Project Folder Structure
+
+```
+lib/
+├── main.dart
+├── app.dart                          # MaterialApp with theme & router
+├── core/
+│   ├── constants/
+│   │   ├── app_colors.dart           # Medical theme color palette
+│   │   ├── app_text_styles.dart      # Typography definitions
+│   │   └── pb_collections.dart       # PocketBase collection name constants
+│   ├── providers/
+│   │   └── pocketbase_provider.dart  # PocketBase client singleton
+│   ├── router/
+│   │   └── app_router.dart           # GoRouter configuration
+│   ├── services/
+│   │   └── auth_service.dart         # Auth logic (login, register, token mgmt)
+│   ├── utils/
+│   │   ├── image_compressor.dart     # Photo compression utility
+│   │   └── validators.dart           # Form validators
+│   └── widgets/
+│       ├── app_button.dart           # Reusable styled button
+│       ├── app_text_field.dart       # Reusable styled text field
+│       └── loading_overlay.dart      # Loading indicator overlay
+├── features/
+│   ├── auth/
+│   │   ├── models/
+│   │   │   ├── clinic_model.dart
+│   │   │   └── doctor_model.dart
+│   │   ├── providers/
+│   │   │   └── auth_provider.dart
+│   │   └── screens/
+│   │       ├── login_screen.dart
+│   │       ├── role_selection_screen.dart
+│   │       ├── clinic_registration/
+│   │       │   ├── clinic_step1_screen.dart   # Name, username, password
+│   │       │   ├── clinic_step2_screen.dart   # Number of beds
+│   │       │   └── clinic_step3_screen.dart   # Primary doctor details
+│   │       └── doctor_registration/
+│   │           ├── doctor_info_screen.dart     # Name, age
+│   │           ├── doctor_schedule_screen.dart # Working days/times
+│   │           ├── doctor_treatments_screen.dart # Treatment selection
+│   │           └── doctor_join_screen.dart     # Join clinic or individual
+│   ├── dashboard/
+│   │   └── screens/
+│   │       ├── clinic_dashboard_screen.dart
+│   │       └── doctor_dashboard_screen.dart
+│   ├── appointments/    # (Phase 2)
+│   ├── patients/        # (Phase 2)
+│   ├── treatments/      # (Phase 3)
+│   └── settings/        # (Phase 5)
+```
+
+---
+
+### 0D. PocketBase Collections (Schema)
+
+These collections will be created in PocketBase admin panel or via migrations:
+
+#### `clinics` collection (Auth type)
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | text | Clinic/hospital name |
+| `username` | text | Unique login username |
+| `email` | email | Optional |
+| `password` | password | Hashed by PocketBase |
+| `bed_count` | number | Available beds for concurrent scheduling |
+| `clinic_id` | text | Unique 6-char code for doctor joining |
+
+#### `doctors` collection (Auth type)
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | text | Doctor's full name |
+| `age` | number | Doctor's age |
+| `email` | email | Optional |
+| `username` | text | Login username |
+| `password` | password | Hashed by PocketBase |
+| `clinic` | relation → clinics | Nullable (null = individual) |
+| `is_primary` | bool | Is this the primary doctor of a clinic? |
+| `working_schedule` | json | `[{"day": "Monday", "start": "09:00", "end": "17:00", "break_start": "13:00", "break_end": "14:00"}]` |
+| `treatments` | json | `[{"type": "Acupuncture", "duration_min": 30, "fee": 500}]` |
+| `share_past_patients` | bool | Share pre-join patient records with clinic |
+| `share_future_patients` | bool | Share post-join patients with clinic |
+
+#### `patients` collection (Base type)
+| Field | Type | Notes |
+|-------|------|-------|
+| `full_name` | text | Required |
+| `phone` | text | Required |
+| `date_of_birth` | date | Optional |
+| `address` | text | Optional |
+| `emergency_contact` | text | Optional |
+| `allergies_conditions` | text | Optional |
+| `doctor` | relation → doctors | The treating doctor |
+| `clinic` | relation → clinics | Nullable |
+| `consent_given` | bool | DPDP consent |
+| `consent_date` | date | When consent was given |
+
+#### `appointments` collection (Base type)
+| Field | Type | Notes |
+|-------|------|-------|
+| `patient` | relation → patients | Nullable for call-by (filled later) |
+| `doctor` | relation → doctors | Required |
+| `clinic` | relation → clinics | Nullable |
+| `type` | select | `call_by` or `walk_in` |
+| `date` | date | Appointment date |
+| `time` | text | Appointment time (HH:mm) |
+| `status` | select | `scheduled`, `in_progress`, `completed`, `cancelled` |
+| `patient_name` | text | For call-by placeholder |
+| `patient_phone` | text | For call-by placeholder |
+
+#### `consultations` collection (Base type)
+| Field | Type | Notes |
+|-------|------|-------|
+| `patient` | relation → patients | Required |
+| `doctor` | relation → doctors | Required |
+| `notes` | text | Consultation notes |
+| `bp_level` | text | Optional |
+| `pulse` | number | Optional |
+| `charged` | bool | Was client charged? |
+| `charge_amount` | number | Fee if charged |
+| `photos` | file (multiple) | Compressed images |
+
+#### `treatment_plans` collection (Base type)
+| Field | Type | Notes |
+|-------|------|-------|
+| `patient` | relation → patients | Required |
+| `doctor` | relation → doctors | Required |
+| `consultation` | relation → consultations | Link to first consultation |
+| `treatment_type` | text | e.g., "Acupuncture" |
+| `start_date` | date | Plan start date |
+| `total_sessions` | number | e.g., 6 |
+| `interval_days` | number | Days between sessions |
+| `session_fee` | number | Fee per session |
+| `status` | select | `active`, `completed`, `paused` |
+
+#### `sessions` collection (Base type)
+| Field | Type | Notes |
+|-------|------|-------|
+| `treatment_plan` | relation → treatment_plans | Required |
+| `patient` | relation → patients | Required |
+| `doctor` | relation → doctors | Required |
+| `session_number` | number | e.g., 1 of 6 |
+| `scheduled_date` | date | Auto-calculated |
+| `scheduled_time` | text | Time slot |
+| `status` | select | `upcoming`, `completed`, `missed`, `cancelled` |
+| `notes` | text | Session notes |
+| `bp_level` | text | Optional |
+| `pulse` | number | Optional |
+| `photos` | file (multiple) | Compressed images |
+| `remarks` | text | Optional |
+
+#### `audit_logs` collection (Base type)
+| Field | Type | Notes |
+|-------|------|-------|
+| `user` | text | User who performed action |
+| `user_role` | text | `clinic` or `doctor` |
+| `action` | text | e.g., `viewed_patient`, `created_appointment` |
+| `record_id` | text | ID of accessed record |
+| `collection` | text | Collection name |
+| `timestamp` | autodate | Auto-set |
+
+---
+
+## Phase 1: Authentication & Registration (Detailed)
+
+### Auth Component
+
+#### [NEW] [auth_service.dart](file:///c:/App Development/PMS/lib/core/services/auth_service.dart)
+- Methods: `loginClinic()`, `loginDoctor()`, `registerClinic()`, `registerDoctor()`, `logout()`, `getCurrentUser()`, `isLoggedIn()`
+- Stores auth token in `flutter_secure_storage`
+- Determines user role from which collection the auth came from
+
+#### [NEW] [auth_provider.dart](file:///c:/App Development/PMS/lib/features/auth/providers/auth_provider.dart)
+- Riverpod providers wrapping `AuthService`
+- `authStateProvider` — streams auth state changes
+- `currentUserProvider` — provides current user model
+
+---
+
+### Screens
+
+#### [NEW] [login_screen.dart](file:///c:/App Development/PMS/lib/features/auth/screens/login_screen.dart)
+- Role toggle (Clinic / Doctor) at the top
+- Username + password fields
+- Login button → validates → calls auth service
+- "Register" link → navigates to role selection
+
+#### [NEW] [role_selection_screen.dart](file:///c:/App Development/PMS/lib/features/auth/screens/role_selection_screen.dart)
+- Two large card options: "Register as Clinic" / "Register as Doctor"
+- Routes to corresponding registration flow
+
+#### [NEW] Clinic Registration (3-step wizard)
+- **Step 1**: Clinic name, username, password, confirm password
+- **Step 2**: Number of beds (numeric input with stepper +/-)
+- **Step 3**: Primary doctor details (name, age, schedule, treatments) — reuses doctor registration form as a sub-component
+- On submit: creates clinic record → creates primary doctor record linked to clinic → auto-login
+
+#### [NEW] Doctor Registration (multi-step)
+- **Screen 1**: Name, age, username, password
+- **Screen 2**: Working schedule (day selector + time pickers for each day, optional break times)
+- **Screen 3**: Treatment selection (checkboxes) + per-treatment duration & fee
+- **Screen 4**: Join clinic (enter Clinic ID) or practice individually
+- On submit: creates doctor record → if clinic ID provided, links to clinic → auto-login
+
+---
+
+### Models
+
+#### [NEW] [clinic_model.dart](file:///c:/App Development/PMS/lib/features/auth/models/clinic_model.dart)
+- Dart data class mapping to `clinics` collection fields
+- `fromRecord()` and `toJson()` methods
+
+#### [NEW] [doctor_model.dart](file:///c:/App Development/PMS/lib/features/auth/models/doctor_model.dart)
+- Dart data class mapping to `doctors` collection fields
+- Includes `WorkingSchedule` and `TreatmentConfig` sub-models
+
+---
+
+## Proposed Changes Summary
+
+### Phase 0 Files
+| File | Status | Description |
+|------|--------|-------------|
+| `pubspec.yaml` | NEW | Flutter project with all dependencies |
+| `lib/main.dart` | NEW | App entry point |
+| `lib/app.dart` | NEW | MaterialApp, theme, router |
+| `lib/core/constants/app_colors.dart` | NEW | Medical color theme |
+| `lib/core/constants/app_text_styles.dart` | NEW | Typography |
+| `lib/core/constants/pb_collections.dart` | NEW | Collection name constants |
+| `lib/core/providers/pocketbase_provider.dart` | NEW | PB client singleton |
+| `lib/core/router/app_router.dart` | NEW | GoRouter routes |
+| `lib/core/widgets/app_button.dart` | NEW | Reusable button |
+| `lib/core/widgets/app_text_field.dart` | NEW | Reusable text field |
+| `lib/core/widgets/loading_overlay.dart` | NEW | Loading indicator |
+| `.gitignore` | MODIFY | Ensure Flutter defaults |
+
+### Phase 1 Files
+| File | Status | Description |
+|------|--------|-------------|
+| `lib/core/services/auth_service.dart` | NEW | Auth business logic |
+| `lib/features/auth/providers/auth_provider.dart` | NEW | Riverpod auth state |
+| `lib/features/auth/models/clinic_model.dart` | NEW | Clinic data model |
+| `lib/features/auth/models/doctor_model.dart` | NEW | Doctor data model |
+| `lib/features/auth/screens/login_screen.dart` | NEW | Login UI |
+| `lib/features/auth/screens/role_selection_screen.dart` | NEW | Role picker |
+| `lib/features/auth/screens/clinic_registration/*.dart` | NEW | 3 clinic reg screens |
+| `lib/features/auth/screens/doctor_registration/*.dart` | NEW | 4 doctor reg screens |
+| `lib/features/dashboard/screens/*.dart` | NEW | Dashboard placeholders |
+
+---
+
+## Verification Plan
+
+### Automated Tests
+Since this is a new project, we'll add tests as we go:
+
+```bash
+# Run all Flutter tests
+flutter test
+
+# Run specific test file
+flutter test test/core/services/auth_service_test.dart
+```
+
+- **Unit tests** for `AuthService` (mock PocketBase client, test login/register logic)
+- **Widget tests** for registration screens (verify form validation, step navigation)
+
+### Manual Verification
+After Phase 0 & 1 are implemented:
+
+1. **Flutter build check**: Run `flutter build apk --debug` to verify the project compiles.
+2. **Emulator test**: Run `flutter run` on an emulator and verify:
+   - App launches to login screen
+   - Can toggle between Clinic/Doctor login
+   - "Register" navigates to role selection
+   - Clinic registration flows through 3 steps
+   - Doctor registration flows through 4 steps
+   - Form validation shows errors for empty required fields
+3. **PocketBase integration** (requires PocketBase running):
+   - Register a clinic → verify record in PocketBase admin
+   - Register a doctor → verify record with correct schedule/treatments JSON
+   - Login with created credentials → verify token stored and dashboard appears
+   - Register a doctor with a Clinic ID → verify doctor is linked to clinic
+
+> [!NOTE]
+> I'll take screenshots during emulator testing to confirm UI appearance. For PocketBase integration testing, you'll need PocketBase deployed first (follow the deployment steps above).

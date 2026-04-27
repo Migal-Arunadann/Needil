@@ -145,8 +145,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     _fetchPatientGender();
     if (widget.consultationId != null) {
       _loadExistingData();
-    } else if (widget.appointmentId != null) {
-      // New consultation from appointment — try restoring a saved draft
+    } else {
+      // New consultation — try restoring a saved draft
       _loadDraft();
     }
   }
@@ -189,7 +189,6 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
 
   /// Save current form state as a draft.
   Future<void> _saveDraft() async {
-    if (widget.appointmentId == null) return;
     try {
       final prefs = await SharedPreferences.getInstance();
       final data = {
@@ -221,7 +220,6 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
 
   /// Delete the draft from SharedPreferences.
   Future<void> _clearDraft() async {
-    if (widget.appointmentId == null) return;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_draftKey);
@@ -299,13 +297,17 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       debugPrint('Error loading view mode data: $e');
     } finally {
       if (mounted) setState(() => _isLoadingView = false);
+      if (!_isViewing) {
+        // Restore any unsaved formulated draft changes on top
+        await _loadDraft();
+      }
     }
   }
 
   @override
   void dispose() {
-    // Save draft if the form was opened for a new consultation but not submitted
-    if (!_formSubmitted && widget.appointmentId != null && !_isViewing) {
+    // Save draft if the form was opened for a consultation but not submitted
+    if (!_formSubmitted && !_isViewing) {
       _saveDraft(); // fire-and-forget is fine here
     }
     _notesCtrl.dispose();
@@ -365,12 +367,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           children: [
             Icon(Icons.stop_circle_rounded, color: AppColors.warning, size: 24),
             const SizedBox(width: 10),
-            const Expanded(child: Text('End Consultation?')),
+            const Expanded(child: Text('End Treatment?')),
           ],
         ),
         content: const Text(
           'This will:\n'
-          '• Cancel all remaining upcoming sessions\n'
+          '• Cancel all remaining treatment & maintenance sessions\n'
           '• Remove them from the appointment schedule\n'
           '• Mark this consultation as completed\n\n'
           'Already completed sessions will be preserved. This action cannot be undone.',
@@ -380,7 +382,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('End Consultation'),
+            child: const Text('End Treatment'),
           ),
         ],
       ),
@@ -389,17 +391,17 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     if (confirm == true && widget.consultationId != null && mounted) {
       try {
         final service = ref.read(treatmentServiceProvider);
-        await service.endConsultation(widget.consultationId!);
+        await service.endTreatment(widget.consultationId!);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Consultation ended. All future sessions cancelled.'), backgroundColor: AppColors.success),
+            const SnackBar(content: Text('Treatment ended. All pending sessions cancelled.'), backgroundColor: AppColors.success),
           );
           Navigator.pop(context);
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to end consultation: $e'), backgroundColor: AppColors.error),
+            SnackBar(content: Text('Failed to end treatment: $e'), backgroundColor: AppColors.error),
           );
         }
       }
@@ -452,7 +454,6 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         final existing = await pb.collection(PBCollections.consultations).getList(
           filter: 'patient = "${widget.patientId}" && doctor = "${widget.doctorId}" && status = "ongoing"',
           perPage: 1,
-          sort: '-created',
         );
         if (existing.items.isNotEmpty) {
           resolvedId = existing.items.first.id;
@@ -661,7 +662,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                       ),
                       IconButton(
                         icon: const Icon(Icons.stop_circle_rounded, color: AppColors.warning),
-                        tooltip: 'End Consultation',
+                        tooltip: 'End Treatment',
                         onPressed: _confirmEndConsultation,
                       ),
                     ] else if (_isViewing) ...[

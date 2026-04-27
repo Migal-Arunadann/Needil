@@ -1,0 +1,48 @@
+# Healthcare CRM – Master Task List
+
+## Phase 0: Infrastructure & Setup
+- [x] Create Flutter project with dependencies (PocketBase SDK, Riverpod, etc.)
+- [x] Set up folder structure (clean architecture)
+- [x] Initialize Git repo and push to GitHub
+- [x] Provide PocketBase deployment steps for Coolify/Hostinger VPS
+- [x] Create PocketBase schema (collections & rules) — setup script at [scripts/setup_pocketbase.dart](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart)
+
+## Phase 1: Authentication & Registration
+- [x] Auth screens (login, role selection)
+- [x] Clinic registration flow (3 steps)
+- [x] Doctor registration flow (treatments, schedule, join/individual)
+- [x] Role-based routing after login
+
+## Phase 2: Appointments
+- [x] Call-by appointment creation
+- [x] Walk-in appointment creation
+- [x] Common patient information form
+- [ ] Doctor availability checking
+- [x] Appointment list with search/filter
+
+## Phase 3: Treatment Plans & Sessions
+- [ ] First consultation form
+- [ ] Treatment plan creation (auto-generate sessions)
+- [ ] Session recording page
+- [ ] Photo attachment with compression
+
+## Phase 4: Scheduling Logic
+- [ ] Working hours & break validation
+- [ ] Bed capacity checks (clinic)
+- [ ] Available slot suggestions
+
+## Phase 5: Data Sharing & Settings
+- [ ] Doctor joins clinic flow (settings)
+- [ ] Data sharing policy (past/future/none)
+- [ ] Enforce sharing policy in queries
+
+## Phase 6: Security & Compliance
+- [ ] HTTPS enforcement
+- [ ] RBAC rules in PocketBase
+- [ ] DPDP consent collection & withdrawal
+- [ ] Audit logging
+
+## Phase 7: Polish & Testing
+- [ ] UI polish (theme, animations)
+- [ ] Pull-to-refresh, search/filter on lists
+- [ ] End-to-end testing on emulator

@@ -1,0 +1,62 @@
+# Healthcare CRM — Walkthrough (All Phases)
+
+## Progress Summary
+
+| Phase | Status | Files | Key Deliverables |
+|-------|--------|-------|-----------------|
+| 0 | ✅ | 12 | Flutter setup, PB deploy, Git, schema |
+| 1 | ✅ | 12 | Auth, clinic/doctor registration, dashboards |
+| 2 | ✅ | 8 | Appointments (call-by/walk-in), patient info |
+| 3 | ✅ | 9 | Consultations, treatment plans, sessions |
+| 4 | ✅ | 5 | Scheduling, slots, bed capacity |
+| 5 | ✅ | 3 | Settings, join/leave clinic, data sharing |
+| 6 | ✅ | 4 | Audit logging, DPDP consent |
+| 7 | ⬜ | — | UI polish, testing |
+
+---
+
+## Phase 3 — Consultations & Treatment Plans
+
+| File | Purpose |
+|------|---------|
+| [consultation_model.dart](file:///c:/App%20Development/PMS/lib/features/consultations/models/consultation_model.dart) | Vitals, photos, charge tracking |
+| [treatment_plan_model.dart](file:///c:/App%20Development/PMS/lib/features/treatments/models/treatment_plan_model.dart) | Plan with status, sessions, fees |
+| [session_model.dart](file:///c:/App%20Development/PMS/lib/features/treatments/models/session_model.dart) | Session with vitals, photos |
+| [treatment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart) | CRUD + photo upload + auto-session generation |
+| [consultation_screen.dart](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart) | Notes, BP/pulse, camera/gallery, charge |
+| [create_treatment_plan_screen.dart](file:///c:/App%20Development/PMS/lib/features/treatments/screens/create_treatment_plan_screen.dart) | Treatment chips, live preview, auto-fee |
+| [session_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/treatments/screens/session_list_screen.dart) | Progress bar, numbered timeline |
+| [record_session_screen.dart](file:///c:/App%20Development/PMS/lib/features/treatments/screens/record_session_screen.dart) | Record vitals/photos, mark missed |
+
+## Phase 4 — Scheduling Logic
+
+| File | Purpose |
+|------|---------|
+| [scheduling_service.dart](file:///c:/App%20Development/PMS/lib/core/services/scheduling_service.dart) | Slot generation, break exclusion, bed capacity, conflict detection |
+| [scheduling_provider.dart](file:///c:/App%20Development/PMS/lib/features/scheduling/providers/scheduling_provider.dart) | Riverpod state for available slots |
+| [available_slots_screen.dart](file:///c:/App%20Development/PMS/lib/features/scheduling/screens/available_slots_screen.dart) | Date nav, color-coded slot grid |
+
+## Phase 5 — Settings & Data Sharing
+
+| File | Purpose |
+|------|---------|
+| [settings_screen.dart](file:///c:/App%20Development/PMS/lib/features/settings/screens/settings_screen.dart) | Profile, join/leave clinic, sharing toggles, sign out |
+
+## Phase 6 — Security & Compliance
+
+| File | Purpose |
+|------|---------|
+| [audit_service.dart](file:///c:/App%20Development/PMS/lib/core/services/audit_service.dart) | Typed audit actions, non-blocking logs |
+| [consent_screen.dart](file:///c:/App%20Development/PMS/lib/features/settings/screens/consent_screen.dart) | DPDP Act consent/withdrawal, rights info |
+
+## Verification
+
+| Check | Result |
+|-------|--------|
+| `flutter analyze` | ✅ 0 errors, 0 warnings (all phases) |
+| `git push` | ✅ All commits on `Migal-Arunadann/PMS-APP` |
+
+## Next: Phase 7 — Polish & Testing
+- UI polish (theme refinements, micro-animations)
+- Pull-to-refresh, search/filter on lists
+- End-to-end testing on emulator

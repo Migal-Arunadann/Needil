@@ -1,0 +1,32 @@
+# Multi-Feature Improvements Task
+
+## 1. Appointment Duplicate Phone Fix
+- [ ] Fix [findExistingAppointment](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#208-224) to require date parameter
+- [ ] Pass selected date from `create_appointment_screen`
+
+## 2. Phone Call Button
+- [ ] Add `url_launcher` to pubspec.yaml
+- [ ] Wire up phone call in [_ScheduleCard](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#643-678)
+
+## 3. Patient Address Split (City + Area)
+- [ ] Add `city` and `area` to [PatientModel](file:///c:/App%20Development/PMS/lib/features/patients/models/patient_model.dart#3-87)
+- [ ] Add to [createPatient](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#130-168) in `appointment_service`
+- [ ] Split address field in `create_appointment_screen`
+- [ ] Update `patient_info_screen` display
+- [ ] Update `patient_profile_screen` display
+
+## 4. Clinic Profile New Fields
+- [ ] Add fields to [ClinicModel](file:///c:/App%20Development/PMS/lib/features/auth/models/clinic_model.dart#3-50)
+- [ ] Add fields + logo picker to `edit_profile_screen`
+- [ ] Display in `settings_screen` clinic card
+
+## 5. Doctor Profile New Fields
+- [ ] Add `phone`, `dob`, `photoUrl` to [DoctorModel](file:///c:/App%20Development/PMS/lib/features/auth/models/doctor_model.dart#68-173)
+- [ ] Add fields + photo picker to `edit_doctor_details_screen`
+
+## 6. Availability Improvements
+- [ ] Add "Apply to All" default schedule template
+- [ ] Validate break times within working hours
+- [ ] Support multiple breaks per day in [WorkingSchedule](file:///c:/App%20Development/PMS/lib/features/auth/models/doctor_model.dart#4-39) model
+- [ ] Update `edit_doctor_details_screen` UI for multiple breaks
+- [ ] Update `scheduling_service` to skip all breaks

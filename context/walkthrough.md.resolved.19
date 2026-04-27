@@ -1,0 +1,38 @@
+# Phase 32: Schedule Overhaul & Double-Booking Prevention
+
+## Changes Made
+
+### 1. Appointment List Screen — Complete Rewrite
+**File**: [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart)
+
+- **Split into two sections**: Consultations (call-by + walk-in) and Treatment Sessions, each with its own header and count badge.
+- **Redesigned schedule cards** with progressive action flow:
+  - `Patient Arrived` → `Fill Details` → `Appointment Ended`
+- **Late patient indicator**: Red warning banner appears when scheduled time has passed and patient hasn't arrived.
+- **Long-press to cancel**: Cancel is now behind a long-press gesture (removed inline cancel icon).
+- **Tap to navigate**: Tapping a card with a linked patient opens their profile.
+- **Walk-in cards** skip the "Arrived" button since check-in happens on form submission.
+
+### 2. Double-Booking Prevention
+**File**: [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart)
+
+- **Debounced phone lookup** (600ms): When a 10+ digit phone is entered, the app checks:
+  1. If a patient record exists → offers to auto-fill all details.
+  2. If a scheduled appointment exists → warns with date/time and offers to replace.
+- Phone number is **mandatory** for both call-by and walk-in.
+
+### 3. Service Layer
+**File**: [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart)
+
+- [findPatientByPhone(phone, doctorId)](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#193-206) — finds existing patient records.
+- [findExistingAppointment(phone, doctorId, {date})](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#207-222) — detects duplicate scheduled appointments.
+- [markArrived(appointmentId)](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#223-234) — sets `check_in_time` + status to `in_progress`.
+- [markEnded(appointmentId)](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#235-246) — sets `check_out_time` + status to `completed`.
+
+### 4. Router
+**File**: [app_router.dart](file:///c:/App%20Development/PMS/lib/core/router/app_router.dart)
+
+- Added `/patient-profile` route for navigation from schedule cards.
+
+## Verification
+- `flutter analyze lib/` — **0 errors**, only info-level lints in pre-existing code.

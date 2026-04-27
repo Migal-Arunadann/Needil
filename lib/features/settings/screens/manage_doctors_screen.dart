@@ -6,6 +6,7 @@ import '../../../core/constants/pb_collections.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'edit_doctor_details_screen.dart';
+import 'add_staff_doctor_screen.dart';
 
 class ManageDoctorsScreen extends ConsumerStatefulWidget {
   const ManageDoctorsScreen({super.key});
@@ -133,6 +134,16 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary),
+            onPressed: () async {
+              final added = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(builder: (_) => const AddStaffDoctorScreen()),
+              );
+              if (added == true && mounted) _load();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: AppColors.primary),
             onPressed: _load,

@@ -25,6 +25,8 @@ import '../../features/settings/screens/settings_screen.dart';
 import '../../features/settings/screens/consent_screen.dart';
 import '../../features/patients/screens/patient_profile_screen.dart';
 import '../../features/patients/models/patient_model.dart';
+import '../../features/superadmin/screens/superadmin_login_screen.dart';
+import '../../features/superadmin/screens/superadmin_clinic_detail_screen.dart';
 
 /// Named route generator for the app.
 Route<dynamic>? generateRoute(RouteSettings settings) {
@@ -150,6 +152,13 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
 
     case '/consent':
       return _slide(const ConsentScreen(), settings);
+
+    case '/superadmin/login':
+      return _fade(const SuperadminLoginScreen(), settings);
+
+    case '/superadmin/clinic':
+      final clinicId = settings.arguments as String;
+      return _slide(SuperadminClinicDetailScreen(clinicId: clinicId), settings);
 
     default:
       return _fade(const LoginScreen(), settings);

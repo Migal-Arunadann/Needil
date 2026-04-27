@@ -1,0 +1,43 @@
+# Consultation & Treatment Rework Plan
+
+## Changes Overview
+
+### 1. Replace "Delete Consultation" with "End Consultation"
+- **File**: [consultation_screen.dart](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart)
+- Remove the delete icon button and [_confirmDelete()](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#235-272) method
+- Add "End Consultation" button that:
+  - Cancels all future (`upcoming`) sessions in PocketBase
+  - Deletes the corresponding synced `appointments` for those cancelled sessions
+  - Sets the consultation status to `completed`
+  - Shows a confirmation dialog before proceeding
+
+### 2. Consultation Creation: Separate from Treatment Plan
+- **File**: [consultation_screen.dart](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart)
+- Remove the Treatment Plan Sessions section from the **create** flow (when `consultationId == null`)
+- After saving, return the consultation to the caller
+- **File**: [patient_profile_screen.dart](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart) *(already done)* — already prompts "Create Plan?" after save
+
+### 3. Session #1 Started Today — Bigger Consultation Card
+- **File**: [patient_profile_screen.dart](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart) → [_buildTreatmentsTab()](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart#332-467)
+- For each consultation card, check if any session linked to it has `session_number == 1` and `status == completed` and `scheduled_date == today`
+- If yes, show an expanded card indicating "Session #1 started today"
+
+### 4. Fix Auto-Schedule Engine (CRITICAL)
+- **File**: [treatment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart) → [createSmartTreatmentPlan()](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart#154-320)
+- **Bug**: The engine checks *only* appointments in the `appointments` collection, but does NOT check the `sessions` table itself. Two treatment plans for different patients can schedule sessions at the exact same time.
+- **Fix**: In the slot-checking loop, query BOTH `appointments` AND `sessions` for the given `doctor + date + time`, and ensure the combined count does not exceed `maxBeds`
+- Also: after a slot is not found in 8 attempts, fall through to next valid working day instead of defaulting to preferred time
+
+### 5. Rework Consultation Details UI in Patient Profile
+- **File**: [consultation_screen.dart](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart) (view mode)
+- Add an "Edit Treatment Plan" section that allows:
+  - Viewing all sessions with editable dates/times
+  - Rescheduling individual sessions (update both session record and synced appointment)
+  - A summary of the plan (treatment type, fees, intervals)
+
+## Execution Order
+1. Fix auto-schedule engine (most critical bug)
+2. Replace delete with end consultation + cancel sessions
+3. Separate consultation creation from treatment plan
+4. Add session #1 indicator on consultation cards
+5. Add treatment plan editing UI

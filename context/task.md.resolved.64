@@ -1,0 +1,52 @@
+# Multi-Role Architecture — Task Tracker
+
+## Phase 1: Auth Core
+- [ ] Create `receptionist_model.dart`
+- [ ] Add `UserRole.receptionist` to enum in `auth_service.dart`
+- [ ] Add `loginReceptionist()` to `auth_service.dart`
+- [ ] Update `restoreSession()` for receptionist
+- [ ] Remove `registerDoctor()` from `auth_service.dart`
+- [ ] Update `auth_provider.dart` (receptionist state, login, remove registerDoctor)
+- [ ] Add `receptionists` to `pb_collections.dart`
+- [ ] Add unique ID generation for doctors (`doctor_id`) and receptionists (`receptionist_id`)
+- [ ] Add payment prep fields to `clinic_model.dart` (`subscription_tier`, `max_doctors`)
+
+## Phase 2: Login & Registration UI
+- [ ] Update `login_screen.dart` — 3-tab toggle (Clinic / Doctor / Receptionist)
+- [ ] Update Register link to go directly to `/register/clinic`
+- [ ] Remove `role_selection_screen.dart` references from router
+- [ ] Remove `doctor_registration_screen.dart` references from router  
+- [ ] Update `clinic_step3_screen.dart` — "+ Add Working Doctor" flow
+- [ ] Update `clinic_step3_screen.dart` — Receptionist toggle + fields
+- [ ] Update `auth_service.registerClinic()` — additional doctors + receptionist
+- [ ] Update `auth_provider.registerClinic()` — forward new params
+
+## Phase 3: MainLayout with Swipe
+- [ ] Replace `IndexedStack` with `PageView` + `PageController`
+- [ ] Sync bottom nav with page controller
+- [ ] Role-based tab configuration (Clinic=5, Doctor=5 with own analytics, Receptionist=4)
+- [ ] Expose `switchToTab()` method for dashboard linking
+
+## Phase 4: Receptionist UI
+- [ ] Create `receptionist_dashboard_screen.dart`
+- [ ] Restrict `appointment_list_screen.dart` for receptionist (no consult/plan buttons)
+- [ ] Restrict `patient_list_screen.dart` for receptionist (timing history, no medical records)
+- [ ] Restrict `settings_screen.dart` for receptionist
+
+## Phase 5: Doctor Management (Settings)
+- [ ] Add "+ Add Doctor" button in clinic settings
+- [ ] Add doctor creation form modal (same fields as registration)
+- [ ] Add receptionist management section in clinic settings
+- [ ] Add doctor visibility toggles (show all patients, show all schedules, etc.)
+- [ ] Remove invite-code / join-clinic flow from doctor settings
+
+## Phase 6: Notification Preferences
+- [ ] Replace with: Patient Late Reminder, Missed (Consultation), Missed (Session), Clinic Alerts
+- [ ] Remove Daily Summary and Patient Arrivals
+
+## Phase 7: Appointments UX
+- [ ] Add "Today" button next to calendar icon
+- [ ] Date scroller: start from yesterday, today second
+- [ ] Auto-scroll to today on reset
+- [ ] Dashboard "Upcoming Today" tap → switch to Appointments tab
+- [ ] Highlight appointment card animation (1-second glow)

@@ -298,12 +298,11 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
         ),
         const SizedBox(height: 14),
 
-        // ── Occupation (required) ──────────────────────────────────────────
+        // ── Occupation (optional) ──────────────────────────────────────────
         AppTextField(
           controller: widget.occupationCtrl,
-          label: 'Occupation *',
+          label: 'Occupation (Optional)',
           prefixIcon: const Icon(Icons.work_outline_rounded, color: AppColors.textHint),
-          validator: (v) => (v == null || v.trim().isEmpty) ? 'Occupation is required' : null,
         ),
         const SizedBox(height: 14),
 

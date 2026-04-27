@@ -1,0 +1,24 @@
+# Consultation Form Updates
+
+## Phase 1: Consultation Form Dropdowns
+- [ ] Implement `Diet Pattern` Dropdown
+- [ ] Implement `Sleep Duration` Dropdown
+- [ ] Implement `Sleep Quality` Dropdown
+- [ ] Implement `Exercise / Physical Activity` Dropdown
+- [ ] Implement `Stress / Mental Health Notes` Dropdown
+
+## Phase 2: Consultation Radios & Conditional Logic
+- [ ] Add 4 Radio Groups (Yes/No) for Addictions (Smoking, Alcohol, Tobacco, Drugs)
+- [ ] Implement serialization/deserialization for Addictions to save as string
+- [ ] Fetch Patient Gender on init in [ConsultationScreen](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#16-35)
+- [ ] Hide `Pregnancy Status` field if Gender == Male
+- [ ] Change `Pregnancy Status` to Radio Group (Yes/No)
+
+## Phase 3: Consultation Formatting & Defaults
+- [ ] Implement BP Level Auto-formatter (`/`)
+- [ ] Default Consultation Fee `_charged` to true
+- [ ] Fix Photo thumbnails rendering (`Image.file` vs `Image.network`)
+
+## Phase 4: Treatment Plan & Smart Scheduling
+- [ ] Modify `TreatmentService.createSmartTreatmentPlan` to skip non-working days
+- [ ] Check and remove the "NA" default error/label inside session planning form

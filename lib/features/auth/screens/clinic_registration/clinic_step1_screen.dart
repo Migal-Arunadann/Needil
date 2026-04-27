@@ -8,6 +8,8 @@ import '../../../../core/widgets/location_fields.dart';
 import '../../../../core/utils/validators.dart';
 import '../../providers/auth_provider.dart';
 
+import 'dart:async';
+
 /// Clinic Registration — Step 1: Clinic details (name, username, password).
 class ClinicStep1Screen extends ConsumerStatefulWidget {
   const ClinicStep1Screen({super.key});
@@ -32,8 +34,42 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
   bool _obscureConfirm = true;
   bool _isChangingEmail = false;
 
+  Timer? _debounce;
+  bool _isCheckingUsername = false;
+  String? _usernameError;
+
+  @override
+  void initState() {
+    super.initState();
+    _usernameController.addListener(_onUsernameChanged);
+  }
+
+  void _onUsernameChanged() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    final value = _usernameController.text;
+    
+    if (value.length < 3) {
+      if (mounted) setState(() => _usernameError = null);
+      return;
+    }
+
+    if (mounted) setState(() => _isCheckingUsername = true);
+    
+    _debounce = Timer(const Duration(milliseconds: 600), () async {
+      final authService = ref.read(authProvider.notifier).authService;
+      final exists = await authService.checkUsernameExists(value);
+      if (mounted) {
+        setState(() {
+          _isCheckingUsername = false;
+          _usernameError = exists ? 'This username is already taken' : null;
+        });
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _debounce?.cancel();
     _nameController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
@@ -81,6 +117,7 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
   }
 
   void _next() {
+    if (_usernameError != null) return;
     if (!_formKey.currentState!.validate()) return;
 
     Navigator.of(context).pushNamed(
@@ -143,15 +180,32 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
                   textInputAction: TextInputAction.next,
                 ),
                 const SizedBox(height: 20),
-                AppTextField(
-                  label: 'Username',
-                  hint: 'Choose a unique username',
-                  controller: _usernameController,
-                  validator: (v) =>
-                      Validators.minLength(v, 3, 'Username'),
-                  prefixIcon: const Icon(Icons.person_outline_rounded,
-                      color: AppColors.textHint),
-                  textInputAction: TextInputAction.next,
+                Stack(
+                  alignment: Alignment.centerRight,
+                  children: [
+                    AppTextField(
+                      label: 'Username',
+                      hint: 'Choose a unique username',
+                      controller: _usernameController,
+                      errorText: _usernameError,
+                      validator: (v) {
+                        if (_usernameError != null) return _usernameError;
+                        return Validators.minLength(v, 3, 'Username');
+                      },
+                      prefixIcon: const Icon(Icons.person_outline_rounded,
+                          color: AppColors.textHint),
+                      textInputAction: TextInputAction.next,
+                    ),
+                    if (_isCheckingUsername)
+                      const Positioned(
+                        right: 16,
+                        top: 40,
+                        child: SizedBox(
+                          width: 16, height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 20),
                 // Show the email they used to verify

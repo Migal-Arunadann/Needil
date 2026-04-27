@@ -300,6 +300,14 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
 
     final selectedTreatments = _selectedTreatments.entries.where((e) => e.value).toList();
     if (selectedTreatments.isEmpty) { _showSnack('Please select at least one treatment'); return; }
+    for (final t in selectedTreatments) {
+      final dur = _durationControllers[t.key]!.text.trim();
+      final fee = _feeControllers[t.key]!.text.trim();
+      if (dur.isEmpty || fee.isEmpty) {
+        _showSnack('Please enter fee and duration for ${t.key}');
+        return;
+      }
+    }
 
     // Build schedule
     final dob = '${_dateOfBirth!.year}-${_dateOfBirth!.month.toString().padLeft(2, '0')}-${_dateOfBirth!.day.toString().padLeft(2, '0')}';

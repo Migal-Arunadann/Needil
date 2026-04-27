@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,6 +27,10 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
   final _recPasswordCtrl = TextEditingController();
   bool _obscurePassword = true;
 
+  Timer? _debounce;
+  bool _isCheckingUsername = false;
+  String? _usernameError;
+
   late final RegistrationCacheNotifier _cacheNotifier;
 
   @override
@@ -38,10 +43,37 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
     if (cache.recName.isNotEmpty) _recNameCtrl.text = cache.recName;
     if (cache.recUsername.isNotEmpty) _recUsernameCtrl.text = cache.recUsername;
     if (cache.recPassword.isNotEmpty) _recPasswordCtrl.text = cache.recPassword;
+
+    _recUsernameCtrl.addListener(_onUsernameChanged);
+  }
+
+  void _onUsernameChanged() {
+    if (!_enableReceptionist) return;
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    final value = _recUsernameCtrl.text;
+
+    if (value.length < 3) {
+      if (mounted) setState(() => _usernameError = null);
+      return;
+    }
+
+    if (mounted) setState(() => _isCheckingUsername = true);
+
+    _debounce = Timer(const Duration(milliseconds: 600), () async {
+      final authService = ref.read(authProvider.notifier).authService;
+      final exists = await authService.checkUsernameExists(value);
+      if (mounted) {
+        setState(() {
+          _isCheckingUsername = false;
+          _usernameError = exists ? 'Username is already taken' : null;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     // Save receptionist state so it survives going back and forward
     _cacheNotifier.saveReceptionist(
       enabled: _enableReceptionist,
@@ -70,12 +102,30 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
     // Validate receptionist if enabled
     Map<String, dynamic>? receptionistData;
     if (_enableReceptionist) {
+      final username = _recUsernameCtrl.text.trim();
       if (_recNameCtrl.text.trim().isEmpty) { _showSnack('Receptionist name is required'); return; }
-      if (_recUsernameCtrl.text.trim().isEmpty) { _showSnack('Receptionist username is required'); return; }
+      if (username.isEmpty) { _showSnack('Receptionist username is required'); return; }
+      
+      // Check against clinic username
+      if (username == widget.clinicData['username']) {
+        _showSnack('Username "$username" is already assigned to the clinic'); return;
+      }
+      
+      // Check against additional doctors
+      final rawAdditional = widget.clinicData['additional_doctors'] as List<dynamic>?;
+      if (rawAdditional != null) {
+        for (final d in rawAdditional) {
+          if (username == d['username']) {
+            _showSnack('Username "$username" is already assigned to a working doctor'); return;
+          }
+        }
+      }
+
+      if (_usernameError != null) { _showSnack(_usernameError!); return; }
       if (_recPasswordCtrl.text.trim().length < 8) { _showSnack('Password must be at least 8 characters'); return; }
       receptionistData = {
         'name': _recNameCtrl.text.trim(),
-        'username': _recUsernameCtrl.text.trim(),
+        'username': username,
         'password': _recPasswordCtrl.text.trim(),
       };
     }
@@ -134,15 +184,19 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
     final authState = ref.watch(authProvider);
 
     ref.listen<AuthState>(authProvider, (prev, next) {
-      if (next.error != null) {
+      if (next.error != null && next.error != prev?.error) {
         _showSnack(next.error!);
-        ref.read(authProvider.notifier).clearError();
       }
-      if (next.isAuthenticated) {
-        // Clear registration cache. Navigation is handled reactively by app.dart
-        // (home: changes from LoginScreen → MainLayout when isAuthenticated).
-        // Do NOT call Navigator.pushNamedAndRemoveUntil here — it causes a black screen.
+      if (next.isAuthenticated && !(prev?.isAuthenticated ?? false)) {
+        // Clear registration cache
         ref.read(registrationCacheProvider.notifier).clear();
+        // Pop all registration screens so app.dart's reactive home (MainLayout)
+        // becomes the root. Using popUntil(first) is safe here because the user
+        // was navigating forward through registration steps — there is no
+        // "back" they would want to return to.
+        if (mounted) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
       }
     });
 
@@ -303,11 +357,26 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
           ),
           const SizedBox(height: 14),
 
-          AppTextField(
-            label: 'Username',
-            hint: 'Login username for receptionist',
-            controller: _recUsernameCtrl,
-            prefixIcon: const Icon(Icons.alternate_email_rounded, color: AppColors.textHint),
+          Stack(
+            alignment: Alignment.centerRight,
+            children: [
+              AppTextField(
+                label: 'Username',
+                hint: 'Login username for receptionist',
+                controller: _recUsernameCtrl,
+                errorText: _usernameError,
+                prefixIcon: const Icon(Icons.alternate_email_rounded, color: AppColors.textHint),
+              ),
+              if (_isCheckingUsername)
+                const Positioned(
+                  right: 16,
+                  top: 40,
+                  child: SizedBox(
+                    width: 16, height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 14),
 

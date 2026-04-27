@@ -1,0 +1,14 @@
+# Appointment Workflow Overhaul
+
+## Bug Fix 1: Double-Booking False Positives
+- [ ] Fix [findExistingAppointment](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#207-222) to filter by selected date
+- [ ] Update [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart) to pass the date
+
+## Bug Fix 2: Appointment Ending Prematurely → Start Consultation
+- [ ] Add `consultation_start_time` field to [appointment_model.dart](file:///c:/App%20Development/PMS/lib/features/appointments/models/appointment_model.dart)
+- [ ] Add PocketBase field script for `consultation_start_time`
+- [ ] Add `findOngoingConsultation` + [createConsultation](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart#15-77) to [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart)
+- [ ] Replace "Appointment Ended" with "Start Consultation" in [_ScheduleCard](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#589-622)
+- [ ] Add `_startConsultation` method in [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart)
+- [ ] Show "Appointment Ended" only after consultation is completed
+- [ ] Verify with `flutter analyze`

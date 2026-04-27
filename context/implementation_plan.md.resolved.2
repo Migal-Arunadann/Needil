@@ -1,0 +1,60 @@
+# UI Restructuring and Appointment Logic Fixes
+
+This document outlines the approach for restructuring the application into a 5-tab layout and fixing core scheduling and appointment edge cases as requested by the user.
+
+## User Review Required
+
+> [!IMPORTANT]  
+> Please review this plan. The UI restructuring involves moving the current Dashboard into the "Home" tab of a new persistent Bottom Navigation layout.
+> Setting a 30-minute strict interval requires modifying time selection inputs across the app to use dropdowns or grid selectors instead of the native open-ended clock pickers.
+
+## Proposed Changes
+
+### Main Layout Structure (5 Tabs)
+--------------------------------------
+To provide immediate access to core module areas, we will implement a `MainLayout` scaffold that wraps the app after login.
+
+#### [NEW] `lib/features/dashboard/screens/main_layout.dart`
+- Create a `StatefulWidget` or Riverpod-driven screen to manage a `BottomNavigationBar`.
+- Define 5 tabs:
+  1. Home ([DoctorDashboardScreen](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/doctor_dashboard_screen.dart#9-263) / [ClinicDashboardScreen](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/clinic_dashboard_screen.dart#8-253))
+  2. Appointments ([AppointmentListScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#10-17))
+  3. Analytics (Placeholder screen for now)
+  4. Patients (Placeholder list for now)
+  5. Settings ([SettingsScreen](file:///c:/App%20Development/PMS/lib/features/settings/screens/settings_screen.dart#12-18))
+
+#### [MODIFY] [lib/core/router/app_router.dart](file:///c:/App%20Development/PMS/lib/core/router/app_router.dart)
+- Change the `/dashboard` route to render `MainLayout` instead of the direct dashboard screens.
+- Refactor the existing [_DashboardRouter](file:///c:/App%20Development/PMS/lib/core/router/app_router.dart#105-115) proxy class (if present) to resolve to `MainLayout`.
+
+
+### Time Interval Standardization (30 mins)
+--------------------------------------
+The system will standardize time intervals. By default, time pickers will enforce 30-minute intervals (e.g., 09:00 AM, 09:30 AM).
+
+#### [NEW] `lib/core/widgets/time_slot_picker.dart`
+- Replace native `showTimePicker` (which allows minute-level granularity) with a custom bottom sheet or dialog grid that specifically renders intervals based on the user's duration setting (default 30 mins).
+
+#### [MODIFY] [lib/features/auth/screens/doctor_registration/doctor_registration_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/doctor_registration/doctor_registration_screen.dart)
+#### [MODIFY] [lib/features/auth/screens/clinic_registration/clinic_step3_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/clinic_registration/clinic_step3_screen.dart)
+- Form fields for "Working Hours" will use the new `time_slot_picker`.
+- Add a dropdown to select default "Slot Duration" (15m, 30m, 60m) saving to the `treatments` array or a dedicated `slot_duration` setting on the [doctors](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#112-131) table.
+
+
+### Appointment Logic Fixes
+--------------------------------------
+Appointments (both Call-By and Walk-In) should only be created when the doctor has availability, avoiding double-booking and schedule clashes.
+
+#### [MODIFY] [lib/features/appointments/screens/create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart)
+- **Availability Constraint**: When users pick a date/time for "Call-By", use the [AvailableSlotsScreen](file:///c:/App%20Development/PMS/lib/features/scheduling/screens/available_slots_screen.dart#12-26) to force them to select an unequivocally free time slot, exactly like walk-ins or patient scheduling. Do not allow arbitrary time entry.
+- **Navigation Bug**: Ensure the [_submit](file:///c:/App%20Development/PMS/lib/features/auth/screens/doctor_registration/doctor_registration_screen.dart#207-248) function handles the `Navigator.pop(context)` successfully up the routing stack after the `pb.collection(appointments).create` promise resolves.
+
+#### [MODIFY] [lib/core/services/scheduling_service.dart](file:///c:/App%20Development/PMS/lib/core/services/scheduling_service.dart)
+- Ensure the [validateAppointmentTime](file:///c:/App%20Development/PMS/lib/core/services/scheduling_service.dart#192-230) or creation proxy runs the exact [getConcurrentAppointments](file:///c:/App%20Development/PMS/lib/core/services/scheduling_service.dart#141-168) / [isSlotBooked](file:///c:/App%20Development/PMS/lib/core/services/scheduling_service.dart#178-191) logic synchronously before creating the record to enforce the **No Duplicate Appointments** rule server/client side.
+
+## Verification Plan
+### Manual Verification
+1. Login and ensure the bottom navigation bar permanently shows 5 options.
+2. Go to Settings and Registration to verify time selectors only offer discrete blocks (e.g. 30min intervals). 
+3. Try to book a Call-By appointment at an explicitly conflicting time to verify rejection.
+4. Try to book a valid Call-By or Walk-In appointment to verify the app navigates back correctly.

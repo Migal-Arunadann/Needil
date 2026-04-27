@@ -1,0 +1,57 @@
+# Healthcare CRM — Walkthrough (Phases 0–2)
+
+## Progress Summary
+
+| Phase | Status | Files | Description |
+|-------|--------|-------|-------------|
+| Phase 0 | ✅ Complete | 12 | Infrastructure, Flutter setup, Git, PB script |
+| Phase 1 | ✅ Complete | 12 | Auth, registration flows, dashboards |
+| Phase 2 | ✅ Complete | 8 | Appointments, patient info |
+| Phase 3 | ⬜ Next | — | Treatment plans & sessions |
+
+## Phase 2: What Was Built
+
+### New Files (8 files, 1848 lines)
+
+| File | Purpose |
+|------|---------|
+| [setup_pocketbase.dart](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart) | Dart script to create all 8 PB collections via Admin API |
+| [patient_model.dart](file:///c:/App%20Development/PMS/lib/features/patients/models/patient_model.dart) | Patient data model with PocketBase serialization |
+| [appointment_model.dart](file:///c:/App%20Development/PMS/lib/features/appointments/models/appointment_model.dart) | Appointment model with type/status enums & expanded relations |
+| [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart) | CRUD operations for appointments and patients |
+| [appointment_provider.dart](file:///c:/App%20Development/PMS/lib/features/appointments/providers/appointment_provider.dart) | Riverpod state management for appointment list |
+| [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart) | Date-filtered list with status badges & pull-to-refresh |
+| [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart) | Call-by/walk-in toggle, date/time pickers, doctor selector |
+| [patient_info_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/patient_info_screen.dart) | Full patient form with DPDP consent |
+
+### Modified Files (4 files)
+- **auth_provider.dart** — Added `userId` getter to [AuthState](file:///c:/App%20Development/PMS/lib/features/auth/providers/auth_provider.dart#14-52)
+- **app_router.dart** — Added 3 appointment routes
+- **clinic_dashboard_screen.dart** — Wired "New Appointment" and "View Appointments"
+- **doctor_dashboard_screen.dart** — Wired "New Appointment"
+
+## Verification
+
+| Check | Result |
+|-------|--------|
+| `flutter analyze` | ✅ 0 errors, 0 warnings |
+| Git push | ✅ Pushed to `Migal-Arunadann/PMS-APP` |
+
+## Remaining: User Actions
+
+> [!IMPORTANT]
+> **Enable Developer Mode** before running the app:
+> Windows Settings → Privacy & Security → For Developers → Toggle ON
+
+> [!IMPORTANT]
+> **Create PocketBase admin** at: `http://pocketbase-ibzovc8gc0m0e8mt4g1pw5aa.178.16.138.198.sslip.io/_/`
+> Then run the setup script:
+> ```bash
+> dart run scripts/setup_pocketbase.dart your_admin@email.com your_password
+> ```
+
+## Next: Phase 3 — Treatment Plans & Sessions
+- First consultation form (notes, BP, pulse, photos)
+- Treatment plan creation with auto-generated sessions
+- Session recording page with photo attachment
+- Photo compression utility

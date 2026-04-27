@@ -1,0 +1,64 @@
+# Healthcare CRM – Master Task List
+
+## Phase 0: Infrastructure & Setup
+- [x] Create Flutter project with dependencies (PocketBase SDK, Riverpod, etc.)
+- [x] Set up folder structure (clean architecture)
+- [x] Initialize Git repo and push to GitHub
+- [x] Provide PocketBase deployment steps for Coolify/Hostinger VPS
+- [x] Create PocketBase schema (collections & rules) — setup script at [scripts/setup_pocketbase.dart](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart)
+
+## Phase 1: Authentication & Registration
+- [x] Auth screens (login, role selection)
+- [x] Clinic registration flow (3 steps)
+- [x] Doctor registration flow (treatments, schedule, join/individual)
+- [x] Role-based routing after login
+
+## Phase 2: Appointments
+- [x] Call-by appointment creation
+- [x] Walk-in appointment creation
+- [x] Common patient information form
+- [ ] Doctor availability checking
+- [x] Appointment list with search/filter
+
+## Phase 3: Treatment Plans & Sessions
+- [x] First consultation form
+- [x] Treatment plan creation (auto-generate sessions)
+- [x] Session recording page
+- [x] Photo attachment with compression
+
+## Phase 4: Scheduling Logic
+- [x] Working hours & break validation
+- [x] Bed capacity checks (clinic)
+- [x] Available slot suggestions
+
+## Phase 5: Data Sharing & Settings
+- [x] Doctor joins clinic flow (settings)
+- [x] Data sharing policy (past/future/none)
+- [x] Enforce sharing policy in queries
+
+## Phase 6: Security & Compliance
+- [x] HTTPS enforcement
+- [x] RBAC rules in PocketBase
+- [x] DPDP consent collection & withdrawal
+- [x] Audit logging
+
+## Phase 7: Polish & Testing
+- [x] UI polish (theme, animations)
+- [x] Pull-to-refresh, search/filter on lists
+- [x] End-to-end testing on emulator
+- [x] Doctor availability checking (wired via available-slots screen)
+
+## Phase 8: UI Restructuring & Interval Logic
+- [x] Implement 5-tab Master Layout (Home, Appointments, Analytics, Patients, Settings)
+- [x] Standardize 30-min configurable intervals (custom Time Picker)
+- [x] Modify Registration & Settings forms to support configurable intervals
+- [x] Enforce doctor availability for all appointments
+- [x] Fix Call-By submission bug (missing navigation pop)
+- [x] Add strict server/client checks to prevent duplicate appointments (Walk-In and Call-By)
+
+## Phase 9: Home UI Simplification & Dynamic Expandable FAB
+- [x] Remove Quick Stats (beds, doctors, patients) from Clinic and Doctor dashboards
+- [x] Remove Quick Actions from Clinic and Doctor dashboards
+- [x] Add [ExpandableFab](file:///c:/App%20Development/PMS/lib/core/widgets/expandable_fab.dart#5-20) to [MainLayout](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/main_layout.dart#12-18) that transitions from pill-shaped (`extended`) on Home to circle on other tabs
+- [x] Add "Call-By" and "Walk-In" animated slide-up buttons natively to the [ExpandableFab](file:///c:/App%20Development/PMS/lib/core/widgets/expandable_fab.dart#5-20)
+- [x] Support `initialIsCallBy` parameter in [CreateAppointmentScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart#14-23) and `AppRouter` to directly jump to the specific form from the FAB

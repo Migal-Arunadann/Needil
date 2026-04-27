@@ -64,7 +64,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final authState = ref.watch(authProvider);
 
     ref.listen<AuthState>(authProvider, (prev, next) {
-      if (next.error != null) {
+      if (next.error != null && next.error != prev?.error) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.error!),
@@ -74,7 +74,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
-        ref.read(authProvider.notifier).clearError();
       }
     });
 
@@ -97,24 +96,27 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
                     // ── Logo & heading ──────────────────────────────
                     Center(
-                      child: Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          gradient: AppColors.heroGradient,
-                          borderRadius: BorderRadius.circular(22),
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primary.withValues(alpha: 0.32),
-                              blurRadius: 22,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.local_hospital_rounded,
-                          color: Colors.white,
-                          size: 40,
+                      child: GestureDetector(
+                        onLongPress: () => Navigator.of(context).pushNamed('/superadmin/login'),
+                        child: Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            gradient: AppColors.heroGradient,
+                            borderRadius: BorderRadius.circular(22),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary.withValues(alpha: 0.32),
+                                blurRadius: 22,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.local_hospital_rounded,
+                            color: Colors.white,
+                            size: 40,
+                          ),
                         ),
                       ),
                     ),

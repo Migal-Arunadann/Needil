@@ -1,0 +1,56 @@
+# Healthcare CRM — Phase 0 & 1 Walkthrough
+
+## What Was Built
+
+### Infrastructure (Phase 0)
+- **Flutter project** created at `c:\App Development\PMS` with 69 dependencies
+- **Clean architecture** folder structure: `core/` (constants, providers, services, utils, widgets) + `features/` (auth, dashboard)
+- **PocketBase SDK** connected to your Coolify deployment at `http://pocketbase-ibzovc8gc0m0e8mt4g1pw5aa.178.16.138.198.sslip.io`
+- **Git repo** initialized with initial commit
+- **Flutter 3.41.4** + **Dart 3.11.1** installed at `C:\dev\flutter`
+
+### Auth & Registration (Phase 1)
+
+| Screen | File | Description |
+|--------|------|-------------|
+| Login | [login_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/login_screen.dart) | Role toggle (Clinic/Doctor), animated header, form validation |
+| Role Selection | [role_selection_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/role_selection_screen.dart) | Two styled cards for registration path |
+| Clinic Step 1 | [clinic_step1_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/clinic_registration/clinic_step1_screen.dart) | Clinic name, username, password |
+| Clinic Step 2 | [clinic_step2_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/clinic_registration/clinic_step2_screen.dart) | Bed count with stepper |
+| Clinic Step 3 | [clinic_step3_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/clinic_registration/clinic_step3_screen.dart) | Primary doctor: schedule, treatments, fees |
+| Doctor Registration | [doctor_registration_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/doctor_registration/doctor_registration_screen.dart) | 4-step PageView: info, schedule, treatments, join/individual |
+| Clinic Dashboard | [clinic_dashboard_screen.dart](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/clinic_dashboard_screen.dart) | Stats, clinic ID display, quick actions |
+| Doctor Dashboard | [doctor_dashboard_screen.dart](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/doctor_dashboard_screen.dart) | Stats, treatment badges, quick actions |
+
+### Core Components
+- [auth_service.dart](file:///c:/App%20Development/PMS/lib/core/services/auth_service.dart) — Login, register, session management, error parsing
+- [auth_provider.dart](file:///c:/App%20Development/PMS/lib/features/auth/providers/auth_provider.dart) — Riverpod state management
+- [app_router.dart](file:///c:/App%20Development/PMS/lib/core/router/app_router.dart) — Named routes with animations
+- Reusable widgets: `AppButton`, `AppTextField`, `LoadingOverlay`
+
+## Verification Results
+
+| Check | Result |
+|-------|--------|
+| `flutter pub get` | ✅ 69 dependencies resolved |
+| `flutter analyze` | ✅ 1 info-level hint only |
+| Git commit | ✅ Initial commit created |
+| PocketBase reachable | ✅ Admin panel loads at `/_/` |
+
+## Action Items for You
+
+1. **Enable Developer Mode** — Required for Flutter plugin symlinks:
+   - Open Windows Settings → Privacy & Security → For developers → Toggle "Developer Mode" ON
+   - Or run as Admin: `start ms-settings:developers`
+
+2. **Push to GitHub** — Run these commands (need your GitHub credentials):
+   ```bash
+   git remote add origin https://github.com/YOUR_USERNAME/pms-app.git
+   git branch -M main
+   git push -u origin main
+   ```
+
+3. **Create PocketBase admin account** — Visit your PocketBase admin panel:
+   `http://pocketbase-ibzovc8gc0m0e8mt4g1pw5aa.178.16.138.198.sslip.io/_/`
+
+4. **Set up PocketBase collections** — I'll create these in the next phase once you confirm the admin account is ready.

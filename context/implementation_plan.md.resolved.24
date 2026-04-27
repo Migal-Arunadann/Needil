@@ -1,0 +1,214 @@
+# Multi-Role Architecture & UX Overhaul
+
+Major restructuring of the PMS app: consolidating to clinic-only registration, adding receptionist accounts, reworking role-based access control, and improving navigation UX.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **PocketBase schema change required.** A new `receptionists` collection must be created in PocketBase with fields: `username`, `password`, `name`, `phone`, `clinic` (relation → clinics). This is needed before the app can log in receptionists.
+
+> [!WARNING]
+> **Breaking change:** All existing "Register as Doctor" / invite-code flows will be removed. Doctors can only be created through a clinic account (during registration or from the settings/profile page). Existing standalone doctor accounts will still work for login, but no new ones can be created through the app UI.
+
+> [!IMPORTANT]
+> **Receptionist PocketBase collection:** A `receptionists` auth collection is needed. Fields: `username` (text, unique), `password`, `name` (text), `phone` (text, optional), `clinic` (relation → clinics), `is_active` (bool, default true). API rules should restrict receptionists to read-only access on patients and full access on appointments within their clinic.
+
+---
+
+## Proposed Changes
+
+### Phase 1: Auth & Registration Restructuring
+
+#### A. Remove Doctor Self-Registration
+
+##### [DELETE] [role_selection_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/role_selection_screen.dart)
+- The "Create Account" screen with "Register as Clinic" / "Register as Doctor" cards is no longer needed.
+- The "Register" link on the login page will navigate directly to `/register/clinic` (Step 1).
+
+##### [DELETE] [doctor_registration_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/doctor_registration/doctor_registration_screen.dart)
+- The entire standalone doctor registration flow is removed.
+
+##### [MODIFY] [login_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/login_screen.dart)
+- **Role toggle:** Change the two-tab toggle from `[Clinic | Doctor]` to a **three-tab** toggle: `[Clinic | Doctor | Receptionist]`.
+- **Register link:** Change navigation from `/register` (RoleSelectionScreen) to `/register/clinic` directly. Update label from "Register" to "Register Clinic".
+- Add `UserRole.receptionist` login path calling `_authService.loginReceptionist()`.
+
+##### [MODIFY] [auth_service.dart](file:///c:/App%20Development/PMS/lib/core/services/auth_service.dart)
+- Add `UserRole.receptionist` to the `UserRole` enum.
+- Add `loginReceptionist(username, password)` method authenticating against the `receptionists` PB collection.
+- Add `restoreSession()` support for `receptionist` role.
+- Remove `registerDoctor()` method (no longer callable from the UI).
+- Keep `loginDoctor()` since doctors still log in — they just get created by clinics.
+
+##### [MODIFY] [auth_provider.dart](file:///c:/App%20Development/PMS/lib/features/auth/providers/auth_provider.dart)
+- Add `ReceptionistModel? receptionist` to `AuthState`.
+- Add `loginReceptionist()` method.
+- Remove `registerDoctor()` method.
+- Update `restoreSession()` for the receptionist role.
+
+##### [NEW] [receptionist_model.dart](file:///c:/App%20Development/PMS/lib/features/auth/models/receptionist_model.dart)
+- Simple model: `id`, `name`, `username`, `phone`, `clinicId`, `isActive`, `created`, `updated`.
+- `fromRecord(RecordModel)` factory.
+
+##### [MODIFY] [pb_collections.dart](file:///c:/App%20Development/PMS/lib/core/constants/pb_collections.dart)
+- Add `static const String receptionists = 'receptionists';`.
+
+##### [MODIFY] [app_router.dart](file:///c:/App%20Development/PMS/lib/core/router/app_router.dart)
+- Remove `/register` route (RoleSelectionScreen).
+- Remove `/register/doctor` route.
+- Change "Register" link to navigate to `/register/clinic`.
+- Add `/dashboard/receptionist` route.
+
+---
+
+#### B. Add Doctors During Clinic Registration
+
+##### [MODIFY] [clinic_step3_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/clinic_registration/clinic_step3_screen.dart)
+- After the primary doctor section, add a **"+ Add Working Doctor"** button.
+- Clicking opens a modal/bottom sheet to collect: name, DOB, username, password, working schedule, treatments, optional photo.
+- Display added doctors as dismissible cards below the primary doctor form.
+- Each card shows name + username, with edit/delete options.
+- Pass the list of additional doctors alongside clinic data in `_submit()`.
+
+##### [MODIFY] [auth_service.dart](file:///c:/App%20Development/PMS/lib/core/services/auth_service.dart) (continued)
+- Update `registerClinic()` to accept a `List<Map<String, dynamic>> additionalDoctors` parameter.
+- After creating the primary doctor, iterate and create each additional doctor with their own username/password and `is_primary: false`.
+
+##### [MODIFY] [auth_provider.dart](file:///c:/App%20Development/PMS/lib/features/auth/providers/auth_provider.dart) (continued)
+- Update `registerClinic()` to forward the additional doctors list.
+
+---
+
+#### C. Receptionist Toggle During Registration
+
+##### [MODIFY] [clinic_step3_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/clinic_registration/clinic_step3_screen.dart) (continued)
+- Add a **"Enable Receptionist Account"** toggle switch at the bottom of the registration form (before Submit).
+- When enabled, show fields for receptionist: name, username, password.
+- Pass to `registerClinic()` which creates the receptionist record.
+
+##### [MODIFY] [auth_service.dart](file:///c:/App%20Development/PMS/lib/core/services/auth_service.dart) (continued)
+- Update `registerClinic()` to accept optional `Map<String, dynamic>? receptionistData`.
+- If provided, create a record in the `receptionists` collection linked to the clinic.
+
+---
+
+### Phase 2: Role-Based UI (MainLayout)
+
+##### [MODIFY] [main_layout.dart](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/main_layout.dart)
+- Add `PageController` and replace `IndexedStack` with `PageView` for swipe-to-switch-tab animation (left/right).
+- Sync `BottomNavigationBar` selection with `PageView`.
+- **Clinic role:** 5 tabs — Home, Appointments, Analytics, Patients, Profile. (unchanged)
+- **Doctor role:** 4 tabs — Home, Appointments, Patients, Profile. (remove Analytics — doctors don't need full clinic analytics)
+- **Receptionist role:** 3-4 tabs — Home (summary dashboard), Appointments, Patients (list only, no medical details), Profile.
+- Expose a way for the dashboard to programmatically switch to the Appointments tab (for the "Upcoming Today" card tap).
+
+---
+
+### Phase 3: Receptionist UI
+
+##### [NEW] [receptionist_dashboard_screen.dart](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/receptionist_dashboard_screen.dart)
+- Simplified dashboard: Today's overview (scheduled, in-progress, completed, cancelled counts), upcoming appointments list.
+- No medical data, no analytics charts.
+- Quick-action buttons: "New Appointment" (call-by / walk-in).
+
+##### [MODIFY] [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart)
+- Receptionist can see all clinic appointments (filter by `clinic` not `doctor`).
+- Receptionist can: create, reschedule, cancel, mark arrived.
+- Receptionist **cannot**: start consultation, create treatment plans, view medical records.
+- Hide "Start Consultation" / "Create Plan" buttons when role is receptionist.
+
+##### [MODIFY] [patient_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_list_screen.dart)
+- Receptionist sees patient names, phone, appointment history.
+- Receptionist **cannot** see: consultation details, treatment notes, medical records.
+- When receptionist taps a patient, show limited info (contact, upcoming appointments) rather than full patient profile.
+
+##### [MODIFY] [settings_screen.dart](file:///c:/App%20Development/PMS/lib/features/settings/screens/settings_screen.dart)
+- Receptionist profile: show name, username, clinic name.
+- Remove clinic management, doctor management, analytics sections.
+- Keep: Notifications, About, Logout.
+
+---
+
+### Phase 4: Doctor Account Scalability (Settings Page)
+
+##### [MODIFY] [settings_screen.dart](file:///c:/App%20Development/PMS/lib/features/settings/screens/settings_screen.dart) (continued)
+- In the "Manage Doctors" section (clinic only), add a prominent **"+ Add Doctor"** button.
+- Clicking opens a form modal identical to the registration one (name, DOB, username, password, schedule, treatments, photo).
+- On submit, creates a new doctor record in PB linked to the clinic.
+- Remove the "Join Clinic" / invite-code flow for doctor role.
+- Add a **"Receptionist Account"** section with a toggle to enable/disable.
+  - If enabling: show fields to create (name, username, password).
+  - If already enabled: show receptionist name, allow editing or deactivating.
+
+---
+
+### Phase 5: Notification Preferences Update
+
+##### [MODIFY] [notifications_screen.dart](file:///c:/App%20Development/PMS/lib/features/settings/screens/notifications_screen.dart)
+- Replace current notification options with:
+  1. **Patient Late Reminder** — triggers when a scheduled patient hasn't arrived within X minutes of appointment time.
+  2. **Patient Missed (Consultation)** — triggers when a consultation appointment passes with no check-in.
+  3. **Patient Missed (Session)** — triggers when a session appointment passes with no check-in.
+  4. **Clinic Alerts** — capacity warnings, scheduling conflicts, bed availability alerts.
+- Remove: "Daily Summary", "Appointment Arrivals" (merged into late/missed).
+
+---
+
+### Phase 6: Appointments Page UX
+
+##### [MODIFY] [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart) (continued)
+
+**Date scroller defaults:**
+- Change `_generateDates()` to generate dates starting from **yesterday** (today - 1).
+- Default scroll position: yesterday first visible, today second (so the user sees yesterday → today on load).
+- Add a **"Today"** pill button next to the calendar icon at the top. When tapped, it resets `_selectedDate` to today, regenerates dates, and scrolls to the default position (yesterday first, today second).
+
+**Appointment card highlighting:**
+- Accept an optional `highlightAppointmentId` parameter.
+- When provided, after the list loads, auto-scroll to the matching card and animate a brief highlight (e.g., a 1-second subtle glow/border pulse).
+- This is triggered when the user taps "Upcoming Today" on the dashboard.
+
+**Dashboard → Appointments linking:**
+
+##### [MODIFY] [clinic_dashboard_screen.dart](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/clinic_dashboard_screen.dart)
+- When the "Upcoming Today" card is tapped, call `mainLayoutController.switchToTab(1)` (Appointments tab) and pass the appointment ID for highlighting.
+- Same for `doctor_dashboard_screen.dart`.
+
+##### [MODIFY] [main_layout.dart](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/main_layout.dart) (continued)
+- Expose a `switchToTab(int index, {String? highlightAppointmentId})` method.
+- When switching to tab 1 (Appointments), pass highlight ID down to `AppointmentListScreen`.
+- Use `PageView` with swipe gestures for smooth tab transitions.
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> 1. **PocketBase `receptionists` auth collection:** Should I provide a script/instructions for creating this collection, or will you set it up manually?
+
+> [!IMPORTANT]
+> 2. **Doctor login restriction:** Should doctor accounts that belong to a clinic have any restrictions (e.g., can a doctor see patients from other doctors in the same clinic?) Currently they only see their own patients. Does this remain the same?
+
+> [!IMPORTANT]
+> 3. **Existing data:** There are existing doctor records that were created via the old self-registration flow. Should we keep the `loginDoctor()` functionality so those accounts can still sign in? (Plan assumes yes.)
+
+> [!WARNING]
+> 4. **Payment prep:** You mentioned doctors are paid modules. Should I add any fields or flags now (e.g., `is_trial`, `subscription_tier` on clinics, `is_paid` on doctors) to prepare for the payment system? Or defer entirely?
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- `dart analyze` — zero errors across all modified files.
+- Build verification: `flutter build apk --debug` to catch compilation issues.
+
+### Manual Verification
+- Test clinic registration → primary doctor + additional doctor + optional receptionist.
+- Login as clinic → verify all 5 tabs, doctor management in settings.
+- Login as doctor → verify 4 tabs, restricted access (own patients only).
+- Login as receptionist → verify 3-4 tabs, no medical record access, appointment management works.
+- Test swipe navigation between tabs.
+- Test "Today" button on appointments page.
+- Test "Upcoming Today" card tap → switches to Appointments tab with highlight animation.
+- Test notification preferences save/restore.

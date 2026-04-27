@@ -1,0 +1,5 @@
+{
+  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
+  "summary": "Detailed implementation plan for reworking the consultation and treatment system. Covers: replacing delete with end consultation, separating creation from treatment plan, fixing auto-schedule engine bugs, adding session #1 indicator, and adding treatment plan editing UI.",
+  "updatedAt": "2026-04-03T14:08:35.822155600Z"
+}

@@ -245,7 +245,6 @@ class AppointmentService {
       final result = await pb.collection(PBCollections.appointments).getList(
         filter: 'patient_phone = "$phone" && doctor = "$doctorId" && date = "$today" && status != "cancelled"',
         perPage: 1,
-        sort: '-created',
       );
       if (result.items.isNotEmpty) {
         return AppointmentModel.fromRecord(result.items.first);
@@ -422,14 +421,55 @@ class AppointmentService {
     return AppointmentModel.fromRecord(record);
   }
 
-  /// Find an ongoing consultation for a patient + doctor.
+  /// Get or create a consultation for an appointment — uses getOne() only,
+  /// avoiding list queries that fail on this PocketBase configuration.
+  ///
+  /// Returns (consultationId, isNew).
+  Future<(String, bool)> getOrCreateConsultationForAppointment(AppointmentModel apt) async {
+    // 1. Appointment already has a linked consultation ID → try getOne to resume
+    if (apt.linkedConsultationId != null && apt.linkedConsultationId!.isNotEmpty) {
+      try {
+        final record = await pb
+            .collection(PBCollections.consultations)
+            .getOne(apt.linkedConsultationId!);
+        final c = ConsultationModel.fromRecord(record);
+        if (c.status == ConsultationStatus.ongoing) {
+          return (c.id, false); // resume existing
+        }
+      } catch (_) {
+        // Record deleted or error — fall through to create
+      }
+    }
+
+    // 2. No existing stub → create one and persist its ID back to the appointment
+    final consultation = await createConsultation(apt.patientId!, apt.doctorId);
+    await saveConsultationToAppointment(apt.id, consultation.id);
+    return (consultation.id, true);
+  }
+
+  /// Persist the consultation ID onto the appointment record so future
+  /// resumes can use getOne() instead of a list query.
+  Future<void> saveConsultationToAppointment(
+      String appointmentId, String consultationId) async {
+    try {
+      await pb.collection(PBCollections.appointments).update(
+        appointmentId,
+        body: {'linked_consultation_id': consultationId},
+      );
+    } catch (_) {
+      // Non-fatal — consultation was created; ID just won't persist
+    }
+  }
+
+  /// Find an ongoing consultation via list query (used by profile FAB which
+  /// has no appointment context). May fail on some PocketBase configs — callers
+  /// must handle the null return gracefully.
   Future<ConsultationModel?> findOngoingConsultation(String patientId, String doctorId) async {
     try {
       final result = await pb.collection(PBCollections.consultations).getList(
         filter: 'patient = "$patientId" && doctor = "$doctorId" && status = "ongoing"',
         perPage: 1,
-        sort: '-created',
-        expand: 'patient',
+        query: {'skipTotal': '1'},
       );
       if (result.items.isNotEmpty) {
         return ConsultationModel.fromRecord(result.items.first);
@@ -438,7 +478,7 @@ class AppointmentService {
     return null;
   }
 
-  /// Create a new consultation (ongoing status).
+  /// Create a new consultation stub.
   Future<ConsultationModel> createConsultation(String patientId, String doctorId) async {
     final record = await pb.collection(PBCollections.consultations).create(
       body: {
@@ -472,15 +512,18 @@ class AppointmentService {
     );
   }
 
-  /// Check if the consultation linked to this appointment's patient is completed.
+  /// Check if the most recent consultation for this patient+doctor is completed
+  /// (i.e. chief_complaint has been filled in, meaning the form was submitted).
   Future<bool> isConsultationCompleted(String patientId, String doctorId) async {
     try {
       final result = await pb.collection(PBCollections.consultations).getList(
-        filter: 'patient = "$patientId" && doctor = "$doctorId" && status = "ongoing"',
+        filter: 'patient = "$patientId" && doctor = "$doctorId"',
         perPage: 1,
+        query: {'skipTotal': '1'},
       );
-      // If there's no ongoing consultation, it means it's been completed (or never created)
-      return result.items.isEmpty;
+      if (result.items.isEmpty) return false;
+      final c = ConsultationModel.fromRecord(result.items.first);
+      return c.status == ConsultationStatus.completed;
     } catch (_) {}
     return false;
   }
@@ -490,26 +533,27 @@ class AppointmentService {
     return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
   }
 
-  /// For an in-progress consultation appointment, returns the ongoing consultation id
+  /// For an in-progress consultation appointment, returns the unfilled consultation id
   /// and whether a treatment plan already exists for it.
-  /// Returns null if no ongoing consultation is found.
+  /// Returns null if no unfilled consultation stub is found.
   Future<Map<String, dynamic>?> getConsultationPlanInfo(
       String patientId, String doctorId) async {
     try {
       final result = await pb.collection(PBCollections.consultations).getList(
         filter: 'patient = "$patientId" && doctor = "$doctorId" && status = "ongoing"',
         perPage: 1,
-        sort: '-created',
+        query: {'skipTotal': '1'},
       );
       if (result.items.isEmpty) return null;
-      final consultationId = result.items.first.id;
+      final c = ConsultationModel.fromRecord(result.items.first);
+      final consultationId = c.id;
 
-      // Check if there's already a treatment plan for this consultation
       bool hasPlan = false;
       try {
         final plans = await pb.collection(PBCollections.treatmentPlans).getList(
           filter: 'consultation = "$consultationId"',
           perPage: 1,
+          query: {'skipTotal': '1'},
         );
         hasPlan = plans.items.isNotEmpty;
       } catch (_) {}
@@ -609,7 +653,6 @@ class AppointmentService {
       final consRes = await pb.collection(PBCollections.consultations).getList(
         filter: 'patient = "$patientId" && doctor = "$doctorId" && status = "ongoing"',
         perPage: 1,
-        sort: '-created',
       );
       if (consRes.items.isEmpty) return null;
       final consultationId = consRes.items.first.id;

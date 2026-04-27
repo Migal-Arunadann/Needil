@@ -19,6 +19,7 @@ import '../../treatments/screens/create_treatment_plan_screen.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/services/auth_service.dart';
 import 'patient_info_screen.dart';
+import '../../patients/screens/patient_profile_screen.dart';
 import '../../analytics/providers/analytics_provider.dart';
 
 class AppointmentListScreen extends ConsumerStatefulWidget {
@@ -288,23 +289,15 @@ class _AppointmentListScreenState
 
   Future<void> _startConsultation(AppointmentModel apt) async {
     if (apt.patientId == null || apt.patientId!.isEmpty) return;
-    // Guard: patient details must be saved first
     if (!apt.patientDetailsSaved) {
       if (mounted) _showError('Please fill and submit patient details before starting a consultation.');
       return;
     }
-    // Guard: if form already saved, don't re-open it (buttons already show Create Plan / End Consultation)
     if (apt.consultationFormSaved) return;
     try {
       final service = ref.read(appointmentServiceProvider);
-      final ongoing = await service.findOngoingConsultation(apt.patientId!, apt.doctorId);
-      String? consultationId;
-      if (ongoing != null) {
-        consultationId = ongoing.id;
-      } else {
-        final newConsultation = await service.createConsultation(apt.patientId!, apt.doctorId);
-        consultationId = newConsultation.id;
-      }
+      // Uses getOne() via linkedConsultationId — no list query needed
+      final (consultationId, _) = await service.getOrCreateConsultationForAppointment(apt);
       await service.setConsultationStartTime(apt.id);
       if (mounted) {
         final pb = ref.read(pocketbaseProvider);
@@ -318,7 +311,7 @@ class _AppointmentListScreenState
               patientName: patientName,
               doctorId: apt.doctorId,
               consultationId: consultationId,
-              appointmentId: apt.id, // so screen can mark form saved + end time
+              appointmentId: apt.id,
             ),
           ),
         );
@@ -336,7 +329,7 @@ class _AppointmentListScreenState
       final patientRecord = await pb.collection(PBCollections.patients).getOne(apt.patientId!);
       final patientName = patientRecord.getStringValue('full_name');
       if (mounted) {
-        final result = await Navigator.push<bool>(
+        final result = await Navigator.push<dynamic>(
           context,
           MaterialPageRoute(
             builder: (_) => CreateTreatmentPlanScreen(
@@ -349,23 +342,47 @@ class _AppointmentListScreenState
           ),
         );
         if (!mounted) return;
-        if (result == true) {
-          // Auto-end the consultation appointment after a plan is created
-          final service = ref.read(appointmentServiceProvider);
-          await service.markEnded(apt.id);
+
+        // Handle both old `true` return and new map return
+        final bool planCreated;
+        final bool firstSessionToday;
+        if (result is Map) {
+          planCreated = result['success'] == true;
+          firstSessionToday = result['firstSessionToday'] == true;
+        } else {
+          planCreated = result == true;
+          firstSessionToday = false;
+        }
+
+        if (planCreated) {
           ref.read(analyticsProvider.notifier).load();
-          if (mounted) {
-            final now = DateTime.now();
-            final timeStr =
-                '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text(
-                'Treatment plan created & consultation ended. Today\'s session is waiting at $timeStr.'),
-              backgroundColor: AppColors.success,
-              duration: const Duration(seconds: 5),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ));
+
+          if (firstSessionToday) {
+            // Auto-end the consultation appointment — 1st session is being handled today
+            final service = ref.read(appointmentServiceProvider);
+            await service.markEnded(apt.id);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: const Text(
+                  'Treatment plan created & consultation ended. Session 1 is waiting on today\'s schedule.'),
+                backgroundColor: AppColors.success,
+                duration: const Duration(seconds: 5),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ));
+            }
+          } else {
+            // Don't auto-end — sessions start on a different day
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: const Text(
+                  'Treatment plan created & sessions scheduled! You may end this appointment now or keep it open.'),
+                backgroundColor: AppColors.success,
+                duration: const Duration(seconds: 5),
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ));
+            }
           }
         }
         ref.read(appointmentListProvider.notifier).loadAppointments();
@@ -984,7 +1001,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
     final isCallBy = apt.type == AppointmentType.callBy;
     final typeColor = isCallBy ? AppColors.info : AppColors.accent;
     final typeLabel = isCallBy ? 'Call-By' : 'Walk-In';
-    final typeIcon = isCallBy ? Icons.phone_in_talk_rounded : Icons.directions_walk_rounded;
+    final typeIcon = isCallBy ? Icons.event_note_rounded : Icons.directions_walk_rounded;
 
     final isScheduled = apt.status == AppointmentStatus.scheduled;
     final isInProgress = apt.status == AppointmentStatus.inProgress;
@@ -1026,14 +1043,19 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
 
     // Step 4: Create/Resume Treatment Plan + End Appointment
     //   Show only after consultation form is saved AND plan not yet fully linked
-    final showPlanSection = apt.consultationFormSaved && apt.linkedTreatmentPlanId == null;
+    //   Also hide if _loadPlanInfo confirms a plan already exists (covers creation from patient profile)
+    final showPlanSection = apt.consultationFormSaved &&
+        apt.linkedTreatmentPlanId == null &&
+        !(_planInfoLoaded && _hasPlan);
     final planLabel = apt.treatmentPlanPartial ? 'Resume Treatment Plan' : 'Create Plan';
     final planIcon = apt.treatmentPlanPartial ? Icons.restart_alt_rounded : Icons.add_chart_rounded;
 
     final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
     final effectiveShowStartConsultation = showStartConsultationBtn && !isReceptionist;
     final effectiveShowPlanSection = showPlanSection && !isReceptionist;
-    final showEndedBtn = apt.consultationFormSaved && !isReceptionist;
+    // Show End Appointment button only when consultation is saved AND appointment is still active
+    final isCompleted = apt.status == AppointmentStatus.completed;
+    final showEndedBtn = apt.consultationFormSaved && !isReceptionist && !isCompleted;
 
 
     // Left accent color
@@ -1045,21 +1067,16 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                 ? AppColors.warning
                 : statusColor;
 
+    final showEndedLabel = isCompleted && apt.consultationFormSaved && !isReceptionist;
     final hasActions = showArrivedBtn || showRescheduleBtn || showFillDetailsBtn ||
-        effectiveShowStartConsultation || effectiveShowPlanSection || showEndedBtn;
+        effectiveShowStartConsultation || effectiveShowPlanSection || showEndedBtn || showEndedLabel;
 
     return FadeTransition(
       opacity: _fade,
       child: SlideTransition(
         position: _slide,
-        child: GestureDetector(
-          onTap: widget.onTap,
-          onLongPress: apt.status == AppointmentStatus.cancelled ? null : () {
-            HapticFeedback.mediumImpact();
-            widget.onLongPress();
-          },
-          child: Opacity(
-            opacity: widget.isMissed || apt.status == AppointmentStatus.cancelled ? 0.65 : 1.0,
+        child: Opacity(
+          opacity: widget.isMissed || apt.status == AppointmentStatus.cancelled ? 0.65 : 1.0,
             child: Container(
               decoration: BoxDecoration(
                 color: AppColors.surface,
@@ -1096,8 +1113,15 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             // Header
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: widget.onTap,
+                              onLongPress: apt.status == AppointmentStatus.cancelled ? null : () {
+                                HapticFeedback.mediumImpact();
+                                widget.onLongPress();
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -1230,6 +1254,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                 ],
                               ),
                             ),
+                            ),
 
                             // Banners
                             if (widget.isMissed)
@@ -1259,14 +1284,17 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                             color: AppColors.success,
                                             onTap: widget.onArrived,
                                           )),
-                                        if (showRescheduleBtn)
+                                        if (showRescheduleBtn) ...[
+                                          if (showArrivedBtn) const SizedBox(width: 7),
                                           Expanded(child: _ActionButton(
                                             label: 'Reschedule',
                                             icon: Icons.event_repeat_rounded,
                                             color: AppColors.info,
                                             onTap: widget.onReschedule,
                                           )),
-                                        if (showFillDetailsBtn)
+                                        ],
+                                        if (showFillDetailsBtn) ...[
+                                          if (showArrivedBtn || showRescheduleBtn) const SizedBox(width: 7),
                                           Expanded(child: _ActionButton(
                                             label: fillDetailsLabel,
                                             icon: fillDetailsIcon,
@@ -1275,8 +1303,9 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                                 : AppColors.info,
                                             onTap: widget.onFillDetails,
                                           )),
+                                        ],
                                         if (effectiveShowStartConsultation) ...[
-                                          if (showFillDetailsBtn) const SizedBox(width: 7),
+                                          if (showArrivedBtn || showRescheduleBtn || showFillDetailsBtn) const SizedBox(width: 7),
                                           Expanded(child: _ActionButton(
                                             label: consultationLabel,
                                             icon: consultationIcon,
@@ -1340,6 +1369,35 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                           )),
                                       ]),
                                     ],
+
+                                    // Show "Appointment Ended" label when completed
+                                    if (isCompleted && apt.consultationFormSaved && !isReceptionist) ...[
+                                      const SizedBox(height: 7),
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.success.withValues(alpha: 0.08),
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: AppColors.success.withValues(alpha: 0.2)),
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.check_circle_rounded, size: 16, color: AppColors.success),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              'Appointment Ended',
+                                              style: TextStyle(
+                                                color: AppColors.success,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ],
                                 ),
                               ),
@@ -1351,7 +1409,6 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                   ),
                 ),
               ),
-            ),
           ),
         ),
       ),
@@ -1477,14 +1534,8 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
       opacity: _fade,
       child: SlideTransition(
         position: _slide,
-        child: GestureDetector(
-          onTap: null,
-          onLongPress: isCancelled ? null : () {
-            HapticFeedback.mediumImpact();
-            widget.onLongPress();
-          },
-          child: Opacity(
-            opacity: (widget.isMissed || isCancelled || isCompleted) ? 0.65 : 1.0,
+        child: Opacity(
+          opacity: (widget.isMissed || isCancelled || isCompleted) ? 0.65 : 1.0,
             child: Container(
               decoration: BoxDecoration(
                 color: AppColors.surface,
@@ -1520,23 +1571,48 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Icon avatar
-                                  Container(
-                                    width: 46,
-                                    height: 46,
-                                    decoration: BoxDecoration(
-                                      color: sessionAccent.withValues(alpha: 0.1),
-                                      shape: BoxShape.circle,
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () async {
+                                if (apt.patientId == null || apt.patientId!.isEmpty) return;
+                                try {
+                                  final pb = ref.read(pocketbaseProvider);
+                                  final pRec = await pb.collection(PBCollections.patients).getOne(apt.patientId!);
+                                  final p = PatientModel.fromRecord(pRec);
+                                  if (mounted) {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => PatientProfileScreen(
+                                          patient: p,
+                                          initialTabIndex: 1,
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                } catch (_) {}
+                              },
+                              onLongPress: isCancelled ? null : () {
+                                HapticFeedback.mediumImpact();
+                                widget.onLongPress();
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Icon avatar
+                                    Container(
+                                      width: 46,
+                                      height: 46,
+                                      decoration: BoxDecoration(
+                                        color: sessionAccent.withValues(alpha: 0.1),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.healing_rounded,
+                                          color: sessionAccent, size: 22),
                                     ),
-                                    child: const Icon(Icons.healing_rounded,
-                                        color: sessionAccent, size: 22),
-                                  ),
-                                  const SizedBox(width: 12),
+                                    const SizedBox(width: 12),
                                   // Name + meta
                                   Expanded(
                                     child: Column(
@@ -1571,7 +1647,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                           const SizedBox(height: 5),
                                           _MetaRow(
                                             icon: Icons.login_rounded,
-                                            label: 'Arrived ${DateFormat('h:mm a').format(apt.checkInTime!.toLocal())}',
+                                            label: 'Started at ${DateFormat('h:mm a').format(apt.checkInTime!.toLocal())}',
                                             color: AppColors.success,
                                           ),
                                         ],
@@ -1600,6 +1676,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                 ],
                               ),
                             ),
+                            ),
 
                             // Banners
                             if (widget.isMissed)
@@ -1614,6 +1691,14 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                             if (isInProgress)
                               _InfoBanner(Icons.sync_rounded,
                                   'Session in progress', AppColors.warning),
+                            if (isCompleted)
+                              _InfoBanner(
+                                Icons.check_circle_rounded,
+                                apt.checkOutTime != null
+                                    ? 'Session ended at ${DateFormat('h:mm a').format(apt.checkOutTime!.toLocal())}'
+                                    : 'Session completed',
+                                AppColors.success,
+                              ),
 
                             // Actions
                             if (hasActions) ...[
@@ -1630,27 +1715,33 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                       color: AppColors.success,
                                       onTap: widget.onArrived,
                                     )),
-                                  if (showStartBtn)
+                                  if (showStartBtn) ...[
+                                    if (showArrivedBtn) const SizedBox(width: 7),
                                     Expanded(child: _ActionButton(
                                       label: 'Start Session',
                                       icon: Icons.play_arrow_rounded,
                                       color: AppColors.primary,
                                       onTap: widget.onStartSession,
                                     )),
-                                  if (showEndedBtn)
+                                  ],
+                                  if (showEndedBtn) ...[
+                                    if (showArrivedBtn || showStartBtn) const SizedBox(width: 7),
                                     Expanded(child: _ActionButton(
                                       label: 'End Session',
                                       icon: Icons.check_circle_outline_rounded,
                                       color: AppColors.success,
                                       onTap: widget.onSessionEnded,
                                     )),
-                                  if (showRescheduleBtn)
+                                  ],
+                                  if (showRescheduleBtn) ...[
+                                    if (showArrivedBtn || showStartBtn || showEndedBtn) const SizedBox(width: 7),
                                     Expanded(child: _ActionButton(
                                       label: 'Reschedule',
                                       icon: Icons.event_repeat_rounded,
                                       color: AppColors.info,
                                       onTap: widget.onReschedule,
                                     )),
+                                  ],
                                 ]),
                               ),
                             ],
@@ -1661,7 +1752,6 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                   ),
                 ),
               ),
-            ),
           ),
         ),
       ),
@@ -1718,12 +1808,16 @@ class _MetaRow extends StatelessWidget {
       children: [
         Icon(icon, size: 12, color: color),
         const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(
-            color: color,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
+        Flexible(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 2,
           ),
         ),
       ],

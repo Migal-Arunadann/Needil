@@ -13,6 +13,9 @@ class TreatmentPlanModel {
   final int intervalDays;
   final double sessionFee;
   final TreatmentPlanStatus status;
+  final String planType;       // 'treatment' or 'maintenance'
+  final String intervalUnit;   // 'days', 'months', 'years'
+  final String? parentPlanId;  // links maintenance → original treatment plan
   final DateTime? created;
   final DateTime? updated;
 
@@ -30,10 +33,15 @@ class TreatmentPlanModel {
     required this.intervalDays,
     required this.sessionFee,
     required this.status,
+    this.planType = 'treatment',
+    this.intervalUnit = 'days',
+    this.parentPlanId,
     this.created,
     this.updated,
     this.patientName,
   });
+
+  bool get isMaintenance => planType == 'maintenance';
 
   factory TreatmentPlanModel.fromRecord(RecordModel record) {
     String? patientName;
@@ -47,6 +55,9 @@ class TreatmentPlanModel {
       }
     } catch (_) {}
 
+    final planTypeVal = record.getStringValue('plan_type');
+    final intervalUnitVal = record.getStringValue('interval_unit');
+
     return TreatmentPlanModel(
       id: record.id,
       patientId: record.getStringValue('patient'),
@@ -58,6 +69,11 @@ class TreatmentPlanModel {
       intervalDays: record.getIntValue('interval_days'),
       sessionFee: record.getDoubleValue('session_fee'),
       status: _parseStatus(record.getStringValue('status')),
+      planType: planTypeVal.isNotEmpty ? planTypeVal : 'treatment',
+      intervalUnit: intervalUnitVal.isNotEmpty ? intervalUnitVal : 'days',
+      parentPlanId: record.getStringValue('parent_plan').isNotEmpty
+          ? record.getStringValue('parent_plan')
+          : null,
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
       patientName: patientName,
@@ -76,6 +92,10 @@ class TreatmentPlanModel {
       'interval_days': intervalDays,
       'session_fee': sessionFee,
       'status': statusToString(status),
+      'plan_type': planType,
+      'interval_unit': intervalUnit,
+      if (parentPlanId != null && parentPlanId!.isNotEmpty)
+        'parent_plan': parentPlanId,
     };
   }
 

@@ -22,6 +22,8 @@ class AppTextField extends StatelessWidget {
   final VoidCallback? onTap;
   final List<TextInputFormatter>? inputFormatters;
 
+  final String? errorText;
+
   const AppTextField({
     super.key,
     required this.label,
@@ -40,6 +42,7 @@ class AppTextField extends StatelessWidget {
     this.readOnly = false,
     this.onTap,
     this.inputFormatters,
+    this.errorText,
   });
 
   @override
@@ -64,6 +67,7 @@ class AppTextField extends StatelessWidget {
           inputFormatters: inputFormatters,
           style: AppTextStyles.bodyLarge,
           decoration: InputDecoration(
+            errorText: errorText,
             hintText: hint,
             hintStyle: AppTextStyles.bodyMedium.copyWith(
               color: AppColors.textHint,

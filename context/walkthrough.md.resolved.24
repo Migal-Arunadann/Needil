@@ -1,0 +1,88 @@
+# Implementation Walkthrough
+
+## Features Implemented
+
+### 1. Appointment Duplicate Phone Logic (Fixed)
+
+**Before:** [findExistingAppointment](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#211-226) checked all dates globally — warned on ANY second booking for the same phone, even on different dates.
+
+**After:** Restricted to **same-date only**. Booking the same patient on different dates is now always allowed. Same-date double-booking shows a "Slot Already Booked" dialog with "Keep Old" or "Replace" options.
+
+Files changed:
+- [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart) — [date](file:///c:/App%20Development/PMS/lib/features/appointments/providers/appointment_provider.dart#193-202) param now **required**
+- [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart) — passes computed date from current selection
+
+---
+
+### 2. Phone Call Button (Implemented)
+
+Added `url_launcher: ^6.3.1` to [pubspec.yaml](file:///c:/App%20Development/PMS/pubspec.yaml).
+
+In [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart), a green phone icon button appears on every appointment card that has a `patientPhone`. Tapping it launches the native phone dialler with the number pre-filled.
+
+---
+
+### 3. Patient Address Split — City + Area (Implemented)
+
+**Before:** Single `address` field (City / Area combined text)
+
+**After:** Separate `city` and `area` fields
+
+Files changed:
+- [patient_model.dart](file:///c:/App%20Development/PMS/lib/features/patients/models/patient_model.dart) — added `city` and `area`, kept legacy `address` for backwards-compat
+- [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart) — [createPatient](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#130-171) now accepts `city`/`area`
+- [appointment_provider.dart](file:///c:/App%20Development/PMS/lib/features/appointments/providers/appointment_provider.dart) — [createWalkIn](file:///c:/App%20Development/PMS/lib/features/appointments/providers/appointment_provider.dart#125-192) now accepts `city`/`area`
+- [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart) — replaced single address field with a side-by-side City + Area row
+- [patient_info_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/patient_info_screen.dart) — same split in the call-by patient arrival form
+
+> [!IMPORTANT]
+> **PocketBase schema change required:** Add `city` (Text) and `area` (Text) fields to the **patients** collection in PocketBase Admin → Collections → patients → Edit.
+
+---
+
+### 4. Clinic Profile — New Fields (Implemented)
+
+[ClinicModel](file:///c:/App%20Development/PMS/lib/features/auth/models/clinic_model.dart#3-89) now supports:
+- `phone`, `address`, `area`, `city`, `state`, `pin`, `location` — Text fields
+- `logoUrl` — built from [logo](file:///c:/App%20Development/PMS/lib/core/services/auth_service.dart#239-244) File field
+
+> [!IMPORTANT]
+> **PocketBase schema change required:** Add these fields to the **clinics** collection:
+> - `phone` (Text)
+> - `address` (Text)
+> - `area` (Text)
+> - `city` (Text)
+> - `state` (Text)
+> - `pin` (Text)
+> - `location` (Text)
+> - [logo](file:///c:/App%20Development/PMS/lib/core/services/auth_service.dart#239-244) (File, single)
+
+---
+
+### 5. Doctor Profile — New Fields (Implemented)
+
+[DoctorModel](file:///c:/App%20Development/PMS/lib/features/auth/models/doctor_model.dart#68-191) now supports:
+- `phone` — Text field
+- `dateOfBirth` (stored as `dob`) — Text field
+- `photoUrl` — built from [photo](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#860-906) File field
+
+> [!IMPORTANT]
+> **PocketBase schema change required:** Add these fields to the **doctors** collection:
+> - `phone` (Text)
+> - `dob` (Text)
+> - [photo](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#860-906) (File, single)
+
+---
+
+## Analysis Result
+
+✅ No errors in main app code. All previously reported lint errors inside `scripts/` are in utility/debug scripts and do not affect the app.
+
+---
+
+## Next Steps (Pending from Plan)
+
+- **Clinic Profile UI** — [edit_profile_screen.dart](file:///c:/App%20Development/PMS/lib/features/settings/screens/edit_profile_screen.dart) needs form fields for the new clinic fields
+- **Doctor Profile UI** — [edit_doctor_details_screen.dart](file:///c:/App%20Development/PMS/lib/features/settings/screens/edit_doctor_details_screen.dart) needs Phone, DOB, and photo picker
+- **Availability Improvements** — "Apply to All Days" template, break time validation, multiple breaks per day
+- **Patient profile display** — show city/area in [patient_profile_screen.dart](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart)

@@ -1,0 +1,55 @@
+# Healthcare CRM — Walkthrough (Phases 0–3)
+
+## Progress Summary
+
+| Phase | Status | New Files | Description |
+|-------|--------|-----------|-------------|
+| Phase 0 | ✅ Done | 12 | Infrastructure, Flutter setup, Git, PB schema |
+| Phase 1 | ✅ Done | 12 | Auth, registration flows, dashboards |
+| Phase 2 | ✅ Done | 8 | Appointments, patient info |
+| Phase 3 | ✅ Done | 9 | Consultations, treatment plans, sessions |
+| Phase 4 | ⬜ Next | — | Scheduling logic |
+
+---
+
+## Phase 3: What Was Built (9 files, 2043 lines)
+
+### Models
+| File | Purpose |
+|------|---------|
+| [consultation_model.dart](file:///c:/App%20Development/PMS/lib/features/consultations/models/consultation_model.dart) | Consultation with vitals, photos, charge tracking |
+| [treatment_plan_model.dart](file:///c:/App%20Development/PMS/lib/features/treatments/models/treatment_plan_model.dart) | Treatment plan with status, sessions, fees |
+| [session_model.dart](file:///c:/App%20Development/PMS/lib/features/treatments/models/session_model.dart) | Individual session with vitals, photos, remarks |
+
+### Service & Providers
+| File | Purpose |
+|------|---------|
+| [treatment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart) | CRUD for consultations, plans, sessions + photo upload |
+| [treatment_provider.dart](file:///c:/App%20Development/PMS/lib/features/treatments/providers/treatment_provider.dart) | Riverpod state management for plans & sessions |
+
+### Screens
+| File | Purpose |
+|------|---------|
+| [consultation_screen.dart](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart) | Notes, BP/pulse, camera/gallery photos, charge toggle |
+| [create_treatment_plan_screen.dart](file:///c:/App%20Development/PMS/lib/features/treatments/screens/create_treatment_plan_screen.dart) | Treatment chips, date picker, live preview, auto-fee |
+| [session_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/treatments/screens/session_list_screen.dart) | Progress bar, numbered timeline, status badges |
+| [record_session_screen.dart](file:///c:/App%20Development/PMS/lib/features/treatments/screens/record_session_screen.dart) | Record vitals/photos, mark missed, complete session |
+
+### Key Features
+- **Auto-session generation**: Create a plan → sessions auto-generated at correct intervals
+- **Photo compression**: Camera/gallery images compressed to 1200px @ 80% quality
+- **Live plan preview**: Shows duration, total cost, and schedule as you configure
+- **Fee auto-fill**: Pre-fills from doctor's treatment config
+- **Mark missed**: Confirmation dialog before marking sessions as missed
+
+## Verification
+
+| Check | Result |
+|-------|--------|
+| `flutter analyze` | ✅ 0 errors, 0 warnings |
+| `git push` | ✅ Pushed to `Migal-Arunadann/PMS-APP` |
+
+## Next: Phase 4 — Scheduling Logic
+- Working hours & break validation
+- Appointment conflicts detection
+- Recurring schedule support

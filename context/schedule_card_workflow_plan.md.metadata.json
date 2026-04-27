@@ -1,0 +1,5 @@
+{
+  "artifactType": "ARTIFACT_TYPE_IMPLEMENTATION_PLAN",
+  "summary": "Detailed implementation plan for the refined schedule card workflow including patient arrival time capture, resume fill details, consultation resume with cache, treatment plan one-per-consultation enforcement, and time recording in patient history.",
+  "updatedAt": "2026-04-11T11:16:36.213671600Z"
+}
