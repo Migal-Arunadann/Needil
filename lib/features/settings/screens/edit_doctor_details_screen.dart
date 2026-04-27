@@ -9,6 +9,7 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/time_slot_picker.dart';
 import '../../auth/models/doctor_model.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../auth/screens/clinic_registration/clinic_step3_screen.dart' show BreakTime;
 import '../../../core/services/auth_service.dart';
 
 /// Full edit screen for a doctor's registration details —
@@ -63,9 +64,11 @@ class _EditDoctorDetailsScreenState
   final Map<String, TimeOfDay> _startTimes = {};
   final Map<String, TimeOfDay> _endTimes = {};
 
-  /// Per-day break.  null = no break configured.
-  final Map<String, TimeOfDay?> _breakStartTimes = {};
-  final Map<String, TimeOfDay?> _breakEndTimes = {};
+  /// Per-day breaks — list so we can support multiple breaks.
+  final Map<String, List<BreakTime>> _dayBreaks = {};
+
+  // ── Date of birth ────────────────────────────────────────────
+  DateTime? _dateOfBirth;
 
   // ── Treatments state ─────────────────────────────────────────
   static const List<String> _treatmentTypes = [
@@ -120,17 +123,21 @@ class _EditDoctorDetailsScreenState
       _emailCtrl.text = _originalEmail!;
       _ageCtrl.text = _originalAge != null ? '$_originalAge' : '';
 
+      // Date of birth
+      if (doc.dateOfBirth != null && doc.dateOfBirth!.isNotEmpty) {
+        _dateOfBirth = DateTime.tryParse(doc.dateOfBirth!);
+      }
+
       // Working schedule
       for (final ws in doc.workingSchedule) {
         _selectedDays[ws.day] = true;
         _startTimes[ws.day] = _parseTime(ws.startTime);
         _endTimes[ws.day] = _parseTime(ws.endTime);
-        if (ws.breakStart != null) {
-          _breakStartTimes[ws.day] = _parseTime(ws.breakStart!);
-        }
-        if (ws.breakEnd != null) {
-          _breakEndTimes[ws.day] = _parseTime(ws.breakEnd!);
-        }
+        // Load multiple breaks
+        _dayBreaks[ws.day] = ws.breaks.map((b) => BreakTime(
+          from: _parseTime(b['start']!),
+          to: _parseTime(b['end']!),
+        )).toList();
       }
 
       // Treatments
@@ -163,45 +170,38 @@ class _EditDoctorDetailsScreenState
   }
 
   // ── Pick a time via TimeSlotPicker ───────────────────────────
-  Future<void> _pickTime(String day, String type) async {
-    TimeOfDay? initial;
-    switch (type) {
-      case 'start':
-        initial = _startTimes[day] ?? const TimeOfDay(hour: 9, minute: 0);
-        break;
-      case 'end':
-        initial = _endTimes[day] ?? const TimeOfDay(hour: 17, minute: 0);
-        break;
-      case 'break_start':
-        initial = _breakStartTimes[day] ?? const TimeOfDay(hour: 13, minute: 0);
-        break;
-      case 'break_end':
-        initial = _breakEndTimes[day] ?? const TimeOfDay(hour: 14, minute: 0);
-        break;
-    }
-
+  Future<void> _pickDayTime(String day, String type) async {
+    final initial = type == 'start'
+        ? (_startTimes[day] ?? const TimeOfDay(hour: 9, minute: 0))
+        : (_endTimes[day] ?? const TimeOfDay(hour: 17, minute: 0));
     FocusScope.of(context).unfocus();
-
     final picked = await TimeSlotPicker.show(context, initialTime: initial);
     if (picked != null && mounted) {
       setState(() {
-        switch (type) {
-          case 'start':
-            _startTimes[day] = picked;
-            break;
-          case 'end':
-            _endTimes[day] = picked;
-            break;
-          case 'break_start':
-            _breakStartTimes[day] = picked;
-            break;
-          case 'break_end':
-            _breakEndTimes[day] = picked;
-            break;
-        }
+        if (type == 'start') _startTimes[day] = picked;
+        else _endTimes[day] = picked;
       });
     }
   }
+
+  Future<void> _pickBreakTime(String day, int breakIndex, String type) async {
+    final breaks = _dayBreaks[day] ?? [];
+    if (breakIndex >= breaks.length) return;
+    final b = breaks[breakIndex];
+    final initial = type == 'from'
+        ? (b.from ?? const TimeOfDay(hour: 13, minute: 0))
+        : (b.to ?? const TimeOfDay(hour: 14, minute: 0));
+    FocusScope.of(context).unfocus();
+    final picked = await TimeSlotPicker.show(context, initialTime: initial);
+    if (picked != null && mounted) {
+      setState(() {
+        if (type == 'from') breaks[breakIndex].from = picked;
+        else breaks[breakIndex].to = picked;
+        _dayBreaks[day] = breaks;
+      });
+    }
+  }
+
 
   // ── Validate & Save ──────────────────────────────────────────
   Future<void> _save() async {
@@ -228,13 +228,20 @@ class _EditDoctorDetailsScreenState
         _tabController.animateTo(1);
         return;
       }
-      // Validate break times if set
-      final bs = _breakStartTimes[d];
-      final be = _breakEndTimes[d];
-      if ((bs != null) != (be != null)) {
-        _showError('For ${entry.key}: set both break start and break end');
-        _tabController.animateTo(1);
-        return;
+      // Validate break times
+      final breaks = _dayBreaks[d] ?? [];
+      for (int i = 0; i < breaks.length; i++) {
+        final b = breaks[i];
+        if (b.from == null || b.to == null) {
+          _showError('For ${entry.key}: complete break ${i + 1} times');
+          _tabController.animateTo(1);
+          return;
+        }
+        if (b.from!.hour * 60 + b.from!.minute >= b.to!.hour * 60 + b.to!.minute) {
+          _showError('For ${entry.key}: break ${i + 1} end must be after start');
+          _tabController.animateTo(1);
+          return;
+        }
       }
     }
 
@@ -261,20 +268,19 @@ class _EditDoctorDetailsScreenState
     try {
       final pb = ref.read(pocketbaseProvider);
 
-      // Build working schedule list
+      // Build working schedule list (array-format breaks)
       final schedule = activeDays.map((e) {
         final d = e.key;
+        final breaks = (_dayBreaks[d] ?? [])
+            .where((b) => b.from != null && b.to != null)
+            .map((b) => {'start': _formatTime(b.from!), 'end': _formatTime(b.to!)})
+            .toList();
         final m = <String, dynamic>{
           'day': d,
           'start': _formatTime(_startTimes[d]!),
           'end': _formatTime(_endTimes[d]!),
+          if (breaks.isNotEmpty) 'breaks': breaks,
         };
-        if (_breakStartTimes[d] != null) {
-          m['break_start'] = _formatTime(_breakStartTimes[d]!);
-        }
-        if (_breakEndTimes[d] != null) {
-          m['break_end'] = _formatTime(_breakEndTimes[d]!);
-        }
         return m;
       }).toList();
 
@@ -288,17 +294,17 @@ class _EditDoctorDetailsScreenState
         };
       }).toList();
 
-      // Patch the doctor record. Only send basic info if it actually changed to bypass PB auth validation issues.
       final body = <String, dynamic>{
         'working_schedule': schedule,
         'treatments': treatments,
       };
-      
       final newName = _nameCtrl.text.trim();
       if (newName.isNotEmpty && newName != _originalName) body['name'] = newName;
-      
       final newAge = int.tryParse(_ageCtrl.text.trim());
       if (newAge != null && newAge != _originalAge) body['age'] = newAge;
+      if (_dateOfBirth != null) {
+        body['dob'] = '${_dateOfBirth!.year}-${_dateOfBirth!.month.toString().padLeft(2,'0')}-${_dateOfBirth!.day.toString().padLeft(2,'0')}';
+      }
 
       // Ensure we don't send the email in the main update request to avoid 400 validation_values_mismatch
       await pb.collection(PBCollections.doctors).update(_resolvedDoctorId, body: body);
@@ -384,7 +390,7 @@ class _EditDoctorDetailsScreenState
               Text('Edit Doctor Details', style: AppTextStyles.h4),
               if (_nameCtrl.text.isNotEmpty)
                 Text(
-                  'Dr. $doctorName',
+                  doctorName,
                   style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                 ),
             ],
@@ -469,6 +475,44 @@ class _EditDoctorDetailsScreenState
             keyboardType: TextInputType.number,
             prefixIcon: const Icon(Icons.cake_outlined, color: AppColors.textHint),
           ),
+          const SizedBox(height: 14),
+          // DOB picker
+          GestureDetector(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: _dateOfBirth ?? DateTime(1990),
+                firstDate: DateTime(1930),
+                lastDate: DateTime.now(),
+              );
+              if (picked != null && mounted) setState(() => _dateOfBirth = picked);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: _dateOfBirth != null ? AppColors.primary.withValues(alpha: 0.4) : AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.calendar_today_outlined, size: 18, color: _dateOfBirth != null ? AppColors.primary : AppColors.textHint),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _dateOfBirth != null
+                          ? '${_dateOfBirth!.day.toString().padLeft(2,'0')}/${_dateOfBirth!.month.toString().padLeft(2,'0')}/${_dateOfBirth!.year}'
+                          : 'Date of Birth',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: _dateOfBirth != null ? AppColors.textPrimary : AppColors.textHint,
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.arrow_drop_down_rounded, color: AppColors.textHint),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 32),
           AppButton(
             label: 'Save All Changes',
@@ -511,8 +555,7 @@ class _EditDoctorDetailsScreenState
                   if (!_selectedDays[day]!) {
                     _startTimes.remove(day);
                     _endTimes.remove(day);
-                    _breakStartTimes.remove(day);
-                    _breakEndTimes.remove(day);
+                    _dayBreaks.remove(day);
                   }
                 }),
                 child: AnimatedContainer(
@@ -555,8 +598,8 @@ class _EditDoctorDetailsScreenState
   }
 
   Widget _dayScheduleCard(String day) {
-    final hasBreak = (_breakStartTimes[day] != null || _breakEndTimes[day] != null);
     final isHalfDay = day == 'Saturday' || day == 'Sunday';
+    final breaks = _dayBreaks[day] ?? [];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -573,8 +616,7 @@ class _EditDoctorDetailsScreenState
           Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 36, height: 36,
                 decoration: BoxDecoration(
                   color: isHalfDay
                       ? AppColors.warning.withValues(alpha: 0.1)
@@ -588,12 +630,7 @@ class _EditDoctorDetailsScreenState
                 ),
               ),
               const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  day,
-                  style: AppTextStyles.label.copyWith(fontSize: 15),
-                ),
-              ),
+              Expanded(child: Text(day, style: AppTextStyles.label.copyWith(fontSize: 15))),
               if (isHalfDay)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -601,14 +638,9 @@ class _EditDoctorDetailsScreenState
                     color: AppColors.warning.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Text(
-                    'Weekend',
+                  child: Text('Weekend',
                     style: AppTextStyles.caption.copyWith(
-                      color: AppColors.warning,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                      color: AppColors.warning, fontSize: 10, fontWeight: FontWeight.w600)),
                 ),
             ],
           ),
@@ -617,68 +649,59 @@ class _EditDoctorDetailsScreenState
           // Start & End times
           Row(
             children: [
-              Expanded(child: _timePickerTile('From', _startTimes[day], () => _pickTime(day, 'start'), AppColors.success)),
+              Expanded(child: _timePickerTile('From', _startTimes[day], () => _pickDayTime(day, 'start'), AppColors.success)),
               const SizedBox(width: 10),
-              Expanded(child: _timePickerTile('To', _endTimes[day], () => _pickTime(day, 'end'), AppColors.error)),
+              Expanded(child: _timePickerTile('To', _endTimes[day], () => _pickDayTime(day, 'end'), AppColors.error)),
             ],
           ),
           const SizedBox(height: 12),
 
-          // Break toggle
+          // Break list
+          ...List.generate(breaks.length, (i) {
+            final b = breaks[i];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.coffee_rounded, size: 14, color: AppColors.warning),
+                  const SizedBox(width: 6),
+                  Text('Break ${i + 1}:', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _timePickerTile('From', b.from, () => _pickBreakTime(day, i, 'from'), AppColors.warning)),
+                  const SizedBox(width: 6),
+                  Expanded(child: _timePickerTile('To', b.to, () => _pickBreakTime(day, i, 'to'), AppColors.warning)),
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () => setState(() {
+                      breaks.removeAt(i);
+                      _dayBreaks[day] = breaks;
+                    }),
+                    child: const Icon(Icons.remove_circle_outline_rounded, size: 18, color: AppColors.error),
+                  ),
+                ],
+              ),
+            );
+          }),
+
+          // Add break button
           GestureDetector(
-            onTap: () {
-              setState(() {
-                if (hasBreak) {
-                  _breakStartTimes.remove(day);
-                  _breakEndTimes.remove(day);
-                } else {
-                  _breakStartTimes[day] = null;
-                  _breakEndTimes[day] = null;
-                }
-              });
-            },
+            onTap: () => setState(() {
+              _dayBreaks[day] = [...breaks, BreakTime()];
+            }),
             child: Row(
               children: [
-                Icon(
-                  hasBreak ? Icons.coffee_rounded : Icons.add_circle_outline_rounded,
-                  size: 16,
-                  color: hasBreak ? AppColors.warning : AppColors.textHint,
-                ),
+                const Icon(Icons.add_circle_outline_rounded, size: 16, color: AppColors.textHint),
                 const SizedBox(width: 6),
-                Text(
-                  hasBreak ? 'Remove break' : 'Add break time',
-                  style: AppTextStyles.caption.copyWith(
-                    color: hasBreak ? AppColors.warning : AppColors.textHint,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                Text('Add break time', style: AppTextStyles.caption.copyWith(
+                  color: AppColors.textHint, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
-
-          // Break time pickers
-          if (_breakStartTimes.containsKey(day)) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(Icons.coffee_rounded, size: 14, color: AppColors.warning),
-                const SizedBox(width: 6),
-                Text('Break:', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _timePickerTile('Start', _breakStartTimes[day], () => _pickTime(day, 'break_start'), AppColors.warning),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: _timePickerTile('End', _breakEndTimes[day], () => _pickTime(day, 'break_end'), AppColors.warning),
-                ),
-              ],
-            ),
-          ],
         ],
       ),
     );
   }
+
 
   Widget _timePickerTile(
     String label,

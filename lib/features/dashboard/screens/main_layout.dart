@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -121,22 +122,11 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       body: Stack(
         clipBehavior: Clip.none,
         children: [
-          // IndexedStack keeps every tab widget alive in memory — zero rebuild
-          // cost on switch. AnimatedSwitcher on the key drives a crisp 150ms
-          // fade so taps feel instant (same pattern Instagram/Facebook use).
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 150),
-            switchInCurve: Curves.easeOut,
-            switchOutCurve: Curves.easeIn,
-            transitionBuilder: (child, animation) => FadeTransition(
-              opacity: animation,
-              child: child,
-            ),
-            child: IndexedStack(
-              key: ValueKey<int>(_currentIndex),
-              index: _currentIndex,
-              children: pages,
-            ),
+          // IndexedStack keeps every tab alive in memory — zero rebuild cost
+          // on switch. No fade animation so the response feels truly instant.
+          IndexedStack(
+            index: _currentIndex,
+            children: pages,
           ),
           Positioned(
             bottom: 16,
@@ -195,11 +185,12 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
-        if (_currentIndex == index) return; // already here, no-op
+        if (_currentIndex == index) return;
+        HapticFeedback.selectionClick();
         setState(() => _currentIndex = index);
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
+        duration: const Duration(milliseconds: 80),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected

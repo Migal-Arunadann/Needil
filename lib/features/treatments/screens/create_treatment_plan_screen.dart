@@ -229,8 +229,10 @@ class _CreateTreatmentPlanScreenState
     var current = parseTime(daySchedule.startTime);
     final end = parseTime(daySchedule.endTime);
 
-    final breakStart = daySchedule.breakStart != null ? parseTime(daySchedule.breakStart!) : null;
-    final breakEnd = daySchedule.breakEnd != null ? parseTime(daySchedule.breakEnd!) : null;
+    // Build break ranges from the new 'breaks' list format
+    final breakRanges = daySchedule.breaks.map((b) {
+      return (parseTime(b['start']!), parseTime(b['end']!));
+    }).toList();
 
     int toMinutes(TimeOfDay t) => t.hour * 60 + t.minute;
     String fmt(TimeOfDay t) =>
@@ -238,10 +240,9 @@ class _CreateTreatmentPlanScreenState
 
     while (toMinutes(current) + duration <= toMinutes(end)) {
       final cMin = toMinutes(current);
-      final isDuringBreak = breakStart != null &&
-          breakEnd != null &&
-          cMin >= toMinutes(breakStart) &&
-          cMin < toMinutes(breakEnd);
+      final isDuringBreak = breakRanges.any(
+        (r) => cMin >= toMinutes(r.$1) && cMin < toMinutes(r.$2),
+      );
 
       if (!isDuringBreak) slots.add(fmt(current));
 

@@ -68,7 +68,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            'Dr. ${doctor?.name ?? 'Doctor'}',
+                            doctor?.name ?? 'Doctor',
                             style: AppTextStyles.h2,
                           ),
                         ],

@@ -6,24 +6,39 @@ class WorkingSchedule {
   final String day;
   final String startTime;
   final String endTime;
-  final String? breakStart;
-  final String? breakEnd;
+  /// Multiple break windows per day: [{'start': 'HH:mm', 'end': 'HH:mm'}, ...]
+  final List<Map<String, String>> breaks;
 
   WorkingSchedule({
     required this.day,
     required this.startTime,
     required this.endTime,
-    this.breakStart,
-    this.breakEnd,
-  });
+    List<Map<String, String>>? breaks,
+  }) : breaks = breaks ?? [];
 
   factory WorkingSchedule.fromJson(Map<String, dynamic> json) {
+    // Support new array format: breaks: [{start, end}, ...]
+    List<Map<String, String>> breaks = [];
+    final rawBreaks = json['breaks'];
+    if (rawBreaks is List && rawBreaks.isNotEmpty) {
+      breaks = rawBreaks.map((b) {
+        final m = b as Map<String, dynamic>;
+        return {'start': m['start'] as String, 'end': m['end'] as String};
+      }).toList();
+    } else {
+      // Fall back to old flat format for backward compat
+      final bs = json['break_start'] as String?;
+      final be = json['break_end'] as String?;
+      if (bs != null && be != null) {
+        breaks = [{'start': bs, 'end': be}];
+      }
+    }
+
     return WorkingSchedule(
       day: json['day'] as String,
       startTime: json['start'] as String,
       endTime: json['end'] as String,
-      breakStart: json['break_start'] as String?,
-      breakEnd: json['break_end'] as String?,
+      breaks: breaks,
     );
   }
 
@@ -32,8 +47,7 @@ class WorkingSchedule {
       'day': day,
       'start': startTime,
       'end': endTime,
-      if (breakStart != null) 'break_start': breakStart,
-      if (breakEnd != null) 'break_end': breakEnd,
+      if (breaks.isNotEmpty) 'breaks': breaks,
     };
   }
 }

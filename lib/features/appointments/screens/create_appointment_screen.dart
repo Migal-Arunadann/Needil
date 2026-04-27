@@ -606,7 +606,7 @@ class _CreateAppointmentScreenState
                         items: _doctors
                             .map((d) => DropdownMenuItem(
                                   value: d['id'],
-                                  child: Text('Dr. ${d['name']}',
+                                  child: Text(d['name'] ?? '',
                                       style: AppTextStyles.bodyMedium),
                                 ))
                             .toList(),

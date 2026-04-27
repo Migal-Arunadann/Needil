@@ -258,7 +258,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ? (auth.clinic?.name ?? 'Clinic')
         : isReceptionist
             ? (auth.receptionist?.name ?? 'Receptionist')
-            : ('Dr. ${auth.doctor?.name ?? "Doctor"}');
+            : (auth.doctor?.name ?? 'Doctor');
     final username = isClinic
         ? (auth.clinic?.username ?? '')
         : isReceptionist
@@ -504,7 +504,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Column(
       children: [
         _infoCard([
-          _infoRow('Name', 'Dr. ${doctor?.name ?? '—'}'),
+          _infoRow('Name', doctor?.name ?? '—'),
           _infoRow('Username', doctor?.username ?? '—'),
           if (doctor?.email != null && doctor!.email!.isNotEmpty)
             _infoRow('Email', doctor.email!),

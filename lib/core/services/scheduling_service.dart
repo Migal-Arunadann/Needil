@@ -46,10 +46,10 @@ class SchedulingService {
 
     if (t < start || t >= end) return false;
 
-    // Check break period
-    if (schedule.breakStart != null && schedule.breakEnd != null) {
-      final breakS = _parseTime(schedule.breakStart!);
-      final breakE = _parseTime(schedule.breakEnd!);
+    // Check all break periods
+    for (final b in schedule.breaks) {
+      final breakS = _parseTime(b['start']!);
+      final breakE = _parseTime(b['end']!);
       if (t >= breakS && t < breakE) return false;
     }
 
@@ -100,12 +100,11 @@ class SchedulingService {
     final slots = <TimeSlot>[];
     var current = _parseTime(schedule.startTime);
     final end = _parseTime(schedule.endTime);
-    final breakStart = schedule.breakStart != null
-        ? _parseTime(schedule.breakStart!)
-        : null;
-    final breakEnd = schedule.breakEnd != null
-        ? _parseTime(schedule.breakEnd!)
-        : null;
+
+    // Build list of (breakStart, breakEnd) pairs in minutes
+    final breakRanges = schedule.breaks.map((b) {
+      return (_parseTime(b['start']!), _parseTime(b['end']!));
+    }).toList();
 
     final now = DateTime.now();
     final isToday = targetDate.year == now.year &&
@@ -114,12 +113,11 @@ class SchedulingService {
     final currentMinutes = now.hour * 60 + now.minute;
 
     while (current + durationMinutes <= end) {
-      final isDuringBreak = breakStart != null &&
-          breakEnd != null &&
-          current >= breakStart &&
-          current < breakEnd;
+      // A slot is during break if it overlaps ANY break window
+      final isDuringBreak = breakRanges.any(
+        (r) => current >= r.$1 && current < r.$2,
+      );
 
-      // A slot is past if today and the slot's start time has already passed.
       final isPast = isToday && current < currentMinutes;
 
       slots.add(TimeSlot(
@@ -131,7 +129,6 @@ class SchedulingService {
 
       current += durationMinutes;
     }
-
 
     return slots;
   }

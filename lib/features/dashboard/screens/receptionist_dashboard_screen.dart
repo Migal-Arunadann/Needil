@@ -279,7 +279,7 @@ class _NextAppointmentCard extends StatelessWidget {
                             color: color, fontWeight: FontWeight.w600)),
                     if (appt.doctorName != null) ...[
                       const SizedBox(width: 8),
-                      Text('• Dr. ${appt.doctorName}',
+                      Text('• ${appt.doctorName}',
                           style: AppTextStyles.caption
                               .copyWith(color: AppColors.textHint, fontSize: 11)),
                     ],

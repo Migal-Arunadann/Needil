@@ -91,7 +91,7 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
       context: context,
       barrierDismissible: false,
       builder: (_) => _ResetPasswordDialog(
-        label: 'Dr. $docName',
+        label: docName,
         newPassCtrl: newPassCtrl,
         confirmCtrl: confirmCtrl,
         onSubmit: (newPass, confirm) async {
@@ -239,11 +239,11 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Flexible(child: Text('Dr. ${doc['name'] ?? ''}', style: AppTextStyles.label.copyWith(fontSize: 15), overflow: TextOverflow.ellipsis)),
+              Flexible(child: Text(doc['name'] ?? '', style: AppTextStyles.label.copyWith(fontSize: 15), overflow: TextOverflow.ellipsis)),
               const SizedBox(width: 6),
               _badge('OWNER', AppColors.primary),
             ]),
-            Text('@${doc['username'] ?? ''}', style: AppTextStyles.caption.copyWith(fontSize: 11)),
+            // Primary doctor uses an internal auto-generated username — don't show it
           ])),
           // Edit schedule/treatments allowed
           _iconBtn(Icons.edit_rounded, AppColors.primary, () => _openEdit(doc['id'])),
@@ -293,7 +293,7 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Flexible(child: Text('Dr. ${doc['name'] ?? ''}', style: AppTextStyles.label.copyWith(fontSize: 15), overflow: TextOverflow.ellipsis)),
+                Flexible(child: Text(doc['name'] ?? '', style: AppTextStyles.label.copyWith(fontSize: 15), overflow: TextOverflow.ellipsis)),
                 const SizedBox(width: 6),
                 _badge(isActive ? 'ACTIVE' : 'INACTIVE', isActive ? AppColors.success : AppColors.error),
               ]),
