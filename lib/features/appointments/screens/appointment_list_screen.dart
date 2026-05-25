@@ -2024,16 +2024,16 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                     children: [
                                       Container(
                                         padding: const EdgeInsets.symmetric(
-                                            horizontal: 8, vertical: 4),
+                                            horizontal: 10, vertical: 5),
                                         decoration: BoxDecoration(
                                           color: accentColor.withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(8),
+                                          borderRadius: BorderRadius.circular(10),
                                         ),
                                         child: Text(
                                           TimeUtils.formatStringTime(apt.time),
                                           style: TextStyle(
                                             color: accentColor,
-                                            fontSize: 11,
+                                            fontSize: 13,
                                             fontWeight: FontWeight.w800,
                                             letterSpacing: -0.2,
                                           ),
