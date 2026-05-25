@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
+import '../../../core/utils/whatsapp_helper.dart';
 import '../models/patient_model.dart';
 import '../providers/patient_provider.dart';
 import 'patient_profile_screen.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class PatientListScreen extends ConsumerStatefulWidget {
   const PatientListScreen({super.key});
@@ -17,6 +17,7 @@ class PatientListScreen extends ConsumerStatefulWidget {
 
 class _PatientListScreenState extends ConsumerState<PatientListScreen> {
   String _searchQuery = '';
+  String _sortMode = 'recent'; // 'recent', 'a-z', 'phone'
   final _searchCtrl = TextEditingController();
 
   @override
@@ -26,13 +27,26 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
   }
 
   List<PatientModel> _filtered(List<PatientModel> all) {
-    if (_searchQuery.isEmpty) return all;
-    final q = _searchQuery.toLowerCase();
-    return all
-        .where(
-          (p) => p.fullName.toLowerCase().contains(q) || p.phone.contains(q),
-        )
-        .toList();
+    List<PatientModel> result = all;
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      result = result
+          .where(
+            (p) => p.fullName.toLowerCase().contains(q) || p.phone.contains(q),
+          )
+          .toList();
+    }
+    switch (_sortMode) {
+      case 'a-z':
+        result = List.of(result)..sort((a, b) => a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+        break;
+      case 'phone':
+        result = List.of(result)..sort((a, b) => a.phone.compareTo(b.phone));
+        break;
+      default: // 'recent'
+        result = List.of(result)..sort((a, b) => (b.created ?? DateTime(2000)).compareTo(a.created ?? DateTime(2000)));
+    }
+    return result;
   }
 
   @override
@@ -41,7 +55,7 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
     final filtered = _filtered(state.patients);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -55,12 +69,12 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Patients', style: AppTextStyles.h1),
+                        Text('Patients', style: context.textStyles.h1),
                         const SizedBox(height: 4),
                         Text(
                           '${state.patients.length} total registered',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: AppColors.textSecondary,
+                          style: context.textStyles.bodyMedium.copyWith(
+                            color: context.colors.textSecondary,
                           ),
                         ),
                       ],
@@ -77,9 +91,9 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
               child: Container(
                 height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: context.colors.surface,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(color: context.colors.border),
                 ),
                 child: Row(
                   children: [
@@ -87,16 +101,16 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
                     Icon(
                       Icons.search_rounded,
                       size: 20,
-                      color: AppColors.textHint,
+                      color: context.colors.textHint,
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextField(
                         controller: _searchCtrl,
-                        style: AppTextStyles.bodyMedium,
+                        style: context.textStyles.bodyMedium,
                         decoration: InputDecoration(
                           hintText: 'Search by name or phone...',
-                          hintStyle: AppTextStyles.caption.copyWith(
+                          hintStyle: context.textStyles.caption.copyWith(
                             fontSize: 14,
                           ),
                           border: InputBorder.none,
@@ -116,7 +130,7 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
                           child: Icon(
                             Icons.close_rounded,
                             size: 18,
-                            color: AppColors.textHint,
+                            color: context.colors.textHint,
                           ),
                         ),
                       ),
@@ -124,14 +138,29 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 12),
+
+            // Filter chips
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                children: [
+                  _filterChip('Recent', 'recent', Icons.schedule_rounded),
+                  const SizedBox(width: 8),
+                  _filterChip('A–Z', 'a-z', Icons.sort_by_alpha_rounded),
+                  const SizedBox(width: 8),
+                  _filterChip('Phone', 'phone', Icons.phone_rounded),
+                ],
+              ),
+            ),
+            SizedBox(height: 12),
 
             // List
             Expanded(
               child: state.isLoading
-                  ? const Center(
+                  ? Center(
                       child: CircularProgressIndicator(
-                        color: AppColors.primary,
+                        color: context.colors.primary,
                         strokeWidth: 3,
                       ),
                     )
@@ -140,7 +169,7 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
                   : filtered.isEmpty
                   ? _emptyView()
                   : RefreshIndicator(
-                      color: AppColors.primary,
+                      color: context.colors.primary,
                       onRefresh: () =>
                           ref.read(patientListProvider.notifier).loadPatients(),
                       child: ListView.separated(
@@ -179,130 +208,146 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
       },
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: context.colors.surface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.colors.border),
         ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Avatar Initials
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      gradient: AppColors.heroGradient,
-                      shape: BoxShape.circle,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Avatar Initials
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: context.colors.heroGradient,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  patient.fullName.isNotEmpty
+                      ? patient.fullName[0].toUpperCase()
+                      : '?',
+                  style: context.textStyles.h2.copyWith(color: Colors.white),
+                ),
+              ),
+              const SizedBox(width: 14),
+              // Details
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      patient.fullName,
+                      style: context.textStyles.h3.copyWith(fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      patient.fullName.isNotEmpty
-                          ? patient.fullName[0].toUpperCase()
-                          : '?',
-                      style: AppTextStyles.h2.copyWith(color: Colors.white),
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  // Details
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: 4),
+                    Row(
                       children: [
-                        Text(
-                          patient.fullName,
-                          style: AppTextStyles.h3.copyWith(fontSize: 16),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        Icon(
+                          Icons.phone_rounded,
+                          size: 12,
+                          color: context.colors.textHint,
                         ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.phone_rounded,
-                              size: 12,
-                              color: AppColors.textHint,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              patient.phone,
-                              style: AppTextStyles.caption.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 4),
+                        Text(
+                          patient.phone,
+                          style: context.textStyles.caption.copyWith(
+                            color: context.colors.textSecondary,
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                  // Phone Call Button
-                  if (patient.phone.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(
-                        Icons.phone_rounded,
-                        color: AppColors.success,
-                      ),
-                      style: IconButton.styleFrom(
-                        backgroundColor: AppColors.success.withValues(
-                          alpha: 0.1,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      onPressed: () async {
-                        final uri = Uri.parse('tel:${patient.phone}');
-                        try {
-                          await launchUrl(uri);
-                        } catch (e) {
-                          debugPrint('Could not launch dialer: $e');
-                        }
-                      },
-                    ),
-                  const SizedBox(width: 4),
-                  // Forward Icon
-                  const Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppColors.textHint,
-                  ),
-                ],
+                  ],
+                ),
               ),
+              // WhatsApp Button — simple redirect to chat
+              if (patient.phone.isNotEmpty)
+                IconButton(
+                  icon: const Icon(Icons.chat_rounded, color: Color(0xFF25D366)),
+                  tooltip: 'WhatsApp',
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFF25D366).withValues(alpha: 0.1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () => WhatsAppHelper.openChat(patient.phone),
+                ),
+              // Phone Call Button
+              if (patient.phone.isNotEmpty)
+                IconButton(
+                  icon: Icon(
+                    Icons.phone_rounded,
+                    color: context.colors.success,
+                  ),
+                  style: IconButton.styleFrom(
+                    backgroundColor: context.colors.success.withValues(
+                      alpha: 0.1,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () async {
+                    final uri = Uri.parse('tel:${patient.phone}');
+                    try {
+                      await launchUrl(uri);
+                    } catch (e) {
+                      debugPrint('Could not launch dialer: $e');
+                    }
+                  },
+                ),
+              SizedBox(width: 4),
+              // Forward Icon
+              Icon(
+                Icons.chevron_right_rounded,
+                color: context.colors.textHint,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _filterChip(String label, String mode, IconData icon) {
+    final isActive = _sortMode == mode;
+    return GestureDetector(
+      onTap: () => setState(() => _sortMode = mode),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive
+              ? context.colors.primary.withValues(alpha: 0.12)
+              : context.colors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isActive
+                ? context.colors.primary.withValues(alpha: 0.5)
+                : context.colors.border,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isActive ? context.colors.primary : context.colors.textHint,
             ),
-            const Divider(color: AppColors.border, height: 1),
-            // Bottom Info Row
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.assignment_turned_in_rounded,
-                        size: 14,
-                        color: AppColors.success,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        patient.consentGiven
-                            ? 'Consent Signed'
-                            : 'Pending Consent',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: patient.consentGiven
-                              ? AppColors.success
-                              : AppColors.warning,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    'Added: ${patient.created != null ? DateFormat('MMM d, yyyy').format(patient.created!) : 'Unknown'}',
-                    style: AppTextStyles.caption.copyWith(fontSize: 11),
-                  ),
-                ],
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: context.textStyles.caption.copyWith(
+                color: isActive ? context.colors.primary : context.colors.textSecondary,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                fontSize: 12,
               ),
             ),
           ],
@@ -319,15 +364,15 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
           Icon(
             Icons.search_off_rounded,
             size: 64,
-            color: AppColors.textHint.withValues(alpha: 0.2),
+            color: context.colors.textHint.withValues(alpha: 0.2),
           ),
           const SizedBox(height: 16),
           Text(
             _searchQuery.isNotEmpty
                 ? 'No matches found'
                 : 'No patients registered yet',
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.textSecondary,
+            style: context.textStyles.bodyMedium.copyWith(
+              color: context.colors.textSecondary,
             ),
           ),
         ],
@@ -338,21 +383,21 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
   Widget _errorView(String error) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
+            Icon(
               Icons.error_outline_rounded,
               size: 48,
-              color: AppColors.error,
+              color: context.colors.error,
             ),
             const SizedBox(height: 12),
             Text(
               error,
               textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
+              style: context.textStyles.bodyMedium.copyWith(
+                color: context.colors.textSecondary,
               ),
             ),
             const SizedBox(height: 16),

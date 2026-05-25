@@ -1,0 +1,27 @@
+name: Deploy OTA Update (Shorebird)
+
+on:
+  push:
+    branches:
+      - main # Runs whenever you push to main
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Setup Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
+        with:
+          shorebird-token: ${{ secrets.SHOREBIRD_TOKEN }}
+
+      - name: Publish Android Patch
+        run: shorebird patch android --force

@@ -17,6 +17,7 @@ class AppointmentModel {
   final String? patientPhone; // For call-by placeholder
   final DateTime? checkInTime;
   final DateTime? checkOutTime;
+  final DateTime? patientDetailsFilledTime;
   final DateTime? consultationStartTime;
   final DateTime? consultationEndTime;       // Set when consultation form is submitted
   final bool patientDetailsSaved;            // true once PatientInfoScreen form is submitted
@@ -30,6 +31,7 @@ class AppointmentModel {
   // Expanded relations (populated when fetched with expand)
   final String? doctorName;
   final String? expandedPatientName;
+  final String? expandedPatientPhone;
 
   AppointmentModel({
     required this.id,
@@ -44,6 +46,7 @@ class AppointmentModel {
     this.patientPhone,
     this.checkInTime,
     this.checkOutTime,
+    this.patientDetailsFilledTime,
     this.consultationStartTime,
     this.consultationEndTime,
     this.patientDetailsSaved = false,
@@ -55,6 +58,7 @@ class AppointmentModel {
     this.updated,
     this.doctorName,
     this.expandedPatientName,
+    this.expandedPatientPhone,
   });
 
   bool get consultationFormSaved => consultationEndTime != null;
@@ -63,6 +67,7 @@ class AppointmentModel {
     // Try to get expanded doctor/patient names
     String? doctorName;
     String? expandedPatientName;
+    String? expandedPatientPhone;
 
     try {
       final expandData = record.get<Map<String, dynamic>>('expand');
@@ -73,7 +78,10 @@ class AppointmentModel {
         }
         if (expandData.containsKey('patient')) {
           final pat = expandData['patient'];
-          if (pat is Map) expandedPatientName = pat['full_name'] as String?;
+          if (pat is Map) {
+            expandedPatientName = pat['full_name'] as String?;
+            expandedPatientPhone = pat['phone'] as String?;
+          }
         }
       }
     } catch (_) {
@@ -93,6 +101,7 @@ class AppointmentModel {
       patientPhone: record.getStringValue('patient_phone'),
       checkInTime: _parseDateTimeOrNull(record.getStringValue('check_in_time')),
       checkOutTime: _parseDateTimeOrNull(record.getStringValue('check_out_time')),
+      patientDetailsFilledTime: _parseDateTimeOrNull(record.getStringValue('patient_details_filled_time')),
       consultationStartTime: _parseDateTimeOrNull(record.getStringValue('consultation_start_time')),
       consultationEndTime: _parseDateTimeOrNull(record.getStringValue('consultation_end_time')),
       patientDetailsSaved: record.getBoolValue('patient_details_saved'),
@@ -108,6 +117,7 @@ class AppointmentModel {
       updated: DateTime.tryParse(record.get<String>('updated')),
       doctorName: doctorName,
       expandedPatientName: expandedPatientName,
+      expandedPatientPhone: expandedPatientPhone,
     );
   }
 
@@ -129,6 +139,7 @@ class AppointmentModel {
       if (patientPhone != null) 'patient_phone': patientPhone,
       if (checkInTime != null) 'check_in_time': checkInTime!.toUtc().toIso8601String(),
       if (checkOutTime != null) 'check_out_time': checkOutTime!.toUtc().toIso8601String(),
+      if (patientDetailsFilledTime != null) 'patient_details_filled_time': patientDetailsFilledTime!.toUtc().toIso8601String(),
       if (consultationStartTime != null) 'consultation_start_time': consultationStartTime!.toUtc().toIso8601String(),
       if (consultationEndTime != null) 'consultation_end_time': consultationEndTime!.toUtc().toIso8601String(),
       'patient_details_saved': patientDetailsSaved,
@@ -144,6 +155,9 @@ class AppointmentModel {
   /// Display name: expanded patient name > placeholder name
   String get displayName =>
       expandedPatientName ?? patientName ?? 'Unknown Patient';
+
+  /// Effective phone: expanded patient phone > placeholder phone
+  String? get effectivePhone => expandedPatientPhone ?? patientPhone;
 
   static AppointmentType _parseType(String t) {
     if (t == 'walk_in') return AppointmentType.walkIn;

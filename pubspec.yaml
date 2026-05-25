@@ -22,6 +22,9 @@ dependencies:
   http: ^1.2.2
   url_launcher: ^6.3.1
   fl_chart: ^1.2.0
+  flutter_local_notifications: ^18.0.0
+  timezone: ^0.9.4
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_test:
@@ -31,6 +34,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/
+    - assets/audio/
+    - shorebird.yaml
+
+
 
 flutter_launcher_icons:
   android: "launcher_icon"
