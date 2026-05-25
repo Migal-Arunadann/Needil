@@ -11,6 +11,8 @@ import '../../auth/models/doctor_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/screens/clinic_registration/clinic_step3_screen.dart' show BreakTime;
 import '../../../core/services/auth_service.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 /// Full edit screen for a doctor's registration details —
 /// working schedule, treatments (type / duration / fee), and basic info.
@@ -113,7 +115,6 @@ class _EditDoctorDetailsScreenState
       final pb = ref.read(pocketbaseProvider);
       final record = await pb.collection(PBCollections.doctors).getOne(_resolvedDoctorId);
       final doc = DoctorModel.fromRecord(record);
-      print('DEBUG DOCTOR: ${doc.name}, Schedule: ${doc.workingSchedule.map((e) => e.toJson()).toList()}');
 
       // Basic info
       _originalName = doc.name;
@@ -346,7 +347,7 @@ class _EditDoctorDetailsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(msg),
-          backgroundColor: AppColors.error,
+          backgroundColor: context.colors.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
@@ -359,7 +360,7 @@ class _EditDoctorDetailsScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(msg),
-          backgroundColor: AppColors.success,
+          backgroundColor: context.colors.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
@@ -378,53 +379,53 @@ class _EditDoctorDetailsScreenState
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
             onPressed: () => Navigator.pop(context),
           ),
           title: Column(
             children: [
-              Text('Edit Doctor Details', style: AppTextStyles.h4),
+              Text('Edit Doctor Details', style: context.textStyles.h4),
               if (_nameCtrl.text.isNotEmpty)
                 Text(
                   doctorName,
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                  style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
                 ),
             ],
           ),
           centerTitle: true,
           actions: [
             Padding(
-              padding: const EdgeInsets.only(right: 12),
+              padding: EdgeInsets.only(right: 12),
               child: TextButton.icon(
                 onPressed: _isSaving ? null : _save,
                 icon: _isSaving
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 14,
                         height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                        child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
                       )
                     : const Icon(Icons.save_rounded, size: 18),
                 label: const Text('Save'),
                 style: TextButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  textStyle: AppTextStyles.label.copyWith(fontSize: 14),
+                  foregroundColor: context.colors.primary,
+                  textStyle: context.textStyles.label.copyWith(fontSize: 14),
                 ),
               ),
             ),
           ],
           bottom: TabBar(
             controller: _tabController,
-            indicatorColor: AppColors.primary,
+            indicatorColor: context.colors.primary,
             indicatorWeight: 3,
-            labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textHint,
-            labelStyle: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w700, fontSize: 12),
-            tabs: const [
+            labelColor: context.colors.primary,
+            unselectedLabelColor: context.colors.textHint,
+            labelStyle: context.textStyles.caption.copyWith(fontWeight: FontWeight.w700, fontSize: 12),
+            tabs: [
               Tab(icon: Icon(Icons.person_outline_rounded, size: 18), text: 'Basic Info'),
               Tab(icon: Icon(Icons.schedule_rounded, size: 18), text: 'Availability'),
               Tab(icon: Icon(Icons.medical_services_outlined, size: 18), text: 'Treatments'),
@@ -432,7 +433,7 @@ class _EditDoctorDetailsScreenState
           ),
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            ? Center(child: CircularProgressIndicator(color: context.colors.primary))
             : TabBarView(
                 controller: _tabController,
                 children: [
@@ -451,30 +452,30 @@ class _EditDoctorDetailsScreenState
 
   Widget _buildBasicInfoTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _sectionHeader('Personal Information', Icons.badge_outlined),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           AppTextField(
             controller: _nameCtrl,
             label: 'Full Name',
-            prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.textHint),
+            prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           AppTextField(
             controller: _emailCtrl,
             label: 'Email Address',
             keyboardType: TextInputType.emailAddress,
-            prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textHint),
+            prefixIcon: Icon(Icons.email_outlined, color: context.colors.textHint),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           AppTextField(
             controller: _ageCtrl,
             label: 'Age',
             keyboardType: TextInputType.number,
-            prefixIcon: const Icon(Icons.cake_outlined, color: AppColors.textHint),
+            prefixIcon: Icon(Icons.cake_outlined, color: context.colors.textHint),
           ),
           const SizedBox(height: 14),
           // DOB picker
@@ -491,25 +492,25 @@ class _EditDoctorDetailsScreenState
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: context.colors.surface,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _dateOfBirth != null ? AppColors.primary.withValues(alpha: 0.4) : AppColors.border),
+                border: Border.all(color: _dateOfBirth != null ? context.colors.primary.withValues(alpha: 0.4) : context.colors.border),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.calendar_today_outlined, size: 18, color: _dateOfBirth != null ? AppColors.primary : AppColors.textHint),
-                  const SizedBox(width: 12),
+                  Icon(Icons.calendar_today_outlined, size: 18, color: _dateOfBirth != null ? context.colors.primary : context.colors.textHint),
+                  SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       _dateOfBirth != null
                           ? '${_dateOfBirth!.day.toString().padLeft(2,'0')}/${_dateOfBirth!.month.toString().padLeft(2,'0')}/${_dateOfBirth!.year}'
                           : 'Date of Birth',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: _dateOfBirth != null ? AppColors.textPrimary : AppColors.textHint,
+                      style: context.textStyles.bodyMedium.copyWith(
+                        color: _dateOfBirth != null ? context.colors.textPrimary : context.colors.textHint,
                       ),
                     ),
                   ),
-                  const Icon(Icons.arrow_drop_down_rounded, color: AppColors.textHint),
+                  Icon(Icons.arrow_drop_down_rounded, color: context.colors.textHint),
                 ],
               ),
             ),
@@ -540,7 +541,7 @@ class _EditDoctorDetailsScreenState
           const SizedBox(height: 6),
           Text(
             'Select working days and configure start, end, and optional break times for each.',
-            style: AppTextStyles.caption,
+            style: context.textStyles.caption,
           ),
           const SizedBox(height: 16),
 
@@ -563,17 +564,17 @@ class _EditDoctorDetailsScreenState
                   duration: const Duration(milliseconds: 180),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                   decoration: BoxDecoration(
-                    gradient: selected ? AppColors.heroGradient : null,
-                    color: selected ? null : AppColors.surface,
+                    gradient: selected ? context.colors.heroGradient : null,
+                    color: selected ? null : context.colors.surface,
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
-                      color: selected ? AppColors.primary : AppColors.border,
+                      color: selected ? context.colors.primary : context.colors.border,
                     ),
                   ),
                   child: Text(
                     day.substring(0, 3),
-                    style: AppTextStyles.label.copyWith(
-                      color: selected ? Colors.white : AppColors.textSecondary,
+                    style: context.textStyles.label.copyWith(
+                      color: selected ? Colors.white : context.colors.textSecondary,
                       fontSize: 13,
                     ),
                   ),
@@ -606,9 +607,9 @@ class _EditDoctorDetailsScreenState
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -620,28 +621,28 @@ class _EditDoctorDetailsScreenState
                 width: 36, height: 36,
                 decoration: BoxDecoration(
                   color: isHalfDay
-                      ? AppColors.warning.withValues(alpha: 0.1)
-                      : AppColors.primary.withValues(alpha: 0.1),
+                      ? context.colors.warning.withValues(alpha: 0.1)
+                      : context.colors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
                   isHalfDay ? Icons.wb_sunny_outlined : Icons.work_outline_rounded,
                   size: 18,
-                  color: isHalfDay ? AppColors.warning : AppColors.primary,
+                  color: isHalfDay ? context.colors.warning : context.colors.primary,
                 ),
               ),
               const SizedBox(width: 10),
-              Expanded(child: Text(day, style: AppTextStyles.label.copyWith(fontSize: 15))),
+              Expanded(child: Text(day, style: context.textStyles.label.copyWith(fontSize: 15))),
               if (isHalfDay)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppColors.warning.withValues(alpha: 0.1),
+                    color: context.colors.warning.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text('Weekend',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.warning, fontSize: 10, fontWeight: FontWeight.w600)),
+                    style: context.textStyles.caption.copyWith(
+                      color: context.colors.warning, fontSize: 10, fontWeight: FontWeight.w600)),
                 ),
             ],
           ),
@@ -650,9 +651,9 @@ class _EditDoctorDetailsScreenState
           // Start & End times
           Row(
             children: [
-              Expanded(child: _timePickerTile('From', _startTimes[day], () => _pickDayTime(day, 'start'), AppColors.success)),
+              Expanded(child: _timePickerTile('From', _startTimes[day], () => _pickDayTime(day, 'start'), context.colors.success)),
               const SizedBox(width: 10),
-              Expanded(child: _timePickerTile('To', _endTimes[day], () => _pickDayTime(day, 'end'), AppColors.error)),
+              Expanded(child: _timePickerTile('To', _endTimes[day], () => _pickDayTime(day, 'end'), context.colors.error)),
             ],
           ),
           const SizedBox(height: 12),
@@ -664,20 +665,20 @@ class _EditDoctorDetailsScreenState
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
-                  Icon(Icons.coffee_rounded, size: 14, color: AppColors.warning),
+                  Icon(Icons.coffee_rounded, size: 14, color: context.colors.warning),
                   const SizedBox(width: 6),
-                  Text('Break ${i + 1}:', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600)),
+                  Text('Break ${i + 1}:', style: context.textStyles.caption.copyWith(color: context.colors.warning, fontWeight: FontWeight.w600)),
                   const SizedBox(width: 8),
-                  Expanded(child: _timePickerTile('From', b.from, () => _pickBreakTime(day, i, 'from'), AppColors.warning)),
-                  const SizedBox(width: 6),
-                  Expanded(child: _timePickerTile('To', b.to, () => _pickBreakTime(day, i, 'to'), AppColors.warning)),
-                  const SizedBox(width: 6),
+                  Expanded(child: _timePickerTile('From', b.from, () => _pickBreakTime(day, i, 'from'), context.colors.warning)),
+                  SizedBox(width: 6),
+                  Expanded(child: _timePickerTile('To', b.to, () => _pickBreakTime(day, i, 'to'), context.colors.warning)),
+                  SizedBox(width: 6),
                   GestureDetector(
                     onTap: () => setState(() {
                       breaks.removeAt(i);
                       _dayBreaks[day] = breaks;
                     }),
-                    child: const Icon(Icons.remove_circle_outline_rounded, size: 18, color: AppColors.error),
+                    child: Icon(Icons.remove_circle_outline_rounded, size: 18, color: context.colors.error),
                   ),
                 ],
               ),
@@ -691,10 +692,10 @@ class _EditDoctorDetailsScreenState
             }),
             child: Row(
               children: [
-                const Icon(Icons.add_circle_outline_rounded, size: 16, color: AppColors.textHint),
+                Icon(Icons.add_circle_outline_rounded, size: 16, color: context.colors.textHint),
                 const SizedBox(width: 6),
-                Text('Add break time', style: AppTextStyles.caption.copyWith(
-                  color: AppColors.textHint, fontWeight: FontWeight.w600)),
+                Text('Add break time', style: context.textStyles.caption.copyWith(
+                  color: context.colors.textHint, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -717,10 +718,10 @@ class _EditDoctorDetailsScreenState
         decoration: BoxDecoration(
           color: time != null
               ? accentColor.withValues(alpha: 0.06)
-              : AppColors.background,
+              : context.colors.background,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: time != null ? accentColor.withValues(alpha: 0.3) : AppColors.border,
+            color: time != null ? accentColor.withValues(alpha: 0.3) : context.colors.border,
           ),
         ),
         child: Row(
@@ -731,12 +732,12 @@ class _EditDoctorDetailsScreenState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label, style: AppTextStyles.caption.copyWith(fontSize: 10, color: accentColor)),
+                  Text(label, style: context.textStyles.caption.copyWith(fontSize: 10, color: accentColor)),
                   Text(
                     time != null ? _formatTimeDisplay(time) : 'Tap to set',
-                    style: AppTextStyles.label.copyWith(
+                    style: context.textStyles.label.copyWith(
                       fontSize: 12,
-                      color: time != null ? AppColors.textPrimary : AppColors.textHint,
+                      color: time != null ? context.colors.textPrimary : context.colors.textHint,
                     ),
                   ),
                 ],
@@ -762,7 +763,7 @@ class _EditDoctorDetailsScreenState
           const SizedBox(height: 6),
           Text(
             'Enable each treatment you offer and set session duration and consultation fee.',
-            style: AppTextStyles.caption,
+            style: context.textStyles.caption,
           ),
           const SizedBox(height: 16),
 
@@ -786,10 +787,10 @@ class _EditDoctorDetailsScreenState
       duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: enabled ? AppColors.primary.withValues(alpha: 0.3) : AppColors.border,
+          color: enabled ? context.colors.primary.withValues(alpha: 0.3) : context.colors.border,
           width: enabled ? 1.5 : 1.0,
         ),
       ),
@@ -809,13 +810,13 @@ class _EditDoctorDetailsScreenState
                     height: 40,
                     decoration: BoxDecoration(
                       color: enabled
-                          ? AppColors.primary.withValues(alpha: 0.12)
-                          : AppColors.background,
+                          ? context.colors.primary.withValues(alpha: 0.12)
+                          : context.colors.background,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Icon(
                       _treatmentIcon(type),
-                      color: enabled ? AppColors.primary : AppColors.textHint,
+                      color: enabled ? context.colors.primary : context.colors.textHint,
                       size: 22,
                     ),
                   ),
@@ -824,13 +825,13 @@ class _EditDoctorDetailsScreenState
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(type, style: AppTextStyles.label.copyWith(fontSize: 14)),
+                        Text(type, style: context.textStyles.label.copyWith(fontSize: 14)),
                         if (enabled) ...[
                           const SizedBox(height: 2),
                           Text(
                             '${_durationCtrls[type]?.text ?? 30} min · ₹${_feeCtrls[type]?.text ?? 0}',
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.primary,
+                            style: context.textStyles.caption.copyWith(
+                              color: context.colors.primary,
                               fontWeight: FontWeight.w600,
                               fontSize: 11,
                             ),
@@ -842,7 +843,7 @@ class _EditDoctorDetailsScreenState
                   Switch(
                     value: enabled,
                     onChanged: (v) => setState(() => _treatmentEnabled[type] = v),
-                    activeTrackColor: AppColors.primary,
+                    activeTrackColor: context.colors.primary,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                 ],
@@ -852,7 +853,7 @@ class _EditDoctorDetailsScreenState
 
           // Expanded form when enabled
           if (enabled) ...[
-            Divider(height: 1, color: AppColors.border),
+            Divider(height: 1, color: context.colors.border),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
               child: Row(
@@ -862,7 +863,7 @@ class _EditDoctorDetailsScreenState
                       ctrl: _durationCtrls[type]!,
                       label: 'Session (min)',
                       icon: Icons.timelapse_rounded,
-                      color: AppColors.accent,
+                      color: context.colors.accent,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -871,7 +872,7 @@ class _EditDoctorDetailsScreenState
                       ctrl: _feeCtrls[type]!,
                       label: 'Fee (₹)',
                       icon: Icons.currency_rupee_rounded,
-                      color: AppColors.success,
+                      color: context.colors.success,
                     ),
                   ),
                 ],
@@ -896,14 +897,14 @@ class _EditDoctorDetailsScreenState
           children: [
             Icon(icon, size: 13, color: color),
             const SizedBox(width: 4),
-            Text(label, style: AppTextStyles.caption.copyWith(color: color, fontSize: 11)),
+            Text(label, style: context.textStyles.caption.copyWith(color: color, fontSize: 11)),
           ],
         ),
         const SizedBox(height: 6),
         TextFormField(
           controller: ctrl,
           keyboardType: TextInputType.number,
-          style: AppTextStyles.bodyMedium,
+          style: context.textStyles.bodyMedium,
           decoration: InputDecoration(
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -951,9 +952,9 @@ class _EditDoctorDetailsScreenState
   Widget _sectionHeader(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: 18, color: AppColors.primary),
+        Icon(icon, size: 18, color: context.colors.primary),
         const SizedBox(width: 6),
-        Text(title, style: AppTextStyles.h3.copyWith(color: AppColors.primary)),
+        Text(title, style: context.textStyles.h3.copyWith(color: context.colors.primary)),
       ],
     );
   }

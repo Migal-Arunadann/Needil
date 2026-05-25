@@ -10,6 +10,8 @@ import '../../../../core/widgets/time_slot_picker.dart';
 import '../../../../core/utils/time_utils.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/screens/clinic_registration/clinic_step3_screen.dart' show BreakTime, DayOverride;
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class AddStaffDoctorScreen extends ConsumerStatefulWidget {
   const AddStaffDoctorScreen({super.key});
@@ -80,7 +82,7 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: error ? AppColors.error : AppColors.success,
+      backgroundColor: error ? context.colors.error : context.colors.success,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ));
@@ -203,19 +205,6 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
       initialDate: initialDate,
       firstDate: DateTime(1920),
       lastDate: DateTime(now.year - 18), // Must be at least 18
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: AppColors.primary,
-              onPrimary: Colors.white,
-              surface: AppColors.surface,
-              onSurface: AppColors.textPrimary,
-            ),
-          ),
-          child: child!,
-        );
-      },
     );
     if (picked != null) {
       setState(() => dateOfBirth = picked);
@@ -227,15 +216,15 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         appBar: AppBar(
-          backgroundColor: AppColors.surface,
+          backgroundColor: context.colors.surface,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
             onPressed: () => Navigator.pop(context, false),
           ),
-          title: Text('Add Working Doctor', style: AppTextStyles.h4),
+          title: Text('Add Working Doctor', style: context.textStyles.h4),
           centerTitle: true,
         ),
         body: SafeArea(
@@ -251,7 +240,7 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
                     Container(
                       width: 80, height: 80,
                       decoration: BoxDecoration(
-                        gradient: photoFile == null ? AppColors.heroGradient : null,
+                        gradient: photoFile == null ? context.colors.heroGradient : null,
                         borderRadius: BorderRadius.circular(22),
                         image: photoFile != null
                             ? DecorationImage(image: FileImage(photoFile!), fit: BoxFit.cover)
@@ -263,7 +252,7 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
                     Positioned(bottom: 0, right: 0,
                       child: Container(
                         width: 26, height: 26,
-                        decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white, width: 2)),
+                        decoration: BoxDecoration(color: context.colors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white, width: 2)),
                         child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
                       )),
                   ]),
@@ -272,18 +261,18 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
 
                 // Name
                 _field('Full Name', 'e.g. Dr. John Doe', Icons.person_outline_rounded, controller: nameCtrl),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
 
                 // Username
                 _field('Username', 'Login username', Icons.alternate_email_rounded,
                   controller: usernameCtrl,
                   errorText: usernameError,
                   suffixIcon: isCheckingUsername
-                      ? const Padding(
+                      ? Padding(
                           padding: EdgeInsets.all(12),
                           child: SizedBox(
                             width: 16, height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
                           ),
                         )
                       : null,
@@ -313,29 +302,29 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
                   controller: passwordCtrl,
                   obscure: _obscurePassword,
                   suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: AppColors.textHint, size: 20),
+                    icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: context.colors.textHint, size: 20),
                     onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: 12),
 
                 // DOB
                 GestureDetector(
                   onTap: _pickDate,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: context.colors.surface,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: context.colors.border),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.cake_outlined, color: AppColors.textHint, size: 20),
+                        Icon(Icons.cake_outlined, color: context.colors.textHint, size: 20),
                         const SizedBox(width: 12),
                         Text(
                           dateOfBirth == null ? 'Date of Birth' : '${dateOfBirth!.day}/${dateOfBirth!.month}/${dateOfBirth!.year}',
-                          style: AppTextStyles.bodyMedium.copyWith(color: dateOfBirth == null ? AppColors.textHint : AppColors.textPrimary),
+                          style: context.textStyles.bodyMedium.copyWith(color: dateOfBirth == null ? context.colors.textHint : context.colors.textPrimary),
                         ),
                       ],
                     ),
@@ -344,7 +333,7 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
                 const SizedBox(height: 24),
 
                 // Schedule
-                Text('Working Schedule', style: AppTextStyles.h3.copyWith(fontSize: 16)),
+                Text('Working Schedule', style: context.textStyles.h3.copyWith(fontSize: 16)),
                 const SizedBox(height: 10),
                 _buildDoctorHoursCard(),
                 const SizedBox(height: 12),
@@ -352,7 +341,7 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
                 const SizedBox(height: 24),
 
                 // Treatments
-                Text('Treatments Offered', style: AppTextStyles.h3.copyWith(fontSize: 16)),
+                Text('Treatments Offered', style: context.textStyles.h3.copyWith(fontSize: 16)),
                 const SizedBox(height: 10),
                 ..._availableTreatments.map((t) => _buildTreatmentTile(t)),
                 
@@ -381,39 +370,39 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
         if (errorText != null) return errorText;
         return null;
       },
-      style: AppTextStyles.bodyMedium,
+      style: context.textStyles.bodyMedium,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         errorText: errorText,
-        hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-        labelStyle: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-        prefixIcon: Icon(icon, color: AppColors.textHint, size: 20),
+        hintStyle: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint),
+        labelStyle: context.textStyles.caption.copyWith(color: context.colors.textHint),
+        prefixIcon: Icon(icon, color: context.colors.textHint, size: 20),
         suffixIcon: suffixIcon,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary)),
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.colors.border)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.colors.border)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.colors.primary)),
         filled: true,
-        fillColor: AppColors.surface,
+        fillColor: context.colors.surface,
       ),
     );
   }
 
   Widget _buildDoctorHoursCard() {
     return Container(
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.border)),
+      decoration: BoxDecoration(color: context.colors.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: context.colors.border)),
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Row(children: [
-              const Icon(Icons.date_range_rounded, size: 18, color: AppColors.primary),
+              Icon(Icons.date_range_rounded, size: 18, color: context.colors.primary),
               const SizedBox(width: 8),
-              Text('Working Days & Hours', style: AppTextStyles.label.copyWith(fontSize: 14)),
+              Text('Working Days & Hours', style: context.textStyles.label.copyWith(fontSize: 14)),
             ]),
           ),
-          Divider(height: 1, color: AppColors.border, indent: 16, endIndent: 16),
+          Divider(height: 1, color: context.colors.border, indent: 16, endIndent: 16),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -428,12 +417,12 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
                     duration: const Duration(milliseconds: 200),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primary : AppColors.surface,
+                      color: isSelected ? context.colors.primary : context.colors.surface,
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: isSelected ? AppColors.primary : AppColors.border),
+                      border: Border.all(color: isSelected ? context.colors.primary : context.colors.border),
                     ),
-                    child: Text(day.substring(0, 3), style: AppTextStyles.caption.copyWith(
-                      color: isSelected ? Colors.white : AppColors.textHint,
+                    child: Text(day.substring(0, 3), style: context.textStyles.caption.copyWith(
+                      color: isSelected ? Colors.white : context.colors.textHint,
                       fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                     )),
                   ),
@@ -454,25 +443,25 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
 
   Widget _buildDoctorBreaksCard() {
     return Container(
-      decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: AppColors.border)),
+      decoration: BoxDecoration(color: context.colors.surface, borderRadius: BorderRadius.circular(16), border: Border.all(color: context.colors.border)),
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Row(children: [
-                  const Icon(Icons.coffee_rounded, size: 18, color: AppColors.warning),
+                  Icon(Icons.coffee_rounded, size: 18, color: context.colors.warning),
                   const SizedBox(width: 8),
-                  Text('Break Times', style: AppTextStyles.label.copyWith(fontSize: 14)),
+                  Text('Break Times', style: context.textStyles.label.copyWith(fontSize: 14)),
                 ]),
                 GestureDetector(
                   onTap: () => setState(() => globalBreaks.add(BreakTime())),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
-                    child: Text('+ Add Break', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.bold)),
+                    decoration: BoxDecoration(color: context.colors.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                    child: Text('+ Add Break', style: context.textStyles.caption.copyWith(color: context.colors.warning, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
@@ -481,19 +470,19 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
           if (globalBreaks.isEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: Center(child: Text('No breaks added.', style: AppTextStyles.caption.copyWith(color: AppColors.textHint))),
+              child: Center(child: Text('No breaks added.', style: context.textStyles.caption.copyWith(color: context.colors.textHint))),
             ),
           ...globalBreaks.asMap().entries.map((entry) {
             final idx = entry.key;
             final br = entry.value;
             return Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: Row(children: [
                 Expanded(child: _timeField('Start', br.from, (t) => setState(() => br.from = t))),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Expanded(child: _timeField('End', br.to, (t) => setState(() => br.to = t))),
                 IconButton(
-                  icon: const Icon(Icons.remove_circle_outline, color: AppColors.error, size: 20),
+                  icon: Icon(Icons.remove_circle_outline, color: context.colors.error, size: 20),
                   onPressed: () => setState(() => globalBreaks.removeAt(idx)),
                 ),
               ]),
@@ -509,17 +498,17 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: isSelected ? AppColors.primary.withValues(alpha: 0.05) : AppColors.surface,
+        color: isSelected ? context.colors.primary.withValues(alpha: 0.05) : context.colors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isSelected ? AppColors.primary.withValues(alpha: 0.3) : AppColors.border),
+        border: Border.all(color: isSelected ? context.colors.primary.withValues(alpha: 0.3) : context.colors.border),
       ),
       child: Column(
         children: [
           CheckboxListTile(
-            title: Text(treatment, style: AppTextStyles.label.copyWith(fontSize: 14)),
+            title: Text(treatment, style: context.textStyles.label.copyWith(fontSize: 14)),
             value: isSelected,
             onChanged: (val) => setState(() => selectedTreatments[treatment] = val ?? false),
-            activeColor: AppColors.primary,
+            activeColor: context.colors.primary,
             controlAffinity: ListTileControlAffinity.leading,
             dense: true,
             visualDensity: VisualDensity.compact,
@@ -547,13 +536,13 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
         if (t != null) onChanged(t);
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(color: AppColors.background, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
+        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(color: context.colors.background, borderRadius: BorderRadius.circular(8), border: Border.all(color: context.colors.border)),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(time == null ? label : TimeUtils.formatTimeOfDay(time), style: AppTextStyles.caption.copyWith(color: time == null ? AppColors.textHint : AppColors.textPrimary)),
-            const Icon(Icons.access_time_rounded, size: 16, color: AppColors.textHint),
+            Text(time == null ? label : TimeUtils.formatTimeOfDay(time), style: context.textStyles.caption.copyWith(color: time == null ? context.colors.textHint : context.colors.textPrimary)),
+            Icon(Icons.access_time_rounded, size: 16, color: context.colors.textHint),
           ],
         ),
       ),
@@ -566,15 +555,15 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
       child: TextField(
         controller: controller,
         keyboardType: type,
-        style: AppTextStyles.caption,
+        style: context.textStyles.caption,
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 10),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+          labelStyle: context.textStyles.caption.copyWith(color: context.colors.textHint, fontSize: 10),
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 0),
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary)),
-          filled: true, fillColor: AppColors.surface,
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.colors.border)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.colors.primary)),
+          filled: true, fillColor: context.colors.surface,
         ),
       ),
     );

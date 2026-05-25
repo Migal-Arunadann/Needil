@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,7 +11,11 @@ import '../../appointments/providers/appointment_provider.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../auth/models/doctor_model.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../../core/services/auth_service.dart';
 import '../providers/treatment_provider.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class CreateTreatmentPlanScreen extends ConsumerStatefulWidget {
   final String patientId;
@@ -66,6 +71,15 @@ class _CreateTreatmentPlanScreenState
   List<int> _doctorWorkingDays = [];
   bool _isLoadingTreatments = true;
 
+  // Doctor selector for clinic accounts
+  bool _isClinicAccount = false;
+  List<DoctorModel> _clinicDoctors = [];
+  DoctorModel? _selectedDoctor;
+  bool _isLoadingDoctors = true;
+
+  /// The effective doctor ID — either from the dropdown or the widget param.
+  String get _effectiveDoctorId => _selectedDoctor?.id ?? widget.doctorId;
+
   bool _formSubmitted = false;
 
   String get _draftKey =>
@@ -81,7 +95,13 @@ class _CreateTreatmentPlanScreenState
           widget.defaultFee! % 1 == 0 ? 0 : 2);
     }
 
+    _checkAccountTypeAndLoadDoctors();
     _loadTreatments();
+
+    // Listen for changes to update session preview dynamically
+    _sessionsCtrl.addListener(_onPreviewFieldChanged);
+    _intervalCtrl.addListener(_onPreviewFieldChanged);
+
     if (widget.appointmentId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         try {
@@ -91,6 +111,10 @@ class _CreateTreatmentPlanScreenState
         await _loadDraft();
       });
     }
+  }
+
+  void _onPreviewFieldChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadDraft() async {
@@ -142,6 +166,47 @@ class _CreateTreatmentPlanScreenState
     } catch (_) {}
   }
 
+  /// Check if the logged-in user is a clinic account and load clinic doctors.
+  Future<void> _checkAccountTypeAndLoadDoctors() async {
+    final auth = ref.read(authProvider);
+    if (auth.role == UserRole.clinic && auth.clinicId != null) {
+      setState(() {
+        _isClinicAccount = true;
+        _isLoadingDoctors = true;
+      });
+      try {
+        final pb = ref.read(pocketbaseProvider);
+        final result = await pb.collection('doctors').getList(
+          filter: 'clinic = "${auth.clinicId}"',
+          perPage: 50,
+        );
+        final doctors = result.items.map((r) => DoctorModel.fromRecord(r)).toList();
+        if (mounted) {
+          setState(() {
+            _clinicDoctors = doctors;
+            _isLoadingDoctors = false;
+            // Auto-select the doctor matching widget.doctorId
+            try {
+              _selectedDoctor = doctors.firstWhere((d) => d.id == widget.doctorId);
+            } catch (_) {
+              if (doctors.isNotEmpty) _selectedDoctor = doctors.first;
+            }
+          });
+          // Reload treatments for the selected doctor
+          if (_selectedDoctor != null) _loadTreatmentsForDoctor(_selectedDoctor!);
+        }
+      } catch (_) {
+        if (mounted) setState(() => _isLoadingDoctors = false);
+      }
+    } else {
+      setState(() {
+        _isClinicAccount = false;
+        _isLoadingDoctors = false;
+      });
+    }
+  }
+
+  /// Load treatments from the doctor record identified by widget.doctorId.
   Future<void> _loadTreatments() async {
     try {
       final pb = ref.read(pocketbaseProvider);
@@ -178,11 +243,40 @@ class _CreateTreatmentPlanScreenState
     }
   }
 
+  /// Load treatments for a specific doctor (used when clinic switches doctor dropdown).
+  void _loadTreatmentsForDoctor(DoctorModel doctor) {
+    setState(() {
+      _doctorTreatments = doctor.treatments;
+      _doctorWorkingDays = doctor.workingDays;
+      _doctorSchedules = doctor.workingSchedule;
+      _isLoadingTreatments = false;
+
+      // Auto-select the default treatment type in maintenance mode if available
+      if (widget.isMaintenance && widget.defaultTreatmentType != null) {
+        try {
+          _selectedTreatment = _doctorTreatments.firstWhere(
+            (t) => t.type == widget.defaultTreatmentType,
+          );
+          _feeCtrl.text = _selectedTreatment!.fee.toStringAsFixed(
+              _selectedTreatment!.fee % 1 == 0 ? 0 : 2);
+        } catch (_) {
+          _selectedTreatment = null;
+          _feeCtrl.clear();
+        }
+      } else {
+        _selectedTreatment = null; // Reset treatment selection
+        _feeCtrl.clear();
+      }
+    });
+  }
+
   @override
   void dispose() {
     if (!_formSubmitted && widget.appointmentId != null) {
       _saveDraft();
     }
+    _sessionsCtrl.removeListener(_onPreviewFieldChanged);
+    _intervalCtrl.removeListener(_onPreviewFieldChanged);
     _sessionsCtrl.dispose();
     _intervalCtrl.dispose();
     _feeCtrl.dispose();
@@ -258,9 +352,9 @@ class _CreateTreatmentPlanScreenState
 
     if (slots.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('No slots available — ensure a treatment is selected and doctor has a schedule'),
-          backgroundColor: AppColors.warning,
+          backgroundColor: context.colors.warning,
         ),
       );
       return;
@@ -285,7 +379,7 @@ class _CreateTreatmentPlanScreenState
     if (!_formKey.currentState!.validate()) return;
     if (_selectedTreatment == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a treatment type'), backgroundColor: AppColors.error),
+        SnackBar(content: Text('Please select a treatment type'), backgroundColor: context.colors.error),
       );
       return;
     }
@@ -303,7 +397,7 @@ class _CreateTreatmentPlanScreenState
       if (widget.isMaintenance) {
         await service.createMaintenancePlan(
           patientId: widget.patientId,
-          doctorId: widget.doctorId,
+          doctorId: _effectiveDoctorId,
           consultationId: widget.consultationId,
           parentPlanId: widget.parentPlanId!,
           treatmentType: _selectedTreatment!.type,
@@ -317,7 +411,7 @@ class _CreateTreatmentPlanScreenState
       } else {
         final plan = await service.createSmartTreatmentPlan(
           patientId: widget.patientId,
-          doctorId: widget.doctorId,
+          doctorId: _effectiveDoctorId,
           consultationId: widget.consultationId,
           treatmentType: _selectedTreatment!.type,
           startDate: startDateStr,
@@ -345,7 +439,7 @@ class _CreateTreatmentPlanScreenState
             content: Text(widget.isMaintenance
                 ? 'Maintenance Plan & Sessions Scheduled!'
                 : 'Treatment Plan & Sessions Auto-Scheduled!'),
-            backgroundColor: AppColors.success,
+            backgroundColor: context.colors.success,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
@@ -358,7 +452,7 @@ class _CreateTreatmentPlanScreenState
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to schedule plan: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('Failed to schedule plan: $e'), backgroundColor: context.colors.error),
         );
       }
     } finally {
@@ -371,13 +465,15 @@ class _CreateTreatmentPlanScreenState
     final isMaintenance = widget.isMaintenance;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
+      backgroundColor: context.colors.background,
+      body: Stack(
+        children: [
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Form(
+                key: _formKey,
+                child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // ── Header ──
@@ -388,11 +484,11 @@ class _CreateTreatmentPlanScreenState
                       child: Container(
                         width: 40, height: 40,
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: context.colors.surface,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: context.colors.border),
                         ),
-                        child: const Icon(Icons.arrow_back_rounded, size: 20, color: AppColors.textPrimary),
+                        child: Icon(Icons.arrow_back_rounded, size: 20, color: context.colors.textPrimary),
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -402,27 +498,27 @@ class _CreateTreatmentPlanScreenState
                         children: [
                           Text(
                             isMaintenance ? 'Maintenance Planning' : 'Session Planning',
-                            style: AppTextStyles.h2,
+                            style: context.textStyles.h2,
                           ),
-                          Text('For ${widget.patientName}', style: AppTextStyles.caption),
+                          Text('For ${widget.patientName}', style: context.textStyles.caption),
                         ],
                       ),
                     ),
                     if (isMaintenance)
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.success.withValues(alpha: 0.12),
+                          color: context.colors.success.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.autorenew_rounded, size: 14, color: AppColors.success),
+                            Icon(Icons.autorenew_rounded, size: 14, color: context.colors.success),
                             const SizedBox(width: 4),
                             Text('Maintenance',
-                                style: AppTextStyles.caption.copyWith(
-                                    color: AppColors.success, fontWeight: FontWeight.bold)),
+                                style: context.textStyles.caption.copyWith(
+                                    color: context.colors.success, fontWeight: FontWeight.bold)),
                           ],
                         ),
                       ),
@@ -430,67 +526,115 @@ class _CreateTreatmentPlanScreenState
                 ),
                 const SizedBox(height: 32),
 
+                // ── Doctor Selector (Clinic accounts only) ──
+                if (_isClinicAccount) ...[
+                  Text('Assign Doctor', style: context.textStyles.label),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: context.colors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: context.colors.border),
+                    ),
+                    child: _isLoadingDoctors
+                        ? Padding(
+                            padding: EdgeInsets.symmetric(vertical: 14),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 16, height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
+                                ),
+                                SizedBox(width: 10),
+                                Text('Loading doctors...'),
+                              ],
+                            ),
+                          )
+                        : DropdownButtonHideUnderline(
+                            child: DropdownButton<DoctorModel>(
+                              isExpanded: true,
+                              value: _selectedDoctor,
+                              hint: Text(
+                                'Select Doctor',
+                                style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint),
+                              ),
+                              items: _clinicDoctors.map((doc) {
+                                return DropdownMenuItem(
+                                  value: doc,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        doc.isPrimary ? Icons.star_rounded : Icons.person_rounded,
+                                        size: 16,
+                                        color: doc.isPrimary ? context.colors.warning : context.colors.textHint,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text('Dr. ${doc.name}', style: context.textStyles.bodyMedium),
+                                      if (doc.isPrimary) ...[
+                                        const SizedBox(width: 6),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                          decoration: BoxDecoration(
+                                            color: context.colors.warning.withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text('Primary',
+                                              style: context.textStyles.caption.copyWith(
+                                                  fontSize: 9, color: context.colors.warning, fontWeight: FontWeight.bold)),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) {
+                                if (val != null) {
+                                  setState(() => _selectedDoctor = val);
+                                  _loadTreatmentsForDoctor(val);
+                                }
+                              },
+                            ),
+                          ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
                 // ── Treatment Type ──
-                Text('Treatment Type', style: AppTextStyles.label),
+                Text('Treatment Type', style: context.textStyles.label),
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: 16),
                   decoration: BoxDecoration(
-                    color: isMaintenance
-                        ? AppColors.background
-                        : AppColors.surface,
+                    color: context.colors.surface,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: context.colors.border),
                   ),
-                  child: isMaintenance
-                      ? Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.healing_rounded, size: 18, color: AppColors.textHint),
-                              const SizedBox(width: 8),
-                              Text(
-                                widget.defaultTreatmentType ?? _selectedTreatment?.type ?? '—',
-                                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textPrimary),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.textHint.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text('Auto-filled',
-                                    style: AppTextStyles.caption.copyWith(
-                                        fontSize: 10, color: AppColors.textHint)),
-                              ),
-                            ],
-                          ),
-                        )
-                      : DropdownButtonHideUnderline(
-                          child: DropdownButton<TreatmentConfig>(
-                            isExpanded: true,
-                            value: _selectedTreatment,
-                            hint: Text(
-                              _isLoadingTreatments ? 'Loading treatments...' : 'Select Treatment',
-                              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-                            ),
-                            items: _doctorTreatments.map((t) {
-                              return DropdownMenuItem(
-                                value: t,
-                                child: Text(t.type, style: AppTextStyles.bodyMedium),
-                              );
-                            }).toList(),
-                            onChanged: (val) {
-                              setState(() {
-                                _selectedTreatment = val;
-                                if (val != null) {
-                                  _feeCtrl.text = val.fee.toString();
-                                }
-                              });
-                            },
-                          ),
-                        ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<TreatmentConfig>(
+                      isExpanded: true,
+                      value: _selectedTreatment,
+                      hint: Text(
+                        _isLoadingTreatments ? 'Loading treatments...' : 'Select Treatment',
+                        style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint),
+                      ),
+                      items: _doctorTreatments.map((t) {
+                        return DropdownMenuItem(
+                          value: t,
+                          child: Text(t.type, style: context.textStyles.bodyMedium),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        setState(() {
+                          _selectedTreatment = val;
+                          if (val != null) {
+                            _feeCtrl.text = val.fee.toStringAsFixed(
+                                val.fee % 1 == 0 ? 0 : 2);
+                          }
+                        });
+                      },
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 24),
 
@@ -503,7 +647,17 @@ class _CreateTreatmentPlanScreenState
                         label: isMaintenance ? 'Total Maintenance Sessions' : 'Total Sessions',
                         hint: '10',
                         keyboardType: TextInputType.number,
-                        validator: (v) => v!.isEmpty ? 'Required' : null,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(2),
+                        ],
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Required';
+                          final n = int.tryParse(v);
+                          if (n == null || n < 1) return 'Min 1';
+                          if (n > 99) return 'Max 99';
+                          return null;
+                        },
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -512,7 +666,7 @@ class _CreateTreatmentPlanScreenState
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Interval', style: AppTextStyles.label),
+                          Text('Interval', style: context.textStyles.label),
                           const SizedBox(height: 8),
                           Row(
                             children: [
@@ -521,23 +675,32 @@ class _CreateTreatmentPlanScreenState
                                 child: TextFormField(
                                   controller: _intervalCtrl,
                                   keyboardType: TextInputType.number,
-                                  style: AppTextStyles.bodyMedium,
+                                  maxLength: 2,
+                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  style: context.textStyles.bodyMedium,
                                   decoration: InputDecoration(
                                     hintText: '1',
-                                    hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
+                                    hintStyle: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint),
                                     filled: true,
-                                    fillColor: AppColors.surface,
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                    fillColor: context.colors.surface,
+                                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                                    counterText: '',
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(color: AppColors.border),
+                                      borderSide: BorderSide(color: context.colors.border),
                                     ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(color: AppColors.border),
+                                      borderSide: BorderSide(color: context.colors.border),
                                     ),
                                   ),
-                                  validator: (v) => v!.isEmpty ? 'Required' : null,
+                                  validator: (v) {
+                                    if (v == null || v.isEmpty) return 'Required';
+                                    final n = int.tryParse(v);
+                                    if (n == null || n < 1) return 'Min 1';
+                                    if (n > 99) return 'Max 99';
+                                    return null;
+                                  },
                                 ),
                               ),
                               if (isMaintenance) ...[
@@ -547,15 +710,15 @@ class _CreateTreatmentPlanScreenState
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8),
                                     decoration: BoxDecoration(
-                                      color: AppColors.surface,
+                                      color: context.colors.surface,
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: AppColors.border),
+                                      border: Border.all(color: context.colors.border),
                                     ),
                                     child: DropdownButtonHideUnderline(
                                       child: DropdownButton<String>(
                                         value: _intervalUnit,
                                         isExpanded: true,
-                                        style: AppTextStyles.bodyMedium,
+                                        style: context.textStyles.bodyMedium,
                                         items: const [
                                           DropdownMenuItem(value: 'days',   child: Text('Days')),
                                           DropdownMenuItem(value: 'months', child: Text('Months')),
@@ -571,11 +734,11 @@ class _CreateTreatmentPlanScreenState
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
                                   decoration: BoxDecoration(
-                                    color: AppColors.surface,
+                                    color: context.colors.surface,
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: AppColors.border),
+                                    border: Border.all(color: context.colors.border),
                                   ),
-                                  child: Text('Days', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                                  child: Text('Days', style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
                                 ),
                               ],
                             ],
@@ -585,7 +748,7 @@ class _CreateTreatmentPlanScreenState
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                SizedBox(height: 24),
 
                 // ── Fee ──
                 AppTextField(
@@ -593,36 +756,65 @@ class _CreateTreatmentPlanScreenState
                   label: isMaintenance ? 'Maintenance Session Fee (₹)' : 'Session Fee (₹)',
                   hint: '500',
                   keyboardType: TextInputType.number,
-                  prefixIcon: const Icon(Icons.currency_rupee_rounded, size: 18, color: AppColors.success),
+                  prefixIcon: Icon(Icons.currency_rupee_rounded, size: 18, color: context.colors.success),
                   validator: (v) => v!.isEmpty ? 'Required' : null,
                 ),
                 const SizedBox(height: 32),
 
                 // ── Scheduling Preferences ──
-                Text('Scheduling Preferences', style: AppTextStyles.label),
+                Text('Scheduling Preferences', style: context.textStyles.label),
                 const SizedBox(height: 8),
+
                 Row(
                   children: [
                     Expanded(
                       child: GestureDetector(
-                        onTap: _pickStartDate,
+                        onTap: (_firstSessionCompletedToday && !isMaintenance) ? null : _pickStartDate,
                         child: Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: AppColors.surface,
+                            color: (_firstSessionCompletedToday && !isMaintenance)
+                                ? context.colors.border.withValues(alpha: 0.15)
+                                : context.colors.surface,
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.border),
+                            border: Border.all(
+                              color: (_firstSessionCompletedToday && !isMaintenance)
+                                  ? context.colors.border.withValues(alpha: 0.5)
+                                  : context.colors.border,
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Start Date', style: AppTextStyles.caption),
+                              Text('Start Date', style: context.textStyles.caption),
                               const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  const Icon(Icons.calendar_month_rounded, size: 18, color: AppColors.primary),
+                                  Icon(
+                                    Icons.calendar_month_rounded,
+                                    size: 18,
+                                    color: (_firstSessionCompletedToday && !isMaintenance)
+                                        ? context.colors.textHint
+                                        : context.colors.primary,
+                                  ),
                                   const SizedBox(width: 8),
-                                  Text(DateFormat('MMM d, yyyy').format(_startDate), style: AppTextStyles.bodyMedium),
+                                  Flexible(
+                                    child: Text(
+                                      (_firstSessionCompletedToday && !isMaintenance)
+                                          ? 'Today (Auto)'
+                                          : DateFormat('MMM d, yyyy').format(_startDate),
+                                      style: context.textStyles.bodyMedium.copyWith(
+                                        color: (_firstSessionCompletedToday && !isMaintenance)
+                                            ? context.colors.textHint
+                                            : context.colors.textPrimary,
+                                        fontWeight: (_firstSessionCompletedToday && !isMaintenance)
+                                            ? FontWeight.normal
+                                            : FontWeight.w600,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -637,29 +829,36 @@ class _CreateTreatmentPlanScreenState
                         child: Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: AppColors.surface,
+                            color: context.colors.surface,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: _preferredTimeStr.isNotEmpty
-                                  ? AppColors.primary.withValues(alpha: 0.5)
-                                  : AppColors.border,
+                                  ? context.colors.primary.withValues(alpha: 0.5)
+                                  : context.colors.border,
                             ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Preferred Slot', style: AppTextStyles.caption),
+                              Text('Preferred Slot', style: context.textStyles.caption),
                               const SizedBox(height: 4),
                               Row(
                                 children: [
-                                  const Icon(Icons.access_time_rounded, size: 18, color: AppColors.primary),
+                                  Icon(Icons.access_time_rounded, size: 18, color: context.colors.primary),
                                   const SizedBox(width: 8),
-                                  Text(
-                                    _preferredTimeStr.isEmpty ? 'Pick a slot' : _formatSlot(_preferredTimeStr),
-                                    style: AppTextStyles.bodyMedium.copyWith(
-                                      color: _preferredTimeStr.isEmpty
-                                          ? AppColors.textHint
-                                          : AppColors.textPrimary,
+                                  Flexible(
+                                    child: Text(
+                                      _preferredTimeStr.isEmpty ? 'Pick a slot' : _formatSlot(_preferredTimeStr),
+                                      style: context.textStyles.bodyMedium.copyWith(
+                                        color: _preferredTimeStr.isEmpty
+                                            ? context.colors.textHint
+                                            : context.colors.textPrimary,
+                                        fontWeight: _preferredTimeStr.isEmpty
+                                            ? FontWeight.normal
+                                            : FontWeight.w600,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
                                     ),
                                   ),
                                 ],
@@ -671,37 +870,35 @@ class _CreateTreatmentPlanScreenState
                     ),
                   ],
                 ),
-
-                // "Start 1st session today" toggle — only for treatment plans, NOT maintenance
                 if (!isMaintenance) ...[
                   const SizedBox(height: 16),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: context.colors.surface,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: context.colors.border),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.check_circle_outline_rounded, color: AppColors.primary),
+                        Icon(Icons.check_circle_outline_rounded, color: context.colors.primary),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text('Start the 1st session today itself?',
-                                  style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600)),
+                                  style: context.textStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600)),
                               const SizedBox(height: 4),
                               Text(
                                   'Creates Session 1 today and schedules the remaining sessions',
-                                  style: AppTextStyles.caption),
+                                  style: context.textStyles.caption),
                             ],
                           ),
                         ),
                         Switch(
                           value: _firstSessionCompletedToday,
-                          activeColor: AppColors.primary,
+                          activeColor: context.colors.primary,
                           onChanged: (val) => setState(() => _firstSessionCompletedToday = val),
                         ),
                       ],
@@ -709,13 +906,25 @@ class _CreateTreatmentPlanScreenState
                   ),
                 ],
 
-                const Padding(
+
+                Padding(
                   padding: EdgeInsets.only(top: 16),
                   child: Text(
                     '💡 Note: The smart scheduling engine will book sessions sequentially. '
                     'If a time slot is fully occupied (all beds taken), it will find the closest next available slot.',
-                    style: TextStyle(color: AppColors.textHint, fontSize: 13, height: 1.4),
+                    style: TextStyle(color: context.colors.textHint, fontSize: 13, height: 1.4),
                   ),
+                ),
+                const SizedBox(height: 16),
+
+                // ── Session Date Preview ──
+                _SessionDatePreview(
+                  startDate: _startDate,
+                  numSessions: int.tryParse(_sessionsCtrl.text.trim()) ?? 0,
+                  interval: int.tryParse(_intervalCtrl.text.trim()) ?? 0,
+                  intervalUnit: isMaintenance ? _intervalUnit : 'days',
+                  firstSessionToday: !isMaintenance && _firstSessionCompletedToday,
+                  doctorWorkingDays: _doctorWorkingDays,
                 ),
                 const SizedBox(height: 36),
 
@@ -729,6 +938,54 @@ class _CreateTreatmentPlanScreenState
             ),
           ),
         ),
+          ),
+          // ── Full-screen scheduling overlay ────────────────────────────
+          if (_isSubmitting)
+            Container(
+              color: Colors.black.withValues(alpha: 0.6),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 32),
+                  margin: const EdgeInsets.symmetric(horizontal: 40),
+                  decoration: BoxDecoration(
+                    color: context.colors.surface,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        blurRadius: 24,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        color: context.colors.primary,
+                        strokeWidth: 3,
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Scheduling sessions...',
+                        style: context.textStyles.h4,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Please wait while we create\nyour treatment plan.',
+                        style: context.textStyles.caption.copyWith(
+                          color: context.colors.textSecondary,
+                          height: 1.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -768,8 +1025,8 @@ class _SlotPickerSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.background,
+      decoration: BoxDecoration(
+        color: context.colors.background,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
@@ -779,13 +1036,13 @@ class _SlotPickerSheet extends StatelessWidget {
           Container(
             margin: const EdgeInsets.symmetric(vertical: 14),
             width: 40, height: 4,
-            decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(color: context.colors.border, borderRadius: BorderRadius.circular(2)),
           ),
-          Text('Choose a Preferred Slot', style: AppTextStyles.h3),
+          Text('Choose a Preferred Slot', style: context.textStyles.h3),
           const SizedBox(height: 4),
           Text(
             'Based on doctor\'s schedule & treatment duration',
-            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+            style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 20),
@@ -807,21 +1064,21 @@ class _SlotPickerSheet extends StatelessWidget {
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
                   decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary : Colors.white,
+                    color: isSelected ? context.colors.primary : context.colors.surface,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: isSelected ? AppColors.primary : AppColors.border,
+                      color: isSelected ? context.colors.primary : context.colors.border,
                       width: isSelected ? 0 : 0.8,
                     ),
                     boxShadow: isSelected
-                        ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.30), blurRadius: 8, offset: const Offset(0, 3))]
+                        ? [BoxShadow(color: context.colors.primary.withValues(alpha: 0.30), blurRadius: 8, offset: const Offset(0, 3))]
                         : null,
                   ),
                   alignment: Alignment.center,
                   child: Text(
                     _fmt(s),
                     style: TextStyle(
-                      color: isSelected ? Colors.white : AppColors.textPrimary,
+                      color: isSelected ? Colors.white : context.colors.textPrimary,
                       fontSize: 13,
                       fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                     ),
@@ -831,6 +1088,136 @@ class _SlotPickerSheet extends StatelessWidget {
             },
           ),
           const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Session Date Preview ────────────────────────────────────────────────────
+class _SessionDatePreview extends StatelessWidget {
+  final DateTime startDate;
+  final int numSessions;
+  final int interval;
+  final String intervalUnit;
+  final bool firstSessionToday;
+  /// Doctor's working weekdays (1=Mon..7=Sun). Empty = no restriction.
+  final List<int> doctorWorkingDays;
+
+  const _SessionDatePreview({
+    required this.startDate,
+    required this.numSessions,
+    required this.interval,
+    required this.intervalUnit,
+    required this.firstSessionToday,
+    this.doctorWorkingDays = const [],
+  });
+
+  List<DateTime> _computeDates() {
+    if (numSessions <= 0 || interval <= 0) return [];
+    final dates = <DateTime>[];
+    final maxPreview = numSessions > 12 ? 12 : numSessions;
+    DateTime current = startDate;
+
+    for (int i = 0; i < maxPreview; i++) {
+      if (i == 0 && firstSessionToday) {
+        // First session is today regardless of schedule
+        dates.add(DateTime(current.year, current.month, current.day));
+        current = _advanceByInterval(current);
+        continue;
+      }
+
+      // Advance to the next valid working day
+      current = _skipToWorkingDay(current);
+      dates.add(DateTime(current.year, current.month, current.day));
+      current = _advanceByInterval(current);
+    }
+    return dates;
+  }
+
+  /// Advance current date by the configured interval.
+  DateTime _advanceByInterval(DateTime d) {
+    switch (intervalUnit) {
+      case 'months':
+        return DateTime(d.year, d.month + interval, d.day);
+      case 'years':
+        return DateTime(d.year + interval, d.month, d.day);
+      default: // days
+        return d.add(Duration(days: interval));
+    }
+  }
+
+  /// Skip forward from [d] until we land on a doctor's working day.
+  /// If doctorWorkingDays is empty, returns [d] unchanged.
+  DateTime _skipToWorkingDay(DateTime d) {
+    if (doctorWorkingDays.isEmpty) return d;
+    int safety = 0;
+    while (!doctorWorkingDays.contains(d.weekday) && safety < 14) {
+      d = d.add(const Duration(days: 1));
+      safety++;
+    }
+    return d;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dates = _computeDates();
+    if (dates.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(Icons.date_range_rounded, size: 16, color: context.colors.primary),
+            const SizedBox(width: 6),
+            Text('Session Schedule Preview', style: context.textStyles.label.copyWith(fontSize: 12)),
+            const Spacer(),
+            Text('$numSessions sessions', style: context.textStyles.caption.copyWith(color: context.colors.primary)),
+          ]),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: dates.asMap().entries.map((e) {
+              final idx = e.key;
+              final d = e.value;
+              final isToday = DateUtils.isSameDay(d, DateTime.now());
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                decoration: BoxDecoration(
+                  color: isToday
+                      ? context.colors.primary.withValues(alpha: 0.12)
+                      : context.colors.background,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: isToday
+                        ? context.colors.primary.withValues(alpha: 0.4)
+                        : context.colors.border,
+                  ),
+                ),
+                child: Text(
+                  '#${idx + 1}  ${DateFormat('MMM d').format(d)}',
+                  style: context.textStyles.caption.copyWith(
+                    fontSize: 11,
+                    fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+                    color: isToday ? context.colors.primary : context.colors.textPrimary,
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          if (numSessions > 12) ...[
+            const SizedBox(height: 6),
+            Text('... and ${numSessions - 12} more sessions',
+                style: context.textStyles.caption.copyWith(color: context.colors.textHint, fontSize: 10)),
+          ],
         ],
       ),
     );

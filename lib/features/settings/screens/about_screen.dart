@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
@@ -12,15 +14,15 @@ class AboutScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('About', style: AppTextStyles.h4),
+        title: Text('About', style: context.textStyles.h4),
         centerTitle: true,
       ),
       body: ListView(
@@ -30,11 +32,11 @@ class AboutScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
             decoration: BoxDecoration(
-              gradient: AppColors.heroGradient,
+              gradient: context.colors.heroGradient,
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withValues(alpha: 0.3),
+                  color: context.colors.primary.withValues(alpha: 0.3),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),
@@ -54,12 +56,12 @@ class AboutScreen extends StatelessWidget {
                 const SizedBox(height: 16),
                 Text(
                   'PMS',
-                  style: AppTextStyles.h1.copyWith(color: Colors.white, fontSize: 28),
+                  style: context.textStyles.h1.copyWith(color: Colors.white, fontSize: 28),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'Practice Management System',
-                  style: AppTextStyles.caption.copyWith(
+                  style: context.textStyles.caption.copyWith(
                     color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 13,
                   ),
@@ -72,8 +74,8 @@ class AboutScreen extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    'Version $_appVersion (Build $_buildNumber)',
-                    style: AppTextStyles.caption.copyWith(
+                    'Version $_appVersion (Build $_buildNumber) • OTA Active',
+                    style: context.textStyles.caption.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w600,
                     ),
@@ -85,47 +87,47 @@ class AboutScreen extends StatelessWidget {
           const SizedBox(height: 24),
 
           // What is PMS
-          _sectionHeader('About PMS', Icons.info_outline_rounded),
+          _sectionHeader(context, 'About PMS', Icons.info_outline_rounded),
           const SizedBox(height: 10),
-          _textCard(
+          _textCard(context, 
             'PMS is a comprehensive Practice Management System designed for clinics offering session-based treatments such as physiotherapy, acupuncture, and reflexology.\n\nIt streamlines patient registration, appointment booking, consultation management, and treatment session planning — all in one place.',
           ),
           const SizedBox(height: 20),
 
           // Features
-          _sectionHeader('Key Features', Icons.star_outline_rounded),
+          _sectionHeader(context, 'Key Features', Icons.star_outline_rounded),
           const SizedBox(height: 10),
-          ..._features.map((f) => _featureTile(f.$1, f.$2, f.$3)),
+          ..._getFeatures(context).map((f) => _featureTile(context, f.$1, f.$2, f.$3)),
           const SizedBox(height: 20),
 
           // Build info
-          _sectionHeader('Technical Information', Icons.build_outlined),
+          _sectionHeader(context, 'Technical Information', Icons.build_outlined),
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: context.colors.surface,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: context.colors.border),
             ),
             child: Column(
               children: [
-                _techRow('Framework', 'Flutter'),
-                _divider(),
-                _techRow('Backend', 'PocketBase'),
-                _divider(),
-                _techRow('App Version', _appVersion),
-                _divider(),
-                _techRow('Build Number', _buildNumber),
-                _divider(),
-                _techRow('Min SDK', 'Android 6.0 / iOS 12'),
+                _techRow(context, 'Framework', 'Flutter'),
+                _divider(context),
+                _techRow(context, 'Backend', 'PocketBase'),
+                _divider(context),
+                _techRow(context, 'App Version', _appVersion),
+                _divider(context),
+                _techRow(context, 'Build Number', _buildNumber),
+                _divider(context),
+                _techRow(context, 'Min SDK', 'Android 6.0 / iOS 12'),
               ],
             ),
           ),
           const SizedBox(height: 20),
 
           // Legal
-          _sectionHeader('Legal', Icons.gavel_rounded),
+          _sectionHeader(context, 'Legal', Icons.gavel_rounded),
           const SizedBox(height: 10),
           _legalTile(
             context,
@@ -135,7 +137,7 @@ class AboutScreen extends StatelessWidget {
             content:
                 'By using PMS, you agree to use this software solely for legitimate medical practice management. Patient data must be handled in accordance with applicable data protection laws. Unauthorised access, data misuse, or sharing of credentials is strictly prohibited.',
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           _legalTile(
             context,
             icon: Icons.privacy_tip_rounded,
@@ -144,69 +146,69 @@ class AboutScreen extends StatelessWidget {
             content:
                 'PMS stores all data on your self-hosted PocketBase server. No data is transmitted to third-party servers. Patient records, appointment history, and consultation data are encrypted at rest. You are responsible for maintaining the security of your server.',
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
 
           // Copy build info
           GestureDetector(
             onTap: () {
-              Clipboard.setData(const ClipboardData(text: 'PMS v$_appVersion (Build $_buildNumber)'));
+              Clipboard.setData(ClipboardData(text: 'PMS v$_appVersion (Build $_buildNumber)'));
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: const Text('Build info copied'),
-                backgroundColor: AppColors.primary,
+                backgroundColor: context.colors.primary,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 duration: const Duration(seconds: 1),
               ));
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              padding: EdgeInsets.symmetric(vertical: 12),
               alignment: Alignment.center,
               child: Text(
                 'Tap to copy build information',
-                style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+                style: context.textStyles.caption.copyWith(color: context.colors.textHint),
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: 32),
         ],
       ),
     );
   }
 
-  static const _features = [
-    (Icons.people_rounded, AppColors.primary, 'Patient Management — complete records, history, search'),
-    (Icons.calendar_today_rounded, AppColors.success, 'Smart Appointment Booking — walk-in & call-by'),
-    (Icons.medical_services_rounded, AppColors.accent, 'Consultation & Treatment Planning'),
-    (Icons.schedule_rounded, AppColors.warning, 'Auto-Schedule Engine — conflict-free slot booking'),
-    (Icons.analytics_rounded, AppColors.info, 'Dashboard Overview — real-time clinic stats'),
-    (Icons.group_rounded, AppColors.error, 'Multi-Doctor Support — clinic doctor management'),
+  List<(IconData, Color, String)> _getFeatures(BuildContext context) => [
+    (Icons.people_rounded, context.colors.primary, 'Patient Management — complete records, history, search'),
+    (Icons.calendar_today_rounded, context.colors.success, 'Smart Appointment Booking — walk-in & call-by'),
+    (Icons.medical_services_rounded, context.colors.accent, 'Consultation & Treatment Planning'),
+    (Icons.schedule_rounded, context.colors.warning, 'Auto-Schedule Engine — conflict-free slot booking'),
+    (Icons.analytics_rounded, context.colors.info, 'Dashboard Overview — real-time clinic stats'),
+    (Icons.group_rounded, context.colors.error, 'Multi-Doctor Support — clinic doctor management'),
   ];
 
-  Widget _sectionHeader(String title, IconData icon) => Row(
+  Widget _sectionHeader(BuildContext context, String title, IconData icon) => Row(
         children: [
-          Icon(icon, size: 18, color: AppColors.primary),
+          Icon(icon, size: 18, color: context.colors.primary),
           const SizedBox(width: 8),
-          Text(title, style: AppTextStyles.h3.copyWith(color: AppColors.primary, fontSize: 15)),
+          Text(title, style: context.textStyles.h3.copyWith(color: context.colors.primary, fontSize: 15)),
         ],
       );
 
-  Widget _textCard(String text) => Container(
+  Widget _textCard(BuildContext context, String text) => Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: context.colors.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.colors.border),
         ),
-        child: Text(text, style: AppTextStyles.bodyMedium.copyWith(height: 1.5, fontSize: 13.5)),
+        child: Text(text, style: context.textStyles.bodyMedium.copyWith(height: 1.5, fontSize: 13.5)),
       );
 
-  Widget _featureTile(IconData icon, Color color, String text) => Container(
+  Widget _featureTile(BuildContext context, IconData icon, Color color, String text) => Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: context.colors.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.colors.border),
         ),
         child: Row(
           children: [
@@ -220,23 +222,23 @@ class AboutScreen extends StatelessWidget {
               child: Icon(icon, color: color, size: 16),
             ),
             const SizedBox(width: 12),
-            Expanded(child: Text(text, style: AppTextStyles.caption.copyWith(fontSize: 12.5))),
+            Expanded(child: Text(text, style: context.textStyles.caption.copyWith(fontSize: 12.5))),
           ],
         ),
       );
 
-  Widget _techRow(String label, String value) => Padding(
+  Widget _techRow(BuildContext context, String label, String value) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
           children: [
             SizedBox(
               width: 100,
-              child: Text(label, style: AppTextStyles.caption),
+              child: Text(label, style: context.textStyles.caption),
             ),
             Expanded(
               child: Text(
                 value,
-                style: AppTextStyles.label.copyWith(fontSize: 13),
+                style: context.textStyles.label.copyWith(fontSize: 13),
                 textAlign: TextAlign.end,
               ),
             ),
@@ -244,7 +246,7 @@ class AboutScreen extends StatelessWidget {
         ),
       );
 
-  Widget _divider() => Divider(height: 1, color: AppColors.border);
+  Widget _divider(BuildContext context) => Divider(height: 1, color: context.colors.border);
 
   Widget _legalTile(
     BuildContext context, {
@@ -256,7 +258,7 @@ class AboutScreen extends StatelessWidget {
       GestureDetector(
         onTap: () => showModalBottomSheet(
           context: context,
-          backgroundColor: AppColors.surface,
+          backgroundColor: context.colors.surface,
           isScrollControlled: true,
           shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -276,14 +278,14 @@ class AboutScreen extends StatelessWidget {
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 20),
                       decoration: BoxDecoration(
-                        color: AppColors.border,
+                        color: context.colors.border,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                   ),
-                  Text(title, style: AppTextStyles.h3),
+                  Text(title, style: context.textStyles.h3),
                   const SizedBox(height: 16),
-                  Text(content, style: AppTextStyles.bodyMedium.copyWith(height: 1.6)),
+                  Text(content, style: context.textStyles.bodyMedium.copyWith(height: 1.6)),
                 ],
               ),
             ),
@@ -292,9 +294,9 @@ class AboutScreen extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: context.colors.surface,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.colors.border),
           ),
           child: Row(
             children: [
@@ -302,22 +304,22 @@ class AboutScreen extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
+                  color: context.colors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: AppColors.primary, size: 18),
+                child: Icon(icon, color: context.colors.primary, size: 18),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: AppTextStyles.label.copyWith(fontSize: 14)),
-                    Text(subtitle, style: AppTextStyles.caption.copyWith(fontSize: 11)),
+                    Text(title, style: context.textStyles.label.copyWith(fontSize: 14)),
+                    Text(subtitle, style: context.textStyles.caption.copyWith(fontSize: 11)),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.textHint),
+              Icon(Icons.chevron_right_rounded, size: 20, color: context.colors.textHint),
             ],
           ),
         ),

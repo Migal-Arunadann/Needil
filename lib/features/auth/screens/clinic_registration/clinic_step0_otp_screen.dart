@@ -9,6 +9,8 @@ import '../../../../../core/constants/pb_collections.dart';
 import '../../../../../core/providers/pocketbase_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../otp_verification_screen.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class ClinicStep0OtpScreen extends ConsumerStatefulWidget {
   const ClinicStep0OtpScreen({super.key});
@@ -85,9 +87,9 @@ class _ClinicStep0OtpScreenState extends ConsumerState<ClinicStep0OtpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: Text('Start Registration', style: AppTextStyles.h4),
+        title: Text('Start Registration', style: context.textStyles.h4),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -99,13 +101,13 @@ class _ClinicStep0OtpScreenState extends ConsumerState<ClinicStep0OtpScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 32),
-                Text('Get Started', style: AppTextStyles.h2),
-                const SizedBox(height: 8),
+                Text('Get Started', style: context.textStyles.h2),
+                SizedBox(height: 8),
                 Text(
                   'Enter your email address to register or sign in securely via a one-time password.',
-                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                  style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary),
                 ),
-                const SizedBox(height: 48),
+                SizedBox(height: 48),
                 AppTextField(
                   label: 'Clinic Email Address',
                   hint: 'e.g. contact@cityhealth.com',
@@ -115,12 +117,12 @@ class _ClinicStep0OtpScreenState extends ConsumerState<ClinicStep0OtpScreen> {
                     if (v == null || v.trim().isEmpty) return 'Email is required';
                     return Validators.email(v);
                   },
-                  prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textHint),
+                  prefixIcon: Icon(Icons.email_outlined, color: context.colors.textHint),
                   textInputAction: TextInputAction.done,
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 12),
-                  Text(_error!, style: AppTextStyles.caption.copyWith(color: AppColors.error)),
+                  Text(_error!, style: context.textStyles.caption.copyWith(color: context.colors.error)),
                 ],
                 const SizedBox(height: 48),
                 AppButton(
@@ -137,8 +139,8 @@ class _ClinicStep0OtpScreenState extends ConsumerState<ClinicStep0OtpScreen> {
                     },
                     child: Text(
                       'Already have an account? Log in',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.primary,
+                      style: context.textStyles.bodyMedium.copyWith(
+                        color: context.colors.primary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),

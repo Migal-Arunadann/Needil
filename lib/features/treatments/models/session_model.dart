@@ -1,6 +1,6 @@
 import 'package:pocketbase/pocketbase.dart';
 
-enum SessionStatus { upcoming, waiting, completed, missed, cancelled }
+enum SessionStatus { upcoming, waiting, inProgress, completed, missed, cancelled }
 
 class SessionModel {
   final String id;
@@ -53,11 +53,11 @@ class SessionModel {
       scheduledTime: record.getStringValue('scheduled_time'),
       status: _parseStatus(record.getStringValue('status')),
       sessionType: sessionTypeVal.isNotEmpty ? sessionTypeVal : 'treatment',
-      notes: record.getStringValue('notes'),
-      bpLevel: record.getStringValue('bp_level'),
-      pulse: record.getIntValue('pulse'),
+      notes: record.getStringValue('session_notes_'),
+      bpLevel: record.getStringValue('vitals_bp'),
+      pulse: record.getIntValue('vitals_pulse'),
       photos: record.getListValue<String>('photos'),
-      remarks: record.getStringValue('remarks'),
+      remarks: record.getStringValue('session_remarks'),
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
     );
@@ -73,10 +73,9 @@ class SessionModel {
       if (scheduledTime != null) 'scheduled_time': scheduledTime,
       'status': statusToString(status),
       'session_type': sessionType,
-      if (notes != null && notes!.isNotEmpty) 'notes': notes,
-      if (bpLevel != null && bpLevel!.isNotEmpty) 'bp_level': bpLevel,
-      if (pulse != null) 'pulse': pulse,
-      if (remarks != null && remarks!.isNotEmpty) 'remarks': remarks,
+      if (notes != null && notes!.isNotEmpty) 'session_notes_': notes,
+      if (bpLevel != null && bpLevel!.isNotEmpty) 'vitals_bp': bpLevel,
+      if (pulse != null) 'vitals_pulse': pulse,
     };
   }
 
@@ -90,6 +89,8 @@ class SessionModel {
         return SessionStatus.cancelled;
       case 'waiting':
         return SessionStatus.waiting;
+      case 'in_progress':
+        return SessionStatus.inProgress;
       default:
         return SessionStatus.upcoming;
     }
@@ -101,6 +102,8 @@ class SessionModel {
         return 'upcoming';
       case SessionStatus.waiting:
         return 'waiting';
+      case SessionStatus.inProgress:
+        return 'in_progress';
       case SessionStatus.completed:
         return 'completed';
       case SessionStatus.missed:

@@ -17,6 +17,10 @@ class DashboardStats {
   final int completedCount;
   final int cancelledCount;
 
+  // Summary bar stats
+  final int walkInsToday;         // walk_in type today (non-cancelled)
+  final int pendingConsultations; // walk_in/call_by today that are scheduled/waiting/in_progress
+
   // Practice overview
   final int totalPatients;
   final int activePlans;
@@ -33,6 +37,8 @@ class DashboardStats {
     this.inProgressCount = 0,
     this.completedCount = 0,
     this.cancelledCount = 0,
+    this.walkInsToday = 0,
+    this.pendingConsultations = 0,
     this.totalPatients = 0,
     this.activePlans = 0,
     this.nextAppointment,
@@ -46,6 +52,8 @@ class DashboardStats {
     int? inProgressCount,
     int? completedCount,
     int? cancelledCount,
+    int? walkInsToday,
+    int? pendingConsultations,
     int? totalPatients,
     int? activePlans,
     AppointmentModel? nextAppointment,
@@ -59,6 +67,8 @@ class DashboardStats {
       inProgressCount: inProgressCount ?? this.inProgressCount,
       completedCount: completedCount ?? this.completedCount,
       cancelledCount: cancelledCount ?? this.cancelledCount,
+      walkInsToday: walkInsToday ?? this.walkInsToday,
+      pendingConsultations: pendingConsultations ?? this.pendingConsultations,
       totalPatients: totalPatients ?? this.totalPatients,
       activePlans: activePlans ?? this.activePlans,
       nextAppointment: clearNextAppointment == true ? null : (nextAppointment ?? this.nextAppointment),
@@ -150,6 +160,12 @@ class DashboardStatsNotifier extends StateNotifier<DashboardStats> {
       safeCount(PBCollections.patients, '$ownerField = "$ownerId"'),
       // [7] Active treatment plans
       safeCount(PBCollections.treatmentPlans, '$planOwnerFilter && status = "active"'),
+      // [8] Walk-ins today (non-cancelled)
+      safeCount(PBCollections.appointments,
+          '$ownerField = "$ownerId" && date = "$today" && type = "walk_in" && status != "cancelled"'),
+      // [9] Pending consultations (scheduled/waiting/in_progress for call_by + walk_in)
+      safeCount(PBCollections.appointments,
+          '$ownerField = "$ownerId" && date = "$today" && (type = "call_by" || type = "walk_in") && (status = "scheduled" || status = "waiting" || status = "in_progress")'),
     ]);
 
     debugPrint('[Dashboard] Counts: consultations=${counts[0]}, sessions=${counts[1]}, '
@@ -181,6 +197,8 @@ class DashboardStatsNotifier extends StateNotifier<DashboardStats> {
       cancelledCount: counts[5],
       totalPatients: counts[6],
       activePlans: counts[7],
+      walkInsToday: counts[8],
+      pendingConsultations: counts[9],
       nextAppointment: nextAppt,
       isLoading: false,
     );

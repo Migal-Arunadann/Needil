@@ -5,6 +5,8 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/app_button.dart';
 import '../providers/auth_provider.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 enum OtpMode { registration, forgotPassword }
 
@@ -120,9 +122,9 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
         // before popping to the dashboard.
         if (authState.clinic?.name.isNotEmpty == true) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+            SnackBar(
               content: Text('Welcome back! You are already registered.'),
-              backgroundColor: AppColors.success,
+              backgroundColor: context.colors.success,
               behavior: SnackBarBehavior.floating,
               duration: Duration(seconds: 2),
             ),
@@ -164,12 +166,12 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
     final isLoading = _isVerifying || authState.isLoading;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -188,11 +190,11 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
                   child: Container(
                     width: 80, height: 80,
                     decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
+                      gradient: context.colors.primaryGradient,
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.3),
+                          color: context.colors.primary.withValues(alpha: 0.3),
                           blurRadius: 20, offset: const Offset(0, 8),
                         ),
                       ],
@@ -208,20 +210,20 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
                       ? 'Verify Your Email'
                       : 'Reset Password',
                   textAlign: TextAlign.center,
-                  style: AppTextStyles.h1,
+                  style: context.textStyles.h1,
                 ),
                 const SizedBox(height: 10),
                 Text(
                   'We sent a 6-digit code to',
                   textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: AppColors.textSecondary),
+                  style: context.textStyles.bodyMedium
+                      .copyWith(color: context.colors.textSecondary),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   _maskedEmail,
                   textAlign: TextAlign.center,
-                  style: AppTextStyles.label.copyWith(color: AppColors.primary),
+                  style: context.textStyles.label.copyWith(color: context.colors.primary),
                 ),
                 const SizedBox(height: 40),
 
@@ -235,19 +237,19 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
                 if (_error != null) ...[
                   const SizedBox(height: 16),
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.error.withValues(alpha: 0.08),
+                      color: context.colors.error.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
+                      border: Border.all(color: context.colors.error.withValues(alpha: 0.3)),
                     ),
                     child: Row(children: [
-                      const Icon(Icons.error_outline_rounded,
-                          size: 16, color: AppColors.error),
+                      Icon(Icons.error_outline_rounded,
+                          size: 16, color: context.colors.error),
                       const SizedBox(width: 8),
                       Expanded(child: Text(_error!,
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.error))),
+                          style: context.textStyles.caption
+                              .copyWith(color: context.colors.error))),
                     ]),
                   ),
                 ],
@@ -268,18 +270,18 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text("Didn't receive the code? ",
-                        style: AppTextStyles.bodyMedium
-                            .copyWith(color: AppColors.textSecondary)),
+                        style: context.textStyles.bodyMedium
+                            .copyWith(color: context.colors.textSecondary)),
                     GestureDetector(
                       onTap: _canResend ? _resend : null,
                       child: Text(
                         _canResend
                             ? 'Resend'
                             : 'Resend in ${_resendSeconds}s',
-                        style: AppTextStyles.bodyMedium.copyWith(
+                        style: context.textStyles.bodyMedium.copyWith(
                           color: _canResend
-                              ? AppColors.primary
-                              : AppColors.textHint,
+                              ? context.colors.primary
+                              : context.colors.textHint,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -313,27 +315,27 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
           keyboardType: TextInputType.number,
           maxLength: 1,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          style: AppTextStyles.h2.copyWith(letterSpacing: 0),
+          style: context.textStyles.h2.copyWith(letterSpacing: 0),
           decoration: InputDecoration(
             contentPadding: EdgeInsets.zero,
             counterText: '',
             filled: true,
-            fillColor: AppColors.surface,
+            fillColor: context.colors.surface,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: BorderSide(color: context.colors.border),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: BorderSide(color: context.colors.border),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+              borderSide: BorderSide(color: context.colors.primary, width: 2),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.error, width: 2),
+              borderSide: BorderSide(color: context.colors.error, width: 2),
             ),
           ),
           onChanged: (v) => _onDigitChanged(index, v),

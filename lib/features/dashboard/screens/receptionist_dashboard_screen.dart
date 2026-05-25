@@ -8,6 +8,8 @@ import '../providers/dashboard_provider.dart';
 import '../../appointments/models/appointment_model.dart';
 import '../../../core/utils/time_utils.dart';
 import 'main_layout.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class ReceptionistDashboardScreen extends ConsumerWidget {
   const ReceptionistDashboardScreen({super.key});
@@ -26,10 +28,10 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
     final stats = ref.watch(dashboardStatsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: SafeArea(
         child: RefreshIndicator(
-          color: AppColors.primary,
+          color: context.colors.primary,
           onRefresh: () => ref.read(dashboardStatsProvider.notifier).load(),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -44,7 +46,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                       width: 52,
                       height: 52,
                       decoration: BoxDecoration(
-                        gradient: AppColors.heroGradient,
+                        gradient: context.colors.heroGradient,
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Icon(Icons.support_agent_rounded,
@@ -57,12 +59,12 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                         children: [
                           Text(
                             '${_greeting()} 👋',
-                            style: AppTextStyles.caption.copyWith(fontSize: 13),
+                            style: context.textStyles.caption.copyWith(fontSize: 13),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             receptionist?.name ?? 'Receptionist',
-                            style: AppTextStyles.h2,
+                            style: context.textStyles.h2,
                           ),
                         ],
                       ),
@@ -71,15 +73,15 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: AppColors.info.withValues(alpha: 0.1),
+                        color: context.colors.info.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                            color: AppColors.info.withValues(alpha: 0.3)),
+                            color: context.colors.info.withValues(alpha: 0.3)),
                       ),
                       child: Text(
                         'Staff',
-                        style: AppTextStyles.caption.copyWith(
-                          color: AppColors.info,
+                        style: context.textStyles.caption.copyWith(
+                          color: context.colors.info,
                           fontWeight: FontWeight.w600,
                           fontSize: 11,
                         ),
@@ -91,15 +93,19 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                 Text(
                   DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now()),
                   style:
-                      AppTextStyles.caption.copyWith(color: AppColors.textHint),
+                      context.textStyles.caption.copyWith(color: context.colors.textHint),
                 ),
+                const SizedBox(height: 20),
+
+                // ── Today's Summary ──
+                _TodaySummaryBar(stats: stats),
                 const SizedBox(height: 28),
 
                 // ── Upcoming Appointment ──
-                Text("Upcoming Today", style: AppTextStyles.h3),
+                Text("Upcoming Today", style: context.textStyles.h3),
                 const SizedBox(height: 14),
                 if (stats.isLoading)
-                  _buildLoadingCard()
+                  _buildLoadingCard(context)
                 else if (stats.nextAppointment == null)
                   _EmptyState(
                     icon: Icons.event_available_rounded,
@@ -122,10 +128,10 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 28),
 
                 // ── Today's Overview ──
-                Text("Today's Schedule", style: AppTextStyles.h3),
+                Text("Today's Schedule", style: context.textStyles.h3),
                 const SizedBox(height: 14),
                 if (stats.isLoading)
-                  _buildLoadingCard()
+                  _buildLoadingCard(context)
                 else ...[
                   Row(
                     children: [
@@ -140,7 +146,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                         icon: Icons.play_circle_rounded,
                         label: 'In Progress',
                         value: '${stats.inProgressCount}',
-                        color: AppColors.warning,
+                        color: context.colors.warning,
                       ),
                     ],
                   ),
@@ -151,14 +157,14 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                         icon: Icons.check_circle_rounded,
                         label: 'Completed',
                         value: '${stats.completedCount}',
-                        color: AppColors.success,
+                        color: context.colors.success,
                       ),
                       const SizedBox(width: 12),
                       _StatCard(
                         icon: Icons.cancel_rounded,
                         label: 'Cancelled',
                         value: '${stats.cancelledCount}',
-                        color: AppColors.error,
+                        color: context.colors.error,
                       ),
                     ],
                   ),
@@ -166,30 +172,30 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 28),
 
                 // ── Quick Stats ──
-                Text('Overview', style: AppTextStyles.h3),
+                Text('Overview', style: context.textStyles.h3),
                 const SizedBox(height: 14),
                 if (stats.isLoading)
-                  _buildLoadingCard()
+                  _buildLoadingCard(context)
                 else ...[
                   _QuickStatRow(
                     icon: Icons.medical_information_rounded,
                     label: 'Consultations Today',
                     value: '${stats.consultationsToday}',
-                    color: AppColors.primary,
+                    color: context.colors.primary,
                   ),
                   const SizedBox(height: 10),
                   _QuickStatRow(
                     icon: Icons.event_repeat_rounded,
                     label: 'Sessions Today',
                     value: '${stats.sessionAppointmentsToday}',
-                    color: AppColors.accent,
+                    color: context.colors.accent,
                   ),
                   const SizedBox(height: 10),
                   _QuickStatRow(
                     icon: Icons.people_rounded,
                     label: 'Total Patients',
                     value: '${stats.totalPatients}',
-                    color: AppColors.info,
+                    color: context.colors.info,
                   ),
                 ],
               ],
@@ -200,23 +206,87 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLoadingCard() {
+  Widget _buildLoadingCard(BuildContext context) {
     return Container(
       height: 80,
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
-      child: const Center(
+      child: Center(
         child:
-            CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3),
+            CircularProgressIndicator(color: context.colors.primary, strokeWidth: 3),
       ),
     );
   }
 }
 
 // ── Shared widgets (same design as clinic dashboard) ──
+
+class _TodaySummaryBar extends StatelessWidget {
+  final DashboardStats stats;
+  const _TodaySummaryBar({required this.stats});
+
+  @override
+  Widget build(BuildContext context) {
+    if (stats.isLoading) {
+      return Container(
+        height: 76,
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: context.colors.border),
+        ),
+        child: Center(
+          child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 2.5),
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            context.colors.primary.withValues(alpha: 0.12),
+            context.colors.accent.withValues(alpha: 0.07),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _summaryItem(context, icon: Icons.people_rounded, label: "Total Patients", value: '${stats.totalPatients}', color: context.colors.primary)),
+          _divider(context),
+          Expanded(child: _summaryItem(context, icon: Icons.directions_walk_rounded, label: "Walk-Ins Today", value: '${stats.walkInsToday}', color: context.colors.accent)),
+          _divider(context),
+          Expanded(child: _summaryItem(context, icon: Icons.pending_actions_rounded, label: "Pending", value: '${stats.pendingConsultations}', color: context.colors.warning)),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryItem(BuildContext context, {required IconData icon, required String label, required String value, required Color color}) {
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 4),
+        Text(value, style: context.textStyles.h3.copyWith(fontWeight: FontWeight.w800, fontSize: 20, color: color)),
+      ]),
+      const SizedBox(height: 2),
+      Text(label, style: context.textStyles.caption.copyWith(fontSize: 10, color: context.colors.textSecondary), textAlign: TextAlign.center),
+    ]);
+  }
+
+  Widget _divider(BuildContext context) => Container(
+    width: 1, height: 40,
+    margin: const EdgeInsets.symmetric(horizontal: 8),
+    color: context.colors.border,
+  );
+}
 
 class _NextAppointmentCard extends StatelessWidget {
   final AppointmentModel appt;
@@ -227,8 +297,8 @@ class _NextAppointmentCard extends StatelessWidget {
     final isSession = appt.type == AppointmentType.session;
     final isCallBy = appt.type == AppointmentType.callBy;
     final color = isSession
-        ? AppColors.accent
-        : (isCallBy ? AppColors.primary : AppColors.success);
+        ? context.colors.accent
+        : (isCallBy ? context.colors.primary : context.colors.success);
     final icon = isSession
         ? Icons.event_repeat_rounded
         : (isCallBy ? Icons.phone_rounded : Icons.person_rounded);
@@ -268,20 +338,20 @@ class _NextAppointmentCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(name,
-                    style: AppTextStyles.label.copyWith(fontSize: 15),
+                    style: context.textStyles.label.copyWith(fontSize: 15),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
                 Row(
                   children: [
                     Text(typeLabel,
-                        style: AppTextStyles.caption.copyWith(
+                        style: context.textStyles.caption.copyWith(
                             color: color, fontWeight: FontWeight.w600)),
                     if (appt.doctorName != null) ...[
                       const SizedBox(width: 8),
                       Text('• ${appt.doctorName}',
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.textHint, fontSize: 11)),
+                          style: context.textStyles.caption
+                              .copyWith(color: context.colors.textHint, fontSize: 11)),
                     ],
                   ],
                 ),
@@ -296,7 +366,7 @@ class _NextAppointmentCard extends StatelessWidget {
             ),
             child: Text(
               TimeUtils.formatStringTime(appt.time),
-              style: AppTextStyles.label
+              style: context.textStyles.label
                   .copyWith(color: Colors.white, fontSize: 14),
             ),
           ),
@@ -322,9 +392,9 @@ class _StatCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: context.colors.surface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.colors.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,12 +410,12 @@ class _StatCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(value,
-                style: AppTextStyles.h1
+                style: context.textStyles.h1
                     .copyWith(fontSize: 28, fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
             Text(label,
                 style:
-                    AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+                    context.textStyles.caption.copyWith(color: context.colors.textHint)),
           ],
         ),
       ),
@@ -368,9 +438,9 @@ class _QuickStatRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
       child: Row(
         children: [
@@ -384,9 +454,9 @@ class _QuickStatRow extends StatelessWidget {
             child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(width: 14),
-          Expanded(child: Text(label, style: AppTextStyles.bodyMedium)),
+          Expanded(child: Text(label, style: context.textStyles.bodyMedium)),
           Text(value,
-              style: AppTextStyles.h3
+              style: context.textStyles.h3
                   .copyWith(fontWeight: FontWeight.w700, fontSize: 18)),
         ],
       ),
@@ -404,17 +474,17 @@ class _EmptyState extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 32),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
       child: Column(
         children: [
           Icon(icon,
-              size: 40, color: AppColors.textHint.withValues(alpha: 0.3)),
+              size: 40, color: context.colors.textHint.withValues(alpha: 0.3)),
           const SizedBox(height: 10),
           Text(message,
-              style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+              style: context.textStyles.caption.copyWith(color: context.colors.textHint)),
         ],
       ),
     );

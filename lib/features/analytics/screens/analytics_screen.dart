@@ -5,13 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
 import '../providers/analytics_provider.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 // ─── Color palette for charts ────────────────────────────────────────────────
 const _kCompleted = Color(0xFF10B981);
 const _kScheduled = Color(0xFF3B82F6);
 const _kCancelled = Color(0xFFEF4444);
 const _kMissed = Color(0xFFF59E0B);
-const _kPrimary = AppColors.primary;
+
 const _kAccent = Color(0xFF8B5CF6);
 
 class AnalyticsScreen extends ConsumerWidget {
@@ -22,12 +24,12 @@ class AnalyticsScreen extends ConsumerWidget {
     final data = ref.watch(analyticsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: SafeArea(
         child: data.isLoading
-            ? const _LoadingView()
+            ? _LoadingView()
             : RefreshIndicator(
-                color: _kPrimary,
+                color: context.colors.primary,
                 onRefresh: () => ref.read(analyticsProvider.notifier).load(),
                 child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -40,6 +42,9 @@ class AnalyticsScreen extends ConsumerWidget {
                           const SizedBox(height: 8),
                           // ── KPI Row 1 ──────────────────────────────
                           _KpiRow(data: data),
+                          const SizedBox(height: 10),
+                          // ── Revenue KPI ─────────────────────────────
+                          _RevenueCard(data: data),
                           const SizedBox(height: 16),
                           // ── Today's Snapshot ───────────────────────
                           _SectionHeader(
@@ -135,8 +140,8 @@ class _AnalyticsAppBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return SliverToBoxAdapter(
       child: Container(
-        decoration: const BoxDecoration(
-          gradient: AppColors.heroGradient,
+        decoration: BoxDecoration(
+          gradient: context.colors.heroGradient,
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
         ),
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
@@ -199,12 +204,12 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, color: _kPrimary, size: 18),
-        const SizedBox(width: 8),
+        Icon(icon, color: context.colors.primary, size: 18),
+        SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(
-            color: AppColors.textPrimary,
+          style: TextStyle(
+            color: context.colors.textPrimary,
             fontSize: 15,
             fontWeight: FontWeight.w700,
           ),
@@ -219,19 +224,19 @@ class _SectionHeader extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _LoadingView extends StatelessWidget {
-  const _LoadingView();
+  _LoadingView();
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(color: _kPrimary),
+          CircularProgressIndicator(color: context.colors.primary),
           SizedBox(height: 16),
           Text(
             'Loading analytics…',
-            style: TextStyle(color: AppColors.textSecondary),
+            style: TextStyle(color: context.colors.textSecondary),
           ),
         ],
       ),
@@ -261,7 +266,7 @@ class _KpiRow extends StatelessWidget {
           label: 'Total Patients',
           value: '${data.totalPatients}',
           icon: Icons.people_rounded,
-          color: _kPrimary,
+          color: context.colors.primary,
           gradient: const LinearGradient(
             colors: [Color(0xFF1565C0), Color(0xFF42A5F5)],
           ),
@@ -365,6 +370,77 @@ class _KpiCard extends StatelessWidget {
   }
 }
 
+class _RevenueCard extends StatelessWidget {
+  final AnalyticsData data;
+  const _RevenueCard({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    final formatted = NumberFormat('#,##,###').format(data.totalRevenue);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0D9488), Color(0xFF14B8A6)],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D9488).withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Total Revenue',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  '₹$formatted',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            'Consultations\n+ Sessions',
+            textAlign: TextAlign.right,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 10,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Today's Snapshot
 // ─────────────────────────────────────────────────────────────────────────────
@@ -378,12 +454,12 @@ class _TodaySnapshotRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
         boxShadow: [
           BoxShadow(
-            color: AppColors.textPrimary.withValues(alpha: 0.04),
+            color: context.colors.textPrimary.withValues(alpha: 0.04),
             blurRadius: 12,
             offset: const Offset(0, 2),
           ),
@@ -397,14 +473,14 @@ class _TodaySnapshotRow extends StatelessWidget {
             color: _kScheduled,
             icon: Icons.schedule_rounded,
           ),
-          _divider(),
+          _divider(context),
           _TodayTile(
             label: 'Completed',
             value: data.todayCompleted,
             color: _kCompleted,
             icon: Icons.check_circle_outline_rounded,
           ),
-          _divider(),
+          _divider(context),
           _TodayTile(
             label: 'Cancelled',
             value: data.todayCancelled,
@@ -416,10 +492,10 @@ class _TodaySnapshotRow extends StatelessWidget {
     );
   }
 
-  Widget _divider() => Container(
+  Widget _divider(BuildContext context) => Container(
     width: 1,
     height: 50,
-    color: AppColors.border,
+    color: context.colors.border,
     margin: const EdgeInsets.symmetric(horizontal: 8),
   );
 }
@@ -442,7 +518,7 @@ class _TodayTile extends StatelessWidget {
       child: Column(
         children: [
           Icon(icon, color: color, size: 22),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           Text(
             '$value',
             style: TextStyle(
@@ -453,8 +529,8 @@ class _TodayTile extends StatelessWidget {
           ),
           Text(
             label,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
+            style: TextStyle(
+              color: context.colors.textSecondary,
               fontSize: 11,
               fontWeight: FontWeight.w500,
             ),
@@ -516,7 +592,7 @@ class _WeeklyBarChart extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 20, 12, 12),
-      decoration: _cardDeco(),
+      decoration: _cardDeco(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -541,14 +617,14 @@ class _WeeklyBarChart extends StatelessWidget {
                   show: true,
                   drawVerticalLine: false,
                   getDrawingHorizontalLine: (_) =>
-                      FlLine(color: AppColors.border, strokeWidth: 1),
+                      FlLine(color: context.colors.border, strokeWidth: 1),
                 ),
                 borderData: FlBorderData(show: false),
                 titlesData: FlTitlesData(
                   topTitles: const AxisTitles(
                     sideTitles: SideTitles(showTitles: false),
                   ),
-                  rightTitles: const AxisTitles(
+                  rightTitles: AxisTitles(
                     sideTitles: SideTitles(showTitles: false),
                   ),
                   leftTitles: AxisTitles(
@@ -557,9 +633,9 @@ class _WeeklyBarChart extends StatelessWidget {
                       reservedSize: 28,
                       getTitlesWidget: (v, _) => Text(
                         '${v.toInt()}',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 10,
-                          color: AppColors.textHint,
+                          color: context.colors.textHint,
                         ),
                       ),
                     ),
@@ -573,12 +649,12 @@ class _WeeklyBarChart extends StatelessWidget {
                           return const SizedBox();
                         }
                         return Padding(
-                          padding: const EdgeInsets.only(top: 6),
+                          padding: EdgeInsets.only(top: 6),
                           child: Text(
                             data.weeklyDayLabels[i],
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 10,
-                              color: AppColors.textSecondary,
+                              color: context.colors.textSecondary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -617,7 +693,7 @@ class _HourlyHeatBar extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: _cardDeco(),
+      decoration: _cardDeco(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -648,10 +724,10 @@ class _HourlyHeatBar extends StatelessWidget {
                               color: isPeak
                                   ? _kCancelled
                                   : ratio > 0.6
-                                  ? _kPrimary
+                                  ? context.colors.primary
                                   : ratio > 0.3
-                                  ? AppColors.primaryLight
-                                  : AppColors.border,
+                                  ? context.colors.primaryLight
+                                  : context.colors.border,
                             ),
                           ),
                         ],
@@ -662,21 +738,21 @@ class _HourlyHeatBar extends StatelessWidget {
               }).toList(),
             ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 _fmt(_start),
-                style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+                style: TextStyle(fontSize: 10, color: context.colors.textHint),
               ),
               Text(
                 _fmt((_start + _end) ~/ 2),
-                style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+                style: TextStyle(fontSize: 10, color: context.colors.textHint),
               ),
               Text(
                 _fmt(_end),
-                style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+                style: TextStyle(fontSize: 10, color: context.colors.textHint),
               ),
             ],
           ),
@@ -749,15 +825,15 @@ class _InsightChip extends StatelessWidget {
       child: Row(
         children: [
           Icon(icon, color: color, size: 20),
-          const SizedBox(width: 8),
+          SizedBox(width: 8),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: AppColors.textSecondary,
+                  color: context.colors.textSecondary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -793,7 +869,7 @@ class _TypeSplitRow extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: _cardDeco(),
+      decoration: _cardDeco(context),
       child: Row(
         children: [
           // Donut
@@ -801,7 +877,7 @@ class _TypeSplitRow extends StatelessWidget {
             width: 120,
             height: 120,
             child: total == 0
-                ? _emptyDonut()
+                ? _emptyDonut(context)
                 : PieChart(
                     PieChartData(
                       sectionsSpace: 3,
@@ -809,7 +885,7 @@ class _TypeSplitRow extends StatelessWidget {
                       sections: [
                         PieChartSectionData(
                           value: data.consultationCount.toDouble(),
-                          color: _kPrimary,
+                          color: context.colors.primary,
                           radius: 28,
                           showTitle: false,
                         ),
@@ -830,7 +906,7 @@ class _TypeSplitRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _TypeRow(
-                  color: _kPrimary,
+                  color: context.colors.primary,
                   label: 'Consultations',
                   count: data.consultationCount,
                   pct: consultPct,
@@ -842,11 +918,11 @@ class _TypeSplitRow extends StatelessWidget {
                   count: data.sessionAppointmentCount,
                   pct: sessionPct,
                 ),
-                const Divider(height: 20),
+                Divider(height: 20),
                 Text(
                   'Total: $total',
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.colors.textSecondary,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -904,18 +980,18 @@ class _TypeRow extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        SizedBox(height: 4),
         LinearProgressIndicator(
           value: pct,
-          backgroundColor: AppColors.border,
+          backgroundColor: context.colors.border,
           color: color,
           minHeight: 5,
           borderRadius: BorderRadius.circular(4),
         ),
-        const SizedBox(height: 2),
+        SizedBox(height: 2),
         Text(
           '${(pct * 100).toStringAsFixed(1)}%',
-          style: const TextStyle(fontSize: 10, color: AppColors.textHint),
+          style: TextStyle(fontSize: 10, color: context.colors.textHint),
         ),
       ],
     );
@@ -936,7 +1012,7 @@ class _SessionPerformanceRow extends StatelessWidget {
         data.sessionsCompleted + data.sessionsMissed + data.sessionsCancelled;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: _cardDeco(),
+      decoration: _cardDeco(context),
       child: Column(
         children: [
           Row(
@@ -1032,9 +1108,9 @@ class _SessionStat extends StatelessWidget {
             ),
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 10,
-                color: AppColors.textSecondary,
+                color: context.colors.textSecondary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -1070,7 +1146,7 @@ class _PlanConversionCard extends StatelessWidget {
     final pctDisplay = (pct * 100).toStringAsFixed(1);
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: _cardDeco(),
+      decoration: _cardDeco(context),
       child: Row(
         children: [
           // Radial progress
@@ -1086,7 +1162,7 @@ class _PlanConversionCard extends StatelessWidget {
                   child: CircularProgressIndicator(
                     value: pct.clamp(0.0, 1.0),
                     strokeWidth: 10,
-                    backgroundColor: AppColors.border,
+                    backgroundColor: context.colors.border,
                     color: _kCompleted,
                     strokeCap: StrokeCap.round,
                   ),
@@ -1102,24 +1178,24 @@ class _PlanConversionCard extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(width: 20),
+          SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Conversion Rate',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: context.colors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 8),
                 _StatRow(
                   label: 'Total Consultations',
                   value: '${data.totalConsultations}',
-                  color: _kPrimary,
+                  color: context.colors.primary,
                 ),
                 const SizedBox(height: 4),
                 _StatRow(
@@ -1147,7 +1223,7 @@ class _StatRow extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  const _StatRow({
+  _StatRow({
     required this.label,
     required this.value,
     required this.color,
@@ -1159,7 +1235,7 @@ class _StatRow extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 12, color: context.colors.textSecondary),
         ),
         Text(
           value,
@@ -1201,27 +1277,27 @@ class _GenderDonut extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = data.genderDistribution.values.fold(0, (a, b) => a + b);
-    final colors = [_kPrimary, _kAccent, _kMissed];
+    final colors = [context.colors.primary, _kAccent, _kMissed];
     final entries = data.genderDistribution.entries.toList();
 
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: _cardDeco(),
+      padding: EdgeInsets.all(14),
+      decoration: _cardDeco(context),
       child: Column(
         children: [
-          const Text(
+          Text(
             'Gender',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: context.colors.textPrimary,
             ),
           ),
           const SizedBox(height: 10),
           SizedBox(
             height: 100,
             child: total == 0
-                ? _emptyDonut()
+                ? _emptyDonut(context)
                 : PieChart(
                     PieChartData(
                       sectionsSpace: 3,
@@ -1254,22 +1330,22 @@ class _GenderDonut extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                   ),
-                  const SizedBox(width: 5),
+                  SizedBox(width: 5),
                   Expanded(
                     child: Text(
                       e.value.key,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: AppColors.textSecondary,
+                        color: context.colors.textSecondary,
                       ),
                     ),
                   ),
                   Text(
                     '${pct.toStringAsFixed(0)}%',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: context.colors.textPrimary,
                     ),
                   ),
                 ],
@@ -1289,20 +1365,20 @@ class _AgeGroupBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final total = data.ageGroupDistribution.values.fold(0, (a, b) => a + b);
-    final colors = [_kAccent, _kPrimary, _kCompleted, _kMissed];
+    final colors = [_kAccent, context.colors.primary, _kCompleted, _kMissed];
     final entries = data.ageGroupDistribution.entries.toList();
 
     return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: _cardDeco(),
+      padding: EdgeInsets.all(14),
+      decoration: _cardDeco(context),
       child: Column(
         children: [
-          const Text(
+          Text(
             'Age Groups',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
+              color: context.colors.textPrimary,
             ),
           ),
           const SizedBox(height: 12),
@@ -1311,7 +1387,7 @@ class _AgeGroupBars extends StatelessWidget {
             final entry = e.value;
             final pct = total == 0 ? 0.0 : entry.value / total;
             return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 5),
+              padding: EdgeInsets.symmetric(vertical: 5),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1320,10 +1396,10 @@ class _AgeGroupBars extends StatelessWidget {
                     children: [
                       Text(
                         entry.key,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: AppColors.textSecondary,
+                          color: context.colors.textSecondary,
                         ),
                       ),
                       Text(
@@ -1340,7 +1416,7 @@ class _AgeGroupBars extends StatelessWidget {
                   LinearProgressIndicator(
                     value: pct,
                     color: colors[idx % colors.length],
-                    backgroundColor: AppColors.border,
+                    backgroundColor: context.colors.border,
                     minHeight: 7,
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -1370,29 +1446,29 @@ class _LocationCard extends StatelessWidget {
 
     if (sorted.isEmpty) {
       return Container(
-        padding: const EdgeInsets.all(24),
-        decoration: _cardDeco(),
-        child: const Center(
+        padding: EdgeInsets.all(24),
+        decoration: _cardDeco(context),
+        child: Center(
           child: Text(
             'No location data yet',
-            style: TextStyle(color: AppColors.textHint),
+            style: TextStyle(color: context.colors.textHint),
           ),
         ),
       );
     }
 
     final barColors = [
-      _kPrimary,
+      context.colors.primary,
       _kAccent,
       _kCompleted,
       _kMissed,
       _kCancelled,
-      AppColors.primaryLight,
+      context.colors.primaryLight,
     ];
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: _cardDeco(),
+      decoration: _cardDeco(context),
       child: Column(
         children: sorted.asMap().entries.map((e) {
           final idx = e.key;
@@ -1422,15 +1498,15 @@ class _LocationCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                SizedBox(width: 10),
                 Expanded(
                   flex: 2,
                   child: Text(
                     entry.key,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
+                      color: context.colors.textPrimary,
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1444,7 +1520,7 @@ class _LocationCard extends StatelessWidget {
                       LinearProgressIndicator(
                         value: ratio,
                         color: barColors[idx % barColors.length],
-                        backgroundColor: AppColors.border,
+                        backgroundColor: context.colors.border,
                         minHeight: 8,
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -1484,7 +1560,7 @@ class _PerformanceMetricsCard extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: _cardDeco(),
+      decoration: _cardDeco(context),
       child: Column(
         children: [
           _MetricTile(
@@ -1510,7 +1586,7 @@ class _PerformanceMetricsCard extends StatelessWidget {
             label: 'Plan Conversion',
             subtitle: 'Consultations converted to treatment plans',
             value: '${(data.planConversionRate * 100).toStringAsFixed(1)}%',
-            color: _kPrimary,
+            color: context.colors.primary,
             progress: data.planConversionRate.clamp(0.0, 1.0),
           ),
         ],
@@ -1547,31 +1623,31 @@ class _MetricTile extends StatelessWidget {
           ),
           child: Icon(icon, color: color, size: 22),
         ),
-        const SizedBox(width: 12),
+        SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: context.colors.textPrimary,
                 ),
               ),
               Text(
                 subtitle,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
-                  color: AppColors.textSecondary,
+                  color: context.colors.textSecondary,
                 ),
               ),
               const SizedBox(height: 6),
               LinearProgressIndicator(
                 value: progress,
                 color: color,
-                backgroundColor: AppColors.border,
+                backgroundColor: context.colors.border,
                 minHeight: 6,
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -1596,14 +1672,14 @@ class _MetricTile extends StatelessWidget {
 // Shared helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-BoxDecoration _cardDeco() {
+BoxDecoration _cardDeco(BuildContext context) {
   return BoxDecoration(
-    color: AppColors.surface,
+    color: context.colors.surface,
     borderRadius: BorderRadius.circular(18),
-    border: Border.all(color: AppColors.border),
+    border: Border.all(color: context.colors.border),
     boxShadow: [
       BoxShadow(
-        color: AppColors.textPrimary.withValues(alpha: 0.04),
+        color: context.colors.textPrimary.withValues(alpha: 0.04),
         blurRadius: 14,
         offset: const Offset(0, 3),
       ),
@@ -1611,11 +1687,11 @@ BoxDecoration _cardDeco() {
   );
 }
 
-Widget _emptyDonut() {
+Widget _emptyDonut(BuildContext context) {
   return Container(
     decoration: BoxDecoration(
       shape: BoxShape.circle,
-      border: Border.all(color: AppColors.border, width: 8),
+      border: Border.all(color: context.colors.border, width: 8),
     ),
   );
 }
@@ -1623,7 +1699,7 @@ Widget _emptyDonut() {
 class _Legend extends StatelessWidget {
   final Color color;
   final String label;
-  const _Legend({required this.color, required this.label});
+  _Legend({required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -1635,10 +1711,10 @@ class _Legend extends StatelessWidget {
           height: 10,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        const SizedBox(width: 4),
+        SizedBox(width: 4),
         Text(
           label,
-          style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 11, color: context.colors.textSecondary),
         ),
       ],
     );

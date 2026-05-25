@@ -1,6 +1,8 @@
+import 'dart:io';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:http/http.dart' as http;
 import '../constants/pb_collections.dart';
+import '../utils/time_utils.dart';
 import '../../features/consultations/models/consultation_model.dart';
 import '../../features/treatments/models/treatment_plan_model.dart';
 import '../../features/treatments/models/session_model.dart';
@@ -18,8 +20,11 @@ class TreatmentService {
     required String doctorId,
     String? notes,
     String? chiefComplaint,
-    String? medicalHistory,
+    String? medicalHistory, // legacy
+    String? previousTreatments,
+    String? painAreas,
     String? pastIllnesses,
+    String? pastSurgeries,
     String? currentMedications,
     String? allergies,
     String? chronicDiseases,
@@ -27,13 +32,17 @@ class TreatmentService {
     String? sleepQuality,
     String? exerciseLevel,
     String? addictions,
-    String? stressLevel,
     String? pregnancyStatus,
     bool consentGiven = true,
     String? bpLevel,
     int? pulse,
+    String? sugarLevel,
+    String? vitD3,
+    String? vitB12,
+    String? thyroidLevel,
+    String? cholesterolLevel,
     bool charged = false,
-    double? chargeAmount,
+    int? chargeAmount,
     List<String> photoPaths = const [],
   }) async {
     final body = <String, dynamic>{
@@ -42,7 +51,10 @@ class TreatmentService {
       if (notes != null && notes.isNotEmpty) 'notes': notes,
       if (chiefComplaint != null && chiefComplaint.isNotEmpty) 'chief_complaint': chiefComplaint,
       if (medicalHistory != null && medicalHistory.isNotEmpty) 'medical_history': medicalHistory,
+      if (previousTreatments != null && previousTreatments.isNotEmpty) 'previous_treatments': previousTreatments,
+      if (painAreas != null && painAreas.isNotEmpty) 'pain_areas': painAreas,
       if (pastIllnesses != null && pastIllnesses.isNotEmpty) 'past_illnesses': pastIllnesses,
+      if (pastSurgeries != null && pastSurgeries.isNotEmpty) 'past_surgeries': pastSurgeries,
       if (currentMedications != null && currentMedications.isNotEmpty) 'current_medications': currentMedications,
       if (allergies != null && allergies.isNotEmpty) 'allergies': allergies,
       if (chronicDiseases != null && chronicDiseases.isNotEmpty) 'chronic_diseases': chronicDiseases,
@@ -50,11 +62,15 @@ class TreatmentService {
       if (sleepQuality != null && sleepQuality.isNotEmpty) 'sleep_quality': sleepQuality,
       if (exerciseLevel != null && exerciseLevel.isNotEmpty) 'exercise_level': exerciseLevel,
       if (addictions != null && addictions.isNotEmpty) 'addictions': addictions,
-      if (stressLevel != null && stressLevel.isNotEmpty) 'stress_level': stressLevel,
       if (pregnancyStatus != null && pregnancyStatus.isNotEmpty) 'pregnancy_status': pregnancyStatus,
       'consent_given': consentGiven,
       if (bpLevel != null && bpLevel.isNotEmpty) 'bp_level': bpLevel,
       if (pulse != null) 'pulse': pulse,
+      if (sugarLevel != null && sugarLevel.isNotEmpty) 'sugar_level': sugarLevel,
+      if (vitD3 != null && vitD3.isNotEmpty) 'vit_d3': vitD3,
+      if (vitB12 != null && vitB12.isNotEmpty) 'vit_b12': vitB12,
+      if (thyroidLevel != null && thyroidLevel.isNotEmpty) 'thyroid_level': thyroidLevel,
+      if (cholesterolLevel != null && cholesterolLevel.isNotEmpty) 'cholesterol_level': cholesterolLevel,
       'charged': charged,
       if (chargeAmount != null) 'charge_amount': chargeAmount,
       'status': 'ongoing',
@@ -76,8 +92,11 @@ class TreatmentService {
     required String consultationId,
     String? notes,
     String? chiefComplaint,
-    String? medicalHistory,
+    String? medicalHistory, // legacy
+    String? previousTreatments,
+    String? painAreas,
     String? pastIllnesses,
+    String? pastSurgeries,
     String? currentMedications,
     String? allergies,
     String? chronicDiseases,
@@ -85,13 +104,17 @@ class TreatmentService {
     String? sleepQuality,
     String? exerciseLevel,
     String? addictions,
-    String? stressLevel,
     String? pregnancyStatus,
     bool? consentGiven,
     String? bpLevel,
     int? pulse,
+    String? sugarLevel,
+    String? vitD3,
+    String? vitB12,
+    String? thyroidLevel,
+    String? cholesterolLevel,
     bool? charged,
-    double? chargeAmount,
+    int? chargeAmount,
     List<String> newPhotoPaths = const [],
   }) async {
     // NOTE: Status is intentionally NOT changed here.
@@ -100,7 +123,10 @@ class TreatmentService {
       if (notes != null) 'notes': notes,
       if (chiefComplaint != null) 'chief_complaint': chiefComplaint,
       if (medicalHistory != null) 'medical_history': medicalHistory,
+      if (previousTreatments != null) 'previous_treatments': previousTreatments,
+      if (painAreas != null) 'pain_areas': painAreas,
       if (pastIllnesses != null) 'past_illnesses': pastIllnesses,
+      if (pastSurgeries != null) 'past_surgeries': pastSurgeries,
       if (currentMedications != null) 'current_medications': currentMedications,
       if (allergies != null) 'allergies': allergies,
       if (chronicDiseases != null) 'chronic_diseases': chronicDiseases,
@@ -108,11 +134,15 @@ class TreatmentService {
       if (sleepQuality != null) 'sleep_quality': sleepQuality,
       if (exerciseLevel != null) 'exercise_level': exerciseLevel,
       if (addictions != null) 'addictions': addictions,
-      if (stressLevel != null) 'stress_level': stressLevel,
       if (pregnancyStatus != null) 'pregnancy_status': pregnancyStatus,
       if (consentGiven != null) 'consent_given': consentGiven,
       if (bpLevel != null) 'bp_level': bpLevel,
       if (pulse != null) 'pulse': pulse,
+      if (sugarLevel != null) 'sugar_level': sugarLevel,
+      if (vitD3 != null) 'vit_d3': vitD3,
+      if (vitB12 != null) 'vit_b12': vitB12,
+      if (thyroidLevel != null) 'thyroid_level': thyroidLevel,
+      if (cholesterolLevel != null) 'cholesterol_level': cholesterolLevel,
       if (charged != null) 'charged': charged,
       if (chargeAmount != null) 'charge_amount': chargeAmount,
     };
@@ -319,7 +349,7 @@ class TreatmentService {
           });
         } catch (_) {}
 
-        currentSessionDate = currentSessionDate.add(Duration(days: intervalDays));
+        currentSessionDate = DateTime.now().add(Duration(days: intervalDays));
         continue;
       }
 
@@ -445,7 +475,7 @@ class TreatmentService {
   Future<List<SessionModel>> getDoctorTodaySessions(String doctorId) async {
     final today = _formatDate(DateTime.now());
     final result = await pb.collection(PBCollections.sessions).getList(
-      filter: 'doctor = "$doctorId" && scheduled_date = "$today"',
+      filter: 'doctor = "$doctorId" && scheduled_date >= "$today 00:00:00.000Z" && scheduled_date <= "$today 23:59:59.999Z"',
       sort: 'scheduled_time',
     );
     return result.items.map((r) => SessionModel.fromRecord(r)).toList();
@@ -459,18 +489,25 @@ class TreatmentService {
     int? pulse,
     String? remarks,
     List<String> photoPaths = const [],
+    bool isCompleted = true,
   }) async {
     final body = <String, dynamic>{
-      'status': 'completed',
-      if (notes != null && notes.isNotEmpty) 'notes': notes,
-      if (bpLevel != null && bpLevel.isNotEmpty) 'bp_level': bpLevel,
-      if (pulse != null) 'pulse': pulse,
-      if (remarks != null && remarks.isNotEmpty) 'remarks': remarks,
+      if (isCompleted) 'status': 'completed',
+      'session_notes_': notes ?? '',
+      'vitals_bp': bpLevel ?? '',
+      if (pulse != null) 'vitals_pulse': pulse,
+      if (remarks != null) 'session_remarks': remarks,
     };
 
     final files = <http.MultipartFile>[];
     for (final path in photoPaths) {
-      files.add(await http.MultipartFile.fromPath('photos', path));
+      // Guard: skip files that no longer exist on disk (e.g., already uploaded)
+      if (!await File(path).exists()) continue;
+      try {
+        files.add(await http.MultipartFile.fromPath('photos', path));
+      } catch (_) {
+        // Skip unreadable files rather than crashing the save
+      }
     }
 
     final record = await pb.collection(PBCollections.sessions).update(
@@ -478,15 +515,117 @@ class TreatmentService {
       body: body,
       files: files,
     );
-    return SessionModel.fromRecord(record);
+    final session = SessionModel.fromRecord(record);
+
+    if (isCompleted) {
+      // Also mark the linked appointment as completed
+      await _syncAppointmentStatus(session, 'completed');
+    }
+
+    return session;
+  }
+
+  /// Mark a session as in-progress (started by doctor).
+  Future<void> startSessionRecord(String sessionId) async {
+    await pb.collection(PBCollections.sessions).update(
+      sessionId,
+      body: {'status': 'in_progress'},
+    );
+  }
+
+  /// Find the session record linked to an appointment by patient + date + time.
+  Future<SessionModel?> findSessionForAppointment({
+    required String patientId,
+    required String date,
+    required String time,
+    required String doctorId,
+  }) async {
+    final timeCandidates = TimeUtils.generateTimeCandidates(time);
+    final timeFilter = timeCandidates.isNotEmpty
+        ? timeCandidates.map((t) => 'scheduled_time = "$t"').join(' || ')
+        : 'scheduled_time = "$time"';
+
+    // Priority 1: Exact match (date + time candidates) with active status (upcoming, waiting, in_progress)
+    try {
+      final res = await pb.collection(PBCollections.sessions).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" '
+            '&& scheduled_date >= "$date 00:00:00.000Z" && scheduled_date <= "$date 23:59:59.999Z" '
+            '&& ($timeFilter) && (status = "upcoming" || status = "waiting" || status = "in_progress")',
+        perPage: 1,
+        sort: 'session_number',
+      );
+      if (res.items.isNotEmpty) return SessionModel.fromRecord(res.items.first);
+    } catch (_) {}
+
+    // Priority 2: Exact match (date + time candidates) with any status
+    try {
+      final res = await pb.collection(PBCollections.sessions).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" '
+            '&& scheduled_date >= "$date 00:00:00.000Z" && scheduled_date <= "$date 23:59:59.999Z" '
+            '&& ($timeFilter)',
+        perPage: 1,
+        sort: 'session_number',
+      );
+      if (res.items.isNotEmpty) return SessionModel.fromRecord(res.items.first);
+    } catch (_) {}
+
+    // Priority 3: Date-only match with active status (upcoming, waiting, in_progress)
+    try {
+      final res = await pb.collection(PBCollections.sessions).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" '
+            '&& scheduled_date >= "$date 00:00:00.000Z" && scheduled_date <= "$date 23:59:59.999Z" '
+            '&& (status = "upcoming" || status = "waiting" || status = "in_progress")',
+        perPage: 1,
+        sort: 'session_number',
+      );
+      if (res.items.isNotEmpty) return SessionModel.fromRecord(res.items.first);
+    } catch (_) {}
+
+    // Priority 4: Date-only match with any status
+    try {
+      final res = await pb.collection(PBCollections.sessions).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" '
+            '&& scheduled_date >= "$date 00:00:00.000Z" && scheduled_date <= "$date 23:59:59.999Z"',
+        perPage: 1,
+        sort: 'session_number',
+      );
+      if (res.items.isNotEmpty) return SessionModel.fromRecord(res.items.first);
+    } catch (_) {}
+
+    // Priority 5: Patient-doctor match with active status (upcoming, waiting, in_progress), sorted by date, session number
+    try {
+      final res = await pb.collection(PBCollections.sessions).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" '
+            '&& (status = "upcoming" || status = "waiting" || status = "in_progress")',
+        perPage: 1,
+        sort: 'scheduled_date,session_number',
+      );
+      if (res.items.isNotEmpty) return SessionModel.fromRecord(res.items.first);
+    } catch (_) {}
+
+    // Priority 6: Patient-doctor match with any status, sorted by date, session number
+    try {
+      final res = await pb.collection(PBCollections.sessions).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId"',
+        perPage: 1,
+        sort: 'scheduled_date,session_number',
+      );
+      if (res.items.isNotEmpty) return SessionModel.fromRecord(res.items.first);
+    } catch (_) {}
+
+    return null;
   }
 
   /// Mark session as missed.
   Future<void> markSessionMissed(String sessionId) async {
-    await pb.collection(PBCollections.sessions).update(
+    final record = await pb.collection(PBCollections.sessions).update(
       sessionId,
       body: {'status': 'missed'},
     );
+    final session = SessionModel.fromRecord(record);
+
+    // Also mark the linked appointment as cancelled
+    await _syncAppointmentStatus(session, 'cancelled');
   }
 
   /// Cancel a session and its synced appointment.
@@ -494,19 +633,83 @@ class TreatmentService {
     final session = await pb.collection(PBCollections.sessions).getOne(sessionId);
     await pb.collection(PBCollections.sessions).update(sessionId, body: {'status': 'cancelled'});
 
-    final dateStr = session.getStringValue('scheduled_date');
+    final rawDate = session.getStringValue('scheduled_date');
+    String datePart = rawDate;
+    try {
+      final dt = DateTime.parse(rawDate);
+      datePart = _formatDate(dt);
+    } catch (_) {}
     final timeStr = session.getStringValue('scheduled_time');
     final doctorId = session.getStringValue('doctor');
     final patientId = session.getStringValue('patient');
     try {
       final appts = await pb.collection(PBCollections.appointments).getList(
         filter:
-            'patient = "$patientId" && doctor = "$doctorId" && date = "$dateStr" && time = "$timeStr" && type = "session"',
+            'patient = "$patientId" && doctor = "$doctorId" '
+            '&& date >= "$datePart 00:00:00.000Z" && date <= "$datePart 23:59:59.999Z" '
+            '&& time = "$timeStr" && type = "session"',
       );
       for (final appt in appts.items) {
         await pb.collection(PBCollections.appointments).update(appt.id, body: {'status': 'cancelled'});
       }
     } catch (_) {}
+  }
+
+  /// Cancel all remaining sessions in a plan after [afterSessionNumber].
+  /// Returns the count of sessions cancelled.
+  Future<int> cancelFutureSessionsForPlan(String planId, int afterSessionNumber) async {
+    int cancelled = 0;
+    try {
+      final sessRes = await pb.collection(PBCollections.sessions).getList(
+        filter:
+            'treatment_plan = "$planId" && session_number > $afterSessionNumber '
+            '&& (status = "upcoming" || status = "waiting")',
+        perPage: 200,
+      );
+      for (final sess in sessRes.items) {
+        final notes = sess.getStringValue('session_notes_');
+        final bp = sess.getStringValue('vitals_bp');
+        final pulse = sess.getIntValue('vitals_pulse');
+        final remarks = sess.getStringValue('session_remarks');
+        final photos = sess.getListValue<String>('photos');
+
+        final hasClinicalData = notes.trim().isNotEmpty ||
+            bp.trim().isNotEmpty ||
+            (pulse != null && pulse > 0) ||
+            remarks.trim().isNotEmpty ||
+            photos.isNotEmpty;
+
+        if (hasClinicalData) continue;
+
+        try {
+          await pb.collection(PBCollections.sessions).update(sess.id, body: {'status': 'cancelled'});
+          cancelled++;
+        } catch (_) {}
+
+        // Cancel the linked appointment
+        final rawDate = sess.getStringValue('scheduled_date');
+        String datePart = rawDate;
+        try {
+          final dt = DateTime.parse(rawDate);
+          datePart = _formatDate(dt);
+        } catch (_) {}
+        final timeStr = sess.getStringValue('scheduled_time');
+        final doctorId = sess.getStringValue('doctor');
+        final patientId = sess.getStringValue('patient');
+        try {
+          final appts = await pb.collection(PBCollections.appointments).getList(
+            filter:
+                'patient = "$patientId" && doctor = "$doctorId" '
+                '&& date >= "$datePart 00:00:00.000Z" && date <= "$datePart 23:59:59.999Z" '
+                '&& time = "$timeStr" && type = "session" && status != "cancelled"',
+          );
+          for (final appt in appts.items) {
+            await pb.collection(PBCollections.appointments).update(appt.id, body: {'status': 'cancelled'});
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+    return cancelled;
   }
 
   /// End Treatment: cancels ALL unattended sessions (treatment + maintenance)
@@ -522,12 +725,12 @@ class TreatmentService {
       planIds.addAll(plansRes.items.map((p) => p.id));
     } catch (_) {}
 
-    // Step 2: Gather all upcoming/waiting sessions across those plans
+    // Step 2: Gather all upcoming/waiting/in_progress sessions across those plans
     final List<dynamic> pendingSessions = [];
     for (final planId in planIds) {
       try {
         final sessRes = await pb.collection(PBCollections.sessions).getList(
-          filter: 'treatment_plan = "$planId" && (status = "upcoming" || status = "waiting")',
+          filter: 'treatment_plan = "$planId" && (status = "upcoming" || status = "waiting" || status = "in_progress")',
           perPage: 200,
         );
         pendingSessions.addAll(sessRes.items);
@@ -536,7 +739,26 @@ class TreatmentService {
 
     // Step 3: Cancel each pending session and its synced appointment
     for (final sess in pendingSessions) {
-      final dateStr = sess.getStringValue('scheduled_date');
+      final notes = sess.getStringValue('session_notes_');
+      final bp = sess.getStringValue('vitals_bp');
+      final pulse = sess.getIntValue('vitals_pulse');
+      final remarks = sess.getStringValue('session_remarks');
+      final photos = sess.getListValue<String>('photos');
+
+      final hasClinicalData = notes.trim().isNotEmpty ||
+          bp.trim().isNotEmpty ||
+          (pulse != null && pulse > 0) ||
+          remarks.trim().isNotEmpty ||
+          photos.isNotEmpty;
+
+      if (hasClinicalData) continue;
+
+      final rawDate = sess.getStringValue('scheduled_date');
+      String datePart = rawDate;
+      try {
+        final dt = DateTime.parse(rawDate);
+        datePart = _formatDate(dt);
+      } catch (_) {}
       final timeStr = sess.getStringValue('scheduled_time');
       final doctorId = sess.getStringValue('doctor');
       final patientId = sess.getStringValue('patient');
@@ -548,7 +770,9 @@ class TreatmentService {
       try {
         final appts = await pb.collection(PBCollections.appointments).getList(
           filter:
-              'patient = "$patientId" && doctor = "$doctorId" && date = "$dateStr" && time = "$timeStr" && type = "session" && status != "cancelled"',
+              'patient = "$patientId" && doctor = "$doctorId" '
+              '&& date >= "$datePart 00:00:00.000Z" && date <= "$datePart 23:59:59.999Z" '
+              '&& time = "$timeStr" && type = "session" && status != "cancelled"',
         );
         for (final appt in appts.items) {
           await pb.collection(PBCollections.appointments).update(appt.id, body: {'status': 'cancelled'});
@@ -600,6 +824,34 @@ class TreatmentService {
           'date': newDate,
           'time': newTime,
         });
+      }
+    } catch (_) {}
+  }
+
+  /// Sync a session's status change to its linked appointment record.
+  Future<void> _syncAppointmentStatus(SessionModel session, String newStatus) async {
+    try {
+      String datePart = session.scheduledDate;
+      try {
+        final dt = DateTime.parse(session.scheduledDate);
+        datePart = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+      } catch (_) {}
+
+      final appts = await pb.collection(PBCollections.appointments).getList(
+        filter:
+            'patient = "${session.patientId}" && doctor = "${session.doctorId}" '
+            '&& date >= "$datePart 00:00:00.000Z" && date <= "$datePart 23:59:59.999Z" && time = "${session.scheduledTime}" '
+            '&& type = "session" && status != "cancelled"',
+      );
+      final now = DateTime.now().toUtc().toIso8601String();
+      for (final appt in appts.items) {
+        final body = <String, dynamic>{'status': newStatus};
+        if (newStatus == 'completed') {
+          // Record session-ended + patient-left timestamps for history
+          body['check_out_time'] = now;
+          body['patient_left_at'] = now;
+        }
+        await pb.collection(PBCollections.appointments).update(appt.id, body: body);
       }
     } catch (_) {}
   }

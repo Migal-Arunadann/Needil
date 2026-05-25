@@ -8,6 +8,8 @@ import '../providers/scheduling_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/models/doctor_model.dart';
 import '../../../core/utils/time_utils.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class AvailableSlotsScreen extends ConsumerStatefulWidget {
   final String doctorId;
@@ -134,7 +136,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
         DateUtils.isSameDay(_selectedDate, DateTime.now());
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -149,19 +151,19 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                       width: 42,
                       height: 42,
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: context.colors.surface,
                         borderRadius: BorderRadius.circular(13),
-                        border: Border.all(color: AppColors.border),
+                        border: Border.all(color: context.colors.border),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.04),
                             blurRadius: 8,
-                            offset: const Offset(0, 2),
+                            offset: Offset(0, 2),
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.arrow_back_rounded,
-                          size: 20, color: AppColors.textPrimary),
+                      child: Icon(Icons.arrow_back_rounded,
+                          size: 20, color: context.colors.textPrimary),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -169,13 +171,13 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Pick a Slot', style: AppTextStyles.h2),
+                        Text('Pick a Slot', style: context.textStyles.h2),
                         Text(
                           isToday
                               ? 'Today — ${DateFormat('d MMM').format(_selectedDate)}'
                               : DateFormat('EEEE, d MMM').format(_selectedDate),
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.textSecondary),
+                          style: context.textStyles.caption
+                              .copyWith(color: context.colors.textSecondary),
                         ),
                       ],
                     ),
@@ -189,13 +191,13 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
+                          color: context.colors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
                           'Today',
-                          style: AppTextStyles.label.copyWith(
-                            color: AppColors.primary,
+                          style: context.textStyles.label.copyWith(
+                            color: context.colors.primary,
                             fontSize: 13,
                           ),
                         ),
@@ -213,13 +215,13 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                       height: 38,
                       decoration: BoxDecoration(
                         color: _calendarExpanded
-                            ? AppColors.primary
-                            : AppColors.surface,
+                            ? context.colors.primary
+                            : context.colors.surface,
                         borderRadius: BorderRadius.circular(11),
                         border: Border.all(
                           color: _calendarExpanded
-                              ? AppColors.primary
-                              : AppColors.border,
+                              ? context.colors.primary
+                              : context.colors.border,
                         ),
                       ),
                       child: Icon(
@@ -229,7 +231,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                         size: 18,
                         color: _calendarExpanded
                             ? Colors.white
-                            : AppColors.textSecondary,
+                            : context.colors.textSecondary,
                       ),
                     ),
                   ),
@@ -260,14 +262,14 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
               secondChild: const SizedBox(height: 0),
             ),
 
-            if (_calendarExpanded) const SizedBox(height: 14),
+            if (_calendarExpanded) SizedBox(height: 14),
 
             // ── Slot Grid / States ───────────────────────────────
             if (state.isLoading)
-              const Expanded(
+              Expanded(
                 child: Center(
                   child: CircularProgressIndicator(
-                      color: AppColors.primary, strokeWidth: 3),
+                      color: context.colors.primary, strokeWidth: 3),
                 ),
               )
             else if (!isWorkingDay)
@@ -358,9 +360,9 @@ class _InlineCalendar extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -386,7 +388,7 @@ class _InlineCalendar extends StatelessWidget {
                   child: Text(
                     DateFormat('MMMM yyyy').format(month),
                     textAlign: TextAlign.center,
-                    style: AppTextStyles.label
+                    style: context.textStyles.label
                         .copyWith(fontSize: 15),
                   ),
                 ),
@@ -408,9 +410,9 @@ class _InlineCalendar extends StatelessWidget {
                         child: Center(
                           child: Text(
                             d,
-                            style: AppTextStyles.caption.copyWith(
+                            style: context.textStyles.caption.copyWith(
                               fontWeight: FontWeight.w700,
-                              color: AppColors.textHint,
+                              color: context.colors.textHint,
                               fontSize: 12,
                             ),
                           ),
@@ -454,23 +456,23 @@ class _InlineCalendar extends StatelessWidget {
                     Border? border;
 
                     if (isSelected) {
-                      bg = AppColors.primary;
+                      bg = context.colors.primary;
                       textColor = Colors.white;
                     } else if (isToday) {
-                      bg = AppColors.primary.withValues(alpha: 0.10);
-                      textColor = AppColors.primary;
+                      bg = context.colors.primary.withValues(alpha: 0.10);
+                      textColor = context.colors.primary;
                       border = Border.all(
-                          color: AppColors.primary
+                          color: context.colors.primary
                               .withValues(alpha: 0.4),
                           width: 1.2);
                     } else if (isPast) {
-                      textColor = AppColors.textHint
+                      textColor = context.colors.textHint
                           .withValues(alpha: 0.4);
                     } else if (!isWorkingDay) {
-                      textColor = AppColors.error
+                      textColor = context.colors.error
                           .withValues(alpha: 0.5);
                     } else {
-                      textColor = AppColors.textPrimary;
+                      textColor = context.colors.textPrimary;
                     }
 
                     return Expanded(
@@ -526,10 +528,10 @@ class _MonthNavBtn extends StatelessWidget {
         width: 32,
         height: 32,
         decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.08),
+          color: context.colors.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(9),
         ),
-        child: Icon(icon, size: 20, color: AppColors.primary),
+        child: Icon(icon, size: 20, color: context.colors.primary),
       ),
     );
   }
@@ -559,22 +561,22 @@ class _SlotChip extends StatelessWidget {
     BoxShadow? shadow;
 
     if (isSelected) {
-      bg = AppColors.primary;
+      bg = context.colors.primary;
       textColor = Colors.white;
       shadow = BoxShadow(
-        color: AppColors.primary.withValues(alpha: 0.35),
+        color: context.colors.primary.withValues(alpha: 0.35),
         blurRadius: 10,
         offset: const Offset(0, 4),
       );
     } else if (isBreak || isPast || isBooked) {
-      bg = AppColors.surface;
-      textColor = AppColors.textHint.withValues(alpha: 0.45);
+      bg = context.colors.surface;
+      textColor = context.colors.textHint.withValues(alpha: 0.45);
       border = Border.all(
-          color: AppColors.border.withValues(alpha: 0.5), width: 0.8);
+          color: context.colors.border.withValues(alpha: 0.5), width: 0.8);
     } else {
-      bg = Colors.white;
-      textColor = AppColors.textPrimary;
-      border = Border.all(color: AppColors.border, width: 0.8);
+      bg = context.colors.cardBackground;
+      textColor = context.colors.textPrimary;
+      border = Border.all(color: context.colors.border, width: 0.8);
     }
 
     return GestureDetector(
@@ -591,7 +593,7 @@ class _SlotChip extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           TimeUtils.formatStringTime(slot.time),
-          style: AppTextStyles.label.copyWith(
+          style: context.textStyles.label.copyWith(
             color: textColor,
             fontSize: 13,
             fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
@@ -619,11 +621,11 @@ class _ConfirmPanel extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
+        gradient: context.colors.primaryGradient,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.30),
+            color: context.colors.primary.withValues(alpha: 0.30),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -715,19 +717,19 @@ class _DayOffState extends StatelessWidget {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: context.colors.surface,
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: context.colors.border),
             ),
-            child: const Icon(Icons.event_busy_rounded,
-                size: 36, color: AppColors.textHint),
+            child: Icon(Icons.event_busy_rounded,
+                size: 36, color: context.colors.textHint),
           ),
           const SizedBox(height: 16),
           Text('No Working Hours',
-              style: AppTextStyles.h3
-                  .copyWith(color: AppColors.textSecondary)),
+              style: context.textStyles.h3
+                  .copyWith(color: context.colors.textSecondary)),
           const SizedBox(height: 6),
-          Text('$dayName is a day off', style: AppTextStyles.caption),
+          Text('$dayName is a day off', style: context.textStyles.caption),
         ],
       ),
     );
@@ -747,20 +749,20 @@ class _NoSlotsState extends StatelessWidget {
             width: 80,
             height: 80,
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: context.colors.surface,
               shape: BoxShape.circle,
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: context.colors.border),
             ),
-            child: const Icon(Icons.schedule_rounded,
-                size: 36, color: AppColors.textHint),
+            child: Icon(Icons.schedule_rounded,
+                size: 36, color: context.colors.textHint),
           ),
           const SizedBox(height: 16),
           Text('No Slots Available',
-              style: AppTextStyles.h3
-                  .copyWith(color: AppColors.textSecondary)),
+              style: context.textStyles.h3
+                  .copyWith(color: context.colors.textSecondary)),
           const SizedBox(height: 6),
           Text('All slots are booked for this day',
-              style: AppTextStyles.caption),
+              style: context.textStyles.caption),
         ],
       ),
     );

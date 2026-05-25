@@ -6,6 +6,8 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/services/superadmin_service.dart';
 import 'superadmin_shell.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 // Provider for the full clinics list with optional search
 final _clinicsSearchProvider = StateProvider.autoDispose<String>((ref) => '');
@@ -49,9 +51,9 @@ class _SuperadminClinicsScreenState extends ConsumerState<SuperadminClinicsScree
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Clinics', style: AppTextStyles.h3.copyWith(color: SAColors.textPrimary)),
+                    Text('Clinics', style: context.textStyles.h3.copyWith(color: SAColors.textPrimary)),
                     Text('Manage all registered clinics',
-                      style: AppTextStyles.caption.copyWith(color: SAColors.textHint)),
+                      style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
                     const SizedBox(height: 16),
                     // Search bar
                     Container(
@@ -63,10 +65,10 @@ class _SuperadminClinicsScreenState extends ConsumerState<SuperadminClinicsScree
                       ),
                       child: TextField(
                         controller: _searchCtrl,
-                        style: AppTextStyles.bodyMedium.copyWith(color: SAColors.textPrimary),
+                        style: context.textStyles.bodyMedium.copyWith(color: SAColors.textPrimary),
                         decoration: InputDecoration(
                           hintText: 'Search by name, city or clinic ID…',
-                          hintStyle: AppTextStyles.caption.copyWith(color: SAColors.textHint),
+                          hintStyle: context.textStyles.caption.copyWith(color: SAColors.textHint),
                           prefixIcon: const Icon(Icons.search_rounded, color: SAColors.textHint, size: 20),
                           suffixIcon: _searchCtrl.text.isNotEmpty
                               ? IconButton(
@@ -99,7 +101,7 @@ class _SuperadminClinicsScreenState extends ConsumerState<SuperadminClinicsScree
                       child: CircularProgressIndicator(color: SAColors.accent),
                     ),
                     error: (e, _) => Center(
-                      child: Text('Error: $e', style: AppTextStyles.bodyMedium.copyWith(color: SAColors.error)),
+                      child: Text('Error: $e', style: context.textStyles.bodyMedium.copyWith(color: SAColors.error)),
                     ),
                     data: (clinics) => clinics.isEmpty
                         ? ListView(
@@ -109,7 +111,7 @@ class _SuperadminClinicsScreenState extends ConsumerState<SuperadminClinicsScree
                                 child: Column(children: [
                                   const Icon(Icons.business_outlined, color: SAColors.textHint, size: 48),
                                   const SizedBox(height: 12),
-                                  Text('No clinics found', style: AppTextStyles.bodyMedium.copyWith(color: SAColors.textHint)),
+                                  Text('No clinics found', style: context.textStyles.bodyMedium.copyWith(color: SAColors.textHint)),
                                 ]),
                               ),
                             ],
@@ -182,10 +184,10 @@ class _ClinicListCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(name.isEmpty ? '(Incomplete)' : name,
-                        style: AppTextStyles.label.copyWith(color: SAColors.textPrimary, fontSize: 15),
+                        style: context.textStyles.label.copyWith(color: SAColors.textPrimary, fontSize: 15),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
                       Text(clinicCode.isEmpty ? 'No ID' : 'ID: $clinicCode',
-                        style: AppTextStyles.caption.copyWith(color: SAColors.textHint)),
+                        style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
                     ],
                   ),
                 ),
@@ -199,7 +201,7 @@ class _ClinicListCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(verified ? '✓ Verified' : '⚠ Pending',
-                    style: AppTextStyles.caption.copyWith(
+                    style: context.textStyles.caption.copyWith(
                       color: verified ? SAColors.success : SAColors.warning,
                       fontWeight: FontWeight.w700,
                       fontSize: 11,
@@ -210,13 +212,13 @@ class _ClinicListCard extends StatelessWidget {
             const SizedBox(height: 12),
             Row(
               children: [
-                _infoChip(Icons.location_on_outlined, location.isEmpty ? 'No location' : location),
+                _infoChip(context, Icons.location_on_outlined, location.isEmpty ? 'No location' : location),
                 const SizedBox(width: 8),
-                _infoChip(Icons.bed_outlined, '$bedCount beds'),
+                _infoChip(context, Icons.bed_outlined, '$bedCount beds'),
                 const Spacer(),
                 if (created != null)
                   Text(DateFormat('d MMM y').format(created),
-                    style: AppTextStyles.caption.copyWith(color: SAColors.textHint, fontSize: 10)),
+                    style: context.textStyles.caption.copyWith(color: SAColors.textHint, fontSize: 10)),
               ],
             ),
           ],
@@ -225,13 +227,13 @@ class _ClinicListCard extends StatelessWidget {
     );
   }
 
-  Widget _infoChip(IconData icon, String label) {
+  Widget _infoChip(BuildContext context, IconData icon, String label) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 13, color: SAColors.textHint),
         const SizedBox(width: 4),
-        Text(label, style: AppTextStyles.caption.copyWith(color: SAColors.textHint, fontSize: 11)),
+        Text(label, style: context.textStyles.caption.copyWith(color: SAColors.textHint, fontSize: 11)),
       ],
     );
   }

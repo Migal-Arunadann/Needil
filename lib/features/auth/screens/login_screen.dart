@@ -7,6 +7,8 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/loading_overlay.dart';
 import '../../../core/utils/validators.dart';
 import '../providers/auth_provider.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -68,7 +70,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(next.error!),
-            backgroundColor: AppColors.error,
+            backgroundColor: context.colors.error,
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -78,7 +80,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     });
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: LoadingOverlay(
         isLoading: authState.isLoading,
         message: 'Signing in...',
@@ -102,11 +104,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           width: 80,
                           height: 80,
                           decoration: BoxDecoration(
-                            gradient: AppColors.heroGradient,
+                            gradient: context.colors.heroGradient,
                             borderRadius: BorderRadius.circular(22),
                             boxShadow: [
                               BoxShadow(
-                                color: AppColors.primary.withValues(alpha: 0.32),
+                                color: context.colors.primary.withValues(alpha: 0.32),
                                 blurRadius: 22,
                                 offset: const Offset(0, 8),
                               ),
@@ -123,16 +125,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                     const SizedBox(height: 24),
                     Text('Welcome Back',
                         textAlign: TextAlign.center,
-                        style: AppTextStyles.h1),
+                        style: context.textStyles.h1),
                     const SizedBox(height: 8),
                     Text(
                       'Sign in to manage your practice',
                       textAlign: TextAlign.center,
-                      style: AppTextStyles.bodyMedium
-                          .copyWith(color: AppColors.textSecondary),
+                      style: context.textStyles.bodyMedium
+                          .copyWith(color: context.colors.textSecondary),
                     ),
 
-                    const SizedBox(height: 48),
+                    SizedBox(height: 48),
 
                     // ── Login form ──────────────────────────────────
                     Form(
@@ -145,12 +147,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             controller: _usernameController,
                             validator: (v) =>
                                 Validators.required(v, 'Username'),
-                            prefixIcon: const Icon(
+                            prefixIcon: Icon(
                                 Icons.person_outline_rounded,
-                                color: AppColors.textHint),
+                                color: context.colors.textHint),
                             textInputAction: TextInputAction.next,
                           ),
-                          const SizedBox(height: 20),
+                          SizedBox(height: 20),
                           AppTextField(
                             label: 'Password',
                             hint: 'Enter your password',
@@ -158,14 +160,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             obscureText: _obscurePassword,
                             validator: (v) =>
                                 Validators.required(v, 'Password'),
-                            prefixIcon: const Icon(Icons.lock_outline_rounded,
-                                color: AppColors.textHint),
+                            prefixIcon: Icon(Icons.lock_outline_rounded,
+                                color: context.colors.textHint),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword
                                     ? Icons.visibility_off_outlined
                                     : Icons.visibility_outlined,
-                                color: AppColors.textHint,
+                                color: context.colors.textHint,
                               ),
                               onPressed: () => setState(
                                   () => _obscurePassword = !_obscurePassword),
@@ -186,8 +188,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                           padding: const EdgeInsets.only(top: 10, bottom: 4),
                           child: Text(
                             'Forgot Password?',
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.primary,
+                            style: context.textStyles.caption.copyWith(
+                              color: context.colors.primary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -212,16 +214,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                       children: [
                         Text(
                           "Don't have an account? ",
-                          style: AppTextStyles.bodyMedium
-                              .copyWith(color: AppColors.textSecondary),
+                          style: context.textStyles.bodyMedium
+                              .copyWith(color: context.colors.textSecondary),
                         ),
                         GestureDetector(
                           onTap: () => Navigator.of(context)
                               .pushNamed('/register/clinic'),
                           child: Text(
                             'Register Clinic',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              color: AppColors.primary,
+                            style: context.textStyles.bodyMedium.copyWith(
+                              color: context.colors.primary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),

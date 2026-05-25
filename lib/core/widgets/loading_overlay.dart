@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 /// A full-screen loading overlay.
 class LoadingOverlay extends StatelessWidget {
@@ -29,31 +31,31 @@ class LoadingOverlay extends StatelessWidget {
                   vertical: 24,
                 ),
                 decoration: BoxDecoration(
-                  color: AppColors.surface,
+                  color: context.colors.surface,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 20,
-                      offset: const Offset(0, 8),
+                      offset: Offset(0, 8),
                     ),
                   ],
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const CircularProgressIndicator(
+                    CircularProgressIndicator(
                       valueColor: AlwaysStoppedAnimation<Color>(
-                        AppColors.primary,
+                        context.colors.primary,
                       ),
                       strokeWidth: 3,
                     ),
                     if (message != null) ...[
-                      const SizedBox(height: 16),
+                      SizedBox(height: 16),
                       Text(
                         message!,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: context.colors.textSecondary,
                           fontSize: 14,
                         ),
                       ),

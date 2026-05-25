@@ -5,6 +5,8 @@ import '../../auth/providers/auth_provider.dart';
 import 'superadmin_dashboard_screen.dart';
 import 'superadmin_clinics_screen.dart';
 import 'superadmin_settings_screen.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 // Shared colour palette for all superadmin screens
 class SAColors {
@@ -107,7 +109,7 @@ class _SuperadminShellState extends ConsumerState<SuperadminShell> {
             const SizedBox(height: 4),
             Text(
               label,
-              style: AppTextStyles.caption.copyWith(
+              style: context.textStyles.caption.copyWith(
                 color: isActive ? SAColors.accent : SAColors.textHint,
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w400,
                 fontSize: 11,

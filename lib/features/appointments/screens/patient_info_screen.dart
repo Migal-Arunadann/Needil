@@ -10,6 +10,8 @@ import '../providers/appointment_provider.dart';
 import '../models/appointment_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../patients/models/patient_model.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 /// Screen shown when a call-by patient arrives — uses the shared
 /// [PatientDetailsForm] to collect full details and link the patient
@@ -91,7 +93,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     if (_selectedGender == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: const Text('Please select gender.'),
-        backgroundColor: AppColors.error,
+        backgroundColor: context.colors.error,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ));
@@ -101,7 +103,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     if (_dobCtrl.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: const Text('Date of birth is required.'),
-        backgroundColor: AppColors.error,
+        backgroundColor: context.colors.error,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ));
@@ -111,7 +113,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     if (!_consentGiven) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: const Text('Patient consent is required to proceed.'),
-        backgroundColor: AppColors.error,
+        backgroundColor: context.colors.error,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ));
@@ -162,7 +164,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content:
                 Text('Returning patient "${existingPatient.fullName}" linked ✓'),
-            backgroundColor: AppColors.info,
+            backgroundColor: context.colors.info,
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -193,7 +195,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
         if (existingPatient == null) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: const Text('Patient registered!'),
-            backgroundColor: AppColors.success,
+            backgroundColor: context.colors.success,
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -204,7 +206,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text('Error: $e'),
-        backgroundColor: AppColors.error,
+        backgroundColor: context.colors.error,
       ));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -214,7 +216,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -232,38 +234,38 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: context.colors.surface,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: context.colors.border),
                         ),
-                        child: const Icon(Icons.arrow_back_rounded,
-                            size: 20, color: AppColors.textPrimary),
+                        child: Icon(Icons.arrow_back_rounded,
+                            size: 20, color: context.colors.textPrimary),
                       ),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
-                        child: Text('Patient Details', style: AppTextStyles.h2)),
+                        child: Text('Patient Details', style: context.textStyles.h2)),
                   ],
                 ),
                 const SizedBox(height: 24),
 
                 // Info banner
                 Container(
-                  padding: const EdgeInsets.all(14),
+                  padding: EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: AppColors.info.withValues(alpha: 0.08),
+                    color: context.colors.info.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline_rounded,
-                          color: AppColors.info, size: 20),
+                      Icon(Icons.info_outline_rounded,
+                          color: context.colors.info, size: 20),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           'Collect patient information as they arrive for their appointment.',
-                          style: AppTextStyles.caption
-                              .copyWith(color: AppColors.info, fontSize: 13),
+                          style: context.textStyles.caption
+                              .copyWith(color: context.colors.info, fontSize: 13),
                         ),
                       ),
                     ],

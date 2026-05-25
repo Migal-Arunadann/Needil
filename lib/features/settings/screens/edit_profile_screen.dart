@@ -13,6 +13,8 @@ import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/constants/pb_collections.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/services/auth_service.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class EditProfileScreen extends ConsumerStatefulWidget {
   const EditProfileScreen({super.key});
@@ -76,29 +78,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       _dobCtrl.text = d.dateOfBirth ?? '';
       _existingPhotoUrl = d.photoUrl;
     }
-    _pinCtrl.addListener(_onPinChanged); // keep for backward compat but LocationFields handles this now
-  }
-
-  void _onPinChanged() async {
-    final pin = _pinCtrl.text.trim();
-    if (pin.length == 6) {
-      try {
-        final res = await http.get(Uri.parse('https://api.postalpincode.in/pincode/$pin'));
-        if (res.statusCode == 200 && mounted) {
-          final data = jsonDecode(res.body);
-          if (data.isNotEmpty && data[0]['Status'] == 'Success') {
-            final postOffice = data[0]['PostOffice'][0];
-            setState(() {
-              _areaCtrl.text = postOffice['Name'] ?? _areaCtrl.text;
-              _cityCtrl.text = postOffice['District'] ?? _cityCtrl.text;
-              _stateCtrl.text = postOffice['State'] ?? _stateCtrl.text;
-            });
-          }
-        }
-      } catch (e) {
-        // ignore network error
-      }
-    }
   }
 
   @override
@@ -140,12 +119,6 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       initialDate: DateTime(1980),
       firstDate: DateTime(1950),
       lastDate: DateTime.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: ColorScheme.light(primary: AppColors.primary, onPrimary: Colors.white, surface: AppColors.surface),
-        ),
-        child: child!,
-      ),
     );
     if (picked != null) {
       _dobCtrl.text = '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
@@ -221,7 +194,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Profile updated successfully'),
-            backgroundColor: AppColors.success,
+            backgroundColor: context.colors.success,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
@@ -233,7 +206,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to update profile: $e'),
-            backgroundColor: AppColors.error,
+            backgroundColor: context.colors.error,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
@@ -252,15 +225,15 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
             onPressed: () { FocusScope.of(context).unfocus(); Navigator.pop(context); },
           ),
-          title: Text('Edit Profile', style: AppTextStyles.h4),
+          title: Text('Edit Profile', style: context.textStyles.h4),
           centerTitle: true,
         ),
         body: SafeArea(
@@ -279,12 +252,12 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                         children: [
                           CircleAvatar(
                             radius: 52,
-                            backgroundColor: AppColors.surface,
+                            backgroundColor: context.colors.surface,
                             backgroundImage: isClinic
                                 ? (_logoFile != null ? FileImage(_logoFile!) : (_existingLogoUrl != null ? NetworkImage(_existingLogoUrl!) as ImageProvider : null))
                                 : (_photoFile != null ? FileImage(_photoFile!) : (_existingPhotoUrl != null ? NetworkImage(_existingPhotoUrl!) as ImageProvider : null)),
                             child: (isClinic ? (_logoFile == null && _existingLogoUrl == null) : (_photoFile == null && _existingPhotoUrl == null))
-                                ? Icon(isClinic ? Icons.business_rounded : Icons.person_rounded, size: 40, color: AppColors.textHint)
+                                ? Icon(isClinic ? Icons.business_rounded : Icons.person_rounded, size: 40, color: context.colors.textHint)
                                 : null,
                           ),
                           Positioned(
@@ -292,9 +265,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                             child: Container(
                               width: 30, height: 30,
                               decoration: BoxDecoration(
-                                color: AppColors.primary,
+                                color: context.colors.primary,
                                 shape: BoxShape.circle,
-                                border: Border.all(color: AppColors.background, width: 2),
+                                border: Border.all(color: context.colors.background, width: 2),
                               ),
                               child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
                             ),
@@ -307,28 +280,28 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   Center(
                     child: Text(
                       isClinic ? 'Tap to upload clinic logo' : 'Tap to upload profile photo',
-                      style: AppTextStyles.caption,
+                      style: context.textStyles.caption,
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
 
                   // ── Core Fields ──
                   _sectionLabel('Basic Information'),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   AppTextField(
                     controller: _nameCtrl,
                     label: isClinic ? 'Clinic Name' : 'Full Name',
-                    prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.textHint),
+                    prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
                     validator: (v) => v == null || v.trim().isEmpty ? 'Required field' : null,
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
                   AppTextField(
                     controller: _emailCtrl,
                     label: 'Email Address',
-                    prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textHint),
+                    prefixIcon: Icon(Icons.email_outlined, color: context.colors.textHint),
                     keyboardType: TextInputType.emailAddress,
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
 
                   if (isClinic) ...[ 
                     // ── Clinic-specific ──
@@ -336,24 +309,24 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       controller: _bedCountCtrl,
                       label: 'Bed Count',
                       keyboardType: TextInputType.number,
-                      prefixIcon: const Icon(Icons.bed_outlined, color: AppColors.textHint),
+                      prefixIcon: Icon(Icons.bed_outlined, color: context.colors.textHint),
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: 24),
                     _sectionLabel('Contact & Location'),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     AppTextField(
                       controller: _phoneCtrl,
                       label: 'Clinic Phone Number',
                       keyboardType: TextInputType.phone,
-                      prefixIcon: const Icon(Icons.phone_outlined, color: AppColors.textHint),
+                      prefixIcon: Icon(Icons.phone_outlined, color: context.colors.textHint),
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: 14),
                     AppTextField(
                       controller: _addressCtrl,
                       label: 'Street Address',
-                      prefixIcon: const Icon(Icons.home_outlined, color: AppColors.textHint),
+                      prefixIcon: Icon(Icons.home_outlined, color: context.colors.textHint),
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: 14),
                     // Pincode-first auto-fill location
                     LocationFields(
                       pincodeCtrl: _pinCtrl,
@@ -363,11 +336,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       areaCtrl: _areaCtrl,
                       allRequired: false,
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: 14),
                     AppTextField(
                       controller: _locationCtrl,
                       label: 'Clinic GMap Link',
-                      prefixIcon: const Icon(Icons.place_outlined, color: AppColors.textHint),
+                      prefixIcon: Icon(Icons.place_outlined, color: context.colors.textHint),
                     ),
                   ] else ...[ 
                     // ── Doctor-specific ──
@@ -375,27 +348,27 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       controller: _ageCtrl,
                       label: 'Age',
                       keyboardType: TextInputType.number,
-                      prefixIcon: const Icon(Icons.cake_outlined, color: AppColors.textHint),
+                      prefixIcon: Icon(Icons.cake_outlined, color: context.colors.textHint),
                     ),
-                    const SizedBox(height: 24),
+                    SizedBox(height: 24),
                     _sectionLabel('Personal Details'),
-                    const SizedBox(height: 12),
+                    SizedBox(height: 12),
                     AppTextField(
                       controller: _doctorPhoneCtrl,
                       label: 'Phone Number',
                       keyboardType: TextInputType.phone,
-                      prefixIcon: const Icon(Icons.phone_outlined, color: AppColors.textHint),
+                      prefixIcon: Icon(Icons.phone_outlined, color: context.colors.textHint),
                     ),
-                    const SizedBox(height: 14),
+                    SizedBox(height: 14),
                     AppTextField(
                       controller: _dobCtrl,
                       label: 'Date of Birth (DD/MM/YYYY)',
-                      prefixIcon: const Icon(Icons.calendar_today_rounded, color: AppColors.textHint, size: 18),
+                      prefixIcon: Icon(Icons.calendar_today_rounded, color: context.colors.textHint, size: 18),
                       readOnly: true,
                       onTap: _pickDob,
                       suffixIcon: GestureDetector(
                         onTap: _pickDob,
-                        child: const Icon(Icons.calendar_month_rounded, color: AppColors.primary),
+                        child: Icon(Icons.calendar_month_rounded, color: context.colors.primary),
                       ),
                     ),
                   ],
@@ -419,9 +392,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   Widget _sectionLabel(String label) {
     return Row(
       children: [
-        Container(width: 4, height: 16, decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(2))),
+        Container(width: 4, height: 16, decoration: BoxDecoration(color: context.colors.primary, borderRadius: BorderRadius.circular(2))),
         const SizedBox(width: 8),
-        Text(label, style: AppTextStyles.h4),
+        Text(label, style: context.textStyles.h4),
       ],
     );
   }

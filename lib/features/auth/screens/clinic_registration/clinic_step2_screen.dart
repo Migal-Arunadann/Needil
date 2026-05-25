@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/widgets/app_button.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 /// Clinic Registration — Step 2: Number of beds.
 class ClinicStep2Screen extends StatefulWidget {
@@ -29,16 +31,16 @@ class _ClinicStep2ScreenState extends State<ClinicStep2Screen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded,
-              color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_rounded,
+              color: context.colors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('Clinic Registration', style: AppTextStyles.h4),
+        title: Text('Clinic Registration', style: context.textStyles.h4),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -50,12 +52,12 @@ class _ClinicStep2ScreenState extends State<ClinicStep2Screen> {
               const SizedBox(height: 8),
               _buildStepIndicator(2, 5),
               const SizedBox(height: 24),
-              Text('Bed Capacity', style: AppTextStyles.h2),
+              Text('Bed Capacity', style: context.textStyles.h2),
               const SizedBox(height: 8),
               Text(
                 'How many beds/treatment stations does your clinic have? This determines concurrent appointment capacity.',
-                style: AppTextStyles.bodyMedium
-                    .copyWith(color: AppColors.textSecondary),
+                style: context.textStyles.bodyMedium
+                    .copyWith(color: context.colors.textSecondary),
               ),
               const SizedBox(height: 48),
               // Bed counter
@@ -64,9 +66,9 @@ class _ClinicStep2ScreenState extends State<ClinicStep2Screen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: context.colors.surface,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: context.colors.border),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.04),
@@ -92,15 +94,15 @@ class _ClinicStep2ScreenState extends State<ClinicStep2Screen> {
                         children: [
                           Text(
                             '$_bedCount',
-                            style: AppTextStyles.h1.copyWith(
+                            style: context.textStyles.h1.copyWith(
                               fontSize: 48,
-                              color: AppColors.primary,
+                              color: context.colors.primary,
                             ),
                           ),
                           Text(
                             _bedCount == 1 ? 'Bed' : 'Beds',
-                            style: AppTextStyles.label
-                                .copyWith(color: AppColors.textSecondary),
+                            style: context.textStyles.label
+                                .copyWith(color: context.colors.textSecondary),
                           ),
                         ],
                       ),
@@ -138,12 +140,12 @@ class _ClinicStep2ScreenState extends State<ClinicStep2Screen> {
         width: 48,
         height: 48,
         decoration: BoxDecoration(
-          color: enabled ? AppColors.primary : AppColors.border,
+          color: enabled ? context.colors.primary : context.colors.border,
           borderRadius: BorderRadius.circular(14),
         ),
         child: Icon(
           icon,
-          color: enabled ? Colors.white : AppColors.textHint,
+          color: enabled ? Colors.white : context.colors.textHint,
           size: 24,
         ),
       ),
@@ -160,7 +162,7 @@ class _ClinicStep2ScreenState extends State<ClinicStep2Screen> {
             margin: EdgeInsets.only(right: step < total ? 8 : 0),
             height: 4,
             decoration: BoxDecoration(
-              color: isActive ? AppColors.primary : AppColors.border,
+              color: isActive ? context.colors.primary : context.colors.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),

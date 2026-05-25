@@ -10,6 +10,8 @@ import '../../../../core/widgets/time_slot_picker.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/utils/time_utils.dart';
 import '../../providers/registration_cache_provider.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 // A break time range
 class BreakTime {
@@ -144,7 +146,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
   Future<void> _pickDoctorPhoto() async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -152,24 +154,24 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const SizedBox(height: 12),
           Container(width: 40, height: 4,
-            decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
+            decoration: BoxDecoration(color: context.colors.border, borderRadius: BorderRadius.circular(2))),
           const SizedBox(height: 16),
-          Text('Doctor Photo', style: AppTextStyles.h3),
-          const SizedBox(height: 16),
+          Text('Doctor Photo', style: context.textStyles.h3),
+          SizedBox(height: 16),
           ListTile(
             leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.photo_library_rounded, color: AppColors.primary),
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(color: context.colors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+              child: Icon(Icons.photo_library_rounded, color: context.colors.primary),
             ),
-            title: const Text('Choose from Gallery'),
+            title: Text('Choose from Gallery'),
             onTap: () => Navigator.pop(ctx, ImageSource.gallery),
           ),
           ListTile(
             leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: AppColors.accent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-              child: const Icon(Icons.camera_alt_rounded, color: AppColors.accent),
+              padding: EdgeInsets.all(8),
+              decoration: BoxDecoration(color: context.colors.accent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+              child: Icon(Icons.camera_alt_rounded, color: context.colors.accent),
             ),
             title: const Text('Take a Photo'),
             onTap: () => Navigator.pop(ctx, ImageSource.camera),
@@ -179,9 +181,18 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
       ),
     );
     if (source == null) return;
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, imageQuality: 80);
-    if (picked != null && mounted) setState(() => _doctorPhotoFile = File(picked.path));
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source, imageQuality: 80);
+      if (picked != null && mounted) setState(() => _doctorPhotoFile = File(picked.path));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to pick image: $e'),
+          backgroundColor: context.colors.error,
+        ));
+      }
+    }
   }
 
   Future<void> _pickTime({
@@ -198,6 +209,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
       initialTime: currentValue ?? const TimeOfDay(hour: 9, minute: 0),
       intervalMinutes: 30,
       startHour: minTime?.hour ?? 5,
+      startMinute: minTime?.minute ?? 0,
       endHour: maxTime?.hour ?? 23,
       minTime: minTime,
     );
@@ -361,7 +373,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: AppColors.error,
+      backgroundColor: context.colors.error,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ));
@@ -372,15 +384,15 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
             onPressed: () { FocusScope.of(context).unfocus(); Navigator.of(context).pop(); },
           ),
-          title: Text('Clinic Registration', style: AppTextStyles.h4),
+          title: Text('Clinic Registration', style: context.textStyles.h4),
           centerTitle: true,
         ),
         body: SafeArea(
@@ -394,10 +406,10 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                   const SizedBox(height: 8),
                   _buildStepIndicator(3, 5),
                   const SizedBox(height: 24),
-                  Text('Primary Doctor', style: AppTextStyles.h2),
+                  Text('Primary Doctor', style: context.textStyles.h2),
                   const SizedBox(height: 6),
                   Text('Set up the primary doctor (clinic owner)',
-                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                    style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
                   const SizedBox(height: 24),
 
                   // Photo
@@ -407,7 +419,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                       Container(
                         width: 96, height: 96,
                         decoration: BoxDecoration(
-                          gradient: _doctorPhotoFile == null ? AppColors.heroGradient : null,
+                          gradient: _doctorPhotoFile == null ? context.colors.heroGradient : null,
                           borderRadius: BorderRadius.circular(28),
                           image: _doctorPhotoFile != null
                               ? DecorationImage(image: FileImage(_doctorPhotoFile!), fit: BoxFit.cover)
@@ -420,7 +432,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                         child: Container(
                           width: 30, height: 30,
                           decoration: BoxDecoration(
-                            color: AppColors.primary,
+                            color: context.colors.primary,
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(color: Colors.white, width: 2),
                           ),
@@ -429,17 +441,17 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                       ),
                     ]),
                   )),
-                  const SizedBox(height: 6),
+                  SizedBox(height: 6),
                   Center(child: Text('Doctor Photo (Optional)',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary))),
-                  const SizedBox(height: 20),
+                    style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))),
+                  SizedBox(height: 20),
 
                   // Name
                   AppTextField(
                     label: 'Doctor Name *', hint: 'e.g. Dr. Sharma',
                     controller: _doctorNameController,
                     validator: (v) => Validators.required(v, 'Name'),
-                    prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.textHint),
+                    prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
                   ),
                   const SizedBox(height: 16),
 
@@ -454,35 +466,29 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                         initialDate: _dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
                         firstDate: DateTime(1940),
                         lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
-                        builder: (ctx, child) => Theme(
-                          data: Theme.of(ctx).copyWith(
-                            colorScheme: ColorScheme.light(primary: AppColors.primary, onPrimary: Colors.white, surface: AppColors.surface),
-                          ),
-                          child: child!,
-                        ),
                       );
                       if (!mounted) return;
                       FocusManager.instance.primaryFocus?.unfocus();
                       if (picked != null) setState(() => _dateOfBirth = picked);
                     },
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: context.colors.surface,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
+                        border: Border.all(color: context.colors.border),
                       ),
                       child: Row(children: [
-                        const Icon(Icons.cake_outlined, color: AppColors.textHint, size: 20),
-                        const SizedBox(width: 12),
+                        Icon(Icons.cake_outlined, color: context.colors.textHint, size: 20),
+                        SizedBox(width: 12),
                         Expanded(child: Text(
                           _dateOfBirth == null
                               ? 'Date of Birth'
                               : '${_dateOfBirth!.day}/${_dateOfBirth!.month}/${_dateOfBirth!.year}',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            color: _dateOfBirth == null ? AppColors.textHint : AppColors.textPrimary),
+                          style: context.textStyles.bodyMedium.copyWith(
+                            color: _dateOfBirth == null ? context.colors.textHint : context.colors.textPrimary),
                         )),
-                        const Icon(Icons.calendar_today_rounded, size: 16, color: AppColors.textHint),
+                        Icon(Icons.calendar_today_rounded, size: 16, color: context.colors.textHint),
                       ]),
                     ),
                   ),
@@ -495,7 +501,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                   const SizedBox(height: 32),
 
                   // Treatments
-                  Text('Treatments Offered', style: AppTextStyles.h3),
+                  Text('Treatments Offered', style: context.textStyles.h3),
                   const SizedBox(height: 12),
                   ..._availableTreatments.map((t) => _buildTreatmentTile(t)),
                   const SizedBox(height: 32),
@@ -523,7 +529,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(children: [
-          Text('Working Schedule', style: AppTextStyles.h3),
+          Text('Working Schedule', style: context.textStyles.h3),
           const Spacer(),
           _quickAction('Weekdays', _selectWeekdays),
           const SizedBox(width: 8),
@@ -531,7 +537,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
         ]),
         const SizedBox(height: 6),
         Text('Select working days, then set global or day-specific hours.',
-          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+          style: context.textStyles.caption.copyWith(color: context.colors.textSecondary)),
         const SizedBox(height: 16),
 
         // Day chips
@@ -545,15 +551,15 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  gradient: selected ? AppColors.heroGradient : null,
-                  color: selected ? null : AppColors.surface,
+                  gradient: selected ? context.colors.heroGradient : null,
+                  color: selected ? null : context.colors.surface,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: selected ? Colors.transparent : AppColors.border),
-                  boxShadow: selected ? [BoxShadow(color: AppColors.primary.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 3))] : null,
+                  border: Border.all(color: selected ? Colors.transparent : context.colors.border),
+                  boxShadow: selected ? [BoxShadow(color: context.colors.primary.withValues(alpha: 0.2), blurRadius: 8, offset: const Offset(0, 3))] : null,
                 ),
                 child: Text(day.substring(0, 3),
-                  style: AppTextStyles.label.copyWith(
-                    color: selected ? Colors.white : AppColors.textSecondary,
+                  style: context.textStyles.label.copyWith(
+                    color: selected ? Colors.white : context.colors.textSecondary,
                     fontSize: 14, fontWeight: FontWeight.w600)),
               ),
             );
@@ -561,8 +567,8 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
         ),
         const SizedBox(height: 6),
         Text('$selectedCount day${selectedCount != 1 ? 's' : ''} selected',
-          style: AppTextStyles.caption.copyWith(
-            color: selectedCount > 0 ? AppColors.primary : AppColors.textHint)),
+          style: context.textStyles.caption.copyWith(
+            color: selectedCount > 0 ? context.colors.primary : context.colors.textHint)),
 
         if (selectedCount > 0) ...[
           const SizedBox(height: 20),
@@ -575,10 +581,10 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
           _buildGlobalBreaksCard(),
 
           const SizedBox(height: 24),
-          Text('Day-Specific Overrides', style: AppTextStyles.h3),
+          Text('Day-Specific Overrides', style: context.textStyles.h3),
           const SizedBox(height: 6),
           Text('Need half-days on weekends? Customize specific days here.',
-            style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+            style: context.textStyles.caption.copyWith(color: context.colors.textSecondary)),
           const SizedBox(height: 12),
           ...selectedDayNames.map((day) => _buildDayOverrideCard(day)),
         ],
@@ -588,23 +594,23 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
 
   Widget _buildGlobalHoursCard() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-            child: const Icon(Icons.schedule_rounded, color: AppColors.primary, size: 18),
+            padding: EdgeInsets.all(6),
+            decoration: BoxDecoration(color: context.colors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+            child: Icon(Icons.schedule_rounded, color: context.colors.primary, size: 18),
           ),
           const SizedBox(width: 10),
           Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Global Working Hours', style: AppTextStyles.label.copyWith(fontSize: 15)),
-            Text('Applies to all selected days by default', style: AppTextStyles.caption.copyWith(fontSize: 11)),
+            Text('Global Working Hours', style: context.textStyles.label.copyWith(fontSize: 15)),
+            Text('Applies to all selected days by default', style: context.textStyles.caption.copyWith(fontSize: 11)),
           ]),
         ]),
         const SizedBox(height: 14),
@@ -614,7 +620,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
             onTap: () => _pickTime(currentValue: _workFrom, onSelect: (t) => _workFrom = t),
           )),
           Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Icon(Icons.arrow_forward_rounded, size: 18, color: AppColors.textHint)),
+            child: Icon(Icons.arrow_forward_rounded, size: 18, color: context.colors.textHint)),
           Expanded(child: _timePickerTile(
             label: 'To', value: _workTo,
             onTap: () => _pickTime(currentValue: _workTo, onSelect: (t) => _workTo = t, minTime: _workFrom),
@@ -626,37 +632,37 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
 
   Widget _buildGlobalBreaksCard() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _globalBreaks.isNotEmpty ? AppColors.warning.withValues(alpha: 0.04) : AppColors.surface,
+        color: _globalBreaks.isNotEmpty ? context.colors.warning.withValues(alpha: 0.04) : context.colors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: _globalBreaks.isNotEmpty ? AppColors.warning.withValues(alpha: 0.2) : AppColors.border),
+          color: _globalBreaks.isNotEmpty ? context.colors.warning.withValues(alpha: 0.2) : context.colors.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-            child: const Icon(Icons.coffee_rounded, color: AppColors.warning, size: 18),
+            padding: EdgeInsets.all(6),
+            decoration: BoxDecoration(color: context.colors.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+            child: Icon(Icons.coffee_rounded, color: context.colors.warning, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Global Break Times', style: AppTextStyles.label.copyWith(fontSize: 15)),
-            Text('Add one or more breaks applied to all days', style: AppTextStyles.caption.copyWith(fontSize: 11)),
+            Text('Global Break Times', style: context.textStyles.label.copyWith(fontSize: 15)),
+            Text('Add one or more breaks applied to all days', style: context.textStyles.caption.copyWith(fontSize: 11)),
           ])),
           GestureDetector(
             onTap: () => setState(() => _globalBreaks.add(BreakTime())),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: AppColors.warning.withValues(alpha: 0.12),
+                color: context.colors.warning.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.add_rounded, color: AppColors.warning, size: 16),
+                Icon(Icons.add_rounded, color: context.colors.warning, size: 16),
                 const SizedBox(width: 4),
-                Text('Add', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600)),
+                Text('Add', style: context.textStyles.caption.copyWith(color: context.colors.warning, fontWeight: FontWeight.w600)),
               ]),
             ),
           ),
@@ -676,7 +682,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
           Padding(
             padding: const EdgeInsets.only(top: 10),
             child: Text('No breaks added. Tap + Add to add a break.',
-              style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+              style: context.textStyles.caption.copyWith(color: context.colors.textHint)),
           ),
       ]),
     );
@@ -693,11 +699,11 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
       padding: const EdgeInsets.only(top: 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Text('Break ${index + 1}', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600)),
+          Text('Break ${index + 1}', style: context.textStyles.caption.copyWith(color: context.colors.warning, fontWeight: FontWeight.w600)),
           const Spacer(),
           GestureDetector(
             onTap: onRemove,
-            child: Icon(Icons.close_rounded, size: 18, color: AppColors.error),
+            child: Icon(Icons.close_rounded, size: 18, color: context.colors.error),
           ),
         ]),
         const SizedBox(height: 8),
@@ -712,7 +718,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
             ),
           )),
           Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Icon(Icons.arrow_forward_rounded, size: 18, color: AppColors.textHint)),
+            child: Icon(Icons.arrow_forward_rounded, size: 18, color: context.colors.textHint)),
           Expanded(child: _timePickerTile(
             label: 'To', value: breakTime.to, isBreak: true,
             onTap: () => _pickTime(
@@ -735,9 +741,9 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: hasOverride ? AppColors.primary : AppColors.border),
+        border: Border.all(color: hasOverride ? context.colors.primary : context.colors.border),
       ),
       child: Column(children: [
         InkWell(
@@ -749,29 +755,29 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(children: [
-              Text(day, style: AppTextStyles.label.copyWith(fontSize: 15)),
+              Text(day, style: context.textStyles.label.copyWith(fontSize: 15)),
               const Spacer(),
               if (hasOverride)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   margin: const EdgeInsets.only(right: 12),
-                  decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
-                  child: Text('Customized', style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontSize: 11)),
+                  decoration: BoxDecoration(color: context.colors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+                  child: Text('Customized', style: context.textStyles.caption.copyWith(color: context.colors.primary, fontSize: 11)),
                 )
               else
-                Text('Global Hours', style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 12)),
+                Text('Global Hours', style: context.textStyles.caption.copyWith(color: context.colors.textHint, fontSize: 12)),
               const SizedBox(width: 12),
-              Icon(isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: AppColors.textHint),
+              Icon(isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: context.colors.textHint),
             ]),
           ),
         ),
         if (isExpanded) ...[
-          Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: context.colors.border),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(children: [
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Text('Use Custom Hours', style: AppTextStyles.label),
+                Text('Use Custom Hours', style: context.textStyles.label),
                 Switch(
                   value: hasOverride,
                   onChanged: (v) {
@@ -788,7 +794,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                       }
                     });
                   },
-                  activeColor: AppColors.primary,
+                  activeColor: context.colors.primary,
                 ),
               ]),
               if (hasOverride && override != null) ...[
@@ -799,7 +805,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                     onTap: () => _pickTime(currentValue: override.workFrom, onSelect: (t) => override.workFrom = t),
                   )),
                   Padding(padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Icon(Icons.arrow_forward_rounded, size: 18, color: AppColors.textHint)),
+                    child: Icon(Icons.arrow_forward_rounded, size: 18, color: context.colors.textHint)),
                   Expanded(child: _timePickerTile(
                     label: 'To', value: override.workTo,
                     onTap: () => _pickTime(currentValue: override.workTo, onSelect: (t) => override.workTo = t, minTime: override.workFrom),
@@ -808,17 +814,17 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                 const SizedBox(height: 16),
                 // Override breaks
                 Row(children: [
-                  Text('Break Times', style: AppTextStyles.label.copyWith(fontSize: 13)),
+                  Text('Break Times', style: context.textStyles.label.copyWith(fontSize: 13)),
                   const Spacer(),
                   GestureDetector(
                     onTap: () => setState(() => override.breaks.add(BreakTime())),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                      decoration: BoxDecoration(color: context.colors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
                       child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        Icon(Icons.add_rounded, color: AppColors.warning, size: 14),
+                        Icon(Icons.add_rounded, color: context.colors.warning, size: 14),
                         const SizedBox(width: 2),
-                        Text('Add', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontSize: 11)),
+                        Text('Add', style: context.textStyles.caption.copyWith(color: context.colors.warning, fontSize: 11)),
                       ]),
                     ),
                   ),
@@ -836,7 +842,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                 if (override.breaks.isEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text('No breaks added', style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+                    child: Text('No breaks added', style: context.textStyles.caption.copyWith(color: context.colors.textHint)),
                   ),
               ],
             ]),
@@ -847,21 +853,21 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
   }
 
   Widget _timePickerTile({required String label, required TimeOfDay? value, required VoidCallback onTap, bool isBreak = false}) {
-    final color = isBreak ? AppColors.warning : AppColors.primary;
+    final color = isBreak ? context.colors.warning : context.colors.primary;
     return GestureDetector(
       onTap: () { FocusScope.of(context).unfocus(); onTap(); },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
         decoration: BoxDecoration(
-          color: value != null ? color.withValues(alpha: 0.06) : AppColors.background,
+          color: value != null ? color.withValues(alpha: 0.06) : context.colors.background,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: value != null ? color.withValues(alpha: 0.25) : AppColors.border),
+          border: Border.all(color: value != null ? color.withValues(alpha: 0.25) : context.colors.border),
         ),
         child: Column(children: [
-          Text(label, style: AppTextStyles.caption.copyWith(fontSize: 11, color: AppColors.textHint)),
+          Text(label, style: context.textStyles.caption.copyWith(fontSize: 11, color: context.colors.textHint)),
           const SizedBox(height: 4),
-          Text(_fmt(value), style: AppTextStyles.label.copyWith(
-            color: value != null ? color : AppColors.textHint, fontSize: 15, fontWeight: FontWeight.w700)),
+          Text(_fmt(value), style: context.textStyles.label.copyWith(
+            color: value != null ? color : context.colors.textHint, fontSize: 15, fontWeight: FontWeight.w700)),
         ]),
       ),
     );
@@ -872,8 +878,8 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
-        child: Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontSize: 11)),
+        decoration: BoxDecoration(color: context.colors.primary.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+        child: Text(label, style: context.textStyles.caption.copyWith(color: context.colors.primary, fontSize: 11)),
       ),
     );
   }
@@ -884,19 +890,24 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: selected ? AppColors.accent.withValues(alpha: 0.05) : AppColors.surface,
+        color: selected ? context.colors.accent.withValues(alpha: 0.05) : context.colors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: selected ? AppColors.accent : AppColors.border),
+        border: Border.all(color: selected ? context.colors.accent : context.colors.border),
       ),
       child: Column(children: [
         Row(children: [
           Checkbox(
             value: selected,
-            onChanged: (v) { FocusScope.of(context).unfocus(); setState(() => _selectedTreatments[treatment] = v ?? false); },
-            activeColor: AppColors.accent,
+            onChanged: (v) {
+              setState(() => _selectedTreatments[treatment] = v ?? false);
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                FocusManager.instance.primaryFocus?.unfocus();
+              });
+            },
+            activeColor: context.colors.accent,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           ),
-          Expanded(child: Text(treatment, style: AppTextStyles.label)),
+          Expanded(child: Text(treatment, style: context.textStyles.label)),
         ]),
         if (selected) ...[
           const SizedBox(height: 8),
@@ -912,17 +923,18 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
 
   Widget _miniField(String label, TextEditingController controller) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: AppTextStyles.caption),
-      const SizedBox(height: 4),
+      Text(label, style: context.textStyles.caption),
+      SizedBox(height: 4),
       TextFormField(
         controller: controller,
         keyboardType: TextInputType.number,
-        style: AppTextStyles.bodyMedium,
+        autofocus: false,
+        style: context.textStyles.bodyMedium,
         decoration: InputDecoration(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.accent)),
+          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.colors.border)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.colors.border)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.colors.accent)),
         ),
       ),
     ]);
@@ -938,7 +950,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
             margin: EdgeInsets.only(right: step < total ? 6 : 0),
             height: 4,
             decoration: BoxDecoration(
-              color: isActive ? AppColors.primary : AppColors.border,
+              color: isActive ? context.colors.primary : context.colors.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),

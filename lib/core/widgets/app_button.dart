@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 /// A styled primary button with gradient background.
 class AppButton extends StatelessWidget {
@@ -30,12 +32,12 @@ class AppButton extends StatelessWidget {
         child: OutlinedButton(
           onPressed: isLoading ? null : onPressed,
           style: OutlinedButton.styleFrom(
-            side: const BorderSide(color: AppColors.primary, width: 1.5),
+            side: BorderSide(color: context.colors.primary, width: 1.5),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(14),
             ),
           ),
-          child: _buildChild(AppColors.primary),
+          child: _buildChild(context, context.colors.primary),
         ),
       );
     }
@@ -46,14 +48,14 @@ class AppButton extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           gradient: onPressed != null && !isLoading
-              ? AppColors.primaryGradient
+              ? context.colors.primaryGradient
               : null,
           color: onPressed == null || isLoading ? Colors.grey.shade300 : null,
           borderRadius: BorderRadius.circular(14),
           boxShadow: onPressed != null && !isLoading
               ? [
                   BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.3),
+                    color: context.colors.primary.withValues(alpha: 0.3),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -69,13 +71,13 @@ class AppButton extends StatelessWidget {
               borderRadius: BorderRadius.circular(14),
             ),
           ),
-          child: _buildChild(Colors.white),
+          child: _buildChild(context, Colors.white),
         ),
       ),
     );
   }
 
-  Widget _buildChild(Color color) {
+  Widget _buildChild(BuildContext context, Color color) {
     if (isLoading) {
       return SizedBox(
         width: 22,
@@ -93,11 +95,11 @@ class AppButton extends StatelessWidget {
         children: [
           Icon(icon, size: 20, color: color),
           const SizedBox(width: 8),
-          Text(label, style: AppTextStyles.buttonLarge.copyWith(color: color)),
+          Text(label, style: context.textStyles.buttonLarge.copyWith(color: color)),
         ],
       );
     }
 
-    return Text(label, style: AppTextStyles.buttonLarge.copyWith(color: color));
+    return Text(label, style: context.textStyles.buttonLarge.copyWith(color: color));
   }
 }

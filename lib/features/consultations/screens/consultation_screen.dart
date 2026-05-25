@@ -18,6 +18,10 @@ import '../../treatments/providers/treatment_provider.dart';
 import '../../treatments/models/session_model.dart';
 import '../models/consultation_model.dart';
 import 'package:pocketbase/pocketbase.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+import '../../../core/services/idle_reminder_service.dart';
+import '../../../core/widgets/voice_dictation_dialog.dart';
+
 
 class ConsultationScreen extends ConsumerStatefulWidget {
   final String patientId;
@@ -47,11 +51,34 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   bool _charged = false;
 
   final _notesCtrl = TextEditingController(); // Chief Complaint / Main Problem
-  final _medicalHistoryCtrl = TextEditingController();
-  final _pastIllnessesCtrl = TextEditingController();
   final _currentMedicationsCtrl = TextEditingController();
-  final _allergiesCtrl = TextEditingController();
-  final _chronicDiseasesCtrl = TextEditingController();
+  
+  // Previous Treatments
+  List<String> _selectedPreviousTreatments = [];
+  
+  // Pain Areas
+  List<String> _selectedPainAreas = [];
+  final _painOtherCtrl = TextEditingController();
+
+  // Past Major Illnesses
+  List<String> _selectedPastIllnesses = [];
+  final _illnessOtherCtrl = TextEditingController();
+
+  // Past Major Surgeries
+  List<String> _selectedPastSurgeries = [];
+  final _surgeryOtherCtrl = TextEditingController();
+
+  // Known Allergies
+  bool _hasDrugAllergy = false;
+  bool _hasEnvAllergy = false;
+  bool _hasFoodAllergy = false;
+  final _drugAllergyCtrl = TextEditingController();
+  final _envAllergyCtrl = TextEditingController();
+  final _foodAllergyCtrl = TextEditingController();
+
+  // Chronic Diseases
+  List<String> _selectedChronicDiseases = [];
+  final _chronicOtherCtrl = TextEditingController();
   
   // Lifestyle dropdowns
   String? _selectedDiet;
@@ -69,8 +96,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   final List<String> _dietOptions = [
     'Standard Indian Non-Veg',
     'Lacto-Vegetarian',
-    'Ovo-Vegetarian',
     'Lacto-Ovo-Vegetarian',
+    'Vegan+',
     'Diabetic Diet',
     'Ketogenic Diet'
   ];
@@ -107,16 +134,22 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     'Moderate Stress',
     'Severe Stress',
     'Extreme / Overwhelming Stress',
-    'Variable'
   ];
   
   // Consent & Gender
   String _pregnancyStatus = 'No';
+  int? _pregnancyMonths;
   String? _patientGender;
   bool _consentGiven = false;
 
   final _bpCtrl = TextEditingController();
   final _pulseCtrl = TextEditingController();
+  final _sugarCtrl = TextEditingController();
+  final _vitD3Ctrl = TextEditingController();
+  final _vitB12Ctrl = TextEditingController();
+  final _thyroidCtrl = TextEditingController();
+  final _cholesterolCtrl = TextEditingController();
+  
   final _chargeCtrl = TextEditingController();
 
   final List<XFile> _photos = [];
@@ -149,6 +182,37 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       // New consultation — try restoring a saved draft
       _loadDraft();
     }
+    // Start idle tracking for this consultation
+    final trackingId = widget.consultationId ?? widget.appointmentId ?? 'consultation_${widget.patientId}';
+    if (!_isViewing) {
+      IdleReminderService.instance.startTracking(
+        id: trackingId,
+        type: 'consultation',
+        displayName: widget.patientName,
+      );
+      _notesCtrl.addListener(_onInteraction);
+      _currentMedicationsCtrl.addListener(_onInteraction);
+      _painOtherCtrl.addListener(_onInteraction);
+      _illnessOtherCtrl.addListener(_onInteraction);
+      _surgeryOtherCtrl.addListener(_onInteraction);
+      _drugAllergyCtrl.addListener(_onInteraction);
+      _envAllergyCtrl.addListener(_onInteraction);
+      _foodAllergyCtrl.addListener(_onInteraction);
+      _chronicOtherCtrl.addListener(_onInteraction);
+      _bpCtrl.addListener(_onInteraction);
+      _pulseCtrl.addListener(_onInteraction);
+      _sugarCtrl.addListener(_onInteraction);
+      _vitD3Ctrl.addListener(_onInteraction);
+      _vitB12Ctrl.addListener(_onInteraction);
+      _thyroidCtrl.addListener(_onInteraction);
+      _cholesterolCtrl.addListener(_onInteraction);
+      _chargeCtrl.addListener(_onInteraction);
+    }
+  }
+
+  void _onInteraction() {
+    final trackingId = widget.consultationId ?? widget.appointmentId ?? 'consultation_${widget.patientId}';
+    IdleReminderService.instance.recordInteraction(trackingId);
   }
 
   /// Load a previously saved draft into the form fields.
@@ -160,13 +224,36 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       final data = jsonDecode(raw) as Map<String, dynamic>;
       setState(() {
         _notesCtrl.text              = data['notes']              ?? '';
-        _medicalHistoryCtrl.text     = data['medicalHistory']     ?? '';
-        _pastIllnessesCtrl.text      = data['pastIllnesses']      ?? '';
         _currentMedicationsCtrl.text = data['currentMedications'] ?? '';
-        _allergiesCtrl.text          = data['allergies']          ?? '';
-        _chronicDiseasesCtrl.text    = data['chronicDiseases']    ?? '';
+        
+        _selectedPreviousTreatments = List<String>.from(data['previousTreatments'] ?? []);
+        _selectedPainAreas          = List<String>.from(data['painAreas'] ?? []);
+        _painOtherCtrl.text         = data['painOther'] ?? '';
+        
+        _selectedPastIllnesses      = List<String>.from(data['pastIllnesses'] ?? []);
+        _illnessOtherCtrl.text      = data['illnessOther'] ?? '';
+        
+        _selectedPastSurgeries      = List<String>.from(data['pastSurgeries'] ?? []);
+        _surgeryOtherCtrl.text      = data['surgeryOther'] ?? '';
+        
+        _hasDrugAllergy             = data['hasDrugAllergy'] ?? false;
+        _hasEnvAllergy              = data['hasEnvAllergy'] ?? false;
+        _hasFoodAllergy             = data['hasFoodAllergy'] ?? false;
+        _drugAllergyCtrl.text       = data['drugAllergy'] ?? '';
+        _envAllergyCtrl.text        = data['envAllergy'] ?? '';
+        _foodAllergyCtrl.text       = data['foodAllergy'] ?? '';
+        
+        _selectedChronicDiseases    = List<String>.from(data['chronicDiseases'] ?? []);
+        _chronicOtherCtrl.text      = data['chronicOther'] ?? '';
+
         _bpCtrl.text                 = data['bp']                 ?? '';
         _pulseCtrl.text              = data['pulse']              ?? '';
+        _sugarCtrl.text              = data['sugar']              ?? '';
+        _vitD3Ctrl.text              = data['vitD3']              ?? '';
+        _vitB12Ctrl.text             = data['vitB12']             ?? '';
+        _thyroidCtrl.text            = data['thyroid']            ?? '';
+        _cholesterolCtrl.text        = data['cholesterol']        ?? '';
+        
         _chargeCtrl.text             = data['charge']             ?? '';
         _selectedDiet          = data['diet']          as String?;
         _selectedSleepDuration = data['sleepDuration'] as String?;
@@ -178,6 +265,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         _tobacco  = data['tobacco']  ?? 'No';
         _drugs    = data['drugs']    ?? 'No';
         _pregnancyStatus = data['pregnancy'] ?? 'No';
+        _pregnancyMonths = data['pregnancyMonths'] as int?;
         _consentGiven    = data['consent']   ?? false;
         _charged         = data['charged']   ?? true;
         _draftLoaded = true;
@@ -193,13 +281,34 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       final prefs = await SharedPreferences.getInstance();
       final data = {
         'notes':              _notesCtrl.text,
-        'medicalHistory':     _medicalHistoryCtrl.text,
-        'pastIllnesses':      _pastIllnessesCtrl.text,
         'currentMedications': _currentMedicationsCtrl.text,
-        'allergies':          _allergiesCtrl.text,
-        'chronicDiseases':    _chronicDiseasesCtrl.text,
+        
+        'previousTreatments': _selectedPreviousTreatments,
+        'painAreas':          _selectedPainAreas,
+        'painOther':          _painOtherCtrl.text,
+        'pastIllnesses':      _selectedPastIllnesses,
+        'illnessOther':       _illnessOtherCtrl.text,
+        'pastSurgeries':      _selectedPastSurgeries,
+        'surgeryOther':       _surgeryOtherCtrl.text,
+        
+        'hasDrugAllergy':     _hasDrugAllergy,
+        'hasEnvAllergy':      _hasEnvAllergy,
+        'hasFoodAllergy':     _hasFoodAllergy,
+        'drugAllergy':        _drugAllergyCtrl.text,
+        'envAllergy':         _envAllergyCtrl.text,
+        'foodAllergy':        _foodAllergyCtrl.text,
+        
+        'chronicDiseases':    _selectedChronicDiseases,
+        'chronicOther':       _chronicOtherCtrl.text,
+        
         'bp':                 _bpCtrl.text,
         'pulse':              _pulseCtrl.text,
+        'sugar':              _sugarCtrl.text,
+        'vitD3':              _vitD3Ctrl.text,
+        'vitB12':             _vitB12Ctrl.text,
+        'thyroid':            _thyroidCtrl.text,
+        'cholesterol':        _cholesterolCtrl.text,
+        
         'charge':             _chargeCtrl.text,
         'diet':          _selectedDiet,
         'sleepDuration': _selectedSleepDuration,
@@ -211,6 +320,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         'tobacco':   _tobacco,
         'drugs':     _drugs,
         'pregnancy': _pregnancyStatus,
+        'pregnancyMonths': _pregnancyMonths,
         'consent':   _consentGiven,
         'charged':   _charged,
       };
@@ -224,6 +334,15 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_draftKey);
     } catch (_) {}
+  }
+
+  List<String> _parseJsonArray(String? val) {
+    if (val == null || val.isEmpty) return [];
+    try {
+      final decoded = jsonDecode(val);
+      if (decoded is List) return decoded.map((e) => e.toString()).toList();
+    } catch (_) {}
+    return [];
   }
 
   Future<void> _fetchPatientGender() async {
@@ -246,18 +365,48 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
 
       // Pre-fill fields for reference (if wanted, though readOnly makes them uneditable)
       _notesCtrl.text = _existingConsultation?.chiefComplaint ?? _existingConsultation?.notes ?? '';
-      _medicalHistoryCtrl.text = _existingConsultation?.medicalHistory ?? '';
-      _pastIllnessesCtrl.text = _existingConsultation?.pastIllnesses ?? '';
       _currentMedicationsCtrl.text = _existingConsultation?.currentMedications ?? '';
-      _allergiesCtrl.text = _existingConsultation?.allergies ?? '';
-      _chronicDiseasesCtrl.text = _existingConsultation?.chronicDiseases ?? '';
+      
+      final c = _existingConsultation;
+      if (c != null) {
+        _selectedPreviousTreatments = _parseJsonArray(c.previousTreatments);
+        _selectedPainAreas          = _parseJsonArray(c.painAreas);
+        _selectedPastIllnesses      = _parseJsonArray(c.pastIllnesses);
+        _selectedPastSurgeries      = _parseJsonArray(c.pastSurgeries);
+        _selectedChronicDiseases    = _parseJsonArray(c.chronicDiseases);
+        
+        // Handle allergies json
+        try {
+           if (c.allergies != null && c.allergies!.isNotEmpty) {
+             final Map<String, dynamic> algs = jsonDecode(c.allergies!);
+             _hasDrugAllergy = algs['hasDrug'] ?? false;
+             _hasEnvAllergy  = algs['hasEnv'] ?? false;
+             _hasFoodAllergy = algs['hasFood'] ?? false;
+             _drugAllergyCtrl.text = algs['drugDesc'] ?? '';
+             _envAllergyCtrl.text  = algs['envDesc'] ?? '';
+             _foodAllergyCtrl.text = algs['foodDesc'] ?? '';
+           }
+        } catch (_) {}
+
+        _sugarCtrl.text      = c.sugarLevel ?? '';
+        _vitD3Ctrl.text      = c.vitD3 ?? '';
+        _vitB12Ctrl.text     = c.vitB12 ?? '';
+        _thyroidCtrl.text    = c.thyroidLevel ?? '';
+        _cholesterolCtrl.text = c.cholesterolLevel ?? '';
+      }
+
       _selectedDiet = _dietOptions.contains(_existingConsultation?.dietPattern) ? _existingConsultation!.dietPattern : null;
       _selectedSleepDuration = _sleepDurationOptions.contains(_existingConsultation?.sleepQuality) ? _existingConsultation!.sleepQuality : null;
       if (_selectedSleepDuration == null && _sleepQualityOptions.contains(_existingConsultation?.sleepQuality)) {
         _selectedSleepQuality = _existingConsultation!.sleepQuality;
       }
       _selectedExercise = _exerciseOptions.contains(_existingConsultation?.exerciseLevel) ? _existingConsultation!.exerciseLevel : null;
-      _selectedStress = _stressOptions.contains(_existingConsultation?.stressLevel) ? _existingConsultation!.stressLevel : null;
+      
+      // Load stress - since we removed 'Variable' we just check if it's in the valid list
+      // Note: we fetch stressLevel via record data since it's removed from model
+      final stressVal = record.getStringValue('stress_level');
+      _selectedStress = _stressOptions.contains(stressVal) ? stressVal : null;
+
       
       if (_existingConsultation?.addictions != null) {
         final addStr = _existingConsultation!.addictions!;
@@ -267,7 +416,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         _drugs = addStr.contains('Recreational Drugs: Yes') ? 'Yes' : 'No';
       }
       
-      _pregnancyStatus = (_existingConsultation?.pregnancyStatus?.isNotEmpty == true && _existingConsultation?.pregnancyStatus != 'No') ? 'Yes' : 'No';
+      final rawPregnancy = _existingConsultation?.pregnancyStatus;
+      _pregnancyStatus = (rawPregnancy?.isNotEmpty == true && rawPregnancy != 'No') ? 'Yes' : 'No';
+      // Parse months from stored value like 'Yes (5 months)'
+      final monthMatch = RegExp(r'Yes \((\d+) months\)').firstMatch(rawPregnancy ?? '');
+      if (monthMatch != null) _pregnancyMonths = int.tryParse(monthMatch.group(1)!);
       _bpCtrl.text = _existingConsultation?.bpLevel ?? '';
       _pulseCtrl.text = _existingConsultation?.pulse?.toString() ?? '';
       _chargeCtrl.text = _existingConsultation?.chargeAmount?.toString() ?? '';
@@ -311,14 +464,49 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       _saveDraft(); // fire-and-forget is fine here
     }
     _notesCtrl.dispose();
-    _medicalHistoryCtrl.dispose();
-    _pastIllnessesCtrl.dispose();
     _currentMedicationsCtrl.dispose();
-    _allergiesCtrl.dispose();
-    _chronicDiseasesCtrl.dispose();
+    
+    if (!_isViewing) {
+      _notesCtrl.removeListener(_onInteraction);
+      _currentMedicationsCtrl.removeListener(_onInteraction);
+      _painOtherCtrl.removeListener(_onInteraction);
+      _illnessOtherCtrl.removeListener(_onInteraction);
+      _surgeryOtherCtrl.removeListener(_onInteraction);
+      _drugAllergyCtrl.removeListener(_onInteraction);
+      _envAllergyCtrl.removeListener(_onInteraction);
+      _foodAllergyCtrl.removeListener(_onInteraction);
+      _chronicOtherCtrl.removeListener(_onInteraction);
+      _bpCtrl.removeListener(_onInteraction);
+      _pulseCtrl.removeListener(_onInteraction);
+      _sugarCtrl.removeListener(_onInteraction);
+      _vitD3Ctrl.removeListener(_onInteraction);
+      _vitB12Ctrl.removeListener(_onInteraction);
+      _thyroidCtrl.removeListener(_onInteraction);
+      _cholesterolCtrl.removeListener(_onInteraction);
+      _chargeCtrl.removeListener(_onInteraction);
+    }
+    _painOtherCtrl.dispose();
+    _illnessOtherCtrl.dispose();
+    _surgeryOtherCtrl.dispose();
+    
+    _drugAllergyCtrl.dispose();
+    _envAllergyCtrl.dispose();
+    _foodAllergyCtrl.dispose();
+    
+    _chronicOtherCtrl.dispose();
+    
     _bpCtrl.dispose();
     _pulseCtrl.dispose();
+    _sugarCtrl.dispose();
+    _vitD3Ctrl.dispose();
+    _vitB12Ctrl.dispose();
+    _thyroidCtrl.dispose();
+    _cholesterolCtrl.dispose();
+    
     _chargeCtrl.dispose();
+    // Stop idle tracking
+    final trackingId = widget.consultationId ?? widget.appointmentId ?? 'consultation_${widget.patientId}';
+    IdleReminderService.instance.stopTracking(trackingId);
     super.dispose();
   }
 
@@ -330,11 +518,14 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         maxHeight: 1200,
         imageQuality: 80,
       );
-      if (img != null && mounted) setState(() => _photos.add(img));
+      if (img != null && mounted) {
+        setState(() => _photos.add(img));
+        _onInteraction();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Camera error: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('Camera error: $e'), backgroundColor: context.colors.error),
         );
       }
     }
@@ -347,11 +538,14 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         maxHeight: 1200,
         imageQuality: 80,
       );
-      if (imgs.isNotEmpty && mounted) setState(() => _photos.addAll(imgs));
+      if (imgs.isNotEmpty && mounted) {
+        setState(() => _photos.addAll(imgs));
+        _onInteraction();
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gallery error: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('Gallery error: $e'), backgroundColor: context.colors.error),
         );
       }
     }
@@ -361,11 +555,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.colors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Row(
           children: [
-            Icon(Icons.stop_circle_rounded, color: AppColors.warning, size: 24),
+            Icon(Icons.stop_circle_rounded, color: context.colors.warning, size: 24),
             const SizedBox(width: 10),
             const Expanded(child: Text('End Treatment?')),
           ],
@@ -380,9 +574,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: context.colors.warning, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('End Treatment'),
+            child: Text('End Treatment'),
           ),
         ],
       ),
@@ -394,14 +588,14 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         await service.endTreatment(widget.consultationId!);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Treatment ended. All pending sessions cancelled.'), backgroundColor: AppColors.success),
+            SnackBar(content: Text('Treatment ended. All pending sessions cancelled.'), backgroundColor: context.colors.success),
           );
           Navigator.pop(context);
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to end treatment: $e'), backgroundColor: AppColors.error),
+            SnackBar(content: Text('Failed to end treatment: $e'), backgroundColor: context.colors.error),
           );
         }
       }
@@ -411,17 +605,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_notesCtrl.text.trim().isEmpty ||
-        _medicalHistoryCtrl.text.trim().isEmpty ||
-        _pastIllnessesCtrl.text.trim().isEmpty ||
-        _currentMedicationsCtrl.text.trim().isEmpty ||
-        _allergiesCtrl.text.trim().isEmpty ||
-        _chronicDiseasesCtrl.text.trim().isEmpty) {
+    if (_notesCtrl.text.trim().isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please fill all consulting conversations fields.'),
-            backgroundColor: AppColors.error,
+          SnackBar(
+            content: Text('Please fill out the Chief Complaint field.'),
+            backgroundColor: context.colors.error,
           ),
         );
       }
@@ -431,9 +620,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     if (!_consentGiven) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text('Consent must be given to proceed.'),
-            backgroundColor: AppColors.error,
+            backgroundColor: context.colors.error,
           ),
         );
       }
@@ -461,27 +650,49 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       }
 
       if (resolvedId.isNotEmpty) {
-        // Always UPDATE the existing consultation — never create a duplicate
+        // Build JSON strings for complex fields
+        final allergiesJson = jsonEncode({
+          'hasDrug': _hasDrugAllergy,
+          'hasEnv': _hasEnvAllergy,
+          'hasFood': _hasFoodAllergy,
+          'drugDesc': _drugAllergyCtrl.text.trim(),
+          'envDesc': _envAllergyCtrl.text.trim(),
+          'foodDesc': _foodAllergyCtrl.text.trim(),
+        });
+
         consultation = await service.updateConsultation(
           consultationId: resolvedId,
           notes: _notesCtrl.text.trim(),
           chiefComplaint: _notesCtrl.text.trim(),
-          medicalHistory: _medicalHistoryCtrl.text.trim(),
-          pastIllnesses: _pastIllnessesCtrl.text.trim(),
           currentMedications: _currentMedicationsCtrl.text.trim(),
-          allergies: _allergiesCtrl.text.trim(),
-          chronicDiseases: _chronicDiseasesCtrl.text.trim(),
+          
+          previousTreatments: jsonEncode(_selectedPreviousTreatments),
+          painAreas: jsonEncode([..._selectedPainAreas, if (_painOtherCtrl.text.isNotEmpty) 'Other: ${_painOtherCtrl.text}']),
+          pastIllnesses: jsonEncode([..._selectedPastIllnesses, if (_illnessOtherCtrl.text.isNotEmpty) 'Other: ${_illnessOtherCtrl.text}']),
+          pastSurgeries: jsonEncode([..._selectedPastSurgeries, if (_surgeryOtherCtrl.text.isNotEmpty) 'Other: ${_surgeryOtherCtrl.text}']),
+          chronicDiseases: jsonEncode([..._selectedChronicDiseases, if (_chronicOtherCtrl.text.isNotEmpty) 'Other: ${_chronicOtherCtrl.text}']),
+          allergies: allergiesJson,
+          
           dietPattern: _selectedDiet ?? '',
           sleepQuality: [if (_selectedSleepDuration != null) _selectedSleepDuration, if (_selectedSleepQuality != null) _selectedSleepQuality].join(' | '),
           exerciseLevel: _selectedExercise ?? '',
           addictions: 'Smoking: $_smoking, Alcohol: $_alcohol, Tobacco Chewing: $_tobacco, Recreational Drugs: $_drugs',
-          stressLevel: _selectedStress ?? '',
-          pregnancyStatus: _pregnancyStatus,
+          
+          pregnancyStatus: _pregnancyStatus == 'Yes' && _pregnancyMonths != null
+              ? 'Yes ($_pregnancyMonths months)'
+              : _pregnancyStatus,
           consentGiven: _consentGiven,
+          
           bpLevel: _bpCtrl.text.trim(),
           pulse: _pulseCtrl.text.isNotEmpty ? int.tryParse(_pulseCtrl.text.trim()) : null,
+          sugarLevel: _sugarCtrl.text.trim(),
+          vitD3: _vitD3Ctrl.text.trim(),
+          vitB12: _vitB12Ctrl.text.trim(),
+          thyroidLevel: _thyroidCtrl.text.trim(),
+          cholesterolLevel: _cholesterolCtrl.text.trim(),
+          
           charged: _charged,
-          chargeAmount: _charged && _chargeCtrl.text.isNotEmpty ? double.tryParse(_chargeCtrl.text.trim()) : null,
+          chargeAmount: _charged && _chargeCtrl.text.isNotEmpty ? int.tryParse(_chargeCtrl.text.trim()) : null,
           newPhotoPaths: _photos.map((p) => p.path).toList(),
         );
       } else {
@@ -507,7 +718,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Consultation recorded!'),
-            backgroundColor: AppColors.success,
+            backgroundColor: context.colors.success,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
@@ -518,7 +729,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('Error: $e'), backgroundColor: context.colors.error),
         );
       }
     } finally {
@@ -560,7 +771,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Session ${session.sessionNumber} rescheduled to ${DateFormat('MMM d, yyyy').format(newDate)} at ${newTime.format(context)}'),
-            backgroundColor: AppColors.success,
+            backgroundColor: context.colors.success,
           ),
         );
         _loadExistingData();
@@ -568,7 +779,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to reschedule: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('Failed to reschedule: $e'), backgroundColor: context.colors.error),
         );
       }
     }
@@ -578,14 +789,14 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.colors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Cancel Session #${session.sessionNumber}?'),
         content: const Text('This will cancel this session and remove it from the appointment schedule.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: context.colors.error, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Cancel Session'),
           ),
@@ -598,14 +809,14 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         await service.cancelSession(session.id);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Session ${session.sessionNumber} cancelled.'), backgroundColor: AppColors.success),
+            SnackBar(content: Text('Session ${session.sessionNumber} cancelled.'), backgroundColor: context.colors.success),
           );
           _loadExistingData();
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.error),
+            SnackBar(content: Text('Failed: $e'), backgroundColor: context.colors.error),
           );
         }
       }
@@ -615,7 +826,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -633,41 +844,41 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: context.colors.surface,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: context.colors.border),
                         ),
-                        child: const Icon(Icons.arrow_back_rounded,
-                            size: 20, color: AppColors.textPrimary),
+                        child: Icon(Icons.arrow_back_rounded,
+                            size: 20, color: context.colors.textPrimary),
                       ),
                     ),
-                    const SizedBox(width: 14),
+                    SizedBox(width: 14),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_isViewing ? 'Consultation Details' : (widget.isViewMode ? 'Edit Consultation' : 'New Consultation'), style: AppTextStyles.h2),
+                          Text(_isViewing ? 'Consultation Details' : (widget.isViewMode ? 'Edit Consultation' : 'New Consultation'), style: context.textStyles.h2),
                           Text(widget.patientName,
-                              style: AppTextStyles.caption),
+                              style: context.textStyles.caption),
                         ],
                       ),
                     ),
                     if (_isViewing && _existingConsultation?.status != ConsultationStatus.completed) ...[ 
                       IconButton(
-                        icon: const Icon(Icons.edit_rounded, color: AppColors.primary),
+                        icon: Icon(Icons.edit_rounded, color: context.colors.primary),
                         onPressed: () => setState(() {
                           _isViewing = false;
                           _isExpanded = true;
                         }),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.stop_circle_rounded, color: AppColors.warning),
+                        icon: Icon(Icons.stop_circle_rounded, color: context.colors.warning),
                         tooltip: 'End Treatment',
                         onPressed: _confirmEndConsultation,
                       ),
                     ] else if (_isViewing) ...[
                       IconButton(
-                        icon: const Icon(Icons.edit_rounded, color: AppColors.primary),
+                        icon: Icon(Icons.edit_rounded, color: context.colors.primary),
                         onPressed: () => setState(() {
                           _isViewing = false;
                           _isExpanded = true;
@@ -682,12 +893,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 24),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: context.colors.surface,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: context.colors.border),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.textHint.withValues(alpha: 0.05),
+                          color: context.colors.textHint.withValues(alpha: 0.05),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         )
@@ -699,32 +910,32 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                         InkWell(
                           onTap: () => setState(() => _isExpanded = !_isExpanded),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                             child: Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.all(8),
+                                  padding: EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: AppColors.primary.withValues(alpha: 0.1),
+                                    color: context.colors.primary.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
-                                  child: const Icon(Icons.assignment_ind_rounded, color: AppColors.primary, size: 20),
+                                  child: Icon(Icons.assignment_ind_rounded, color: context.colors.primary, size: 20),
                                 ),
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text('Consultation Details', style: AppTextStyles.h4),
-                                      const SizedBox(height: 2),
-                                      Text('View full patient form & attached files', style: AppTextStyles.caption),
+                                      Text('Consultation Details', style: context.textStyles.h4),
+                                      SizedBox(height: 2),
+                                      Text('View full patient form & attached files', style: context.textStyles.caption),
                                     ],
                                   ),
                                 ),
                                 AnimatedRotation(
                                   turns: _isExpanded ? 0.5 : 0,
-                                  duration: const Duration(milliseconds: 300),
-                                  child: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textHint),
+                                  duration: Duration(milliseconds: 300),
+                                  child: Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textHint),
                                 ),
                               ],
                             ),
@@ -735,10 +946,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                           curve: Curves.fastOutSlowIn,
                           alignment: Alignment.topCenter,
                           child: !_isExpanded
-                              ? const SizedBox(width: double.infinity, height: 0)
+                              ? SizedBox(width: double.infinity, height: 0)
                               : Container(
-                                  decoration: const BoxDecoration(
-                                    border: Border(top: BorderSide(color: AppColors.border)),
+                                  decoration: BoxDecoration(
+                                    border: Border(top: BorderSide(color: context.colors.border)),
                                   ),
                                   padding: const EdgeInsets.all(20),
                                   child: _buildFormContent(),
@@ -769,37 +980,215 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   }
 
 
+  Widget _buildMultiSelectGrid(List<String> options, List<String> selected, Function(String, bool) onChanged, {TextEditingController? otherCtrl}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((opt) {
+            final isSelected = selected.contains(opt);
+            return FilterChip(
+              label: Text(opt),
+              selected: isSelected,
+              onSelected: _isViewing ? null : (val) {
+                onChanged(opt, val);
+                _onInteraction();
+              },
+              selectedColor: context.colors.primary.withValues(alpha: 0.2),
+              checkmarkColor: context.colors.primary,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            );
+          }).toList(),
+        ),
+        if (otherCtrl != null && selected.contains('Other')) ...[
+          const SizedBox(height: 12),
+          AppTextField(
+            controller: otherCtrl,
+            label: 'Please specify',
+            hint: 'Specify other...',
+            readOnly: _isViewing,
+          )
+        ],
+      ],
+    );
+  }
+
+  Widget _buildAllergyCheckbox(String label, bool value, Function(bool) onChanged, TextEditingController ctrl, String hint) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(label, style: context.textStyles.bodyMedium),
+          value: value,
+          onChanged: _isViewing ? null : (v) {
+            onChanged(v ?? false);
+            _onInteraction();
+          },
+          activeColor: context.colors.primary,
+          controlAffinity: ListTileControlAffinity.leading,
+        ),
+        if (value)
+          Padding(
+            padding: const EdgeInsets.only(left: 48, bottom: 8),
+            child: AppTextField(
+              controller: ctrl,
+              label: 'Details',
+              hint: hint,
+              readOnly: _isViewing,
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildFormContent() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // ─── Conversational / Medical ───
         _buildSectionHeader('Consulting Conversations', Icons.chat_bubble_outline_rounded),
-        
+
+        // Chief Complaint field with mic button
+        if (!_isViewing)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Chief Complaint / Main Problem',
+                  style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => VoiceDictationDialog.show(
+                  context: context,
+                  controller: _notesCtrl,
+                  fieldLabel: 'Chief Complaint',
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: context.colors.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: context.colors.primary.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.mic_rounded, size: 15, color: context.colors.primary),
+                      const SizedBox(width: 5),
+                      Text(
+                        'Dictate',
+                        style: context.textStyles.caption.copyWith(
+                          color: context.colors.primary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        if (!_isViewing) const SizedBox(height: 8),
         AppTextField(
           controller: _notesCtrl,
-          label: 'Chief Complaint / Main Problem',
+          label: _isViewing ? 'Chief Complaint / Main Problem' : '',
           hint: 'As discussed with the client...',
           maxLines: 3,
           readOnly: _isViewing,
         ),
         const SizedBox(height: 16),
-        AppTextField(
-          controller: _medicalHistoryCtrl,
-          label: 'Medical & Treatment History',
-          hint: 'Previous treatments...',
-          maxLines: 2,
-          readOnly: _isViewing,
+        Text('Previous Treatments', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        _buildMultiSelectGrid(
+          ['Acupuncture', 'Acupressure', 'Cupping', 'Physiotherapy', 'Foot Reflexology', 'Allopathy', 'Ayurveda', 'Siddha treatments', 'No previous treatments', 'Other'],
+          _selectedPreviousTreatments,
+          (val, selected) {
+            setState(() {
+              if (val == 'No previous treatments') {
+                _selectedPreviousTreatments.clear();
+                if (selected) _selectedPreviousTreatments.add(val);
+              } else {
+                _selectedPreviousTreatments.remove('No previous treatments');
+                if (selected) _selectedPreviousTreatments.add(val);
+                else _selectedPreviousTreatments.remove(val);
+              }
+            });
+          },
         ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: _pastIllnessesCtrl,
-          label: 'Past Major Illnesses / Surgeries',
-          hint: 'Hospitalizations, surgeries...',
-          maxLines: 2,
-          readOnly: _isViewing,
+        
+        const SizedBox(height: 32),
+        Text('Main Problem Pain Area', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        _buildMultiSelectGrid(
+          ['Head', 'Neck', 'Shoulder', 'Upper Back', 'Lower Back', 'Chest', 'Abdomen', 'Arms', 'Hands', 'Hips', 'Legs', 'Knees', 'Feet', 'Joints', 'Muscle', 'No Pain', 'Other'],
+          _selectedPainAreas,
+          (val, selected) {
+            setState(() {
+              if (val == 'No Pain') {
+                _selectedPainAreas.clear();
+                if (selected) _selectedPainAreas.add(val);
+              } else {
+                _selectedPainAreas.remove('No Pain');
+                if (selected) _selectedPainAreas.add(val);
+                else _selectedPainAreas.remove(val);
+              }
+            });
+          },
         ),
-        const SizedBox(height: 16),
+        
+        if (_selectedPainAreas.contains('Other')) ...[
+          const SizedBox(height: 12),
+          AppTextField(controller: _painOtherCtrl, label: 'Specify Pain Area', readOnly: _isViewing),
+        ],
+
+        const SizedBox(height: 32),
+        Text('Past Major Illnesses', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        _buildMultiSelectGrid(
+          ['Heart diseases', 'Heart attack', 'TB', 'Stroke', 'Chronic kidney disease', 'Hep-B', 'HIV/AIDS', 'Cirrhosis', 'Pancreatitis', 'Cancer', 'No illness', 'Other'],
+          _selectedPastIllnesses,
+          (val, selected) {
+            setState(() {
+              if (selected) {
+                 if (val == 'No illness') _selectedPastIllnesses.clear();
+                 else _selectedPastIllnesses.remove('No illness');
+                 _selectedPastIllnesses.add(val);
+              } else {
+                 _selectedPastIllnesses.remove(val);
+              }
+            });
+          },
+          otherCtrl: _illnessOtherCtrl,
+        ),
+
+        const SizedBox(height: 24),
+        Text('Past Major Surgeries', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        _buildMultiSelectGrid(
+          ['Appendicitis', 'Gall bladder removal', 'Hernia repair', 'Knee/Hip replacement', 'Spinal procedures', 'Hysterectomy', 'C-section', 'Cancer surgeries', 'No surgeries', 'Other'],
+          _selectedPastSurgeries,
+          (val, selected) {
+            setState(() {
+              if (selected) {
+                 if (val == 'No surgeries') _selectedPastSurgeries.clear();
+                 else _selectedPastSurgeries.remove('No surgeries');
+                 _selectedPastSurgeries.add(val);
+              } else {
+                 _selectedPastSurgeries.remove(val);
+              }
+            });
+          },
+          otherCtrl: _surgeryOtherCtrl,
+        ),
+
+        const SizedBox(height: 24),
         AppTextField(
           controller: _currentMedicationsCtrl,
           label: 'Current Medications',
@@ -807,22 +1196,29 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           maxLines: 2,
           readOnly: _isViewing,
         ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: _allergiesCtrl,
-          label: 'Known Allergies / Contraindications',
-          hint: 'Skin reactions, drug allergies...',
-          maxLines: 2,
-          readOnly: _isViewing,
+
+        const SizedBox(height: 24),
+        Text('Known Allergies', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        _buildAllergyCheckbox('Drug / Medication Allergies', _hasDrugAllergy, (v) => setState(() => _hasDrugAllergy = v), _drugAllergyCtrl, 'Which drugs?'),
+        _buildAllergyCheckbox('Environmental Allergies', _hasEnvAllergy, (v) => setState(() => _hasEnvAllergy = v), _envAllergyCtrl, 'Dust, pollen, etc.'),
+        _buildAllergyCheckbox('Food Allergies', _hasFoodAllergy, (v) => setState(() => _hasFoodAllergy = v), _foodAllergyCtrl, 'Dairy, nuts, etc.'),
+
+        const SizedBox(height: 24),
+        Text('Chronic Diseases', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        _buildMultiSelectGrid(
+          ['Arthritis', 'Sinus', 'Asthma', 'Thyroid', 'Diabetes', 'BP', 'Heart problems', 'Other'],
+          _selectedChronicDiseases,
+          (val, selected) {
+            setState(() {
+              if (selected) _selectedChronicDiseases.add(val);
+              else _selectedChronicDiseases.remove(val);
+            });
+          },
+          otherCtrl: _chronicOtherCtrl,
         ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: _chronicDiseasesCtrl,
-          label: 'Chronic Diseases',
-          hint: 'Diabetes, BP, Heart, Thyroid...',
-          maxLines: 2,
-          readOnly: _isViewing,
-        ),
+
         const SizedBox(height: 32),
 
         // ─── Lifestyle & Habits ───
@@ -835,22 +1231,21 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         _buildDropdown('Sleep Quality', 'How well do you sleep?', _selectedSleepQuality, _sleepQualityOptions, (v) => setState(() => _selectedSleepQuality = v)),
         const SizedBox(height: 16),
         _buildDropdown('Exercise / Physical Activity', 'Level of activity', _selectedExercise, _exerciseOptions, (v) => setState(() => _selectedExercise = v)),
+        const SizedBox(height: 16),
+        _buildDropdown('Stress / Mental Health', 'Current stress level', _selectedStress, _stressOptions, (v) => setState(() => _selectedStress = v)),
         const SizedBox(height: 32),
 
-        Text('Substance Use', style: AppTextStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        Text('Substance Use', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         _buildRadioGroup('Smoking', _smoking, (v) => setState(() => _smoking = v!)),
         _buildRadioGroup('Alcohol', _alcohol, (v) => setState(() => _alcohol = v!)),
         _buildRadioGroup('Tobacco Chewing', _tobacco, (v) => setState(() => _tobacco = v!)),
         _buildRadioGroup('Recreational Drugs', _drugs, (v) => setState(() => _drugs = v!)),
-        const SizedBox(height: 16),
-
-        _buildDropdown('Stress / Mental Health Notes', 'Current stress level', _selectedStress, _stressOptions, (v) => setState(() => _selectedStress = v)),
         const SizedBox(height: 32),
 
         // ─── Vitals ───
         _buildSectionHeader('Vitals', Icons.monitor_heart_outlined),
-        const SizedBox(height: 8),
+        SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -862,8 +1257,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                 inputFormatters: [
                   FilteringTextInputFormatter.allow(RegExp(r'[0-9/]')),
                 ],
-                prefixIcon: const Icon(Icons.favorite_outline_rounded,
-                    color: AppColors.error, size: 18),
+                prefixIcon: Icon(Icons.favorite_outline_rounded,
+                    color: context.colors.error, size: 18),
                 readOnly: _isViewing,
                 onChanged: (val) {
                   if (_isViewing) return;
@@ -880,25 +1275,81 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                 },
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Expanded(
               child: AppTextField(
                 controller: _pulseCtrl,
                 label: 'Pulse (bpm)',
                 hint: '72',
                 keyboardType: TextInputType.number,
-                prefixIcon: const Icon(Icons.monitor_heart_outlined,
-                    color: AppColors.warning, size: 18),
+                prefixIcon: Icon(Icons.monitor_heart_outlined,
+                    color: context.colors.warning, size: 18),
                 readOnly: _isViewing,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: AppTextField(
+                controller: _sugarCtrl,
+                label: 'Blood Sugar (mg/dL)',
+                hint: 'Fasting / Random',
+                keyboardType: TextInputType.text,
+                readOnly: _isViewing,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: AppTextField(
+                controller: _cholesterolCtrl,
+                label: 'Cholesterol',
+                hint: 'Total / LDL',
+                keyboardType: TextInputType.text,
+                readOnly: _isViewing,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: AppTextField(
+                controller: _vitD3Ctrl,
+                label: 'Vitamin D3',
+                hint: 'Level',
+                keyboardType: TextInputType.text,
+                readOnly: _isViewing,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: AppTextField(
+                controller: _vitB12Ctrl,
+                label: 'Vitamin B12',
+                hint: 'Level',
+                keyboardType: TextInputType.text,
+                readOnly: _isViewing,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: _thyroidCtrl,
+          label: 'Thyroid (TSH, T3, T4)',
+          hint: 'Results...',
+          keyboardType: TextInputType.text,
+          readOnly: _isViewing,
+        ),
+        const SizedBox(height: 32),
 
         // ─── Report Files & Media ───
         _buildSectionHeader('Report Files', Icons.science_outlined),
-        Text('Upload X-Rays, MRI, Blood Test Reports', style: AppTextStyles.caption),
+        Text('Upload X-Rays, MRI, Blood Test Reports', style: context.textStyles.caption),
         const SizedBox(height: 12),
         Wrap(
           spacing: 12,
@@ -918,31 +1369,64 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         // ─── Consent & Safety ───
         _buildSectionHeader('Consent & Safety', Icons.verified_user_outlined),
         if (_patientGender != 'Male') ...[
-          Text('Pregnancy Status', style: AppTextStyles.label.copyWith(fontSize: 14, fontWeight: FontWeight.bold)),
+          Text('Pregnancy Status', style: context.textStyles.label.copyWith(fontSize: 14, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
-          _buildRadioGroup('Are you currently pregnant?', _pregnancyStatus, (v) => setState(() => _pregnancyStatus = v!)),
+          _buildRadioGroup('Are you currently pregnant?', _pregnancyStatus, (v) {
+            setState(() {
+              _pregnancyStatus = v!;
+              if (v == 'No') _pregnancyMonths = null;
+            });
+          }),
+          if (_pregnancyStatus == 'Yes') ...[
+            const SizedBox(height: 12),
+            Text('How many months?', style: context.textStyles.label.copyWith(fontSize: 13)),
+            const SizedBox(height: 8),
+            Wrap(spacing: 8, runSpacing: 8, children: List.generate(9, (i) {
+              final month = i + 1;
+              final isSelected = _pregnancyMonths == month;
+              return GestureDetector(
+                onTap: _isViewing ? null : () => setState(() => _pregnancyMonths = month),
+                child: Container(
+                  width: 42, height: 42,
+                  decoration: BoxDecoration(
+                    color: isSelected ? context.colors.primary : context.colors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: isSelected ? context.colors.primary : context.colors.border),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text('$month', style: TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w600,
+                    color: isSelected ? Colors.white : context.colors.textPrimary,
+                  )),
+                ),
+              );
+            })),
+          ],
           const SizedBox(height: 16),
         ],
         const SizedBox(height: 16),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: context.colors.surface,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.colors.border),
           ),
           child: Row(
             children: [
               Expanded(
                 child: Text(
                   'Informed consent obtained for touch-based treatments / exercises.',
-                  style: AppTextStyles.bodyMedium,
+                  style: context.textStyles.bodyMedium,
                 ),
               ),
               Switch(
                 value: _consentGiven,
-                onChanged: (_isViewing) ? null : (v) => setState(() => _consentGiven = v),
-                activeColor: AppColors.primary,
+                onChanged: (_isViewing) ? null : (v) {
+                  setState(() => _consentGiven = v);
+                  _onInteraction();
+                },
+                activeColor: context.colors.primary,
               ),
             ],
           ),
@@ -954,9 +1438,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: context.colors.surface,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.colors.border),
           ),
           child: Column(
             children: [
@@ -964,25 +1448,29 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                 children: [
                   Expanded(
                     child: Text('Charge for consultation?',
-                        style: AppTextStyles.bodyMedium),
+                        style: context.textStyles.bodyMedium),
                   ),
                   Switch(
                     value: _charged,
-                    onChanged: (_isViewing) ? null : (v) => setState(() => _charged = v),
-                    activeColor: AppColors.primary,
+                    onChanged: (_isViewing) ? null : (v) {
+                      setState(() => _charged = v);
+                      _onInteraction();
+                    },
+                    activeColor: context.colors.primary,
                   ),
                 ],
               ),
               if (_charged) ...[
-                const SizedBox(height: 10),
+                SizedBox(height: 10),
                 AppTextField(
                   controller: _chargeCtrl,
                   label: 'Amount (₹)',
                   hint: '500',
                   keyboardType: TextInputType.number,
-                  prefixIcon: const Icon(
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  prefixIcon: Icon(
                       Icons.currency_rupee_rounded,
-                      color: AppColors.success,
+                      color: context.colors.success,
                       size: 18),
                   readOnly: _isViewing,
                 ),
@@ -999,9 +1487,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         children: [
-          Icon(icon, size: 20, color: AppColors.primary),
+          Icon(icon, size: 20, color: context.colors.primary),
           const SizedBox(width: 8),
-          Text(title, style: AppTextStyles.h3),
+          Text(title, style: context.textStyles.h3),
         ],
       ),
     );
@@ -1015,8 +1503,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           height: 72,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border),
-            color: AppColors.surface,
+            border: Border.all(color: context.colors.border),
+            color: context.colors.surface,
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(9),
@@ -1024,12 +1512,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                 ? Image.network(
                     _photos[index].path,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.image_rounded, color: AppColors.textHint),
+                    errorBuilder: (_, __, ___) => Icon(Icons.image_rounded, color: context.colors.textHint),
                   )
                 : Image.file(
                     File(_photos[index].path),
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.image_rounded, color: AppColors.textHint),
+                    errorBuilder: (_, __, ___) => Icon(Icons.image_rounded, color: context.colors.textHint),
                   ),
           ),
         ),
@@ -1037,12 +1525,15 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           top: -4,
           right: -4,
           child: GestureDetector(
-            onTap: () => setState(() => _photos.removeAt(index)),
+            onTap: () {
+              setState(() => _photos.removeAt(index));
+              _onInteraction();
+            },
             child: Container(
               width: 22,
               height: 22,
               decoration: BoxDecoration(
-                color: AppColors.error,
+                color: context.colors.error,
                 shape: BoxShape.circle,
               ),
               child:
@@ -1096,15 +1587,15 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         height: 72,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.border),
-          color: AppColors.surface,
+          border: Border.all(color: context.colors.border),
+          color: context.colors.surface,
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(9),
           child: Image.network(
             url,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => const Icon(Icons.image_rounded, color: AppColors.textHint),
+            errorBuilder: (_, __, ___) => Icon(Icons.image_rounded, color: context.colors.textHint),
           ),
         ),
       ),
@@ -1119,13 +1610,13 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         height: 72,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.primary, style: BorderStyle.solid),
-          color: AppColors.primary.withValues(alpha: 0.05),
+          border: Border.all(color: context.colors.primary, style: BorderStyle.solid),
+          color: context.colors.primary.withValues(alpha: 0.05),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 22, color: AppColors.primary),
+            Icon(icon, size: 22, color: context.colors.primary),
             const SizedBox(height: 2),
           ],
         ),
@@ -1137,23 +1628,26 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: AppTextStyles.label),
-        const SizedBox(height: 8),
+        Text(label, style: context.textStyles.label),
+        SizedBox(height: 8),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           decoration: BoxDecoration(
-            color: _isViewing ? AppColors.divider : AppColors.surface,
+            color: _isViewing ? context.colors.divider : context.colors.surface,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
+            border: Border.all(color: context.colors.border),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               isExpanded: true,
               value: value,
-              hint: Text(hint, style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
-              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textSecondary),
-              items: options.map((opt) => DropdownMenuItem(value: opt, child: Text(opt, style: AppTextStyles.bodyMedium))).toList(),
-              onChanged: _isViewing ? null : onChanged,
+              hint: Text(hint, style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint)),
+              icon: Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textSecondary),
+              items: options.map((opt) => DropdownMenuItem(value: opt, child: Text(opt, style: context.textStyles.bodyMedium))).toList(),
+              onChanged: _isViewing ? null : (v) {
+                onChanged(v);
+                _onInteraction();
+              },
             ),
           ),
         ),
@@ -1167,19 +1661,25 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(child: Text(label, style: AppTextStyles.bodyMedium)),
+          Expanded(child: Text(label, style: context.textStyles.bodyMedium)),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               GestureDetector(
-                onTap: _isViewing ? null : () => onChanged('Yes'),
+                onTap: _isViewing ? null : () {
+                  onChanged('Yes');
+                  _onInteraction();
+                },
                 child: Row(
                   children: [
                     Radio<String>(
                       value: 'Yes',
                       groupValue: groupValue,
-                      onChanged: _isViewing ? null : onChanged,
-                      activeColor: AppColors.primary,
+                      onChanged: _isViewing ? null : (v) {
+                        onChanged(v);
+                        _onInteraction();
+                      },
+                      activeColor: context.colors.primary,
                       visualDensity: VisualDensity.compact,
                     ),
                     const Text('Yes'),
@@ -1188,14 +1688,20 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
               ),
               const SizedBox(width: 16),
               GestureDetector(
-                onTap: _isViewing ? null : () => onChanged('No'),
+                onTap: _isViewing ? null : () {
+                  onChanged('No');
+                  _onInteraction();
+                },
                 child: Row(
                   children: [
                     Radio<String>(
                       value: 'No',
                       groupValue: groupValue,
-                      onChanged: _isViewing ? null : onChanged,
-                      activeColor: AppColors.primary,
+                      onChanged: _isViewing ? null : (v) {
+                        onChanged(v);
+                        _onInteraction();
+                      },
+                      activeColor: context.colors.primary,
                       visualDensity: VisualDensity.compact,
                     ),
                     const Text('No'),

@@ -11,8 +11,11 @@ class ConsultationModel {
   
   // Conversational / Medical
   final String? chiefComplaint;
-  final String? medicalHistory;
+  final String? medicalHistory; // Keeping for backward compatibility or display
+  final String? previousTreatments;
+  final String? painAreas;
   final String? pastIllnesses;
+  final String? pastSurgeries;
   final String? currentMedications;
   final String? allergies;
   final String? chronicDiseases;
@@ -28,10 +31,17 @@ class ConsultationModel {
   final String? pregnancyStatus;
   final bool consentGiven;
 
+  // Vitals
   final String? bpLevel;
   final int? pulse;
+  final String? sugarLevel;
+  final String? vitD3;
+  final String? vitB12;
+  final String? thyroidLevel;
+  final String? cholesterolLevel;
+
   final bool charged;
-  final double? chargeAmount;
+  final int? chargeAmount;
   final List<String> photos;
   final DateTime? created;
   final DateTime? updated;
@@ -47,7 +57,10 @@ class ConsultationModel {
     this.status = ConsultationStatus.ongoing,
     this.chiefComplaint,
     this.medicalHistory,
+    this.previousTreatments,
+    this.painAreas,
     this.pastIllnesses,
+    this.pastSurgeries,
     this.currentMedications,
     this.allergies,
     this.chronicDiseases,
@@ -60,6 +73,11 @@ class ConsultationModel {
     this.consentGiven = true,
     this.bpLevel,
     this.pulse,
+    this.sugarLevel,
+    this.vitD3,
+    this.vitB12,
+    this.thyroidLevel,
+    this.cholesterolLevel,
     this.charged = false,
     this.chargeAmount,
     this.photos = const [],
@@ -88,7 +106,10 @@ class ConsultationModel {
       status: _parseStatus(record.getStringValue('status')),
       chiefComplaint: record.getStringValue('chief_complaint'),
       medicalHistory: record.getStringValue('medical_history'),
+      previousTreatments: record.getStringValue('previous_treatments'),
+      painAreas: record.getStringValue('pain_areas'),
       pastIllnesses: record.getStringValue('past_illnesses'),
+      pastSurgeries: record.getStringValue('past_surgeries'),
       currentMedications: record.getStringValue('current_medications'),
       allergies: record.getStringValue('allergies'),
       chronicDiseases: record.getStringValue('chronic_diseases'),
@@ -100,12 +121,16 @@ class ConsultationModel {
       pregnancyStatus: record.getStringValue('pregnancy_status'),
       consentGiven: record.getBoolValue('consent_given'),
       bpLevel: record.getStringValue('bp_level'),
-      // Use raw data so getIntValue's default-0 doesn't mask a truly unset pulse
       pulse: record.data['pulse'] != null && record.data['pulse'] != 0
           ? record.getIntValue('pulse')
           : null,
+      sugarLevel: record.getStringValue('sugar_level'),
+      vitD3: record.getStringValue('vit_d3'),
+      vitB12: record.getStringValue('vit_b12'),
+      thyroidLevel: record.getStringValue('thyroid_level'),
+      cholesterolLevel: record.getStringValue('cholesterol_level'),
       charged: record.getBoolValue('charged'),
-      chargeAmount: record.getDoubleValue('charge_amount'),
+      chargeAmount: record.getIntValue('charge_amount'),
       photos: record.getListValue<String>('photos'),
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
@@ -121,7 +146,10 @@ class ConsultationModel {
       if (notes != null && notes!.isNotEmpty) 'notes': notes,
       if (chiefComplaint != null && chiefComplaint!.isNotEmpty) 'chief_complaint': chiefComplaint,
       if (medicalHistory != null && medicalHistory!.isNotEmpty) 'medical_history': medicalHistory,
+      if (previousTreatments != null && previousTreatments!.isNotEmpty) 'previous_treatments': previousTreatments,
+      if (painAreas != null && painAreas!.isNotEmpty) 'pain_areas': painAreas,
       if (pastIllnesses != null && pastIllnesses!.isNotEmpty) 'past_illnesses': pastIllnesses,
+      if (pastSurgeries != null && pastSurgeries!.isNotEmpty) 'past_surgeries': pastSurgeries,
       if (currentMedications != null && currentMedications!.isNotEmpty) 'current_medications': currentMedications,
       if (allergies != null && allergies!.isNotEmpty) 'allergies': allergies,
       if (chronicDiseases != null && chronicDiseases!.isNotEmpty) 'chronic_diseases': chronicDiseases,
@@ -134,6 +162,11 @@ class ConsultationModel {
       'consent_given': consentGiven,
       if (bpLevel != null && bpLevel!.isNotEmpty) 'bp_level': bpLevel,
       if (pulse != null) 'pulse': pulse,
+      if (sugarLevel != null && sugarLevel!.isNotEmpty) 'sugar_level': sugarLevel,
+      if (vitD3 != null && vitD3!.isNotEmpty) 'vit_d3': vitD3,
+      if (vitB12 != null && vitB12!.isNotEmpty) 'vit_b12': vitB12,
+      if (thyroidLevel != null && thyroidLevel!.isNotEmpty) 'thyroid_level': thyroidLevel,
+      if (cholesterolLevel != null && cholesterolLevel!.isNotEmpty) 'cholesterol_level': cholesterolLevel,
       'charged': charged,
       if (chargeAmount != null) 'charge_amount': chargeAmount,
     };

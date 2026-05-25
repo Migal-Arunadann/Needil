@@ -5,6 +5,8 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class ConsentScreen extends ConsumerStatefulWidget {
   const ConsentScreen({super.key});
@@ -69,7 +71,7 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const Text('Consent recorded'),
-            backgroundColor: AppColors.success,
+            backgroundColor: context.colors.success,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10)),
@@ -80,7 +82,7 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
       setState(() => _isSaving = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.error),
+          SnackBar(content: Text('Error: $e'), backgroundColor: context.colors.error),
         );
       }
     }
@@ -99,12 +101,12 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Withdraw',
-                style: TextStyle(color: AppColors.error)),
+            child: Text('Withdraw',
+                style: TextStyle(color: context.colors.error)),
           ),
         ],
       ),
@@ -145,7 +147,7 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const Text('Consent withdrawn'),
-              backgroundColor: AppColors.warning,
+              backgroundColor: context.colors.warning,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10)),
@@ -161,7 +163,7 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -177,12 +179,12 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: context.colors.surface,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
+                        border: Border.all(color: context.colors.border),
                       ),
-                      child: const Icon(Icons.arrow_back_rounded,
-                          size: 20, color: AppColors.textPrimary),
+                      child: Icon(Icons.arrow_back_rounded,
+                          size: 20, color: context.colors.textPrimary),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -190,31 +192,31 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Data Privacy', style: AppTextStyles.h2),
+                        Text('Data Privacy', style: context.textStyles.h2),
                         Text('DPDP Act 2023 Compliance',
-                            style: AppTextStyles.caption),
+                            style: context.textStyles.caption),
                       ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
 
               if (_isLoading)
-                const Center(
+                Center(
                     child: CircularProgressIndicator(
-                        color: AppColors.primary, strokeWidth: 3))
+                        color: context.colors.primary, strokeWidth: 3))
               else ...[
                 // Status card
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: _hasConsented
-                        ? AppColors.success.withValues(alpha: 0.06)
-                        : AppColors.warning.withValues(alpha: 0.06),
+                        ? context.colors.success.withValues(alpha: 0.06)
+                        : context.colors.warning.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: (_hasConsented ? AppColors.success : AppColors.warning)
+                      color: (_hasConsented ? context.colors.success : context.colors.warning)
                           .withValues(alpha: 0.2),
                     ),
                   ),
@@ -225,8 +227,8 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
                         height: 44,
                         decoration: BoxDecoration(
                           color: (_hasConsented
-                                  ? AppColors.success
-                                  : AppColors.warning)
+                                  ? context.colors.success
+                                  : context.colors.warning)
                               .withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -235,8 +237,8 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
                               ? Icons.verified_user_rounded
                               : Icons.shield_outlined,
                           color: _hasConsented
-                              ? AppColors.success
-                              : AppColors.warning,
+                              ? context.colors.success
+                              : context.colors.warning,
                           size: 24,
                         ),
                       ),
@@ -249,17 +251,17 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
                               _hasConsented
                                   ? 'Consent Active'
                                   : 'No Active Consent',
-                              style: AppTextStyles.label.copyWith(
+                              style: context.textStyles.label.copyWith(
                                 color: _hasConsented
-                                    ? AppColors.success
-                                    : AppColors.warning,
+                                    ? context.colors.success
+                                    : context.colors.warning,
                               ),
                             ),
                             Text(
                               _hasConsented
                                   ? 'Your data is being processed with your consent'
                                   : 'Data processing requires your explicit consent',
-                              style: AppTextStyles.caption,
+                              style: context.textStyles.caption,
                             ),
                           ],
                         ),
@@ -273,9 +275,9 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: context.colors.surface,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: context.colors.border),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -283,11 +285,11 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
                       Row(
                         children: [
                           Icon(Icons.info_outline_rounded,
-                              size: 18, color: AppColors.primary),
+                              size: 18, color: context.colors.primary),
                           const SizedBox(width: 6),
                           Text('Data Processing Notice',
-                              style: AppTextStyles.label.copyWith(
-                                  color: AppColors.primary)),
+                              style: context.textStyles.label.copyWith(
+                                  color: context.colors.primary)),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -306,10 +308,10 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.04),
+                    color: context.colors.primary.withValues(alpha: 0.04),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                        color: AppColors.primary.withValues(alpha: 0.15)),
+                        color: context.colors.primary.withValues(alpha: 0.15)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -317,11 +319,11 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
                       Row(
                         children: [
                           Icon(Icons.gavel_rounded,
-                              size: 18, color: AppColors.primary),
+                              size: 18, color: context.colors.primary),
                           const SizedBox(width: 6),
                           Text('Your Rights Under DPDP Act',
-                              style: AppTextStyles.label.copyWith(
-                                  color: AppColors.primary)),
+                              style: context.textStyles.label.copyWith(
+                                  color: context.colors.primary)),
                         ],
                       ),
                       const SizedBox(height: 10),
@@ -362,20 +364,20 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
 
   Widget _noticeItem(String text) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: EdgeInsets.symmetric(vertical: 3),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(top: 4),
             child: Icon(Icons.check_rounded,
-                size: 14, color: AppColors.success),
+                size: 14, color: context.colors.success),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(text,
-                style: AppTextStyles.caption.copyWith(
-                    fontSize: 12, color: AppColors.textSecondary)),
+                style: context.textStyles.caption.copyWith(
+                    fontSize: 12, color: context.colors.textSecondary)),
           ),
         ],
       ),
@@ -393,7 +395,7 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
             height: 6,
             margin: const EdgeInsets.only(top: 5),
             decoration: BoxDecoration(
-              color: AppColors.primary,
+              color: context.colors.primary,
               shape: BoxShape.circle,
             ),
           ),
@@ -403,9 +405,9 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(title,
-                    style: AppTextStyles.label.copyWith(fontSize: 12)),
+                    style: context.textStyles.label.copyWith(fontSize: 12)),
                 Text(description,
-                    style: AppTextStyles.caption.copyWith(fontSize: 11)),
+                    style: context.textStyles.caption.copyWith(fontSize: 11)),
               ],
             ),
           ),

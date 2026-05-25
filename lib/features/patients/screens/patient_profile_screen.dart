@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/pb_collections.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../appointments/models/appointment_model.dart';
@@ -14,6 +12,8 @@ import '../../treatments/models/treatment_plan_model.dart';
 import '../../treatments/models/session_model.dart';
 import '../../treatments/screens/create_treatment_plan_screen.dart';
 import '../../treatments/providers/treatment_provider.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class PatientProfileScreen extends ConsumerStatefulWidget {
   final PatientModel patient;
@@ -82,18 +82,18 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     final hasOngoing = _ongoingConsultationId != null && _ongoingConsultationId!.isNotEmpty;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: Text('Patient Profile', style: AppTextStyles.h4),
+        title: Text('Patient Profile', style: context.textStyles.h4),
         centerTitle: true,
         bottom: TabBar(
           controller: _tabController,
-          labelColor: AppColors.primary,
-          unselectedLabelColor: AppColors.textHint,
-          indicatorColor: AppColors.primary,
+          labelColor: context.colors.primary,
+          unselectedLabelColor: context.colors.textHint,
+          indicatorColor: context.colors.primary,
           indicatorWeight: 3,
-          labelStyle: AppTextStyles.h4,
-          unselectedLabelStyle: AppTextStyles.bodyMedium,
+          labelStyle: context.textStyles.h4,
+          unselectedLabelStyle: context.textStyles.bodyMedium,
           tabs: const [
             Tab(text: 'Treatments'),
             Tab(text: 'History'),
@@ -147,18 +147,20 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
           );
           if (mounted) {
             await _checkOngoingConsultation();
-            setState(() {});
+            setState(() {
+              _refreshKey++;
+            });
           }
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text('Error: $e', style: const TextStyle(color: Colors.white)),
-              backgroundColor: AppColors.error,
+              backgroundColor: context.colors.error,
             ));
           }
         }
       },
-      backgroundColor: AppColors.primary,
+      backgroundColor: context.colors.primary,
       icon: const Icon(Icons.add_comment_rounded, color: Colors.white),
       label: const Text('Start Consult',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -203,13 +205,13 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       future: _loadConsultations(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-              child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3));
+          return Center(
+              child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 3));
         }
         if (snapshot.hasError) {
           return Center(
             child: Text('Error loading treatments: ${snapshot.error}',
-                style: AppTextStyles.bodyMedium),
+                style: context.textStyles.bodyMedium),
           );
         }
 
@@ -217,7 +219,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         if (entries.isEmpty) {
           return Center(
             child: Text('No consultations yet.',
-                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
           );
         }
 
@@ -254,10 +256,10 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3));
+          return Center(child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 3));
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error loading history: ${snapshot.error}', style: AppTextStyles.bodyMedium));
+          return Center(child: Text('Error loading history: ${snapshot.error}', style: context.textStyles.bodyMedium));
         }
 
         final appointments = snapshot.data!.items;
@@ -266,6 +268,9 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         for (var a in appointments) {
           final status = a.getStringValue('status');
           final checkInStr = a.getStringValue('check_in_time');
+          final detailsFilledStr = a.getStringValue('patient_details_filled_time');
+          final startConsultStr = a.getStringValue('consultation_start_time');
+          final endConsultStr = a.getStringValue('consultation_end_time');
           final checkOutStr = a.getStringValue('check_out_time');
           if (status == 'scheduled' && checkInStr.isEmpty) continue;
 
@@ -282,15 +287,28 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
             title = sessionTypeVal == 'maintenance' ? 'Maintenance Session' : 'Treatment Session';
           }
 
-          String? details1;
-          String? details2;
+          final List<String> timeline = [];
           if (checkInStr.isNotEmpty) {
-            String label = typeVal == 'session' ? 'Session Started' : 'Check-in';
-            details1 = '$label: ${DateFormat("h:mm a").format(DateTime.parse(checkInStr).toLocal())}';
+            timeline.add('Patient Arrived: ${DateFormat("h:mm a").format(DateTime.parse(checkInStr).toLocal())}');
           }
-          if (checkOutStr.isNotEmpty) {
-            String label = typeVal == 'session' ? 'Session Ended' : 'Check-out';
-            details2 = '$label: ${DateFormat("h:mm a").format(DateTime.parse(checkOutStr).toLocal())}';
+          if (detailsFilledStr.isNotEmpty) {
+            timeline.add('Details Filled: ${DateFormat("h:mm a").format(DateTime.parse(detailsFilledStr).toLocal())}');
+          }
+          if (startConsultStr.isNotEmpty) {
+            final label = typeVal == 'session' ? 'Session Started' : 'Consultation Started';
+            timeline.add('$label: ${DateFormat("h:mm a").format(DateTime.parse(startConsultStr).toLocal())}');
+          }
+          if (endConsultStr.isNotEmpty) {
+            final label = typeVal == 'session' ? 'Session Ended' : 'Consultation Ended';
+            timeline.add('$label: ${DateFormat("h:mm a").format(DateTime.parse(endConsultStr).toLocal())}');
+          }
+          final patientLeftStr = a.getStringValue('patient_left_at');
+          if (patientLeftStr.isNotEmpty) {
+            final label = typeVal == 'session' ? 'Session Ended' : 'Patient Left At';
+            timeline.add('$label: ${DateFormat("h:mm a").format(DateTime.parse(patientLeftStr).toLocal())}');
+          } else if (checkOutStr.isNotEmpty && endConsultStr.isEmpty) {
+            final label = typeVal == 'session' ? 'Session Ended' : 'Patient Left At';
+            timeline.add('$label: ${DateFormat("h:mm a").format(DateTime.parse(checkOutStr).toLocal())}');
           }
 
           events.add(_HistoryEvent(
@@ -302,12 +320,11 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                     : Icons.healing_rounded)
                 : Icons.event_available_rounded,
             color: typeVal == 'session' && sessionTypeVal == 'maintenance'
-                ? AppColors.success
-                : AppColors.primary,
+                ? context.colors.success
+                : context.colors.primary,
             title: title,
             subtitle: 'Time: $timeStr | Status: $status',
-            details: details1,
-            details2: details2,
+            detailsTimeline: timeline,
           ));
         }
 
@@ -316,7 +333,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         if (events.isEmpty) {
           return Center(
             child: Text('No history found.',
-                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
           );
         }
 
@@ -341,7 +358,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                         child: Icon(e.icon, size: 20, color: e.color),
                       ),
                       if (index != events.length - 1)
-                        Container(width: 2, height: 40, color: AppColors.border),
+                        Container(width: 2, height: 40, color: context.colors.border),
                     ],
                   ),
                   const SizedBox(width: 16),
@@ -349,23 +366,21 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(DateFormat('MMM d, yyyy').format(e.date), style: AppTextStyles.caption),
+                        Text(DateFormat('MMM d, yyyy').format(e.date), style: context.textStyles.caption),
                         const SizedBox(height: 4),
-                        Text(e.title, style: AppTextStyles.h4),
+                        Text(e.title, style: context.textStyles.h4),
                         const SizedBox(height: 4),
                         Text(e.subtitle,
-                            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
-                        if (e.details != null) ...[
+                            style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
+                        if (e.detailsTimeline.isNotEmpty) ...[
                           const SizedBox(height: 4),
-                          Text(e.details!,
-                              style: AppTextStyles.bodyMedium
-                                  .copyWith(fontSize: 13, color: AppColors.primary)),
-                        ],
-                        if (e.details2 != null) ...[
-                          const SizedBox(height: 2),
-                          Text(e.details2!,
-                              style: AppTextStyles.bodyMedium
-                                  .copyWith(fontSize: 13, color: AppColors.primary)),
+                          for (final d in e.detailsTimeline)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(d,
+                                  style: context.textStyles.bodyMedium
+                                      .copyWith(fontSize: 13, color: context.colors.primary)),
+                            ),
                         ],
                       ],
                     ),
@@ -383,41 +398,129 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
   Widget _buildBasicDetailsTab() {
     final p = widget.patient;
+    final initials = p.fullName.trim().split(' ')
+        .where((s) => s.isNotEmpty)
+        .take(2)
+        .map((s) => s[0].toUpperCase())
+        .join();
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Avatar + Name + Phone ─────────────────────────────────────────
+          Column(
+            children: [
+              Container(
+                width: 88, height: 88,
+                decoration: BoxDecoration(
+                  gradient: context.colors.heroGradient,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: context.colors.primary.withValues(alpha: 0.3),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    initials.isNotEmpty ? initials : '?',
+                    style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(p.fullName, style: context.textStyles.h2.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              const SizedBox(height: 6),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.phone_rounded, size: 14, color: context.colors.textSecondary),
+                  const SizedBox(width: 4),
+                  Text(p.phone, style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // ── Personal Info Card ────────────────────────────────────────────
+          _profileInfoCard(
+            title: 'Personal Info',
+            icon: Icons.person_rounded,
+            children: [
+              if (p.age != null) _profileDetailRow('Age', '${p.age} years'),
+              if (p.dateOfBirth?.isNotEmpty == true) _profileDetailRow('Date of Birth', p.dateOfBirth!),
+              if (p.gender?.isNotEmpty == true) _profileDetailRow('Gender', p.gender!),
+              if (p.occupation?.isNotEmpty == true) _profileDetailRow('Occupation', p.occupation!),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // ── Contact & Location Card ───────────────────────────────────────
+          _profileInfoCard(
+            title: 'Contact & Location',
+            icon: Icons.location_on_rounded,
+            children: [
+              if (p.city?.isNotEmpty == true) _profileDetailRow('City', p.city!),
+              if (p.area?.isNotEmpty == true) _profileDetailRow('Area', p.area!),
+              if (p.email?.isNotEmpty == true) _profileDetailRow('Email', p.email!),
+            ],
+          ),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _profileInfoCard({required String title, required IconData icon, required List<Widget> children}) {
+    final visible = children.where((w) => w is! SizedBox).toList();
+    if (visible.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: context.colors.textPrimary.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Center(
-            child: Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                gradient: AppColors.heroGradient,
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                p.fullName.isNotEmpty ? p.fullName[0].toUpperCase() : '?',
-                style: AppTextStyles.h1.copyWith(color: Colors.white, fontSize: 32),
-              ),
-            ),
+          Row(children: [
+            Icon(icon, size: 16, color: context.colors.primary),
+            const SizedBox(width: 6),
+            Text(title, style: context.textStyles.label.copyWith(color: context.colors.primary, fontSize: 13)),
+          ]),
+          const SizedBox(height: 12),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _profileDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(label, style: context.textStyles.caption.copyWith(color: context.colors.textSecondary, fontSize: 12)),
           ),
-          const SizedBox(height: 16),
-          Center(child: Text(p.fullName, style: AppTextStyles.h3)),
-          Center(
-            child: Text(p.phone,
-                style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+          Expanded(
+            child: Text(value, style: context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600, fontSize: 13)),
           ),
-          const SizedBox(height: 32),
-          _detailRow('Age', p.age?.toString() ?? 'Not provided'),
-          _detailRow('Date of Birth', p.dateOfBirth ?? 'Not provided'),
-          _detailRow('Gender', p.gender ?? 'Not provided'),
-          _detailRow('City', p.city?.isNotEmpty == true ? p.city! : 'Not provided'),
-          _detailRow('Area / Locality', p.area?.isNotEmpty == true ? p.area! : 'Not provided'),
-          _detailRow('Occupation', p.occupation ?? 'Not provided'),
-          _detailRow('Email', p.email ?? 'Not provided'),
-          _detailRow('Allergies/Conditions', p.allergiesConditions ?? 'None known'),
         ],
       ),
     );
@@ -429,9 +532,9 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: AppTextStyles.label.copyWith(color: AppColors.primary)),
+          Text(label, style: context.textStyles.label.copyWith(color: context.colors.primary)),
           const SizedBox(height: 4),
-          Text(value, style: AppTextStyles.bodyMedium),
+          Text(value, style: context.textStyles.bodyMedium),
         ],
       ),
     );
@@ -571,34 +674,44 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   bool get _formFilled =>
       c.chiefComplaint != null && c.chiefComplaint!.trim().isNotEmpty;
 
+  /// Compute display status: if session is 'upcoming' but date is past, treat as 'missed'.
+  SessionStatus _displayStatus(SessionModel s) {
+    if (s.status == SessionStatus.upcoming) {
+      final dt = DateTime.tryParse(s.scheduledDate);
+      if (dt != null) {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final sessionDay = DateTime(dt.year, dt.month, dt.day);
+        if (sessionDay.isBefore(today)) return SessionStatus.missed;
+      }
+    }
+    return s.status;
+  }
+
   bool get _allTreatmentDone =>
       _treatmentPlan != null &&
       _treatmentSessions.isNotEmpty &&
-      _treatmentSessions.every((s) =>
-          s.status == SessionStatus.completed ||
-          s.status == SessionStatus.cancelled ||
-          s.status == SessionStatus.missed);
+      _treatmentSessions.every((s) {
+        final ds = _displayStatus(s);
+        return ds == SessionStatus.completed ||
+            ds == SessionStatus.cancelled ||
+            ds == SessionStatus.missed;
+      });
 
   @override
   Widget build(BuildContext context) {
-    final treatmentDone = _treatmentSessions
-        .where((s) => s.status == SessionStatus.completed)
-        .length;
-    final maintenanceDone = _maintenanceSessions
-        .where((s) => s.status == SessionStatus.completed)
-        .length;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: !_formFilled && _isOngoing
-              ? AppColors.warning.withValues(alpha: 0.5)   // unfilled: orange
+              ? context.colors.warning.withValues(alpha: 0.5)   // unfilled: orange
               : _formFilled && _isOngoing
-                  ? AppColors.primary.withValues(alpha: 0.5) // filled+ongoing: blue
-                  : AppColors.border,                        // completed: grey
+                  ? context.colors.primary.withValues(alpha: 0.5) // filled+ongoing: blue
+                  : context.colors.border,                        // completed: grey
           width: _isOngoing ? 1.5 : 1,
         ),
         boxShadow: [
@@ -643,7 +756,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                                 c.chiefComplaint?.isNotEmpty == true
                                     ? c.chiefComplaint!
                                     : 'General Consultation',
-                                style: AppTextStyles.h4,
+                                style: context.textStyles.h4,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -656,22 +769,29 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                           c.created != null
                               ? DateFormat('MMM d, yyyy · h:mm a').format(c.created!.toLocal())
                               : '—',
-                          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                          style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
                         ),
                         if (_planLoaded) ...[
-                          if (_treatmentPlan != null)
-                            Text(
-                              '$treatmentDone/${_treatmentSessions.length} treatment sessions done'
-                              '${_maintenancePlan != null ? ' · $maintenanceDone/${_maintenanceSessions.length} maintenance' : ''}',
-                              style: AppTextStyles.caption.copyWith(color: AppColors.primary),
-                            ),
+                          if (_treatmentPlan != null) ...[
+                            Builder(builder: (_) {
+                              final activeSessions = _treatmentSessions.where((s) => _displayStatus(s) != SessionStatus.cancelled).toList();
+                              final doneCount = activeSessions.where((s) => _displayStatus(s) == SessionStatus.completed).length;
+                              final mActiveSessions = _maintenanceSessions.where((s) => _displayStatus(s) != SessionStatus.cancelled).toList();
+                              final mDoneCount = mActiveSessions.where((s) => _displayStatus(s) == SessionStatus.completed).length;
+                              return Text(
+                                '$doneCount/${activeSessions.length} treatment sessions done'
+                                '${_maintenancePlan != null ? ' · $mDoneCount/${mActiveSessions.length} maintenance' : ''}',
+                                style: context.textStyles.caption.copyWith(color: context.colors.primary),
+                              );
+                            }),
+                          ],
                         ],
                       ],
                     ),
                   ),
                   Icon(
                     _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                    color: AppColors.textHint,
+                    color: context.colors.textHint,
                   ),
                 ],
               ),
@@ -680,7 +800,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
 
           // ── Expanded body ──
           if (_expanded) ...[
-            const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.border),
+            Divider(height: 1, indent: 16, endIndent: 16, color: context.colors.border),
             _buildConsultationDetails(),
             if (_planLoaded) _buildSessionsSection(),
             const SizedBox(height: 8),
@@ -692,23 +812,23 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
 
   /// Returns the accent color for this card based on its workflow state.
   Color get _cardColor {
-    if (!_isOngoing) return AppColors.success;                        // completed
-    if (!_formFilled) return AppColors.warning;                       // ongoing, form not filled
-    if (_planLoaded && _treatmentPlan != null) return AppColors.info;  // ongoing, plan exists
-    return AppColors.primary;                                         // ongoing, form submitted, no plan
+    if (!_isOngoing) return context.colors.success;                        // completed
+    if (!_formFilled) return context.colors.warning;                       // ongoing, form not filled
+    if (_planLoaded && _treatmentPlan != null) return context.colors.info;  // ongoing, plan exists
+    return context.colors.primary;                                         // ongoing, form submitted, no plan
   }
 
   Widget _statusChip() {
     final String label;
     final Color color;
     if (!_isOngoing) {
-      label = 'Completed'; color = AppColors.success;
+      label = 'Completed'; color = context.colors.success;
     } else if (!_formFilled) {
-      label = 'In Progress'; color = AppColors.warning;
+      label = 'In Progress'; color = context.colors.warning;
     } else if (_planLoaded && _treatmentPlan != null) {
-      label = 'Ongoing'; color = AppColors.info;
+      label = 'Ongoing'; color = context.colors.info;
     } else {
-      label = 'Plan Needed'; color = AppColors.primary;
+      label = 'Plan Needed'; color = context.colors.primary;
     }
     return Container(
       margin: const EdgeInsets.only(left: 8),
@@ -720,7 +840,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       ),
       child: Text(
         label,
-        style: AppTextStyles.caption.copyWith(
+        style: context.textStyles.caption.copyWith(
           color: color,
           fontSize: 10,
           fontWeight: FontWeight.bold,
@@ -735,7 +855,6 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
           // ── Case 1: Form not yet filled → show Resume button ──
           if (_isOngoing && !_formFilled) ...[
             SizedBox(
@@ -759,7 +878,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 icon: const Icon(Icons.play_arrow_rounded, size: 18),
                 label: const Text('Resume Consultation'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.warning,
+                  backgroundColor: context.colors.warning,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -771,72 +890,123 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
             const SizedBox(height: 12),
           ],
 
-          // ── Case 2: Form filled → show consultation details ──
+          // ── Case 2: Form filled ──
           if (_formFilled) ...[
-            _infoRow('Chief Complaint', c.chiefComplaint),
-            _infoRow('Medical History', c.medicalHistory),
-            _infoRow('Past Illnesses', c.pastIllnesses),
-            _infoRow('Current Medications', c.currentMedications),
-            _infoRow('Allergies', c.allergies),
-            _infoRow('Diet Pattern', c.dietPattern),
-            _infoRow('Sleep Quality', c.sleepQuality),
-            _infoRow('Stress Level', c.stressLevel),
-            _infoRow('Notes', c.notes),
-            // View Full Record button (always available once form is filled)
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () async {
-                  await Navigator.pushNamed(
-                    context,
-                    '/consultation',
-                    arguments: {
-                      'patientId': patient.id,
-                      'patientName': patient.fullName,
-                      'doctorId': patient.doctorId,
-                      'consultationId': c.id,
-                      'isViewMode': true,
-                    },
-                  );
-                  widget.onReturn();
-                },
-                icon: const Icon(Icons.description_rounded, size: 16),
-                label: const Text('View Full Record'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.info,
-                  side: BorderSide(color: AppColors.info.withValues(alpha: 0.5)),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            if (_planLoaded && _treatmentPlan == null) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await Navigator.pushNamed(
+                          context,
+                          '/consultation',
+                          arguments: {
+                            'patientId': patient.id,
+                            'patientName': patient.fullName,
+                            'doctorId': patient.doctorId,
+                            'consultationId': c.id,
+                            'isViewMode': true,
+                          },
+                        );
+                        widget.onReturn();
+                      },
+                      icon: const Icon(Icons.description_rounded, size: 14),
+                      label: const Text('View Consult'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: context.colors.info,
+                        side: BorderSide(color: context.colors.info.withValues(alpha: 0.5)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final result = await Navigator.push<dynamic>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CreateTreatmentPlanScreen(
+                              patientId: patient.id,
+                              patientName: patient.fullName,
+                              doctorId: patient.doctorId,
+                              consultationId: c.id,
+                              appointmentId: widget.entry.appointment.id,
+                            ),
+                          ),
+                        );
+                        
+                        if (!mounted) return;
+                        if (result is Map && result['firstSessionToday'] == true) {
+                          final aptService = ref.read(appointmentServiceProvider);
+                          await aptService.markEnded(widget.entry.appointment.id);
+                        }
+
+                        setState(() {
+                          _planLoaded = false;
+                          _treatmentPlan = null;
+                          _treatmentSessions = [];
+                          _maintenancePlan = null;
+                          _maintenanceSessions = [];
+                        });
+                        await _loadPlans();
+                        widget.onReturn();
+                      },
+                      icon: const Icon(Icons.add_chart_rounded, size: 14),
+                      label: const Text('Create Plan'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: context.colors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ] else ...[
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () async {
+                    await Navigator.pushNamed(
+                      context,
+                      '/consultation',
+                      arguments: {
+                        'patientId': patient.id,
+                        'patientName': patient.fullName,
+                        'doctorId': patient.doctorId,
+                        'consultationId': c.id,
+                        'isViewMode': true,
+                      },
+                    );
+                    widget.onReturn();
+                  },
+                  icon: const Icon(Icons.description_rounded, size: 16),
+                  label: const Text('View Consultation'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: context.colors.info,
+                    side: BorderSide(color: context.colors.info.withValues(alpha: 0.5)),
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 12),
+            ],
           ],
         ],
       ),
     );
   }
 
-  Widget _infoRow(String label, String? value) {
-    if (value == null || value.trim().isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 140,
-            child: Text(label,
-                style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary, fontSize: 12)),
-          ),
-          Expanded(
-            child: Text(value, style: AppTextStyles.bodyMedium.copyWith(fontSize: 13)),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildSessionsSection() {
     return Padding(
@@ -844,7 +1014,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: context.colors.border),
           const SizedBox(height: 12),
 
           if (!_planLoaded)
@@ -853,133 +1023,114 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             )
           else ...[
-            // ── Create Treatment Plan button ──
-            // Show when: form is filled (submitted) AND no plan created yet.
-            // Works for both ongoing (just submitted) and completed consultations.
-            if (_formFilled && _treatmentPlan == null)
+            // Treatment sessions
+            if (_treatmentPlan != null) ...[
+              _planHeader(
+                label: 'Treatment Plan',
+                plan: _treatmentPlan!,
+                color: context.colors.primary,
+                icon: Icons.healing_rounded,
+              ),
+              const SizedBox(height: 8),
+              if (_treatmentSessions.isEmpty)
+                Text('No sessions found.',
+                    style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))
+              else
+                ...List.generate(
+                  _treatmentSessions.length,
+                  (index) => _sessionTile(_treatmentSessions[index], index, _treatmentSessions.length),
+                ),
+              const SizedBox(height: 12),
+
+              // End Sessions button (visible when pending sessions exist)
+              if (_treatmentSessions.any((s) {
+                  final ds = _displayStatus(s);
+                  return ds == SessionStatus.upcoming ||
+                      ds == SessionStatus.waiting ||
+                      ds == SessionStatus.inProgress;
+              })) ...[
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _endSessionsForConsultation(),
+                    icon: const Icon(Icons.stop_circle_rounded, size: 16),
+                    label: const Text('End Sessions for this Consultation'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: context.colors.error,
+                      side: BorderSide(color: context.colors.error.withValues(alpha: 0.5)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+            ],
+
+            // Create Maintenance Plan button
+            if (_treatmentPlan != null && _maintenancePlan == null && _allTreatmentDone) ...[
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                  final result = await Navigator.push<dynamic>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CreateTreatmentPlanScreen(
-                        patientId: patient.id,
-                        patientName: patient.fullName,
-                        doctorId: patient.doctorId,
-                        consultationId: c.id,
-                        appointmentId: widget.entry.appointment.id,
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CreateTreatmentPlanScreen(
+                          patientId: patient.id,
+                          patientName: patient.fullName,
+                          doctorId: patient.doctorId,
+                          consultationId: c.id,
+                          appointmentId: widget.entry.appointment.id,
+                          isMaintenance: true,
+                          parentPlanId: _treatmentPlan!.id,
+                          defaultTreatmentType: _treatmentPlan!.treatmentType,
+                          defaultFee: _treatmentPlan!.sessionFee,
+                        ),
                       ),
-                    ),
-                  );
-                  
-                  if (!mounted) return;
-                  if (result is Map && result['firstSessionToday'] == true) {
-                    final aptService = ref.read(appointmentServiceProvider);
-                    await aptService.markEnded(widget.entry.appointment.id);
-                  }
-
-                  setState(() {
-                    _planLoaded = false;
-                    _treatmentPlan = null;
-                    _treatmentSessions = [];
-                    _maintenancePlan = null;
-                    _maintenanceSessions = [];
-                  });
-                  await _loadPlans();
-                  widget.onReturn();
-                },
-                icon: const Icon(Icons.add_chart_rounded, size: 18),
-                label: const Text('Create Treatment Plan'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                  elevation: 0,
+                    );
+                    setState(() {
+                      _planLoaded = false;
+                      _maintenancePlan = null;
+                      _maintenanceSessions = [];
+                    });
+                    await _loadPlans();
+                    widget.onReturn();
+                  },
+                  icon: const Icon(Icons.autorenew_rounded, size: 18),
+                  label: const Text('Create Maintenance Plan'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: context.colors.success,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    textStyle: const TextStyle(fontWeight: FontWeight.bold),
+                    elevation: 0,
+                  ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+            ],
 
-          // ── Treatment sessions ──
-          if (_treatmentPlan != null) ...[
-            _planHeader(
-              label: 'Treatment Sessions',
-              plan: _treatmentPlan!,
-              color: AppColors.primary,
-              icon: Icons.healing_rounded,
-            ),
-            const SizedBox(height: 8),
-            if (_treatmentSessions.isEmpty)
-              Text('No sessions found.',
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary))
-            else
-              ...(_treatmentSessions.map((s) => _sessionTile(s))),
-            const SizedBox(height: 12),
-          ],
-
-          // ── Create Maintenance Plan button ──
-          if (_treatmentPlan != null && _maintenancePlan == null && _allTreatmentDone) ...[
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CreateTreatmentPlanScreen(
-                        patientId: patient.id,
-                        patientName: patient.fullName,
-                        doctorId: patient.doctorId,
-                        consultationId: c.id,
-                        appointmentId: widget.entry.appointment.id,
-                        isMaintenance: true,
-                        parentPlanId: _treatmentPlan!.id,
-                        defaultTreatmentType: _treatmentPlan!.treatmentType,
-                        defaultFee: _treatmentPlan!.sessionFee,
-                      ),
-                    ),
-                  );
-                  setState(() {
-                    _planLoaded = false;
-                    _maintenancePlan = null;
-                    _maintenanceSessions = [];
-                  });
-                  await _loadPlans();
-                  widget.onReturn();
-                },
-                icon: const Icon(Icons.autorenew_rounded, size: 18),
-                label: const Text('Create Maintenance Plan'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.success,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                  elevation: 0,
-                ),
+            // Maintenance sessions
+            if (_maintenancePlan != null) ...[
+              _planHeader(
+                label: 'Maintenance Plan',
+                plan: _maintenancePlan!,
+                color: context.colors.success,
+                icon: Icons.autorenew_rounded,
               ),
-            ),
-            const SizedBox(height: 12),
-          ],
-
-          // ── Maintenance sessions ──
-          if (_maintenancePlan != null) ...[
-            _planHeader(
-              label: 'Maintenance Sessions',
-              plan: _maintenancePlan!,
-              color: AppColors.success,
-              icon: Icons.autorenew_rounded,
-            ),
-            const SizedBox(height: 8),
-            if (_maintenanceSessions.isEmpty)
-              Text('No maintenance sessions found.',
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary))
-            else
-              ...(_maintenanceSessions.map((s) => _sessionTile(s))),
+              const SizedBox(height: 8),
+              if (_maintenanceSessions.isEmpty)
+                Text('No maintenance sessions found.',
+                    style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))
+              else
+                ...List.generate(
+                  _maintenanceSessions.length,
+                  (index) => _sessionTile(_maintenanceSessions[index], index, _maintenanceSessions.length),
+                ),
+            ],
           ],
         ],
       ),
@@ -996,38 +1147,114 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       children: [
         Icon(icon, size: 16, color: color),
         const SizedBox(width: 6),
-        Text(label, style: AppTextStyles.label.copyWith(fontSize: 13, color: color)),
+        Text(label, style: context.textStyles.label.copyWith(fontSize: 13, color: color)),
         const Spacer(),
         Text(
           '${plan.treatmentType} · ₹${plan.sessionFee.toInt()}/session',
-          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+          style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
         ),
       ],
     );
   }
 
-  Widget _sessionTile(SessionModel session) {
+  Widget _sessionTile(SessionModel session, int index, int totalCount) {
     final isMaintenance = session.isMaintenance;
-    final statusColor = _sessionStatusColor(session.status);
-    final accentColor = isMaintenance ? AppColors.success : AppColors.primary;
+    final effectiveStatus = _displayStatus(session);
+    final statusColor = _sessionStatusColor(effectiveStatus);
+    final accentColor = isMaintenance ? context.colors.success : context.colors.primary;
     final date = DateTime.tryParse(session.scheduledDate);
     final dateLabel = date != null ? DateFormat('EEE, MMM d').format(date) : '—';
-    final isEditable = session.status == SessionStatus.upcoming ||
-        session.status == SessionStatus.waiting;
-    final isViewable = session.status == SessionStatus.completed;
+    final isEditable = effectiveStatus == SessionStatus.inProgress;
+    final hasClinicalData = (session.notes?.trim().isNotEmpty == true) ||
+        (session.bpLevel?.trim().isNotEmpty == true) ||
+        (session.pulse != null && session.pulse! > 0) ||
+        (session.photos.isNotEmpty) ||
+        (session.remarks?.trim().isNotEmpty == true);
+    final isViewable = effectiveStatus == SessionStatus.completed ||
+        effectiveStatus == SessionStatus.missed ||
+        hasClinicalData;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final sessionDay = date != null
+        ? DateTime(date.toLocal().year, date.toLocal().month, date.toLocal().day)
+        : null;
+    final isToday = sessionDay != null && sessionDay.isAtSameMomentAs(today);
+
+    // Timeline dots styling
+    final isCompleted = effectiveStatus == SessionStatus.completed;
+    final isInProgress = effectiveStatus == SessionStatus.inProgress;
+    final isMissed = effectiveStatus == SessionStatus.missed;
+    final isCancelled = effectiveStatus == SessionStatus.cancelled;
+
+    Widget dotWidget;
+    if (isCompleted) {
+      dotWidget = Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: context.colors.success,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: const Icon(Icons.check, size: 13, color: Colors.white),
+      );
+    } else if (isInProgress) {
+      dotWidget = Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: context.colors.warning,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '${session.sessionNumber}',
+          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+      );
+    } else if (isMissed || isCancelled) {
+      dotWidget = Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: context.colors.error,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          isCancelled ? Icons.close_rounded : Icons.priority_high_rounded,
+          size: 11,
+          color: Colors.white,
+        ),
+      );
+    } else {
+      // Upcoming
+      dotWidget = Container(
+        width: 24,
+        height: 24,
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          shape: BoxShape.circle,
+          border: Border.all(color: context.colors.border, width: 2),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          '${session.sessionNumber}',
+          style: TextStyle(color: context.colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w700),
+        ),
+      );
+    }
 
     return GestureDetector(
       onTap: () async {
-        // Navigate to session detail for upcoming/waiting (record) or completed (view)
         if (!isEditable && !isViewable) return;
-
         if (isEditable) {
-          // Check date mismatch for upcoming sessions
-          final now = DateTime.now();
-          if (date != null &&
-              (date.toLocal().year != now.year ||
-                  date.toLocal().month != now.month ||
-                  date.toLocal().day != now.day)) {
+          final sessionDay = date != null
+              ? DateTime(date.toLocal().year, date.toLocal().month, date.toLocal().day)
+              : null;
+          final isFutureSession = sessionDay != null && sessionDay.isAfter(today);
+
+          if (isFutureSession) {
             final proceed = await showDialog<bool>(
               context: context,
               builder: (ctx) => AlertDialog(
@@ -1035,10 +1262,10 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 title: const Text('Date Mismatch'),
                 content: const Text('This session is not scheduled for today. Record anyway?'),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel')),
                   TextButton(
                       onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Proceed', style: TextStyle(color: AppColors.primary))),
+                      child: Text('Proceed', style: TextStyle(color: context.colors.primary))),
                 ],
               ),
             );
@@ -1046,7 +1273,10 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
           }
         }
 
-        await Navigator.pushNamed(context, '/sessions/record', arguments: session);
+        await Navigator.pushNamed(context, '/sessions/record', arguments: {
+          'session': session,
+          'patientName': patient.fullName,
+        });
         if (mounted) {
           final planId = isMaintenance ? _maintenancePlan?.id : _treatmentPlan?.id;
           if (planId != null) {
@@ -1056,91 +1286,112 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
             });
             await _loadSessions(planId, isMaintenance: isMaintenance);
           }
+          widget.onReturn();
         }
       },
       onLongPress: () => _showSessionActions(session),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isEditable
-              ? accentColor.withValues(alpha: 0.04)
-              : AppColors.background,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isEditable
-                ? accentColor.withValues(alpha: 0.3)
-                : AppColors.border,
-          ),
-        ),
+      child: IntrinsicHeight(
         child: Row(
           children: [
-            // Session number badge
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.12),
-                shape: BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                '#${session.sessionNumber}',
-                style: AppTextStyles.caption.copyWith(
-                    color: statusColor, fontWeight: FontWeight.bold, fontSize: 11),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
+            // Left vertical line + dot
+            SizedBox(
+              width: 36,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        '${isMaintenance ? "Maintenance" : "Session"} ${session.sessionNumber}',
-                        style: AppTextStyles.label.copyWith(fontSize: 13),
-                      ),
-                      if (isMaintenance) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: AppColors.success.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text('M',
-                              style: AppTextStyles.caption.copyWith(
-                                  color: AppColors.success, fontSize: 9, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ],
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      color: index == 0 ? Colors.transparent : context.colors.border.withValues(alpha: 0.8),
+                    ),
                   ),
-                  Text(dateLabel, style: AppTextStyles.caption),
+                  dotWidget,
+                  Expanded(
+                    child: Container(
+                      width: 2,
+                      color: index == totalCount - 1 ? Colors.transparent : context.colors.border.withValues(alpha: 0.8),
+                    ),
+                  ),
                 ],
               ),
             ),
-            // Status chip
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                _sessionStatusLabel(session.status),
-                style: AppTextStyles.caption.copyWith(color: statusColor, fontSize: 10),
+            const SizedBox(width: 8),
+            // Session details card
+            Expanded(
+              child: Container(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isEditable
+                      ? accentColor.withValues(alpha: 0.03)
+                      : context.colors.background.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isEditable
+                        ? accentColor.withValues(alpha: 0.2)
+                        : context.colors.border.withValues(alpha: 0.5),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                '${isMaintenance ? "Maintenance" : "Session"} ${session.sessionNumber}',
+                                style: context.textStyles.label.copyWith(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (isMaintenance) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: context.colors.success.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text('M',
+                                      style: context.textStyles.caption.copyWith(
+                                          color: context.colors.success, fontSize: 9, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(dateLabel, style: context.textStyles.caption.copyWith(fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                    // Status chip
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: statusColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: statusColor.withValues(alpha: 0.15)),
+                      ),
+                      child: Text(
+                        _sessionStatusLabel(session, effectiveStatus),
+                        style: context.textStyles.caption.copyWith(
+                          color: statusColor,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    if (isEditable) ...[
+                      const SizedBox(width: 4),
+                      Icon(Icons.chevron_right_rounded, color: context.colors.textHint, size: 16),
+                      Icon(Icons.more_vert_rounded, color: context.colors.textHint.withValues(alpha: 0.4), size: 13),
+                    ],
+                  ],
+                ),
               ),
             ),
-            if (isEditable) ...[
-              const SizedBox(width: 4),
-              const Icon(Icons.chevron_right_rounded, color: AppColors.textHint, size: 18),
-            ],
-            // Long-press hint icon for upcoming sessions
-            if (isEditable) ...[
-              const SizedBox(width: 2),
-              Icon(Icons.more_vert_rounded, color: AppColors.textHint.withValues(alpha: 0.5), size: 14),
-            ],
           ],
         ),
       ),
@@ -1150,15 +1401,16 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   /// Show action popup menu for session management.
   void _showSessionActions(SessionModel session) {
     final canAct = session.status == SessionStatus.upcoming ||
-        session.status == SessionStatus.waiting;
+        session.status == SessionStatus.waiting ||
+        session.status == SessionStatus.inProgress;
     if (!canAct) return;
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        decoration: const BoxDecoration(
-          color: AppColors.surface,
+        decoration: BoxDecoration(
+          color: context.colors.surface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
@@ -1170,7 +1422,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               child: Container(
                 width: 36, height: 4,
                 decoration: BoxDecoration(
-                  color: AppColors.border,
+                  color: context.colors.border,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -1178,17 +1430,17 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
             const SizedBox(height: 16),
             Text(
               '${session.isMaintenance ? "Maintenance" : "Session"} ${session.sessionNumber}',
-              style: AppTextStyles.h4,
+              style: context.textStyles.h4,
             ),
             Text(
               'Scheduled: ${session.scheduledDate}${session.scheduledTime != null ? " at ${session.scheduledTime}" : ""}',
-              style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+              style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
             ),
             const SizedBox(height: 20),
             _actionTile(
               ctx,
               icon: Icons.calendar_month_rounded,
-              color: AppColors.primary,
+              color: context.colors.primary,
               label: 'Reschedule Session',
               onTap: () async {
                 Navigator.pop(ctx);
@@ -1198,7 +1450,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
             _actionTile(
               ctx,
               icon: Icons.warning_amber_rounded,
-              color: AppColors.warning,
+              color: context.colors.warning,
               label: 'Mark as Missed',
               onTap: () async {
                 Navigator.pop(ctx);
@@ -1208,7 +1460,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
             _actionTile(
               ctx,
               icon: Icons.cancel_outlined,
-              color: AppColors.error,
+              color: context.colors.error,
               label: 'Cancel Session',
               onTap: () async {
                 Navigator.pop(ctx);
@@ -1234,9 +1486,122 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
         decoration: BoxDecoration(color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
         child: Icon(icon, color: color, size: 20),
       ),
-      title: Text(label, style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+      title: Text(label, style: context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
       onTap: onTap,
     );
+  }
+  Future<void> _startSession(SessionModel session) async {
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final aptService = ref.read(appointmentServiceProvider);
+      final treatmentService = ref.read(treatmentServiceProvider);
+      
+      String datePart = session.scheduledDate;
+      try {
+        final dt = DateTime.parse(session.scheduledDate);
+        datePart = DateFormat('yyyy-MM-dd').format(dt);
+      } catch (_) {}
+
+      final apts = await pb.collection(PBCollections.appointments).getList(
+        filter: 'type = "session" && patient = "${patient.id}" && date >= "$datePart 00:00:00.000Z" && date <= "$datePart 23:59:59.999Z"',
+      );
+      
+      if (apts.items.isNotEmpty) {
+        final aptId = apts.items.first.id;
+        await aptService.startSession(aptId);
+      }
+      
+      await treatmentService.startSessionRecord(session.id);
+      
+      if (mounted) {
+        await Navigator.pushNamed(context, '/sessions/record', arguments: {
+          'session': session,
+          'patientName': patient.fullName,
+        });
+        setState(() {
+          _planLoaded = false;
+          if (session.isMaintenance) {
+            _maintenanceSessions = [];
+          } else {
+            _treatmentSessions = [];
+          }
+        });
+        await _loadPlans();
+        widget.onReturn();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error starting session: $e')));
+      }
+    }
+  }
+
+  /// Force-end all remaining upcoming sessions for this consultation.
+  Future<void> _endSessionsForConsultation() async {
+    final allSessions = [..._treatmentSessions, ..._maintenanceSessions];
+    final pendingCount = allSessions.where((s) =>
+        s.status == SessionStatus.upcoming ||
+        s.status == SessionStatus.waiting ||
+        s.status == SessionStatus.inProgress).length;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.colors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('End All Sessions?'),
+        content: Text(
+          'This will cancel $pendingCount remaining session(s) and remove them from the schedule.\n\n'
+          'You can create maintenance sessions afterwards.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.colors.error,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('End Sessions'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true || !mounted) return;
+
+    try {
+      final service = ref.read(treatmentServiceProvider);
+      await service.endConsultation(c.id);
+      try {
+        ref.read(appointmentListProvider.notifier).loadAppointments();
+      } catch (_) {}
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('$pendingCount session(s) cancelled and removed from schedule.'),
+          backgroundColor: context.colors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+        // Refresh sessions
+        setState(() {
+          _planLoaded = false;
+          _treatmentSessions = [];
+          _maintenanceSessions = [];
+        });
+        await _loadPlans();
+        widget.onReturn();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed: $e'),
+          backgroundColor: context.colors.error,
+        ));
+      }
+    }
   }
 
   Future<void> _rescheduleSession(SessionModel session) async {
@@ -1269,7 +1634,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Session ${session.sessionNumber} rescheduled.'),
-          backgroundColor: AppColors.success,
+          backgroundColor: context.colors.success,
         ));
         final isMaintenance = session.isMaintenance;
         final planId = isMaintenance ? _maintenancePlan?.id : _treatmentPlan?.id;
@@ -1278,7 +1643,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed: $e'), backgroundColor: AppColors.error,
+          content: Text('Failed: $e'), backgroundColor: context.colors.error,
         ));
       }
     }
@@ -1289,8 +1654,8 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       final service = ref.read(treatmentServiceProvider);
       await service.markSessionMissed(session.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Session marked as missed.'), backgroundColor: AppColors.warning,
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Session marked as missed.'), backgroundColor: context.colors.warning,
         ));
         final isMaintenance = session.isMaintenance;
         final planId = isMaintenance ? _maintenancePlan?.id : _treatmentPlan?.id;
@@ -1299,7 +1664,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed: $e'), backgroundColor: AppColors.error,
+          content: Text('Failed: $e'), backgroundColor: context.colors.error,
         ));
       }
     }
@@ -1309,14 +1674,14 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.colors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('Cancel Session #${session.sessionNumber}?'),
         content: const Text('This will cancel this session and remove it from the schedule.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(backgroundColor: context.colors.error, foregroundColor: Colors.white),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Cancel Session'),
           ),
@@ -1329,8 +1694,8 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       final service = ref.read(treatmentServiceProvider);
       await service.cancelSession(session.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Session cancelled.'), backgroundColor: AppColors.success,
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Session cancelled.'), backgroundColor: context.colors.success,
         ));
         final isMaintenance = session.isMaintenance;
         final planId = isMaintenance ? _maintenancePlan?.id : _treatmentPlan?.id;
@@ -1339,7 +1704,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed: $e'), backgroundColor: AppColors.error,
+          content: Text('Failed: $e'), backgroundColor: context.colors.error,
         ));
       }
     }
@@ -1347,22 +1712,37 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
 
   Color _sessionStatusColor(SessionStatus s) {
     switch (s) {
-      case SessionStatus.upcoming:  return AppColors.info;
-      case SessionStatus.waiting:   return AppColors.warning;
-      case SessionStatus.completed: return AppColors.success;
-      case SessionStatus.missed:    return AppColors.warning;
-      case SessionStatus.cancelled: return AppColors.error;
+      case SessionStatus.upcoming:    return context.colors.info;
+      case SessionStatus.waiting:     return context.colors.warning;
+      case SessionStatus.inProgress:  return const Color(0xFFF59E0B);
+      case SessionStatus.completed:   return context.colors.success;
+      case SessionStatus.missed:      return context.colors.warning;
+      case SessionStatus.cancelled:   return context.colors.error;
     }
   }
 
-  String _sessionStatusLabel(SessionStatus s) {
-    switch (s) {
-      case SessionStatus.upcoming:  return 'Upcoming';
-      case SessionStatus.waiting:   return 'Waiting';
-      case SessionStatus.completed: return 'Done';
-      case SessionStatus.missed:    return 'Missed';
-      case SessionStatus.cancelled: return 'Cancelled';
+  String _sessionStatusLabel(SessionModel session, SessionStatus s) {
+    // 'waiting' = Patient Arrived button was clicked
+    if (s == SessionStatus.waiting) return 'Patient Waiting';
+    if (s == SessionStatus.inProgress) return 'Ongoing';
+    if (s == SessionStatus.completed) return 'Completed';
+    if (s == SessionStatus.missed) return 'Missed';
+    if (s == SessionStatus.cancelled) return 'Cancelled';
+
+    // upcoming — check if today or future
+    if (s == SessionStatus.upcoming) {
+      final dt = DateTime.tryParse(session.scheduledDate);
+      if (dt != null) {
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        final sessionDay = DateTime(dt.year, dt.month, dt.day);
+        if (sessionDay.isAtSameMomentAs(today)) {
+          return 'Waiting to Start';
+        }
+      }
+      return 'Upcoming';
     }
+    return 'Upcoming';
   }
 }
 
@@ -1375,8 +1755,7 @@ class _HistoryEvent {
   final Color color;
   final String title;
   final String subtitle;
-  final String? details;
-  final String? details2;
+  final List<String> detailsTimeline;
 
   _HistoryEvent({
     required this.type,
@@ -1385,7 +1764,6 @@ class _HistoryEvent {
     required this.color,
     required this.title,
     required this.subtitle,
-    this.details,
-    this.details2,
+    this.detailsTimeline = const [],
   });
 }

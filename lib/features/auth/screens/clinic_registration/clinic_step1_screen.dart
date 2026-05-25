@@ -9,6 +9,8 @@ import '../../../../core/utils/validators.dart';
 import '../../providers/auth_provider.dart';
 
 import 'dart:async';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 /// Clinic Registration — Step 1: Clinic details (name, username, password).
 class ClinicStep1Screen extends ConsumerStatefulWidget {
@@ -87,7 +89,7 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: AppColors.surface,
+        backgroundColor: context.colors.surface,
         title: const Text('Change Email?'),
         content: const Text(
           'This will remove the current email from our system and take you back to start. You can then register with a different email.',
@@ -95,12 +97,12 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep This Email'),
+            child: Text('Keep This Email'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Yes, Change Email',
-                style: TextStyle(color: AppColors.error)),
+            child: Text('Yes, Change Email',
+                style: TextStyle(color: context.colors.error)),
           ),
         ],
       ),
@@ -139,16 +141,16 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded,
-              color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_rounded,
+              color: context.colors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('Clinic Registration', style: AppTextStyles.h4),
+        title: Text('Clinic Registration', style: context.textStyles.h4),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -162,24 +164,24 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
                 const SizedBox(height: 8),
               _buildStepIndicator(1, 5),
                 const SizedBox(height: 24),
-                Text('Clinic Details', style: AppTextStyles.h2),
+                Text('Clinic Details', style: context.textStyles.h2),
                 const SizedBox(height: 8),
                 Text(
                   'Enter your clinic or hospital information',
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: AppColors.textSecondary),
+                  style: context.textStyles.bodyMedium
+                      .copyWith(color: context.colors.textSecondary),
                 ),
-                const SizedBox(height: 32),
+                SizedBox(height: 32),
                 AppTextField(
                   label: 'Clinic / Hospital Name',
                   hint: 'e.g. City Health Clinic',
                   controller: _nameController,
                   validator: (v) => Validators.required(v, 'Clinic name'),
-                  prefixIcon: const Icon(Icons.business_rounded,
-                      color: AppColors.textHint),
+                  prefixIcon: Icon(Icons.business_rounded,
+                      color: context.colors.textHint),
                   textInputAction: TextInputAction.next,
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 Stack(
                   alignment: Alignment.centerRight,
                   children: [
@@ -192,22 +194,22 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
                         if (_usernameError != null) return _usernameError;
                         return Validators.minLength(v, 3, 'Username');
                       },
-                      prefixIcon: const Icon(Icons.person_outline_rounded,
-                          color: AppColors.textHint),
+                      prefixIcon: Icon(Icons.person_outline_rounded,
+                          color: context.colors.textHint),
                       textInputAction: TextInputAction.next,
                     ),
                     if (_isCheckingUsername)
-                      const Positioned(
+                      Positioned(
                         right: 16,
                         top: 40,
                         child: SizedBox(
                           width: 16, height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
                         ),
                       ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 // Show the email they used to verify
                 Consumer(builder: (context, ref, _) {
                   final auth = ref.watch(authProvider);
@@ -220,26 +222,26 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
                         hint: 'Verified',
                         controller: TextEditingController(text: _lockedEmail ?? 'Verified Email'),
                         enabled: false,
-                        prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textHint),
+                        prefixIcon: Icon(Icons.email_outlined, color: context.colors.textHint),
                       ),
-                      const SizedBox(height: 6),
+                      SizedBox(height: 6),
                       // Change email — deletes shell record and restarts
                       Align(
                         alignment: Alignment.centerRight,
                         child: _isChangingEmail
-                            ? const SizedBox(
+                            ? SizedBox(
                                 width: 16, height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                                child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
                               )
                             : GestureDetector(
                                 onTap: () => _changeEmail(ref),
                                 child: Text(
                                   'Use a different email?',
-                                  style: AppTextStyles.caption.copyWith(
-                                    color: AppColors.primary,
+                                  style: context.textStyles.caption.copyWith(
+                                    color: context.colors.primary,
                                     fontWeight: FontWeight.w600,
                                     decoration: TextDecoration.underline,
-                                    decorationColor: AppColors.primary,
+                                    decorationColor: context.colors.primary,
                                   ),
                                 ),
                               ),
@@ -247,28 +249,28 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
                     ],
                   );
                 }),
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 AppTextField(
                   label: 'Set Password',
                   hint: 'Min. 8 characters',
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   validator: Validators.password,
-                  prefixIcon: const Icon(Icons.lock_outline_rounded,
-                      color: AppColors.textHint),
+                  prefixIcon: Icon(Icons.lock_outline_rounded,
+                      color: context.colors.textHint),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscurePassword
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
-                      color: AppColors.textHint,
+                      color: context.colors.textHint,
                     ),
                     onPressed: () =>
                         setState(() => _obscurePassword = !_obscurePassword),
                   ),
                   textInputAction: TextInputAction.next,
                 ),
-                const SizedBox(height: 20),
+                SizedBox(height: 20),
                 AppTextField(
                   label: 'Confirm Password',
                   hint: 'Re-enter your password',
@@ -276,14 +278,14 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
                   obscureText: _obscureConfirm,
                   validator: (v) => Validators.confirmPassword(
                       v, _passwordController.text),
-                  prefixIcon: const Icon(Icons.lock_outline_rounded,
-                      color: AppColors.textHint),
+                  prefixIcon: Icon(Icons.lock_outline_rounded,
+                      color: context.colors.textHint),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscureConfirm
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
-                      color: AppColors.textHint,
+                      color: context.colors.textHint,
                     ),
                     onPressed: () =>
                         setState(() => _obscureConfirm = !_obscureConfirm),
@@ -293,11 +295,11 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
                 const SizedBox(height: 36),
 
                 // ── Clinic Location ──────────────────────────────────
-                Text('Clinic Location', style: AppTextStyles.h3),
+                Text('Clinic Location', style: context.textStyles.h3),
                 const SizedBox(height: 6),
                 Text(
                   'Required for patient records and scheduling',
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                  style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
                 ),
                 const SizedBox(height: 16),
                 LocationFields(
@@ -329,7 +331,7 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
             margin: EdgeInsets.only(right: step < total ? 8 : 0),
             height: 4,
             decoration: BoxDecoration(
-              color: isActive ? AppColors.primary : AppColors.border,
+              color: isActive ? context.colors.primary : context.colors.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),

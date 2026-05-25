@@ -1,5 +1,6 @@
 import 'package:pocketbase/pocketbase.dart';
 import '../constants/pb_collections.dart';
+import '../utils/time_utils.dart';
 import '../../features/appointments/models/appointment_model.dart';
 import '../../features/patients/models/patient_model.dart';
 import '../../features/consultations/models/consultation_model.dart';
@@ -8,6 +9,88 @@ class AppointmentService {
   final PocketBase pb;
 
   AppointmentService(this.pb);
+
+  Future<RecordModel?> _findSessionRecordForAppointment({
+    required String patientId,
+    required String date,
+    required String time,
+    required String doctorId,
+  }) async {
+    final timeCandidates = TimeUtils.generateTimeCandidates(time);
+    final timeFilter = timeCandidates.isNotEmpty
+        ? timeCandidates.map((t) => 'scheduled_time = "$t"').join(' || ')
+        : 'scheduled_time = "$time"';
+
+    // Priority 1: Exact match (date + time candidates) with active status (upcoming, waiting, in_progress)
+    try {
+      final res = await pb.collection(PBCollections.sessions).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" '
+            '&& scheduled_date >= "$date 00:00:00.000Z" && scheduled_date <= "$date 23:59:59.999Z" '
+            '&& ($timeFilter) && (status = "upcoming" || status = "waiting" || status = "in_progress")',
+        perPage: 1,
+        sort: 'session_number',
+      );
+      if (res.items.isNotEmpty) return res.items.first;
+    } catch (_) {}
+
+    // Priority 2: Exact match (date + time candidates) with any status
+    try {
+      final res = await pb.collection(PBCollections.sessions).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" '
+            '&& scheduled_date >= "$date 00:00:00.000Z" && scheduled_date <= "$date 23:59:59.999Z" '
+            '&& ($timeFilter)',
+        perPage: 1,
+        sort: 'session_number',
+      );
+      if (res.items.isNotEmpty) return res.items.first;
+    } catch (_) {}
+
+    // Priority 3: Date-only match with active status (upcoming, waiting, in_progress)
+    try {
+      final res = await pb.collection(PBCollections.sessions).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" '
+            '&& scheduled_date >= "$date 00:00:00.000Z" && scheduled_date <= "$date 23:59:59.999Z" '
+            '&& (status = "upcoming" || status = "waiting" || status = "in_progress")',
+        perPage: 1,
+        sort: 'session_number',
+      );
+      if (res.items.isNotEmpty) return res.items.first;
+    } catch (_) {}
+
+    // Priority 4: Date-only match with any status
+    try {
+      final res = await pb.collection(PBCollections.sessions).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" '
+            '&& scheduled_date >= "$date 00:00:00.000Z" && scheduled_date <= "$date 23:59:59.999Z"',
+        perPage: 1,
+        sort: 'session_number',
+      );
+      if (res.items.isNotEmpty) return res.items.first;
+    } catch (_) {}
+
+    // Priority 5: Patient-doctor match with active status (upcoming, waiting, in_progress), sorted by date, session number
+    try {
+      final res = await pb.collection(PBCollections.sessions).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId" '
+            '&& (status = "upcoming" || status = "waiting" || status = "in_progress")',
+        perPage: 1,
+        sort: 'scheduled_date,session_number',
+      );
+      if (res.items.isNotEmpty) return res.items.first;
+    } catch (_) {}
+
+    // Priority 6: Patient-doctor match with any status, sorted by date, session number
+    try {
+      final res = await pb.collection(PBCollections.sessions).getList(
+        filter: 'patient = "$patientId" && doctor = "$doctorId"',
+        perPage: 1,
+        sort: 'scheduled_date,session_number',
+      );
+      if (res.items.isNotEmpty) return res.items.first;
+    } catch (_) {}
+
+    return null;
+  }
 
   /// Fetch today's appointments for a doctor.
   Future<List<AppointmentModel>> getDoctorAppointments(
@@ -180,14 +263,39 @@ class AppointmentService {
   /// Search patients by name or phone.
   Future<List<PatientModel>> searchPatients(
       String query, String doctorId, {String? clinicId}) async {
-    final filter = clinicId != null && clinicId.isNotEmpty
-        ? '(full_name ~ "$query" || phone ~ "$query") && clinic = "$clinicId"'
-        : '(full_name ~ "$query" || phone ~ "$query") && doctor = "$doctorId"';
-    final result = await pb.collection(PBCollections.patients).getList(
-      filter: filter,
-      perPage: 20,
-    );
-    return result.items.map((r) => PatientModel.fromRecord(r)).toList();
+    if (clinicId != null && clinicId.isNotEmpty) {
+      final filter = '(full_name ~ "$query" || phone ~ "$query") && clinic = "$clinicId"';
+      final result = await pb.collection(PBCollections.patients).getList(
+        filter: filter,
+        perPage: 20,
+      );
+      return result.items.map((r) => PatientModel.fromRecord(r)).toList();
+    } else {
+      Set<String> patientIds = {};
+      try {
+        final appointments = await pb.collection(PBCollections.appointments).getFullList(
+          filter: 'doctor = "$doctorId"',
+          fields: 'patient',
+        );
+        patientIds = appointments
+            .map((a) => a.getStringValue('patient'))
+            .where((id) => id.isNotEmpty)
+            .toSet();
+      } catch (_) {}
+
+      String patientFilter = 'doctor = "$doctorId"';
+      if (patientIds.isNotEmpty) {
+        final idsFilter = patientIds.map((id) => 'id = "$id"').join(' || ');
+        patientFilter = '($patientFilter) || ($idsFilter)';
+      }
+      final filter = '(full_name ~ "$query" || phone ~ "$query") && ($patientFilter)';
+
+      final result = await pb.collection(PBCollections.patients).getList(
+        filter: filter,
+        perPage: 20,
+      );
+      return result.items.map((r) => PatientModel.fromRecord(r)).toList();
+    }
   }
 
   /// Get all doctors in a clinic (for doctor selection dropdown).
@@ -287,7 +395,26 @@ class AppointmentService {
         'check_in_time': DateTime.now().toUtc().toIso8601String(),
       },
     );
-    return AppointmentModel.fromRecord(record);
+    final appt = AppointmentModel.fromRecord(record);
+    if (appt.patientId != null) {
+      try {
+        final s = await _findSessionRecordForAppointment(
+          patientId: appt.patientId!,
+          date: appt.date,
+          time: appt.time,
+          doctorId: appt.doctorId,
+        );
+        if (s != null) {
+          await pb.collection(PBCollections.sessions).update(
+            s.id,
+            body: {
+              'status': 'waiting',
+            },
+          );
+        }
+      } catch (_) {}
+    }
+    return appt;
   }
 
   /// Start the session: sets appointment status = in_progress,
@@ -295,19 +422,23 @@ class AppointmentService {
   Future<AppointmentModel> startSession(String appointmentId) async {
     final record = await pb.collection(PBCollections.appointments).update(
       appointmentId,
-      body: {'status': 'in_progress'},
+      body: {
+        'status': 'in_progress',
+        'consultation_start_time': DateTime.now().toUtc().toIso8601String(),
+      },
     );
     final appt = AppointmentModel.fromRecord(record);
     if (appt.patientId != null) {
       try {
-        final sessions = await pb.collection(PBCollections.sessions).getList(
-          filter:
-              'patient = "${appt.patientId}" && doctor = "${appt.doctorId}" && scheduled_date = "${appt.date}" && scheduled_time = "${appt.time}" && (status = "upcoming" || status = "in_progress")',
-          perPage: 1,
+        final s = await _findSessionRecordForAppointment(
+          patientId: appt.patientId!,
+          date: appt.date,
+          time: appt.time,
+          doctorId: appt.doctorId,
         );
-        if (sessions.items.isNotEmpty) {
+        if (s != null) {
           await pb.collection(PBCollections.sessions).update(
-            sessions.items.first.id,
+            s.id,
             body: {
               'status': 'in_progress',
               'check_in_time': DateTime.now().toUtc().toIso8601String(),
@@ -320,26 +451,40 @@ class AppointmentService {
   }
 
   /// Mark a SESSION appointment as ended: sets appointment + session to completed.
-  Future<AppointmentModel> markSessionEnded(String appointmentId) async {
+  Future<AppointmentModel> markSessionEnded(String appointmentId, {String? sessionId}) async {
+    final now = DateTime.now().toUtc().toIso8601String();
     final record = await pb.collection(PBCollections.appointments).update(
       appointmentId,
       body: {
         'status': 'completed',
-        'check_out_time': DateTime.now().toUtc().toIso8601String(),
+        'check_out_time': now,
+        'patient_left_at': now,
       },
     );
     final appt = AppointmentModel.fromRecord(record);
+    
     // Sync the session record to completed
-    if (appt.patientId != null) {
+    if (sessionId != null && sessionId.isNotEmpty) {
       try {
-        final sessions = await pb.collection(PBCollections.sessions).getList(
-          filter:
-              'patient = "${appt.patientId}" && doctor = "${appt.doctorId}" && scheduled_date = "${appt.date}" && scheduled_time = "${appt.time}" && (status = "upcoming" || status = "in_progress")',
-          perPage: 1,
+        await pb.collection(PBCollections.sessions).update(
+          sessionId,
+          body: {
+            'status': 'completed',
+            'check_out_time': DateTime.now().toUtc().toIso8601String(),
+          },
         );
-        if (sessions.items.isNotEmpty) {
+      } catch (_) {}
+    } else if (appt.patientId != null) {
+      try {
+        final s = await _findSessionRecordForAppointment(
+          patientId: appt.patientId!,
+          date: appt.date,
+          time: appt.time,
+          doctorId: appt.doctorId,
+        );
+        if (s != null) {
           await pb.collection(PBCollections.sessions).update(
-            sessions.items.first.id,
+            s.id,
             body: {
               'status': 'completed',
               'check_out_time': DateTime.now().toUtc().toIso8601String(),
@@ -356,13 +501,13 @@ class AppointmentService {
   Future<Map<String, String>?> findSessionForAppointment(AppointmentModel apt) async {
     if (apt.patientId == null || apt.patientId!.isEmpty) return null;
     try {
-      final sessions = await pb.collection(PBCollections.sessions).getList(
-        filter:
-            'patient = "${apt.patientId}" && doctor = "${apt.doctorId}" && scheduled_date = "${apt.date}" && scheduled_time = "${apt.time}"',
-        perPage: 1,
+      final s = await _findSessionRecordForAppointment(
+        patientId: apt.patientId!,
+        date: apt.date,
+        time: apt.time,
+        doctorId: apt.doctorId,
       );
-      if (sessions.items.isNotEmpty) {
-        final s = sessions.items.first;
+      if (s != null) {
         return {
           'sessionId': s.id,
           'treatmentPlanId': s.getStringValue('treatment_plan'),
@@ -384,12 +529,13 @@ class AppointmentService {
     // Sync the linked sessions record
     if (apt.patientId != null) {
       try {
-        final sessions = await pb.collection(PBCollections.sessions).getList(
-          filter:
-              'patient = "${apt.patientId}" && doctor = "${apt.doctorId}" && scheduled_date = "${apt.date}" && scheduled_time = "${apt.time}" && status = "upcoming"',
-          perPage: 1,
+        final s = await _findSessionRecordForAppointment(
+          patientId: apt.patientId!,
+          date: apt.date,
+          time: apt.time,
+          doctorId: apt.doctorId,
         );
-        for (final s in sessions.items) {
+        if (s != null) {
           await pb.collection(PBCollections.sessions).update(s.id, body: {
             'scheduled_date': newDate,
             'scheduled_time': newTime,
@@ -418,7 +564,26 @@ class AppointmentService {
         'check_in_time': '',
       },
     );
-    return AppointmentModel.fromRecord(record);
+    final appt = AppointmentModel.fromRecord(record);
+    if (appt.patientId != null) {
+      try {
+        final s = await _findSessionRecordForAppointment(
+          patientId: appt.patientId!,
+          date: appt.date,
+          time: appt.time,
+          doctorId: appt.doctorId,
+        );
+        if (s != null) {
+          await pb.collection(PBCollections.sessions).update(
+            s.id,
+            body: {
+              'status': 'upcoming',
+            },
+          );
+        }
+      } catch (_) {}
+    }
+    return appt;
   }
 
   /// Get or create a consultation for an appointment — uses getOne() only,
@@ -581,6 +746,7 @@ class AppointmentService {
       body: {
         'patient_details_saved': true,
         'patient_details_partial': false,
+        'patient_details_filled_time': DateTime.now().toUtc().toIso8601String(),
       },
     );
   }
@@ -591,6 +757,16 @@ class AppointmentService {
       appointmentId,
       body: {
         'consultation_end_time': DateTime.now().toUtc().toIso8601String(),
+      },
+    );
+  }
+
+  /// Record the consultation start time when start consultation is clicked.
+  Future<void> markConsultationStartTime(String appointmentId) async {
+    await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {
+        'consultation_start_time': DateTime.now().toUtc().toIso8601String(),
       },
     );
   }
@@ -632,17 +808,41 @@ class AppointmentService {
   Future<int> getSessionNumberForAppointment(AppointmentModel apt) async {
     if (apt.patientId == null || apt.patientId!.isEmpty) return 0;
     try {
-      final sessions = await pb.collection(PBCollections.sessions).getList(
-        filter:
-            'patient = "${apt.patientId}" && scheduled_date = "${apt.date}" && scheduled_time = "${apt.time}"',
-        perPage: 1,
-        sort: 'session_number',
+      final s = await _findSessionRecordForAppointment(
+        patientId: apt.patientId!,
+        date: apt.date,
+        time: apt.time,
+        doctorId: apt.doctorId,
       );
-      if (sessions.items.isNotEmpty) {
-        return sessions.items.first.getIntValue('session_number');
+      if (s != null) {
+        return s.getIntValue('session_number');
       }
     } catch (_) {}
     return 0;
+  }
+
+  /// Look up session_number AND session_type for a session-type appointment.
+  /// Returns {id: String, number: int, type: 'treatment'|'maintenance'} or null.
+  Future<Map<String, dynamic>?> getSessionInfoForAppointment(AppointmentModel apt) async {
+    if (apt.patientId == null || apt.patientId!.isEmpty) return null;
+    try {
+      final s = await _findSessionRecordForAppointment(
+        patientId: apt.patientId!,
+        date: apt.date,
+        time: apt.time,
+        doctorId: apt.doctorId,
+      );
+      if (s != null) {
+        return {
+          'id': s.id,
+          'number': s.getIntValue('session_number'),
+          'type': s.getStringValue('session_type').isNotEmpty
+              ? s.getStringValue('session_type')
+              : 'treatment',
+        };
+      }
+    } catch (_) {}
+    return null;
   }
 
   /// Fetch a treatment plan linked to a patient's ongoing consultation, if any.

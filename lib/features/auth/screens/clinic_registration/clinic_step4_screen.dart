@@ -11,6 +11,8 @@ import 'dart:async';
 import '../../providers/registration_cache_provider.dart';
 import '../../providers/auth_provider.dart';
 import 'clinic_step3_screen.dart' show BreakTime, DayOverride;
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 // Full doctor data model used within step 4
 class _WorkingDoctorData {
@@ -289,7 +291,7 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: AppColors.error,
+      backgroundColor: context.colors.error,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ));
@@ -300,15 +302,15 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
             onPressed: () { FocusScope.of(context).unfocus(); Navigator.of(context).pop(); },
           ),
-          title: Text('Clinic Registration', style: AppTextStyles.h4),
+          title: Text('Clinic Registration', style: context.textStyles.h4),
           centerTitle: true,
         ),
         body: SafeArea(
@@ -320,23 +322,23 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
                 const SizedBox(height: 8),
                 _buildStepIndicator(4, 5),
                 const SizedBox(height: 24),
-                Text('Working Doctors', style: AppTextStyles.h2),
+                Text('Working Doctors', style: context.textStyles.h2),
                 const SizedBox(height: 6),
                 Text('Add doctors who work at your clinic. They get their own login.',
-                  style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                  style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
                 const SizedBox(height: 6),
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppColors.info.withValues(alpha: 0.06),
+                    color: context.colors.info.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.info.withValues(alpha: 0.2)),
+                    border: Border.all(color: context.colors.info.withValues(alpha: 0.2)),
                   ),
                   child: Row(children: [
-                    Icon(Icons.info_outline_rounded, color: AppColors.info, size: 18),
+                    Icon(Icons.info_outline_rounded, color: context.colors.info, size: 18),
                     const SizedBox(width: 10),
                     Expanded(child: Text('Optional — You can also add doctors later from Settings.',
-                      style: AppTextStyles.caption.copyWith(color: AppColors.info))),
+                      style: context.textStyles.caption.copyWith(color: context.colors.info))),
                   ]),
                 ),
                 const SizedBox(height: 24),
@@ -355,15 +357,15 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     decoration: BoxDecoration(
-                      color: AppColors.accent.withValues(alpha: 0.06),
+                      color: context.colors.accent.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                      border: Border.all(color: context.colors.accent.withValues(alpha: 0.3)),
                     ),
                     child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Icon(Icons.add_circle_outline_rounded, color: AppColors.accent, size: 22),
+                      Icon(Icons.add_circle_outline_rounded, color: context.colors.accent, size: 22),
                       const SizedBox(width: 10),
                       Text('Add Working Doctor',
-                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.accent, fontWeight: FontWeight.w600)),
+                        style: context.textStyles.bodyMedium.copyWith(color: context.colors.accent, fontWeight: FontWeight.w600)),
                     ]),
                   ),
                 ),
@@ -390,10 +392,10 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
-        boxShadow: [BoxShadow(color: AppColors.accent.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4))],
+        border: Border.all(color: context.colors.accent.withValues(alpha: 0.3)),
+        boxShadow: [BoxShadow(color: context.colors.accent.withValues(alpha: 0.06), blurRadius: 12, offset: const Offset(0, 4))],
       ),
       child: Column(children: [
         // Header
@@ -401,37 +403,37 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
           onTap: () { FocusScope.of(context).unfocus(); setState(() => _expandedIndex = isExpanded ? null : index); },
           borderRadius: BorderRadius.circular(18),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16),
             child: Row(children: [
               Container(
                 width: 40, height: 40,
                 decoration: BoxDecoration(
-                  color: AppColors.accent.withValues(alpha: 0.1),
+                  color: context.colors.accent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                   image: doc.photoFile != null
                       ? DecorationImage(image: FileImage(doc.photoFile!), fit: BoxFit.cover)
                       : null,
                 ),
-                child: doc.photoFile == null ? const Icon(Icons.person_rounded, color: AppColors.accent, size: 22) : null,
+                child: doc.photoFile == null ? Icon(Icons.person_rounded, color: context.colors.accent, size: 22) : null,
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(hasName ? doc.nameCtrl.text : 'Doctor ${index + 1}',
-                  style: AppTextStyles.label.copyWith(fontSize: 15, color: hasName ? AppColors.textPrimary : AppColors.textHint)),
+                  style: context.textStyles.label.copyWith(fontSize: 15, color: hasName ? context.colors.textPrimary : context.colors.textHint)),
                 if (doc.usernameCtrl.text.isNotEmpty)
-                  Text('@${doc.usernameCtrl.text}', style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 11)),
+                  Text('@${doc.usernameCtrl.text}', style: context.textStyles.caption.copyWith(color: context.colors.textHint, fontSize: 11)),
               ])),
               IconButton(
-                icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 20),
+                icon: Icon(Icons.delete_outline_rounded, color: context.colors.error, size: 20),
                 onPressed: () => _removeDoctor(index),
               ),
-              Icon(isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: AppColors.textHint),
+              Icon(isExpanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: context.colors.textHint),
             ]),
           ),
         ),
 
         if (isExpanded) ...[
-          Divider(height: 1, color: AppColors.border),
+          Divider(height: 1, color: context.colors.border),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -442,7 +444,7 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
                   Container(
                     width: 80, height: 80,
                     decoration: BoxDecoration(
-                      gradient: doc.photoFile == null ? AppColors.heroGradient : null,
+                      gradient: doc.photoFile == null ? context.colors.heroGradient : null,
                       borderRadius: BorderRadius.circular(22),
                       image: doc.photoFile != null
                           ? DecorationImage(image: FileImage(doc.photoFile!), fit: BoxFit.cover)
@@ -454,29 +456,29 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
                   Positioned(bottom: 0, right: 0,
                     child: Container(
                       width: 26, height: 26,
-                      decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white, width: 2)),
+                      decoration: BoxDecoration(color: context.colors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white, width: 2)),
                       child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
                     )),
                 ]),
               )),
               const SizedBox(height: 6),
-              Center(child: Text('Photo (Optional)', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary))),
+              Center(child: Text('Photo (Optional)', style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))),
               const SizedBox(height: 16),
 
               // Name
               _field('Doctor Name', 'e.g. Dr. Vijayan', Icons.person_outline_rounded, controller: doc.nameCtrl),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
 
               // Username
               _field('Username', 'Login username', Icons.alternate_email_rounded,
                 controller: doc.usernameCtrl,
                 errorText: doc.usernameError,
                 suffixIcon: doc.isCheckingUsername
-                    ? const Padding(
+                    ? Padding(
                         padding: EdgeInsets.all(12),
                         child: SizedBox(
                           width: 16, height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
                         ),
                       )
                     : null,
@@ -516,39 +518,35 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
                     initialDate: doc.dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
                     firstDate: DateTime(1940),
                     lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
-                    builder: (ctx, child) => Theme(
-                      data: Theme.of(ctx).copyWith(colorScheme: ColorScheme.light(primary: AppColors.primary, onPrimary: Colors.white, surface: AppColors.surface)),
-                      child: child!,
-                    ),
                   );
                   if (!mounted) return;
                   FocusManager.instance.primaryFocus?.unfocus();
                   if (picked != null) setState(() => doc.dateOfBirth = picked);
                 },
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
-                    color: AppColors.surface, borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.border),
+                    color: context.colors.surface, borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: context.colors.border),
                   ),
                   child: Row(children: [
-                    const Icon(Icons.cake_outlined, color: AppColors.textHint, size: 20),
-                    const SizedBox(width: 12),
+                    Icon(Icons.cake_outlined, color: context.colors.textHint, size: 20),
+                    SizedBox(width: 12),
                     Expanded(child: Text(
                       doc.dateOfBirth == null
                           ? 'Date of Birth'
                           : '${doc.dateOfBirth!.day}/${doc.dateOfBirth!.month}/${doc.dateOfBirth!.year}',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: doc.dateOfBirth == null ? AppColors.textHint : AppColors.textPrimary),
+                      style: context.textStyles.bodyMedium.copyWith(
+                        color: doc.dateOfBirth == null ? context.colors.textHint : context.colors.textPrimary),
                     )),
-                    const Icon(Icons.calendar_today_rounded, size: 16, color: AppColors.textHint),
+                    Icon(Icons.calendar_today_rounded, size: 16, color: context.colors.textHint),
                   ]),
                 ),
               ),
               const SizedBox(height: 20),
 
               // Working schedule
-              Text('Working Schedule', style: AppTextStyles.h3.copyWith(fontSize: 16)),
+              Text('Working Schedule', style: context.textStyles.h3.copyWith(fontSize: 16)),
               const SizedBox(height: 10),
               _buildDayChips(doc),
 
@@ -561,7 +559,7 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
               const SizedBox(height: 20),
 
               // Treatments
-              Text('Treatments Offered', style: AppTextStyles.h3.copyWith(fontSize: 16)),
+              Text('Treatments Offered', style: context.textStyles.h3.copyWith(fontSize: 16)),
               const SizedBox(height: 10),
               ..._availableTreatments.map((t) => _buildTreatmentTile(doc, t)),
             ]),
@@ -580,20 +578,20 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
         if (errorText != null) return errorText;
         return null;
       },
-      style: AppTextStyles.bodyMedium,
+      style: context.textStyles.bodyMedium,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
         errorText: errorText,
-        hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-        labelStyle: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-        prefixIcon: Icon(icon, color: AppColors.textHint, size: 20),
+        hintStyle: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint),
+        labelStyle: context.textStyles.caption.copyWith(color: context.colors.textHint),
+        prefixIcon: Icon(icon, color: context.colors.textHint, size: 20),
         suffixIcon: suffixIcon,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppColors.primary)),
-        filled: true, fillColor: AppColors.surface,
+        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.colors.border)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.colors.border)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.colors.primary)),
+        filled: true, fillColor: context.colors.surface,
       ),
     );
   }
@@ -601,22 +599,22 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
   void _pickPhoto(_WorkingDoctorData doc) async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: context.colors.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (ctx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           const SizedBox(height: 12),
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
+          Container(width: 40, height: 4, decoration: BoxDecoration(color: context.colors.border, borderRadius: BorderRadius.circular(2))),
           const SizedBox(height: 16),
-          Text('Doctor Photo', style: AppTextStyles.h3),
+          Text('Doctor Photo', style: context.textStyles.h3),
           const SizedBox(height: 8),
           ListTile(
-            leading: Icon(Icons.photo_library_rounded, color: AppColors.primary),
+            leading: Icon(Icons.photo_library_rounded, color: context.colors.primary),
             title: const Text('Gallery'),
             onTap: () => Navigator.pop(ctx, ImageSource.gallery),
           ),
           ListTile(
-            leading: Icon(Icons.camera_alt_rounded, color: AppColors.accent),
+            leading: Icon(Icons.camera_alt_rounded, color: context.colors.accent),
             title: const Text('Camera'),
             onTap: () => Navigator.pop(ctx, ImageSource.camera),
           ),
@@ -625,8 +623,17 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
       ),
     );
     if (source == null) return;
-    final picked = await ImagePicker().pickImage(source: source, imageQuality: 80);
-    if (picked != null && mounted) setState(() => doc.photoFile = File(picked.path));
+    try {
+      final picked = await ImagePicker().pickImage(source: source, imageQuality: 80);
+      if (picked != null && mounted) setState(() => doc.photoFile = File(picked.path));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to pick image: $e'),
+          backgroundColor: context.colors.error,
+        ));
+      }
+    }
   }
 
   Widget _buildDayChips(_WorkingDoctorData doc) {
@@ -651,13 +658,13 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
                   duration: const Duration(milliseconds: 200),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                   decoration: BoxDecoration(
-                    gradient: selected ? AppColors.heroGradient : null,
-                    color: selected ? null : AppColors.background,
+                    gradient: selected ? context.colors.heroGradient : null,
+                    color: selected ? null : context.colors.background,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: selected ? Colors.transparent : AppColors.border),
+                    border: Border.all(color: selected ? Colors.transparent : context.colors.border),
                   ),
-                  child: Text(day.substring(0, 3), style: AppTextStyles.label.copyWith(
-                    color: selected ? Colors.white : AppColors.textSecondary, fontSize: 13)),
+                  child: Text(day.substring(0, 3), style: context.textStyles.label.copyWith(
+                    color: selected ? Colors.white : context.colors.textSecondary, fontSize: 13)),
                 ),
               );
             }).toList(),
@@ -694,10 +701,10 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-          color: AppColors.primary.withValues(alpha: 0.08),
+          color: context.colors.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
         ),
-        child: Text(label, style: AppTextStyles.caption.copyWith(color: AppColors.primary, fontSize: 11)),
+        child: Text(label, style: context.textStyles.caption.copyWith(color: context.colors.primary, fontSize: 11)),
       ),
     );
   }
@@ -706,18 +713,18 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.background,
+        color: context.colors.background,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Working Hours', style: AppTextStyles.label.copyWith(fontSize: 13)),
+        Text('Working Hours', style: context.textStyles.label.copyWith(fontSize: 13)),
         const SizedBox(height: 10),
         Row(children: [
           Expanded(child: _tpTile('From', doc.workFrom, false,
             () => _pickDocTime(doc.workFrom, (t) => doc.workFrom = t, null, null))),
           Padding(padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Icon(Icons.arrow_forward_rounded, size: 16, color: AppColors.textHint)),
+            child: Icon(Icons.arrow_forward_rounded, size: 16, color: context.colors.textHint)),
           Expanded(child: _tpTile('To', doc.workTo, false,
             () => _pickDocTime(doc.workTo, (t) => doc.workTo = t, doc.workFrom, null))),
         ]),
@@ -729,23 +736,23 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: doc.globalBreaks.isNotEmpty ? AppColors.warning.withValues(alpha: 0.04) : AppColors.background,
+        color: doc.globalBreaks.isNotEmpty ? context.colors.warning.withValues(alpha: 0.04) : context.colors.background,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: doc.globalBreaks.isNotEmpty ? AppColors.warning.withValues(alpha: 0.2) : AppColors.border),
+        border: Border.all(color: doc.globalBreaks.isNotEmpty ? context.colors.warning.withValues(alpha: 0.2) : context.colors.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Text('Break Times', style: AppTextStyles.label.copyWith(fontSize: 13)),
+          Text('Break Times', style: context.textStyles.label.copyWith(fontSize: 13)),
           const Spacer(),
           GestureDetector(
             onTap: () => setState(() => doc.globalBreaks.add(BreakTime())),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(color: context.colors.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.add_rounded, color: AppColors.warning, size: 14),
+                Icon(Icons.add_rounded, color: context.colors.warning, size: 14),
                 const SizedBox(width: 2),
-                Text('Add', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontSize: 11)),
+                Text('Add', style: context.textStyles.caption.copyWith(color: context.colors.warning, fontSize: 11)),
               ]),
             ),
           ),
@@ -757,17 +764,17 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
             padding: const EdgeInsets.only(top: 10),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Text('Break ${i + 1}', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600, fontSize: 11)),
+                Text('Break ${i + 1}', style: context.textStyles.caption.copyWith(color: context.colors.warning, fontWeight: FontWeight.w600, fontSize: 11)),
                 const Spacer(),
                 GestureDetector(onTap: () => setState(() => doc.globalBreaks.removeAt(i)),
-                  child: Icon(Icons.close_rounded, size: 16, color: AppColors.error)),
+                  child: Icon(Icons.close_rounded, size: 16, color: context.colors.error)),
               ]),
               const SizedBox(height: 6),
               Row(children: [
                 Expanded(child: _tpTile('From', b.from, true,
                   () => _pickDocTime(b.from, (t) => b.from = t, doc.workFrom, doc.workTo))),
                 Padding(padding: const EdgeInsets.symmetric(horizontal: 10),
-                  child: Icon(Icons.arrow_forward_rounded, size: 16, color: AppColors.textHint)),
+                  child: Icon(Icons.arrow_forward_rounded, size: 16, color: context.colors.textHint)),
                 Expanded(child: _tpTile('To', b.to, true,
                   () => _pickDocTime(b.to, (t) => b.to = t, b.from ?? doc.workFrom, doc.workTo))),
               ]),
@@ -777,28 +784,28 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
         if (doc.globalBreaks.isEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Text('No breaks added. Tap + Add.', style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+            child: Text('No breaks added. Tap + Add.', style: context.textStyles.caption.copyWith(color: context.colors.textHint)),
           ),
       ]),
     );
   }
 
   Widget _tpTile(String label, TimeOfDay? value, bool isBreak, VoidCallback onTap) {
-    final color = isBreak ? AppColors.warning : AppColors.primary;
+    final color = isBreak ? context.colors.warning : context.colors.primary;
     return GestureDetector(
       onTap: () { FocusScope.of(context).unfocus(); onTap(); },
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 10),
         decoration: BoxDecoration(
-          color: value != null ? color.withValues(alpha: 0.06) : AppColors.surface,
+          color: value != null ? color.withValues(alpha: 0.06) : context.colors.surface,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: value != null ? color.withValues(alpha: 0.25) : AppColors.border),
+          border: Border.all(color: value != null ? color.withValues(alpha: 0.25) : context.colors.border),
         ),
         child: Column(children: [
-          Text(label, style: AppTextStyles.caption.copyWith(fontSize: 10, color: AppColors.textHint)),
+          Text(label, style: context.textStyles.caption.copyWith(fontSize: 10, color: context.colors.textHint)),
           const SizedBox(height: 3),
           Text(value == null ? 'Set' : TimeUtils.formatTimeOfDay(value),
-            style: AppTextStyles.label.copyWith(color: value != null ? color : AppColors.textHint, fontSize: 13, fontWeight: FontWeight.w700)),
+            style: context.textStyles.label.copyWith(color: value != null ? color : context.colors.textHint, fontSize: 13, fontWeight: FontWeight.w700)),
         ]),
       ),
     );
@@ -813,6 +820,7 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
       initialTime: current ?? const TimeOfDay(hour: 9, minute: 0),
       intervalMinutes: 30,
       startHour: minTime?.hour ?? 5,
+      startMinute: minTime?.minute ?? 0,
       endHour: maxTime?.hour ?? 23,
       minTime: minTime,
     );
@@ -827,19 +835,19 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: selected ? AppColors.accent.withValues(alpha: 0.05) : AppColors.background,
+        color: selected ? context.colors.accent.withValues(alpha: 0.05) : context.colors.background,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: selected ? AppColors.accent : AppColors.border),
+        border: Border.all(color: selected ? context.colors.accent : context.colors.border),
       ),
       child: Column(children: [
         Row(children: [
           Checkbox(
             value: selected,
             onChanged: (v) { FocusScope.of(context).unfocus(); setState(() => doc.selectedTreatments[treatment] = v ?? false); },
-            activeColor: AppColors.accent,
+            activeColor: context.colors.accent,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           ),
-          Expanded(child: Text(treatment, style: AppTextStyles.label.copyWith(fontSize: 14))),
+          Expanded(child: Text(treatment, style: context.textStyles.label.copyWith(fontSize: 14))),
         ]),
         if (selected) ...[
           const SizedBox(height: 6),
@@ -855,17 +863,18 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
 
   Widget _miniField(String label, TextEditingController ctrl) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: AppTextStyles.caption.copyWith(fontSize: 11)),
-      const SizedBox(height: 3),
+      Text(label, style: context.textStyles.caption.copyWith(fontSize: 11)),
+      SizedBox(height: 3),
       TextFormField(
         controller: ctrl,
         keyboardType: TextInputType.number,
-        style: AppTextStyles.bodyMedium.copyWith(fontSize: 13),
+        autofocus: false,
+        style: context.textStyles.bodyMedium.copyWith(fontSize: 13),
         decoration: InputDecoration(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.accent)),
+          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.colors.border)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.colors.border)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide(color: context.colors.accent)),
         ),
       ),
     ]);
@@ -880,7 +889,7 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
             margin: EdgeInsets.only(right: step < total ? 6 : 0),
             height: 4,
             decoration: BoxDecoration(
-              color: step <= current ? AppColors.primary : AppColors.border,
+              color: step <= current ? context.colors.primary : context.colors.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),

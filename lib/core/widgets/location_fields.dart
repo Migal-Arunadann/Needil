@@ -1,10 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
 import 'app_text_field.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 /// List of countries for the country dropdown.
 const kCountries = [
@@ -83,58 +88,124 @@ class _LocationFieldsState extends State<LocationFields> {
 
   Future<void> _lookupPincode(String pin) async {
     setState(() { _isLookingUp = true; _lookupError = null; });
+
+    // ── Try primary API (India Post) with retry ──
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        final innerClient = HttpClient()
+          ..badCertificateCallback = (X509Certificate cert, String host, int port) {
+            return host == 'api.postalpincode.in';
+          };
+        final client = IOClient(innerClient);
+        final res = await client.get(
+          Uri.parse('https://api.postalpincode.in/pincode/$pin'),
+        ).timeout(const Duration(seconds: 12));
+        client.close();
+
+        if (!mounted) return;
+
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body) as List;
+          if (data.isNotEmpty && data[0]['Status'] == 'Success') {
+            final offices = data[0]['PostOffice'] as List;
+            if (offices.isNotEmpty) {
+              final first = offices[0] as Map<String, dynamic>;
+              final state = first['State'] as String? ?? '';
+              final district = first['District'] as String? ?? '';
+              final country = first['Country'] as String? ?? 'India';
+
+              final areas = offices
+                  .map((o) => (o as Map)['Name']?.toString() ?? '')
+                  .where((n) => n.isNotEmpty)
+                  .toSet()
+                  .toList();
+              areas.sort();
+
+              widget.countryCtrl.text = country;
+              widget.stateCtrl.text = state;
+              widget.cityCtrl.text = district;
+              if (widget.areaCtrl.text.isEmpty && areas.isNotEmpty) {
+                widget.areaCtrl.text = areas.first;
+              }
+              setState(() { _areaOptions = areas; _isLookingUp = false; });
+              return;
+            }
+          }
+          // API responded but pincode not found — try fallback
+          break;
+        }
+        // Non-200 status — retry
+        if (attempt == 0) await Future.delayed(const Duration(seconds: 2));
+      } catch (_) {
+        if (attempt == 0) {
+          await Future.delayed(const Duration(seconds: 2));
+          continue;
+        }
+        break;
+      }
+    }
+
+    // ── Fallback API (zippopotam.us) ──
     try {
       final res = await http.get(
-        Uri.parse('https://api.postalpincode.in/pincode/$pin'),
-      ).timeout(const Duration(seconds: 8));
+        Uri.parse('https://api.zippopotam.us/in/$pin'),
+      ).timeout(const Duration(seconds: 10));
 
       if (!mounted) return;
 
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as List;
-        if (data.isNotEmpty && data[0]['Status'] == 'Success') {
-          final offices = data[0]['PostOffice'] as List;
-          if (offices.isNotEmpty) {
-            final first = offices[0] as Map<String, dynamic>;
-            final state = first['State'] as String? ?? '';
-            final district = first['District'] as String? ?? '';
-            final country = first['Country'] as String? ?? 'India';
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final places = data['places'] as List?;
+        if (places != null && places.isNotEmpty) {
+          final first = places[0] as Map<String, dynamic>;
+          final state = first['state'] as String? ?? '';
+          final placeName = first['place name'] as String? ?? '';
+          final country = data['country'] as String? ?? 'India';
 
-            // Collect all unique locality names
-            final areas = offices
-                .map((o) => (o as Map)['Name']?.toString() ?? '')
-                .where((n) => n.isNotEmpty)
-                .toSet()
-                .toList();
-            areas.sort();
+          final areas = places
+              .map((p) => (p as Map)['place name']?.toString() ?? '')
+              .where((n) => n.isNotEmpty)
+              .toSet()
+              .toList();
+          areas.sort();
 
-            setState(() {
-              _areaOptions = areas;
-              _isLookingUp = false;
-            });
-
-            widget.countryCtrl.text = country;
-            widget.stateCtrl.text = state;
-            widget.cityCtrl.text = district;
-            // Auto-set area to first option if not already filled
-            if (widget.areaCtrl.text.isEmpty && areas.isNotEmpty) {
-              widget.areaCtrl.text = areas.first;
-            }
-            return;
+          widget.countryCtrl.text = country;
+          widget.stateCtrl.text = state;
+          widget.cityCtrl.text = placeName;
+          if (widget.areaCtrl.text.isEmpty && areas.isNotEmpty) {
+            widget.areaCtrl.text = areas.first;
           }
+          setState(() { _areaOptions = areas; _isLookingUp = false; });
+          return;
         }
+      }
+
+      // Fallback also failed
+      if (mounted) {
         setState(() {
           _isLookingUp = false;
           _lookupError = 'Pincode not found. Please fill manually.';
         });
-      } else {
-        setState(() { _isLookingUp = false; });
+      }
+    } on SocketException {
+      if (mounted) {
+        setState(() {
+          _isLookingUp = false;
+          _lookupError = 'No internet connection. Please fill manually.';
+        });
+      }
+    } on TimeoutException {
+      if (mounted) {
+        setState(() {
+          _isLookingUp = false;
+          _lookupError = 'Request timed out. Please fill manually.';
+        });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
           _isLookingUp = false;
-          _lookupError = 'Network error. Please fill manually.';
+          _lookupError = 'Could not look up pincode. Please fill manually.';
         });
       }
     }
@@ -161,8 +232,8 @@ class _LocationFieldsState extends State<LocationFields> {
                 FilteringTextInputFormatter.digitsOnly,
                 LengthLimitingTextInputFormatter(6),
               ],
-              prefixIcon: const Icon(Icons.pin_drop_rounded,
-                  color: AppColors.textHint),
+              prefixIcon: Icon(Icons.pin_drop_rounded,
+                  color: context.colors.textHint),
               validator: widget.allRequired
                   ? (v) => (v == null || v.trim().isEmpty)
                       ? 'Pincode is required'
@@ -171,12 +242,12 @@ class _LocationFieldsState extends State<LocationFields> {
               textInputAction: TextInputAction.next,
             ),
             if (_isLookingUp)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(right: 16),
                 child: SizedBox(
                   width: 18, height: 18,
                   child: CircularProgressIndicator(
-                    color: AppColors.primary, strokeWidth: 2),
+                    color: context.colors.primary, strokeWidth: 2),
                 ),
               ),
           ],
@@ -188,8 +259,8 @@ class _LocationFieldsState extends State<LocationFields> {
             padding: const EdgeInsets.only(left: 4),
             child: Text(
               _lookupError!,
-              style: AppTextStyles.caption
-                  .copyWith(color: AppColors.warning, fontSize: 11),
+              style: context.textStyles.caption
+                  .copyWith(color: context.colors.warning, fontSize: 11),
             ),
           ),
         ],
@@ -232,20 +303,20 @@ class _LocationFieldsState extends State<LocationFields> {
           AppTextField(
             controller: widget.stateCtrl,
             label: widget.allRequired ? 'State / Province *' : 'State / Province',
-            prefixIcon: const Icon(Icons.flag_rounded, color: AppColors.textHint),
+            prefixIcon: Icon(Icons.flag_rounded, color: context.colors.textHint),
             validator: widget.allRequired
                 ? (v) => (v == null || v.trim().isEmpty) ? 'State is required' : null
                 : null,
             textInputAction: TextInputAction.next,
           ),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
 
         // ── City ─────────────────────────────────────────────────────
         AppTextField(
           controller: widget.cityCtrl,
           label: widget.allRequired ? 'City / District *' : 'City / District',
-          prefixIcon: const Icon(Icons.location_city_rounded,
-              color: AppColors.textHint),
+          prefixIcon: Icon(Icons.location_city_rounded,
+              color: context.colors.textHint),
           validator: widget.allRequired
               ? (v) => (v == null || v.trim().isEmpty) ? 'City is required' : null
               : null,
@@ -271,7 +342,7 @@ class _LocationFieldsState extends State<LocationFields> {
           AppTextField(
             controller: widget.areaCtrl,
             label: widget.allRequired ? 'Area / Locality *' : 'Area / Locality',
-            prefixIcon: const Icon(Icons.map_rounded, color: AppColors.textHint),
+            prefixIcon: Icon(Icons.map_rounded, color: context.colors.textHint),
             validator: widget.allRequired
                 ? (v) => (v == null || v.trim().isEmpty) ? 'Area is required' : null
                 : null,
@@ -306,40 +377,40 @@ class _DropdownField extends StatelessWidget {
       value: value,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-        prefixIcon: Icon(icon, color: AppColors.textHint, size: 20),
+        labelStyle: context.textStyles.caption.copyWith(color: context.colors.textHint),
+        prefixIcon: Icon(icon, color: context.colors.textHint, size: 20),
         filled: true,
-        fillColor: AppColors.surface,
+        fillColor: context.colors.surface,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: context.colors.border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.border),
+          borderSide: BorderSide(color: context.colors.border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: BorderSide(color: context.colors.primary, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.error),
+          borderSide: BorderSide(color: context.colors.error),
         ),
       ),
-      style: AppTextStyles.bodyMedium,
-      dropdownColor: AppColors.surface,
+      style: context.textStyles.bodyMedium,
+      dropdownColor: context.colors.surface,
       isExpanded: true,
-      hint: Text('Select', style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+      hint: Text('Select', style: context.textStyles.caption.copyWith(color: context.colors.textHint)),
       validator: required
           ? (v) => (v == null || v.isEmpty) ? '$label is required' : null
           : null,
       items: items
           .map((item) => DropdownMenuItem(
                 value: item,
-                child: Text(item, style: AppTextStyles.bodyMedium),
+                child: Text(item, style: context.textStyles.bodyMedium),
               ))
           .toList(),
       onChanged: onChanged,

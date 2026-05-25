@@ -7,6 +7,8 @@ import '../../appointments/models/appointment_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../providers/dashboard_provider.dart';
 import 'main_layout.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class DoctorDashboardScreen extends ConsumerWidget {
   const DoctorDashboardScreen({super.key});
@@ -25,10 +27,10 @@ class DoctorDashboardScreen extends ConsumerWidget {
     final stats = ref.watch(dashboardStatsProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: SafeArea(
         child: RefreshIndicator(
-          color: AppColors.primary,
+          color: context.colors.primary,
           onRefresh: () => ref.read(dashboardStatsProvider.notifier).load(),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
@@ -43,8 +45,8 @@ class DoctorDashboardScreen extends ConsumerWidget {
                       width: 52,
                       height: 52,
                       decoration: BoxDecoration(
-                        gradient: doctor?.photoUrl == null ? AppColors.accentGradient : null,
-                        color: doctor?.photoUrl != null ? AppColors.surface : null,
+                        gradient: doctor?.photoUrl == null ? context.colors.accentGradient : null,
+                        color: doctor?.photoUrl != null ? context.colors.surface : null,
                         borderRadius: BorderRadius.circular(16),
                         image: doctor?.photoUrl != null
                             ? DecorationImage(
@@ -64,12 +66,12 @@ class DoctorDashboardScreen extends ConsumerWidget {
                         children: [
                           Text(
                             '${_greeting()} 👋',
-                            style: AppTextStyles.caption.copyWith(fontSize: 13),
+                            style: context.textStyles.caption.copyWith(fontSize: 13),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             doctor?.name ?? 'Doctor',
-                            style: AppTextStyles.h2,
+                            style: context.textStyles.h2,
                           ),
                         ],
                       ),
@@ -79,15 +81,19 @@ class DoctorDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 6),
                 Text(
                   DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now()),
-                  style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+                  style: context.textStyles.caption.copyWith(color: context.colors.textHint),
                 ),
+                const SizedBox(height: 20),
+
+                // ── Today's Summary ──
+                _TodaySummaryBar(stats: stats),
                 const SizedBox(height: 28),
 
                 // ── Upcoming Today (Next appointment only) ──
-                Text("Upcoming Today", style: AppTextStyles.h3),
+                Text("Upcoming Today", style: context.textStyles.h3),
                 const SizedBox(height: 14),
                 if (stats.isLoading)
-                  _buildLoadingCard()
+                  _buildLoadingCard(context)
                 else if (stats.nextAppointment == null)
                   _EmptyState(
                     icon: Icons.event_available_rounded,
@@ -108,10 +114,10 @@ class DoctorDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 28),
 
                 // ── Today's Overview ──
-                Text("Today's Overview", style: AppTextStyles.h3),
+                Text("Today's Overview", style: context.textStyles.h3),
                 const SizedBox(height: 14),
                 if (stats.isLoading)
-                  _buildLoadingCard()
+                  _buildLoadingCard(context)
                 else ...[
                   // Row 1: Consultations + Sessions
                   Row(
@@ -120,14 +126,14 @@ class DoctorDashboardScreen extends ConsumerWidget {
                         icon: Icons.medical_information_rounded,
                         label: 'Consultations',
                         value: '${stats.consultationsToday}',
-                        color: AppColors.primary,
+                        color: context.colors.primary,
                       ),
                       const SizedBox(width: 12),
                       _StatCard(
                         icon: Icons.event_repeat_rounded,
                         label: 'Sessions',
                         value: '${stats.sessionAppointmentsToday}',
-                        color: AppColors.accent,
+                        color: context.colors.accent,
                       ),
                     ],
                   ),
@@ -146,7 +152,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                         icon: Icons.play_circle_rounded,
                         label: 'In Progress',
                         value: '${stats.inProgressCount}',
-                        color: AppColors.warning,
+                        color: context.colors.warning,
                       ),
                     ],
                   ),
@@ -158,14 +164,14 @@ class DoctorDashboardScreen extends ConsumerWidget {
                         icon: Icons.check_circle_rounded,
                         label: 'Completed',
                         value: '${stats.completedCount}',
-                        color: AppColors.success,
+                        color: context.colors.success,
                       ),
                       const SizedBox(width: 12),
                       _StatCard(
                         icon: Icons.cancel_rounded,
                         label: 'Cancelled',
                         value: '${stats.cancelledCount}',
-                        color: AppColors.error,
+                        color: context.colors.error,
                       ),
                     ],
                   ),
@@ -174,23 +180,23 @@ class DoctorDashboardScreen extends ConsumerWidget {
                 const SizedBox(height: 28),
 
                 // ── Practice Overview ──
-                Text('Practice Overview', style: AppTextStyles.h3),
+                Text('Practice Overview', style: context.textStyles.h3),
                 const SizedBox(height: 14),
                 if (stats.isLoading)
-                  _buildLoadingCard()
+                  _buildLoadingCard(context)
                 else ...[
                   _QuickStatRow(
                     icon: Icons.people_rounded,
                     label: 'Total Patients',
                     value: '${stats.totalPatients}',
-                    color: AppColors.primary,
+                    color: context.colors.primary,
                   ),
                   const SizedBox(height: 10),
                   _QuickStatRow(
                     icon: Icons.medical_services_rounded,
                     label: 'Active Treatment Plans',
                     value: '${stats.activePlans}',
-                    color: AppColors.accent,
+                    color: context.colors.accent,
                   ),
                 ],
               ],
@@ -201,22 +207,133 @@ class DoctorDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildLoadingCard() {
+  Widget _buildLoadingCard(BuildContext context) {
     return Container(
       height: 80,
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
-      child: const Center(
-        child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 3),
+      child: Center(
+        child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 3),
       ),
     );
   }
 }
 
 // ── Shared Widgets ────────────────────────────────────────────
+
+class _TodaySummaryBar extends StatelessWidget {
+  final DashboardStats stats;
+  const _TodaySummaryBar({required this.stats});
+
+  @override
+  Widget build(BuildContext context) {
+    if (stats.isLoading) {
+      return Container(
+        height: 76,
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: context.colors.border),
+        ),
+        child: Center(
+          child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 2.5),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            context.colors.primary.withValues(alpha: 0.12),
+            context.colors.accent.withValues(alpha: 0.07),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.primary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _summaryItem(
+            context,
+            icon: Icons.people_rounded,
+            label: "Total Patients",
+            value: '${stats.totalPatients}',
+            color: context.colors.primary,
+          )),
+          _divider(context),
+          Expanded(child: _summaryItem(
+            context,
+            icon: Icons.directions_walk_rounded,
+            label: "Walk-Ins Today",
+            value: '${stats.walkInsToday}',
+            color: context.colors.accent,
+          )),
+          _divider(context),
+          Expanded(child: _summaryItem(
+            context,
+            icon: Icons.pending_actions_rounded,
+            label: "Pending",
+            value: '${stats.pendingConsultations}',
+            color: context.colors.warning,
+          )),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryItem(BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              style: context.textStyles.h3.copyWith(
+                fontWeight: FontWeight.w800,
+                fontSize: 20,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: context.textStyles.caption.copyWith(
+            fontSize: 10,
+            color: context.colors.textSecondary,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ],
+    );
+  }
+
+  Widget _divider(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 40,
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      color: context.colors.border,
+    );
+  }
+}
 
 class _NextAppointmentCard extends StatelessWidget {
   final AppointmentModel appt;
@@ -226,7 +343,7 @@ class _NextAppointmentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isSession = appt.type == AppointmentType.session;
     final isCallBy = appt.type == AppointmentType.callBy;
-    final color = isSession ? AppColors.accent : (isCallBy ? AppColors.primary : AppColors.success);
+    final color = isSession ? context.colors.accent : (isCallBy ? context.colors.primary : context.colors.success);
     final icon = isSession
         ? Icons.event_repeat_rounded
         : (isCallBy ? Icons.phone_rounded : Icons.person_rounded);
@@ -261,12 +378,12 @@ class _NextAppointmentCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(name,
-                    style: AppTextStyles.label.copyWith(fontSize: 15),
+                    style: context.textStyles.label.copyWith(fontSize: 15),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
                 const SizedBox(height: 4),
                 Text(typeLabel,
-                    style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w600)),
+                    style: context.textStyles.caption.copyWith(color: color, fontWeight: FontWeight.w600)),
               ],
             ),
           ),
@@ -278,7 +395,7 @@ class _NextAppointmentCard extends StatelessWidget {
             ),
             child: Text(
               appt.time,
-              style: AppTextStyles.label.copyWith(color: Colors.white, fontSize: 14),
+              style: context.textStyles.label.copyWith(color: Colors.white, fontSize: 14),
             ),
           ),
         ],
@@ -306,9 +423,9 @@ class _StatCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: context.colors.surface,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.colors.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -324,11 +441,11 @@ class _StatCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(value,
-                style: AppTextStyles.h1
+                style: context.textStyles.h1
                     .copyWith(fontSize: 28, fontWeight: FontWeight.w700)),
             const SizedBox(height: 2),
             Text(label,
-                style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+                style: context.textStyles.caption.copyWith(color: context.colors.textHint)),
           ],
         ),
       ),
@@ -354,9 +471,9 @@ class _QuickStatRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
       child: Row(
         children: [
@@ -371,10 +488,10 @@ class _QuickStatRow extends StatelessWidget {
           ),
           const SizedBox(width: 14),
           Expanded(
-            child: Text(label, style: AppTextStyles.bodyMedium),
+            child: Text(label, style: context.textStyles.bodyMedium),
           ),
           Text(value,
-              style: AppTextStyles.h3
+              style: context.textStyles.h3
                   .copyWith(fontWeight: FontWeight.w700, fontSize: 18)),
         ],
       ),
@@ -394,16 +511,16 @@ class _EmptyState extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 32),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
       child: Column(
         children: [
-          Icon(icon, size: 40, color: AppColors.textHint.withValues(alpha: 0.3)),
+          Icon(icon, size: 40, color: context.colors.textHint.withValues(alpha: 0.3)),
           const SizedBox(height: 10),
           Text(message,
-              style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
+              style: context.textStyles.caption.copyWith(color: context.colors.textHint)),
         ],
       ),
     );

@@ -7,6 +7,8 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../../core/utils/validators.dart';
 import '../providers/auth_provider.dart';
 import 'otp_verification_screen.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 /// Forgot Password screen — clinic enters their email, receives OTP.
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
@@ -51,7 +53,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     if (authState.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(authState.error!),
-        backgroundColor: AppColors.error,
+        backgroundColor: context.colors.error,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ));
@@ -74,12 +76,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
     final authState = ref.watch(authProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -97,11 +99,11 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
                   child: Container(
                     width: 80, height: 80,
                     decoration: BoxDecoration(
-                      gradient: AppColors.primaryGradient,
+                      gradient: context.colors.primaryGradient,
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.3),
+                          color: context.colors.primary.withValues(alpha: 0.3),
                           blurRadius: 20, offset: const Offset(0, 8),
                         ),
                       ],
@@ -113,15 +115,15 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
                 const SizedBox(height: 28),
 
                 Text('Forgot Password?', textAlign: TextAlign.center,
-                    style: AppTextStyles.h1),
+                    style: context.textStyles.h1),
                 const SizedBox(height: 10),
                 Text(
                   'Enter the email address on your clinic account.\nWe\'ll send you a one-time code to reset your password.',
                   textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium
-                      .copyWith(color: AppColors.textSecondary, height: 1.5),
+                  style: context.textStyles.bodyMedium
+                      .copyWith(color: context.colors.textSecondary, height: 1.5),
                 ),
-                const SizedBox(height: 44),
+                SizedBox(height: 44),
 
                 Form(
                   key: _formKey,
@@ -134,8 +136,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
                       if (v == null || v.trim().isEmpty) return 'Email is required';
                       return Validators.email(v);
                     },
-                    prefixIcon: const Icon(Icons.email_outlined,
-                        color: AppColors.textHint),
+                    prefixIcon: Icon(Icons.email_outlined,
+                        color: context.colors.textHint),
                     textInputAction: TextInputAction.done,
                   ),
                 ),
@@ -153,8 +155,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
                   child: Text(
                     'Only clinic accounts can reset password via email.\nDoctors and staff should contact their clinic admin.',
                     textAlign: TextAlign.center,
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.textHint),
+                    style: context.textStyles.caption
+                        .copyWith(color: context.colors.textHint),
                   ),
                 ),
               ],

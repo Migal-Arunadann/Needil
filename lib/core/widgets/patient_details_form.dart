@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../constants/app_colors.dart';
-import '../constants/app_text_styles.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/location_fields.dart';
 import '../utils/validators.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 /// ─── Shared Patient Details Form ────────────────────────────────────────────
 ///
@@ -90,16 +90,6 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
       initialDate: DateTime(1990),
       firstDate: DateTime(1920),
       lastDate: DateTime.now(),
-      builder: (ctx, child) => Theme(
-        data: Theme.of(ctx).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: AppColors.primary,
-            onPrimary: Colors.white,
-            surface: AppColors.surface,
-          ),
-        ),
-        child: child!,
-      ),
     );
     if (picked != null && mounted) {
       widget.dobCtrl.text =
@@ -140,7 +130,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
             AppTextField(
               controller: widget.phoneCtrl,
               label: 'Phone Number',
-              prefixIcon: const Icon(Icons.phone_outlined, color: AppColors.textHint),
+              prefixIcon: Icon(Icons.phone_outlined, color: context.colors.textHint),
               keyboardType: TextInputType.phone,
               validator: Validators.phone,
               readOnly: widget.phoneLocked,
@@ -159,22 +149,22 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
         ),
 
         if (widget.isReturningPatient) ...[
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
-              color: AppColors.info.withValues(alpha: 0.1),
+              color: context.colors.info.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.info.withValues(alpha: 0.4)),
+              border: Border.all(color: context.colors.info.withValues(alpha: 0.4)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.verified_user_rounded, color: AppColors.info, size: 18),
+                Icon(Icons.verified_user_rounded, color: context.colors.info, size: 18),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Patient already registered — details auto-filled.',
-                    style: AppTextStyles.caption.copyWith(color: AppColors.info),
+                    style: context.textStyles.caption.copyWith(color: context.colors.info),
                   ),
                 ),
               ],
@@ -182,13 +172,13 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
           ),
         ],
 
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
 
         // ── Full Name ──────────────────────────────────────────────────────
         AppTextField(
           controller: widget.nameCtrl,
           label: 'Full Name',
-          prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.textHint),
+          prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
           validator: Validators.required,
           readOnly: widget.nameLocked,
         ),
@@ -200,7 +190,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
           children: [
             RichText(
               text: TextSpan(children: [
-                TextSpan(text: 'Gender ', style: AppTextStyles.label),
+                TextSpan(text: 'Gender ', style: context.textStyles.label),
                 const TextSpan(
                     text: '*',
                     style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
@@ -210,10 +200,10 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
               decoration: BoxDecoration(
-                color: AppColors.surface,
+                color: context.colors.surface,
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: widget.selectedGender == null ? AppColors.border : AppColors.primary,
+                  color: widget.selectedGender == null ? context.colors.border : context.colors.primary,
                 ),
               ),
               child: DropdownButtonHideUnderline(
@@ -221,11 +211,11 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
                   value: widget.selectedGender,
                   isExpanded: true,
                   hint: Text('Select Gender *',
-                      style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
+                      style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint)),
                   items: ['Male', 'Female', 'Other']
                       .map((g) => DropdownMenuItem(
                             value: g,
-                            child: Text(g, style: AppTextStyles.bodyMedium),
+                            child: Text(g, style: context.textStyles.bodyMedium),
                           ))
                       .toList(),
                   onChanged: widget.onGenderChanged,
@@ -234,7 +224,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
             ),
           ],
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
 
         // ── Date of Birth (required) + auto Age ───────────────────────────
         Row(
@@ -245,14 +235,14 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
               child: AppTextField(
                 controller: TextEditingController(text: _displayDob()),
                 label: 'Date of Birth *',
-                prefixIcon: const Icon(Icons.cake_outlined, color: AppColors.textHint),
+                prefixIcon: Icon(Icons.cake_outlined, color: context.colors.textHint),
                 hint: 'DD/MM/YYYY',
                 readOnly: true,
                 onTap: _pickDob,
                 validator: (_) => widget.dobCtrl.text.isEmpty ? 'Date of birth is required' : null,
                 suffixIcon: GestureDetector(
                   onTap: _pickDob,
-                  child: const Icon(Icons.calendar_month_rounded, color: AppColors.primary),
+                  child: Icon(Icons.calendar_month_rounded, color: context.colors.primary),
                 ),
               ),
             ),
@@ -262,21 +252,21 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Age', style: AppTextStyles.label),
+                  Text('Age', style: context.textStyles.label),
                   const SizedBox(height: 8),
                   Container(
                     height: 52,
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
-                      color: AppColors.surface.withValues(alpha: 0.6),
+                      color: context.colors.surface.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: context.colors.border),
                     ),
                     alignment: Alignment.centerLeft,
                     child: Text(
                       _calculatedAge != null ? '$_calculatedAge yrs' : '—',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: _calculatedAge != null ? AppColors.textPrimary : AppColors.textHint,
+                      style: context.textStyles.bodyMedium.copyWith(
+                        color: _calculatedAge != null ? context.colors.textPrimary : context.colors.textHint,
                       ),
                     ),
                   ),
@@ -296,50 +286,58 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
           areaCtrl: widget.areaCtrl,
           allRequired: true,
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
 
         // ── Occupation (optional) ──────────────────────────────────────────
         AppTextField(
           controller: widget.occupationCtrl,
           label: 'Occupation (Optional)',
-          prefixIcon: const Icon(Icons.work_outline_rounded, color: AppColors.textHint),
+          prefixIcon: Icon(Icons.work_outline_rounded, color: context.colors.textHint),
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
 
         // ── Email (optional) ───────────────────────────────────────────────
         AppTextField(
           controller: widget.emailCtrl,
           label: 'Email (Optional)',
-          prefixIcon: const Icon(Icons.email_outlined, color: AppColors.textHint),
+          prefixIcon: Icon(Icons.email_outlined, color: context.colors.textHint),
           keyboardType: TextInputType.emailAddress,
         ),
         const SizedBox(height: 24),
 
         // ── Consent ────────────────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: widget.consentGiven ? AppColors.success : AppColors.border,
+        GestureDetector(
+          onTap: () => widget.onConsentChanged(!widget.consentGiven),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: context.colors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: widget.consentGiven ? context.colors.success : context.colors.border,
+              ),
             ),
-          ),
-          child: Row(
-            children: [
-              Checkbox(
-                value: widget.consentGiven,
-                onChanged: (v) => widget.onConsentChanged(v ?? false),
-                activeColor: AppColors.success,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-              ),
-              Expanded(
-                child: Text(
-                  'Patient consents to collection and processing of their health data as per DPDP Act.',
-                  style: AppTextStyles.caption.copyWith(fontSize: 12),
+            child: Row(
+              children: [
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    widget.consentGiven ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                    key: ValueKey(widget.consentGiven),
+                    color: widget.consentGiven ? context.colors.success : context.colors.textHint,
+                    size: 24,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Patient consents to collection and processing of their health data as per DPDP Act.',
+                    style: context.textStyles.caption.copyWith(fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ],

@@ -951,6 +951,21 @@ class AuthService {
       if (response.containsKey('data')) {
         final data = response['data'];
         if (data is Map && data.isNotEmpty) {
+          // Check for specific field errors and map to friendly messages
+          if (data.containsKey('username')) {
+            final msg = (data['username'] as Map?)?['message']?.toString() ?? '';
+            if (msg.toLowerCase().contains('unique')) {
+              return 'This username is already taken. Please choose a different one.';
+            }
+          }
+          if (data.containsKey('email')) {
+            final msg = (data['email'] as Map?)?['message']?.toString() ?? '';
+            if (msg.toLowerCase().contains('unique')) {
+              // This happens when the internal dummy email derived from username clashes.
+              // Root cause: username is already used — surface a friendly message.
+              return 'This username is already registered. Please choose a different username.';
+            }
+          }
           final fieldErrors = data.entries
               .where(
                 (entry) =>
@@ -969,6 +984,9 @@ class AuthService {
         final msg = response['message'].toString();
         if (msg.contains('Failed to authenticate')) {
           return 'Invalid username or password';
+        }
+        if (msg.toLowerCase().contains('unique')) {
+          return 'This username or email is already registered.';
         }
         return msg;
       }

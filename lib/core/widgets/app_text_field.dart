@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 /// A styled text field with consistent theming.
 class AppTextField extends StatelessWidget {
@@ -50,7 +52,7 @@ class AppTextField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: AppTextStyles.label),
+        Text(label, style: context.textStyles.label),
         const SizedBox(height: 8),
         TextFormField(
           controller: controller,
@@ -65,48 +67,48 @@ class AppTextField extends StatelessWidget {
           focusNode: focusNode,
           textInputAction: textInputAction,
           inputFormatters: inputFormatters,
-          style: AppTextStyles.bodyLarge,
+          style: context.textStyles.bodyLarge,
           decoration: InputDecoration(
             errorText: errorText,
             hintText: hint,
-            hintStyle: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.textHint,
+            hintStyle: context.textStyles.bodyMedium.copyWith(
+              color: context.colors.textHint,
             ),
             prefixIcon: prefixIcon,
             suffixIcon: suffixIcon,
             filled: true,
-            fillColor: enabled ? AppColors.surface : AppColors.divider,
-            contentPadding: const EdgeInsets.symmetric(
+            fillColor: enabled ? context.colors.surface : context.colors.divider,
+            contentPadding: EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 14,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: BorderSide(color: context.colors.border),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.border),
+              borderSide: BorderSide(color: context.colors.border),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: AppColors.primary,
+              borderSide: BorderSide(
+                color: context.colors.primary,
                 width: 1.5,
               ),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: AppColors.error),
+              borderSide: BorderSide(color: context.colors.error),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: AppColors.error,
+              borderSide: BorderSide(
+                color: context.colors.error,
                 width: 1.5,
               ),
             ),
-            errorStyle: AppTextStyles.caption.copyWith(color: AppColors.error),
+            errorStyle: context.textStyles.caption.copyWith(color: context.colors.error),
           ),
         ),
       ],

@@ -54,6 +54,10 @@ class AnalyticsData {
   final int totalConsultations;
   final int consultationsWithPlan;
 
+  // --- Revenue ---
+  /// Total revenue = paid consultation charges + (session fee × completed sessions)
+  final int totalRevenue;
+
   final bool isLoading;
 
   const AnalyticsData({
@@ -81,6 +85,7 @@ class AnalyticsData {
     this.sessionsCancelled = 0,
     this.totalConsultations = 0,
     this.consultationsWithPlan = 0,
+    this.totalRevenue = 0,
     this.isLoading = false,
   });
 
@@ -336,6 +341,53 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
     );
     final top6Loc = Map.fromEntries(sortedLoc.entries.take(6));
 
+    // ── Revenue Calculation ──────────────────────────────────────────────────
+    int totalRevenue = 0;
+
+    // 1. Consultation charges (charged=true, status=completed)
+    try {
+      final consultFilter = isClinic
+          ? 'doctor.clinic = "$userId" && charged = true && status = "completed"'
+          : 'doctor = "$userId" && charged = true && status = "completed"';
+      final paidConsults = await pb.collection(PBCollections.consultations).getList(
+        filter: consultFilter,
+        perPage: 500,
+        skipTotal: true,
+      );
+      for (final c in paidConsults.items) {
+        final amt = c.getIntValue('charge_amount');
+        if (amt > 0) totalRevenue += amt;
+      }
+    } catch (e) {
+      debugPrint('[Analytics] consultation revenue error: $e');
+    }
+
+    // 2. Session fees from treatment_plans (session_fee × completed sessions)
+    try {
+      final planFilter = '$planOwnerFilter && status != "cancelled"';
+      final plans = await pb.collection(PBCollections.treatmentPlans).getList(
+        filter: planFilter,
+        perPage: 500,
+        skipTotal: true,
+      );
+      for (final plan in plans.items) {
+        final sessionFee = plan.getDoubleValue('session_fee').toInt();
+        if (sessionFee <= 0) continue;
+        final planId = plan.id;
+        // Count completed sessions for this plan
+        try {
+          final sessResult = await pb.collection(PBCollections.sessions).getList(
+            filter: 'treatment_plan = "$planId" && status = "completed"',
+            perPage: 1,
+            skipTotal: false,
+          );
+          totalRevenue += sessionFee * sessResult.totalItems;
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('[Analytics] session revenue error: $e');
+    }
+
     state = AnalyticsData(
       totalPatients: kpis[0],
       totalAppointments: kpis[1],
@@ -360,6 +412,7 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
       genderDistribution: gender,
       ageGroupDistribution: ageGroup,
       locationDistribution: top6Loc,
+      totalRevenue: totalRevenue,
       isLoading: false,
     );
   }

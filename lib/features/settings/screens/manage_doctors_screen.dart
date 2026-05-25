@@ -7,6 +7,8 @@ import '../../../core/providers/pocketbase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'edit_doctor_details_screen.dart';
 import 'add_staff_doctor_screen.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class ManageDoctorsScreen extends ConsumerStatefulWidget {
   const ManageDoctorsScreen({super.key});
@@ -62,7 +64,7 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: error ? AppColors.error : AppColors.success,
+      backgroundColor: error ? context.colors.error : context.colors.success,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ));
@@ -124,44 +126,44 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: Text('Manage Doctors', style: AppTextStyles.h3),
-        backgroundColor: AppColors.surface,
+        title: Text('Manage Doctors', style: context.textStyles.h3),
+        backgroundColor: context.colors.surface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded, size: 18),
+          icon: Icon(Icons.arrow_back_ios_rounded, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary),
+            icon: Icon(Icons.add_circle_outline_rounded, color: context.colors.primary),
             onPressed: () async {
               final added = await Navigator.push<bool>(
                 context,
-                MaterialPageRoute(builder: (_) => const AddStaffDoctorScreen()),
+                MaterialPageRoute(builder: (_) => AddStaffDoctorScreen()),
               );
               if (added == true && mounted) _load();
             },
           ),
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppColors.primary),
+            icon: Icon(Icons.refresh_rounded, color: context.colors.primary),
             onPressed: _load,
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2))
+          ? Center(child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 2))
           : _error != null
               ? _buildError()
               : RefreshIndicator(
                   onRefresh: _load,
-                  color: AppColors.primary,
+                  color: context.colors.primary,
                   child: ListView(
                     padding: const EdgeInsets.all(20),
                     children: [
                       // ── Primary Doctor ──
-                      _sectionLabel('Primary Doctor (Clinic Owner)', Icons.admin_panel_settings_rounded, AppColors.primary),
+                      _sectionLabel('Primary Doctor (Clinic Owner)', Icons.admin_panel_settings_rounded, context.colors.primary),
                       const SizedBox(height: 10),
                       ..._doctors
                           .where((d) => d['is_primary'] == true)
@@ -172,7 +174,7 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
                       const SizedBox(height: 28),
 
                       // ── Working Doctors ──
-                      _sectionLabel('Working Doctors', Icons.group_rounded, AppColors.accent),
+                      _sectionLabel('Working Doctors', Icons.group_rounded, context.colors.accent),
                       const SizedBox(height: 10),
                       ..._doctors
                           .where((d) => d['is_primary'] != true)
@@ -192,11 +194,11 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
     child: Padding(
       padding: const EdgeInsets.all(32),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
+        Icon(Icons.error_outline_rounded, size: 48, color: context.colors.error),
         const SizedBox(height: 12),
-        Text('Failed to load doctors', style: AppTextStyles.label),
+        Text('Failed to load doctors', style: context.textStyles.label),
         const SizedBox(height: 8),
-        Text(_error ?? '', style: AppTextStyles.caption, textAlign: TextAlign.center),
+        Text(_error ?? '', style: context.textStyles.caption, textAlign: TextAlign.center),
         const SizedBox(height: 16),
         ElevatedButton(onPressed: _load, child: const Text('Retry')),
       ]),
@@ -210,16 +212,16 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
       child: Icon(icon, size: 16, color: color),
     ),
     const SizedBox(width: 10),
-    Text(text, style: AppTextStyles.label.copyWith(fontSize: 14, color: AppColors.textPrimary)),
+    Text(text, style: context.textStyles.label.copyWith(fontSize: 14, color: context.colors.textPrimary)),
   ]);
 
   Widget _emptyState(String msg, IconData icon) => Container(
     padding: const EdgeInsets.all(24),
-    decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: AppColors.border)),
+    decoration: BoxDecoration(color: context.colors.surface, borderRadius: BorderRadius.circular(14), border: Border.all(color: context.colors.border)),
     child: Column(mainAxisSize: MainAxisSize.min, children: [
-      Icon(icon, size: 36, color: AppColors.textHint),
+      Icon(icon, size: 36, color: context.colors.textHint),
       const SizedBox(height: 8),
-      Text(msg, style: AppTextStyles.caption, textAlign: TextAlign.center),
+      Text(msg, style: context.textStyles.caption, textAlign: TextAlign.center),
     ]),
   );
 
@@ -229,9 +231,9 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+        border: Border.all(color: context.colors.primary.withValues(alpha: 0.3)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
@@ -239,31 +241,31 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
           const SizedBox(width: 12),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              Flexible(child: Text(doc['name'] ?? '', style: AppTextStyles.label.copyWith(fontSize: 15), overflow: TextOverflow.ellipsis)),
+              Flexible(child: Text(doc['name'] ?? '', style: context.textStyles.label.copyWith(fontSize: 15), overflow: TextOverflow.ellipsis)),
               const SizedBox(width: 6),
-              _badge('OWNER', AppColors.primary),
+              _badge('OWNER', context.colors.primary),
             ]),
             // Primary doctor uses an internal auto-generated username — don't show it
           ])),
           // Edit schedule/treatments allowed
-          _iconBtn(Icons.edit_rounded, AppColors.primary, () => _openEdit(doc['id'])),
+          _iconBtn(Icons.edit_rounded, context.colors.primary, () => _openEdit(doc['id'])),
         ]),
         const SizedBox(height: 10),
-        Divider(height: 1, color: AppColors.border),
+        Divider(height: 1, color: context.colors.border),
         const SizedBox(height: 10),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: AppColors.info.withValues(alpha: 0.06),
+            color: context.colors.info.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.info.withValues(alpha: 0.2)),
+            border: Border.all(color: context.colors.info.withValues(alpha: 0.2)),
           ),
           child: Row(children: [
-            Icon(Icons.info_outline_rounded, size: 14, color: AppColors.info),
+            Icon(Icons.info_outline_rounded, size: 14, color: context.colors.info),
             const SizedBox(width: 8),
             Expanded(child: Text(
               'Password is managed via the clinic account (Privacy & Security).',
-              style: AppTextStyles.caption.copyWith(fontSize: 11, color: AppColors.info),
+              style: context.textStyles.caption.copyWith(fontSize: 11, color: context.colors.info),
             )),
           ]),
         ),
@@ -280,9 +282,9 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: isActive ? AppColors.border : AppColors.error.withValues(alpha: 0.3)),
+        border: Border.all(color: isActive ? context.colors.border : context.colors.error.withValues(alpha: 0.3)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // Header
@@ -293,25 +295,25 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Flexible(child: Text(doc['name'] ?? '', style: AppTextStyles.label.copyWith(fontSize: 15), overflow: TextOverflow.ellipsis)),
+                Flexible(child: Text(doc['name'] ?? '', style: context.textStyles.label.copyWith(fontSize: 15), overflow: TextOverflow.ellipsis)),
                 const SizedBox(width: 6),
-                _badge(isActive ? 'ACTIVE' : 'INACTIVE', isActive ? AppColors.success : AppColors.error),
+                _badge(isActive ? 'ACTIVE' : 'INACTIVE', isActive ? context.colors.success : context.colors.error),
               ]),
-              Text('@${doc['username'] ?? ''}', style: AppTextStyles.caption.copyWith(fontSize: 11)),
+              Text('@${doc['username'] ?? ''}', style: context.textStyles.caption.copyWith(fontSize: 11)),
             ])),
-            _iconBtn(Icons.edit_rounded, AppColors.primary, () => _openEdit(doc['id'])),
+            _iconBtn(Icons.edit_rounded, context.colors.primary, () => _openEdit(doc['id'])),
           ]),
         ),
 
         const SizedBox(height: 12),
-        Divider(height: 1, color: AppColors.border, indent: 16, endIndent: 16),
+        Divider(height: 1, color: context.colors.border, indent: 16, endIndent: 16),
         const SizedBox(height: 12),
 
         // Restrictions
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text('Access & Restrictions', style: AppTextStyles.caption.copyWith(
-            fontWeight: FontWeight.w600, color: AppColors.textSecondary, fontSize: 11,
+          child: Text('Access & Restrictions', style: context.textStyles.caption.copyWith(
+            fontWeight: FontWeight.w600, color: context.colors.textSecondary, fontSize: 11,
           )),
         ),
         const SizedBox(height: 6),
@@ -336,29 +338,29 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
           subtitle: 'Allow this doctor to log in',
           value: isActive,
           onChanged: (_) => _toggleField(doc['id'], 'is_active', isActive),
-          activeColor: isActive ? AppColors.success : AppColors.error,
+          activeColor: isActive ? context.colors.success : context.colors.error,
         ),
 
         const SizedBox(height: 8),
-        Divider(height: 1, color: AppColors.border, indent: 16, endIndent: 16),
+        Divider(height: 1, color: context.colors.border, indent: 16, endIndent: 16),
         const SizedBox(height: 12),
 
         // Reset Password button
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
           child: GestureDetector(
             onTap: () => _showResetPasswordDialog(doc['id'], doc['name'] ?? ''),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              padding: EdgeInsets.symmetric(horizontal: 14, vertical: 9),
               decoration: BoxDecoration(
-                color: AppColors.warning.withValues(alpha: 0.08),
+                color: context.colors.warning.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                border: Border.all(color: context.colors.warning.withValues(alpha: 0.3)),
               ),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.lock_reset_rounded, size: 15, color: AppColors.warning),
+                Icon(Icons.lock_reset_rounded, size: 15, color: context.colors.warning),
                 const SizedBox(width: 6),
-                Text('Reset Login Password', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600)),
+                Text('Reset Login Password', style: context.textStyles.caption.copyWith(color: context.colors.warning, fontWeight: FontWeight.w600)),
               ]),
             ),
           ),
@@ -373,15 +375,16 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
     required String subtitle,
     required bool value,
     required ValueChanged<bool> onChanged,
-    Color activeColor = AppColors.primary,
+    Color? activeColor,
   }) {
+    activeColor ??= context.colors.primary;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       child: SwitchListTile.adaptive(
         contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-        secondary: Icon(icon, size: 18, color: value ? activeColor : AppColors.textHint),
-        title: Text(label, style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600, fontSize: 12, color: AppColors.textPrimary)),
-        subtitle: Text(subtitle, style: AppTextStyles.caption.copyWith(fontSize: 10)),
+        secondary: Icon(icon, size: 18, color: value ? activeColor : context.colors.textHint),
+        title: Text(label, style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600, fontSize: 12, color: context.colors.textPrimary)),
+        subtitle: Text(subtitle, style: context.textStyles.caption.copyWith(fontSize: 10)),
         value: value,
         onChanged: onChanged,
         activeColor: activeColor,
@@ -393,21 +396,21 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
   Widget _avatar(String? photoUrl, {required bool isPrimary}) => Container(
     width: 44, height: 44,
     decoration: BoxDecoration(
-      gradient: photoUrl == null ? (isPrimary ? AppColors.heroGradient : null) : null,
-      color: photoUrl == null && !isPrimary ? AppColors.accent.withValues(alpha: 0.1) : null,
+      gradient: photoUrl == null ? (isPrimary ? context.colors.heroGradient : null) : null,
+      color: photoUrl == null && !isPrimary ? context.colors.accent.withValues(alpha: 0.1) : null,
       borderRadius: BorderRadius.circular(12),
       image: photoUrl != null ? DecorationImage(image: NetworkImage(photoUrl), fit: BoxFit.cover) : null,
     ),
     child: photoUrl == null
         ? Icon(isPrimary ? Icons.star_rounded : Icons.person_rounded,
-            color: isPrimary ? Colors.white : AppColors.accent, size: 22)
+            color: isPrimary ? Colors.white : context.colors.accent, size: 22)
         : null,
   );
 
   Widget _badge(String text, Color color) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
     decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
-    child: Text(text, style: AppTextStyles.caption.copyWith(color: color, fontSize: 9, fontWeight: FontWeight.w700)),
+    child: Text(text, style: context.textStyles.caption.copyWith(color: color, fontSize: 9, fontWeight: FontWeight.w700)),
   );
 
   Widget _iconBtn(IconData icon, Color color, VoidCallback onTap) => GestureDetector(
@@ -479,18 +482,18 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    backgroundColor: AppColors.surface,
+    backgroundColor: context.colors.surface,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     title: Row(children: [
       Container(
         width: 36, height: 36,
-        decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-        child: const Icon(Icons.lock_reset_rounded, color: AppColors.warning, size: 18),
+        decoration: BoxDecoration(color: context.colors.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+        child: Icon(Icons.lock_reset_rounded, color: context.colors.warning, size: 18),
       ),
-      const SizedBox(width: 10),
+      SizedBox(width: 10),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Reset Password', style: AppTextStyles.h3),
-        Text(widget.label, style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 11)),
+        Text('Reset Password', style: context.textStyles.h3),
+        Text(widget.label, style: context.textStyles.caption.copyWith(color: context.colors.textHint, fontSize: 11)),
       ])),
     ]),
     content: SizedBox(
@@ -498,12 +501,12 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         if (_error != null) ...[
           Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+            padding: EdgeInsets.all(10),
+            decoration: BoxDecoration(color: context.colors.error.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
             child: Row(children: [
-              const Icon(Icons.error_outline_rounded, size: 14, color: AppColors.error),
+              Icon(Icons.error_outline_rounded, size: 14, color: context.colors.error),
               const SizedBox(width: 6),
-              Expanded(child: Text(_error!, style: AppTextStyles.caption.copyWith(color: AppColors.error, fontSize: 11))),
+              Expanded(child: Text(_error!, style: context.textStyles.caption.copyWith(color: context.colors.error, fontSize: 11))),
             ]),
           ),
           const SizedBox(height: 12),
@@ -516,19 +519,19 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
     actions: [
       TextButton(
         onPressed: _loading ? null : () => Navigator.pop(context, false),
-        child: Text('Cancel', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+        child: Text('Cancel', style: context.textStyles.caption.copyWith(color: context.colors.textSecondary)),
       ),
       ElevatedButton(
         onPressed: _loading ? null : _submit,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.warning,
+          backgroundColor: context.colors.warning,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         ),
         child: _loading
-            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : Text('Reset', style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+            ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            : Text('Reset', style: context.textStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
       ),
     ],
   );
@@ -537,19 +540,19 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
     TextField(
       controller: ctrl,
       obscureText: obscure,
-      style: AppTextStyles.bodyMedium,
+      style: context.textStyles.bodyMedium,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-        prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.textHint, size: 18),
+        labelStyle: context.textStyles.caption.copyWith(color: context.colors.textHint),
+        prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint, size: 18),
         suffixIcon: IconButton(
-          icon: Icon(obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: AppColors.textHint, size: 18),
+          icon: Icon(obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: context.colors.textHint, size: 18),
           onPressed: toggle,
         ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary)),
-        filled: true, fillColor: AppColors.background, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.colors.border)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.colors.primary)),
+        filled: true, fillColor: context.colors.background, contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
     );
 }

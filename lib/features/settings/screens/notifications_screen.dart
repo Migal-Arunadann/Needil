@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -63,7 +65,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Notification preferences saved ✓'),
-          backgroundColor: AppColors.success,
+          backgroundColor: context.colors.success,
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -75,19 +77,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         surfaceTintColor: Colors.transparent,
-        title: Text('Notifications', style: AppTextStyles.h2),
+        title: Text('Notifications', style: context.textStyles.h2),
         centerTitle: true,
         actions: [
           TextButton(
             onPressed: _savePrefs,
             child: Text(
               'Save',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.primary,
+              style: context.textStyles.bodyMedium.copyWith(
+                color: context.colors.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -95,8 +97,8 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         ],
       ),
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: AppColors.primary))
+          ? Center(
+              child: CircularProgressIndicator(color: context.colors.primary))
           : SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
               child: Column(
@@ -112,7 +114,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         'Alert when a scheduled patient hasn\'t arrived within $_lateMins min of appointment time',
                     icon: Icons.timer_off_outlined,
                     value: _patientLateReminder,
-                    color: AppColors.warning,
+                    color: context.colors.warning,
                     onChanged: (v) =>
                         setState(() => _patientLateReminder = v),
                   ),
@@ -127,7 +129,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         'Alert when a consultation appointment passes with no patient check-in',
                     icon: Icons.medical_information_outlined,
                     value: _missedConsultation,
-                    color: AppColors.error,
+                    color: context.colors.error,
                     onChanged: (v) =>
                         setState(() => _missedConsultation = v),
                   ),
@@ -138,7 +140,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         'Alert when a treatment session passes with no patient check-in',
                     icon: Icons.event_busy_outlined,
                     value: _missedSession,
-                    color: AppColors.error,
+                    color: context.colors.error,
                     onChanged: (v) =>
                         setState(() => _missedSession = v),
                   ),
@@ -169,7 +171,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     subtitle: 'Remind you before upcoming appointments',
                     icon: Icons.notifications_active_outlined,
                     value: _appointmentReminders,
-                    color: AppColors.primary,
+                    color: context.colors.primary,
                     onChanged: (v) =>
                         setState(() => _appointmentReminders = v),
                   ),
@@ -180,7 +182,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         'Notify when a new appointment is scheduled',
                     icon: Icons.add_circle_outline,
                     value: _newAppointmentBooked,
-                    color: AppColors.success,
+                    color: context.colors.success,
                     onChanged: (v) =>
                         setState(() => _newAppointmentBooked = v),
                   ),
@@ -191,7 +193,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         'Notify when an appointment is cancelled',
                     icon: Icons.cancel_outlined,
                     value: _appointmentCancelled,
-                    color: AppColors.error,
+                    color: context.colors.error,
                     onChanged: (v) =>
                         setState(() => _appointmentCancelled = v),
                   ),
@@ -208,15 +210,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.1),
+            color: context.colors.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: AppColors.primary, size: 18),
+          child: Icon(icon, color: context.colors.primary, size: 18),
         ),
         const SizedBox(width: 10),
         Text(title,
-            style: AppTextStyles.label
-                .copyWith(fontSize: 14, color: AppColors.textSecondary)),
+            style: context.textStyles.label
+                .copyWith(fontSize: 14, color: context.colors.textSecondary)),
       ],
     );
   }
@@ -232,9 +234,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: context.colors.border),
       ),
       child: Row(
         children: [
@@ -252,11 +254,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: AppTextStyles.label.copyWith(fontSize: 14)),
+                Text(title, style: context.textStyles.label.copyWith(fontSize: 14)),
                 const SizedBox(height: 4),
                 Text(subtitle,
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.textHint, fontSize: 11)),
+                    style: context.textStyles.caption
+                        .copyWith(color: context.colors.textHint, fontSize: 11)),
               ],
             ),
           ),
@@ -276,13 +278,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       margin: const EdgeInsets.only(left: 54),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: AppColors.warning.withValues(alpha: 0.06),
+        color: context.colors.warning.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.warning.withValues(alpha: 0.2)),
+        border: Border.all(color: context.colors.warning.withValues(alpha: 0.2)),
       ),
       child: Row(
         children: [
-          Text('Alert after', style: AppTextStyles.bodyMedium.copyWith(fontSize: 13)),
+          Text('Alert after', style: context.textStyles.bodyMedium.copyWith(fontSize: 13)),
           const SizedBox(width: 12),
           ...([5, 10, 15, 20].map((mins) => Padding(
                 padding: const EdgeInsets.only(right: 6),
@@ -294,13 +296,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: _lateMins == mins
-                          ? AppColors.warning
-                          : AppColors.surface,
+                          ? context.colors.warning
+                          : context.colors.surface,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: _lateMins == mins
-                            ? AppColors.warning
-                            : AppColors.border,
+                            ? context.colors.warning
+                            : context.colors.border,
                       ),
                     ),
                     child: Text(
@@ -309,7 +311,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
                         color:
-                            _lateMins == mins ? Colors.white : AppColors.textSecondary,
+                            _lateMins == mins ? Colors.white : context.colors.textSecondary,
                       ),
                     ),
                   ),

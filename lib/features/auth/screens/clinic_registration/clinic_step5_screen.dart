@@ -10,6 +10,8 @@ import '../../../../core/widgets/loading_overlay.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/registration_cache_provider.dart';
 import '../../screens/otp_verification_screen.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 /// Clinic Registration — Step 5 of 5: Receptionist Account.
 class ClinicStep5Screen extends ConsumerStatefulWidget {
@@ -26,6 +28,7 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
   final _recUsernameCtrl = TextEditingController();
   final _recPasswordCtrl = TextEditingController();
   bool _obscurePassword = true;
+  bool _isSubmitting = false; // Local guard against double-tap
 
   Timer? _debounce;
   bool _isCheckingUsername = false;
@@ -90,13 +93,14 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: AppColors.error,
+      backgroundColor: context.colors.error,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ));
   }
 
   Future<void> _submit() async {
+    if (_isSubmitting) return; // Prevent double-tap
     FocusScope.of(context).unfocus();
 
     // Validate receptionist if enabled
@@ -163,6 +167,7 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
       if (additionalDoctors != null) 'additional_doctors': additionalDoctors,
       if (receptionistData != null) 'receptionist_data': receptionistData,
     };
+    setState(() => _isSubmitting = true);
     await ref.read(authProvider.notifier).completeClinicRegistration(
       clinicName: widget.clinicData['clinic_name'],
       username: widget.clinicData['username'],
@@ -177,41 +182,34 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
       stateField: widget.clinicData['state'],
       pincode: widget.clinicData['pincode'],
     );
+    if (mounted) {
+      setState(() => _isSubmitting = false);
+      final finalState = ref.read(authProvider);
+      if (finalState.error != null) {
+        _showSnack(finalState.error!);
+      } else if (finalState.isAuthenticated) {
+        ref.read(registrationCacheProvider.notifier).clear();
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
-    ref.listen<AuthState>(authProvider, (prev, next) {
-      if (next.error != null && next.error != prev?.error) {
-        _showSnack(next.error!);
-      }
-      if (next.isAuthenticated && !(prev?.isAuthenticated ?? false)) {
-        // Clear registration cache
-        ref.read(registrationCacheProvider.notifier).clear();
-        // Pop all registration screens so app.dart's reactive home (MainLayout)
-        // becomes the root. Using popUntil(first) is safe here because the user
-        // was navigating forward through registration steps — there is no
-        // "back" they would want to return to.
-        if (mounted) {
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        }
-      }
-    });
-
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
             onPressed: () { FocusScope.of(context).unfocus(); Navigator.of(context).pop(); },
           ),
-          title: Text('Clinic Registration', style: AppTextStyles.h4),
+          title: Text('Clinic Registration', style: context.textStyles.h4),
           centerTitle: true,
         ),
         body: LoadingOverlay(
@@ -228,10 +226,10 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
                   const SizedBox(height: 24),
 
                   // Header
-                  Text('Almost Done!', style: AppTextStyles.h2),
+                  Text('Almost Done!', style: context.textStyles.h2),
                   const SizedBox(height: 6),
                   Text('Optionally set up a receptionist account for your clinic.',
-                    style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+                    style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
                   const SizedBox(height: 32),
 
                   // Summary card
@@ -244,15 +242,15 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
 
                   AppButton(
                     label: 'Create Clinic',
-                    onPressed: _submit,
-                    isLoading: authState.isLoading,
+                    onPressed: (_isSubmitting || authState.isLoading) ? null : _submit,
+                    isLoading: _isSubmitting || authState.isLoading,
                     icon: Icons.check_circle_outline_rounded,
                   ),
                   const SizedBox(height: 12),
                   if (!_enableReceptionist)
                     Center(child: Text(
                       'You can add a receptionist later from Settings.',
-                      style: AppTextStyles.caption.copyWith(color: AppColors.textHint),
+                      style: context.textStyles.caption.copyWith(color: context.colors.textHint),
                       textAlign: TextAlign.center,
                     )),
                   const SizedBox(height: 32),
@@ -274,21 +272,21 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [AppColors.primary.withValues(alpha: 0.07), AppColors.accent.withValues(alpha: 0.05)],
+          colors: [context.colors.primary.withValues(alpha: 0.07), context.colors.accent.withValues(alpha: 0.05)],
           begin: Alignment.topLeft, end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+        border: Border.all(color: context.colors.primary.withValues(alpha: 0.15)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
           Container(
             padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-            child: Icon(Icons.check_circle_rounded, color: AppColors.primary, size: 20),
+            decoration: BoxDecoration(color: context.colors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+            child: Icon(Icons.check_circle_rounded, color: context.colors.primary, size: 20),
           ),
           const SizedBox(width: 12),
-          Text('Registration Summary', style: AppTextStyles.label.copyWith(fontSize: 15)),
+          Text('Registration Summary', style: context.textStyles.label.copyWith(fontSize: 15)),
         ]),
         const SizedBox(height: 16),
         _summaryRow(Icons.local_hospital_rounded, 'Clinic', widget.clinicData['clinic_name'] ?? ''),
@@ -304,20 +302,20 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
 
   Widget _summaryRow(IconData icon, String label, String value) {
     return Row(children: [
-      Icon(icon, size: 16, color: AppColors.textHint),
+      Icon(icon, size: 16, color: context.colors.textHint),
       const SizedBox(width: 8),
-      Text('$label: ', style: AppTextStyles.caption.copyWith(color: AppColors.textHint)),
-      Expanded(child: Text(value, style: AppTextStyles.caption.copyWith(color: AppColors.textPrimary, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+      Text('$label: ', style: context.textStyles.caption.copyWith(color: context.colors.textHint)),
+      Expanded(child: Text(value, style: context.textStyles.caption.copyWith(color: context.colors.textPrimary, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
     ]);
   }
 
   Widget _buildReceptionistCard() {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: _enableReceptionist ? AppColors.info.withValues(alpha: 0.04) : AppColors.surface,
+        color: _enableReceptionist ? context.colors.info.withValues(alpha: 0.04) : context.colors.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _enableReceptionist ? AppColors.info.withValues(alpha: 0.3) : AppColors.border),
+        border: Border.all(color: _enableReceptionist ? context.colors.info.withValues(alpha: 0.3) : context.colors.border),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // Toggle row
@@ -325,37 +323,37 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
           Container(
             width: 44, height: 44,
             decoration: BoxDecoration(
-              color: AppColors.info.withValues(alpha: 0.1),
+              color: context.colors.info.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(13),
             ),
-            child: const Icon(Icons.support_agent_rounded, color: AppColors.info, size: 24),
+            child: Icon(Icons.support_agent_rounded, color: context.colors.info, size: 24),
           ),
           const SizedBox(width: 14),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Receptionist Account', style: AppTextStyles.label.copyWith(fontSize: 15)),
+            Text('Receptionist Account', style: context.textStyles.label.copyWith(fontSize: 15)),
             const SizedBox(height: 3),
             Text('Enable to add a receptionist login',
-              style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 11)),
+              style: context.textStyles.caption.copyWith(color: context.colors.textHint, fontSize: 11)),
           ])),
           Switch.adaptive(
             value: _enableReceptionist,
             onChanged: (v) => setState(() => _enableReceptionist = v),
-            activeColor: AppColors.info,
+            activeColor: context.colors.info,
           ),
         ]),
 
         if (_enableReceptionist) ...[
-          const SizedBox(height: 20),
-          Divider(color: AppColors.border.withValues(alpha: 0.5), height: 1),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
+          Divider(color: context.colors.border.withValues(alpha: 0.5), height: 1),
+          SizedBox(height: 20),
 
           AppTextField(
             label: 'Receptionist Name',
             hint: 'e.g. Priya',
             controller: _recNameCtrl,
-            prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.textHint),
+            prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
 
           Stack(
             alignment: Alignment.centerRight,
@@ -365,30 +363,30 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
                 hint: 'Login username for receptionist',
                 controller: _recUsernameCtrl,
                 errorText: _usernameError,
-                prefixIcon: const Icon(Icons.alternate_email_rounded, color: AppColors.textHint),
+                prefixIcon: Icon(Icons.alternate_email_rounded, color: context.colors.textHint),
               ),
               if (_isCheckingUsername)
-                const Positioned(
+                Positioned(
                   right: 16,
                   top: 40,
                   child: SizedBox(
                     width: 16, height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
                   ),
                 ),
             ],
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
 
           AppTextField(
             label: 'Password',
             hint: 'Min 8 characters',
             controller: _recPasswordCtrl,
-            prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.textHint),
+            prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint),
             suffixIcon: GestureDetector(
               onTap: () => setState(() => _obscurePassword = !_obscurePassword),
               child: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                color: AppColors.textHint, size: 20),
+                color: context.colors.textHint, size: 20),
             ),
           ),
 
@@ -396,16 +394,16 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.info.withValues(alpha: 0.06),
+              color: context.colors.info.withValues(alpha: 0.06),
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.info.withValues(alpha: 0.2)),
+              border: Border.all(color: context.colors.info.withValues(alpha: 0.2)),
             ),
             child: Row(children: [
-              Icon(Icons.shield_outlined, color: AppColors.info, size: 16),
+              Icon(Icons.shield_outlined, color: context.colors.info, size: 16),
               const SizedBox(width: 8),
               Expanded(child: Text(
                 'Receptionists can manage appointments and patients, but cannot access medical records or consultations.',
-                style: AppTextStyles.caption.copyWith(color: AppColors.info, fontSize: 11),
+                style: context.textStyles.caption.copyWith(color: context.colors.info, fontSize: 11),
               )),
             ]),
           ),
@@ -423,7 +421,7 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
             margin: EdgeInsets.only(right: step < total ? 6 : 0),
             height: 4,
             decoration: BoxDecoration(
-              color: step <= current ? AppColors.primary : AppColors.border,
+              color: step <= current ? context.colors.primary : context.colors.border,
               borderRadius: BorderRadius.circular(2),
             ),
           ),

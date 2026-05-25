@@ -147,6 +147,7 @@ class SessionsNotifier extends StateNotifier<SessionsState> {
     int? pulse,
     String? remarks,
     List<String> photoPaths = const [],
+    bool isCompleted = true,
   }) async {
     try {
       final session = await _service.recordSession(
@@ -156,6 +157,7 @@ class SessionsNotifier extends StateNotifier<SessionsState> {
         pulse: pulse,
         remarks: remarks,
         photoPaths: photoPaths,
+        isCompleted: isCompleted,
       );
       // Update the session in the list
       final updated = state.sessions.map((s) {

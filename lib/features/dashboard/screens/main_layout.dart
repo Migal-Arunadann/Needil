@@ -12,6 +12,9 @@ import '../../settings/screens/settings_screen.dart';
 import '../../../core/widgets/expandable_fab.dart';
 import '../../patients/screens/patient_list_screen.dart';
 import '../../analytics/screens/analytics_screen.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+import '../../appointments/providers/appointment_provider.dart';
+
 
 /// Global key to access MainLayout state from dashboard screens.
 final mainLayoutKey = GlobalKey<MainLayoutState>();
@@ -154,10 +157,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: context.colors.surface,
           boxShadow: [
             BoxShadow(
-              color: AppColors.textPrimary.withValues(alpha: 0.05),
+              color: context.colors.textPrimary.withValues(alpha: 0.05),
               blurRadius: 20,
               offset: const Offset(0, -5),
             )
@@ -180,7 +183,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isSelected = _currentIndex == index;
-    final color = isSelected ? AppColors.primary : AppColors.textHint;
+    final color = isSelected ? context.colors.primary : context.colors.textHint;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -188,13 +191,19 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         if (_currentIndex == index) return;
         HapticFeedback.selectionClick();
         setState(() => _currentIndex = index);
+        // Refresh appointments when switching to the Appts tab
+        final tabs = _getTabsForRole(ref.read(authProvider).role);
+        final isApptsTab = index < tabs.length && tabs[index].label == 'Appts';
+        if (isApptsTab) {
+          ref.read(appointmentListProvider.notifier).loadAppointments();
+        }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 80),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: isSelected
-              ? AppColors.primary.withValues(alpha: 0.1)
+              ? context.colors.primary.withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),

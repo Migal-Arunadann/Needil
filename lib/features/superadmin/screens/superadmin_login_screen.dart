@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../auth/providers/auth_provider.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 // ── Superadmin colour palette ──────────────────────────────────────────────
 class _SA {
@@ -221,14 +223,14 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
                         child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 42),
                       ),
                       const SizedBox(height: 28),
-                      Text('Superadmin Access', style: AppTextStyles.h2.copyWith(color: _SA.textPrimary)),
+                      Text('Superadmin Access', style: context.textStyles.h2.copyWith(color: _SA.textPrimary)),
                       const SizedBox(height: 8),
                       Text(
                         _otpPhase
                             ? 'OTP sent to ${_pendingEmail ?? ''}\nEnter the 6-digit code below.'
                             : 'Restricted access. Enter your\nadmin credentials to continue.',
                         textAlign: TextAlign.center,
-                        style: AppTextStyles.bodyMedium.copyWith(color: _SA.textSecondary, height: 1.6),
+                        style: context.textStyles.bodyMedium.copyWith(color: _SA.textSecondary, height: 1.6),
                       ),
                       const SizedBox(height: 48),
 
@@ -255,7 +257,7 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
                         },
                         icon: Icon(Icons.arrow_back_rounded, size: 16, color: _SA.textHint),
                         label: Text(_otpPhase ? 'Back to credentials' : 'Back to login',
-                          style: AppTextStyles.caption.copyWith(color: _SA.textHint)),
+                          style: context.textStyles.caption.copyWith(color: _SA.textHint)),
                       ),
                       const SizedBox(height: 40),
                     ],
@@ -305,7 +307,7 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
               keyboardType: TextInputType.number,
               maxLength: 1,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              style: AppTextStyles.h3.copyWith(color: _SA.textPrimary, fontSize: 22),
+              style: context.textStyles.h3.copyWith(color: _SA.textPrimary, fontSize: 22),
               decoration: InputDecoration(
                 contentPadding: EdgeInsets.zero,
                 counterText: '',
@@ -328,12 +330,12 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
   Widget _buildResendRow() {
     final canResend = _otpSeconds == 0;
     return Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-      Text("Didn't receive it? ", style: AppTextStyles.caption.copyWith(color: _SA.textHint)),
+      Text("Didn't receive it? ", style: context.textStyles.caption.copyWith(color: _SA.textHint)),
       GestureDetector(
         onTap: canResend ? _resendOtp : null,
         child: Text(
           canResend ? 'Resend OTP' : 'Resend in $_timerLabel',
-          style: AppTextStyles.caption.copyWith(color: canResend ? _SA.accent : _SA.textHint, fontWeight: FontWeight.w700),
+          style: context.textStyles.caption.copyWith(color: canResend ? _SA.accent : _SA.textHint, fontWeight: FontWeight.w700),
         ),
       ),
     ]);
@@ -353,7 +355,7 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
         child: Center(
           child: _isLoading
               ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-              : Text(label, style: AppTextStyles.buttonLarge.copyWith(color: Colors.white)),
+              : Text(label, style: context.textStyles.buttonLarge.copyWith(color: Colors.white)),
         ),
       ),
     );
@@ -371,10 +373,10 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
       controller: controller,
       keyboardType: type,
       obscureText: obscure,
-      style: AppTextStyles.bodyMedium.copyWith(color: _SA.textPrimary),
+      style: context.textStyles.bodyMedium.copyWith(color: _SA.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: AppTextStyles.caption.copyWith(color: _SA.textHint),
+        labelStyle: context.textStyles.caption.copyWith(color: _SA.textHint),
         prefixIcon: Icon(icon, color: _SA.textHint, size: 20),
         suffixIcon: suffixIcon,
         filled: true, fillColor: _SA.card,

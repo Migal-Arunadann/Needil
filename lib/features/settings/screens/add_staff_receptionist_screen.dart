@@ -6,6 +6,8 @@ import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
 import '../../auth/providers/auth_provider.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class AddStaffReceptionistScreen extends ConsumerStatefulWidget {
   const AddStaffReceptionistScreen({super.key});
@@ -71,7 +73,7 @@ class _AddStaffReceptionistScreenState extends ConsumerState<AddStaffReceptionis
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: isError ? AppColors.error : AppColors.success,
+      backgroundColor: isError ? context.colors.error : context.colors.success,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ));
@@ -109,15 +111,15 @@ class _AddStaffReceptionistScreenState extends ConsumerState<AddStaffReceptionis
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         appBar: AppBar(
-          backgroundColor: AppColors.surface,
+          backgroundColor: context.colors.surface,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+            icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
             onPressed: () => Navigator.pop(context, false),
           ),
-          title: Text('Add Receptionist', style: AppTextStyles.h4),
+          title: Text('Add Receptionist', style: context.textStyles.h4),
           centerTitle: true,
         ),
         body: SafeArea(
@@ -130,31 +132,31 @@ class _AddStaffReceptionistScreenState extends ConsumerState<AddStaffReceptionis
                 children: [
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.info.withValues(alpha: 0.1),
+                      color: context.colors.info.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.all(10),
+                          padding: EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.6),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(Icons.support_agent_rounded, color: AppColors.info, size: 28),
+                          child: Icon(Icons.support_agent_rounded, color: context.colors.info, size: 28),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Receptionist Details', style: AppTextStyles.label.copyWith(fontSize: 15)),
+                              Text('Receptionist Details', style: context.textStyles.label.copyWith(fontSize: 15)),
                               const SizedBox(height: 2),
                               Text(
                                 'Receptionists can manage appointments but cannot access medical records.',
-                                style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 11),
+                                style: context.textStyles.caption.copyWith(color: context.colors.textHint, fontSize: 11),
                               ),
                             ],
                           ),
@@ -162,17 +164,17 @@ class _AddStaffReceptionistScreenState extends ConsumerState<AddStaffReceptionis
                       ],
                     ),
                   ),
-                  const SizedBox(height: 28),
+                  SizedBox(height: 28),
 
                   AppTextField(
                     label: 'Full Name',
                     hint: 'e.g. Priya Sharma',
                     controller: _nameCtrl,
                     validator: (v) => v == null || v.trim().isEmpty ? 'Name is required' : null,
-                    prefixIcon: const Icon(Icons.person_outline_rounded, color: AppColors.textHint),
+                    prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
                     textInputAction: TextInputAction.next,
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: 20),
 
                   Stack(
                     alignment: Alignment.centerRight,
@@ -187,31 +189,31 @@ class _AddStaffReceptionistScreenState extends ConsumerState<AddStaffReceptionis
                           if (v == null || v.length < 3) return 'Min 3 characters';
                           return null;
                         },
-                        prefixIcon: const Icon(Icons.alternate_email_rounded, color: AppColors.textHint),
+                        prefixIcon: Icon(Icons.alternate_email_rounded, color: context.colors.textHint),
                         textInputAction: TextInputAction.next,
                       ),
                       if (_isCheckingUsername)
-                        const Positioned(
+                        Positioned(
                           right: 16,
                           top: 40,
                           child: SizedBox(
                             width: 16, height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                            child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
                           ),
                         ),
                     ],
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: 20),
 
                   AppTextField(
                     label: 'Phone (optional)',
                     hint: 'Contact number',
                     controller: _phoneCtrl,
                     keyboardType: TextInputType.phone,
-                    prefixIcon: const Icon(Icons.phone_outlined, color: AppColors.textHint),
+                    prefixIcon: Icon(Icons.phone_outlined, color: context.colors.textHint),
                     textInputAction: TextInputAction.next,
                   ),
-                  const SizedBox(height: 20),
+                  SizedBox(height: 20),
 
                   AppTextField(
                     label: 'Password',
@@ -219,11 +221,11 @@ class _AddStaffReceptionistScreenState extends ConsumerState<AddStaffReceptionis
                     controller: _passwordCtrl,
                     obscureText: _obscurePassword,
                     validator: (v) => v == null || v.length < 8 ? 'Password must be at least 8 characters' : null,
-                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.textHint),
+                    prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint),
                     suffixIcon: GestureDetector(
                       onTap: () => setState(() => _obscurePassword = !_obscurePassword),
                       child: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                        color: AppColors.textHint, size: 20),
+                        color: context.colors.textHint, size: 20),
                     ),
                     textInputAction: TextInputAction.done,
                   ),

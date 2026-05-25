@@ -18,6 +18,8 @@ import '../../scheduling/screens/available_slots_screen.dart';
 import '../providers/appointment_provider.dart';
 import '../../../core/services/auth_service.dart';
 import '../../patients/models/patient_model.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class CreateAppointmentScreen extends ConsumerStatefulWidget {
   final bool initialIsCallBy;
@@ -53,6 +55,7 @@ class _CreateAppointmentScreenState
   final _occupationCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   String? _selectedGender;
+  bool _consentGiven = false;
 
   // Slot selection
   DateTime? _selectedDate;
@@ -220,7 +223,20 @@ class _CreateAppointmentScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Please select the patient\'s gender'),
-          backgroundColor: AppColors.error,
+          backgroundColor: context.colors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+      return;
+    }
+
+    // Consent is mandatory for walk-in
+    if (!_isCallBy && !_consentGiven) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Patient consent is required to proceed.'),
+          backgroundColor: context.colors.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
@@ -232,7 +248,7 @@ class _CreateAppointmentScreenState
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('Please select a time slot first'),
-          backgroundColor: AppColors.error,
+          backgroundColor: context.colors.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
@@ -261,7 +277,7 @@ class _CreateAppointmentScreenState
               'A patient can only have one consultation per day. '
               'Please find the existing appointment in the schedule.',
             ),
-            backgroundColor: AppColors.error,
+            backgroundColor: context.colors.error,
             behavior: SnackBarBehavior.floating,
             duration: const Duration(seconds: 6),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -277,10 +293,10 @@ class _CreateAppointmentScreenState
         context: context,
         builder: (ctx) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          backgroundColor: AppColors.surface,
+          backgroundColor: context.colors.surface,
           title: Row(
             children: [
-              const Icon(Icons.warning_amber_rounded, color: AppColors.warning, size: 22),
+              Icon(Icons.warning_amber_rounded, color: context.colors.warning, size: 22),
               const SizedBox(width: 10),
               const Expanded(child: Text('Slot Already Booked')),
             ],
@@ -292,7 +308,7 @@ class _CreateAppointmentScreenState
               child: const Text('Keep Old')
             ),
             ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning, foregroundColor: Colors.white),
+              style: ElevatedButton.styleFrom(backgroundColor: context.colors.warning, foregroundColor: Colors.white),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('Replace'),
             ),
@@ -311,13 +327,13 @@ class _CreateAppointmentScreenState
           context: context,
           builder: (ctx) => AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            backgroundColor: AppColors.surface,
+            backgroundColor: context.colors.surface,
             title: const Text('Confirm Reschedule'),
             content: Text('The old appointment on ${existingAppt.date} at ${TimeUtils.formatStringTime(existingAppt.time)} will be deleted and rescheduled to ${_formatDate(_selectedDate!)} at ${TimeUtils.formatStringTime(_selectedTimeStr!)}.\n\nProceed?'),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: AppColors.error, foregroundColor: Colors.white),
+                style: ElevatedButton.styleFrom(backgroundColor: context.colors.error, foregroundColor: Colors.white),
                 onPressed: () => Navigator.pop(ctx, true),
                 child: const Text('Yes, Replace'),
               ),
@@ -335,7 +351,7 @@ class _CreateAppointmentScreenState
           await ref.read(pocketbaseProvider).collection(PBCollections.appointments).delete(existingAppt.id);
         } catch (e) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete old appointment: $e'), backgroundColor: AppColors.error));
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete old appointment: $e'), backgroundColor: context.colors.error));
           }
           setState(() => _isSubmitting = false);
           return;
@@ -375,19 +391,70 @@ class _CreateAppointmentScreenState
         final schedService = SchedulingService(pb);
         final daySchedule = schedService.getScheduleForDay(doctor.workingSchedule, DateTime.now().weekday);
         if (daySchedule == null) {
-          setState(() => _isSubmitting = false);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Doctor is not scheduled to work today.'), backgroundColor: AppColors.error));
+          final proceed = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              backgroundColor: context.colors.surface,
+              title: Row(children: [
+                Icon(Icons.warning_amber_rounded, color: context.colors.warning, size: 24),
+                const SizedBox(width: 10),
+                Text('No Working Schedule', style: context.textStyles.h4),
+              ]),
+              content: Text(
+                'Doctor is not scheduled to work today. Do you still want to proceed?',
+                style: context.textStyles.bodyMedium,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: Text('Cancel', style: TextStyle(color: context.colors.textHint)),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  style: ElevatedButton.styleFrom(backgroundColor: context.colors.warning),
+                  child: const Text('Proceed Anyway', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          );
+          if (proceed != true) {
+            setState(() => _isSubmitting = false);
+            return;
           }
-          return;
-        }
-        
-        if (!schedService.isWithinWorkingHours(daySchedule, exactTimeStr)) {
-          setState(() => _isSubmitting = false);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Walk-in appointments can only be created during doctor\'s working hours.'), backgroundColor: AppColors.error));
+        } else if (!schedService.isWithinWorkingHours(daySchedule, exactTimeStr)) {
+          // Show confirmation dialog instead of hard-blocking
+          final proceed = await showDialog<bool>(
+            context: context,
+            builder: (dialogContext) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              backgroundColor: context.colors.surface,
+              title: Row(children: [
+                Icon(Icons.warning_amber_rounded, color: context.colors.warning, size: 24),
+                const SizedBox(width: 10),
+                Text('Outside Working Hours', style: context.textStyles.h4),
+              ]),
+              content: Text(
+                'The current time is outside the doctor\'s working hours.\nDo you still want to proceed with the walk-in?',
+                style: context.textStyles.bodyMedium,
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: Text('Cancel', style: TextStyle(color: context.colors.textHint)),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  style: ElevatedButton.styleFrom(backgroundColor: context.colors.warning),
+                  child: const Text('Proceed Anyway', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          );
+          if (proceed != true) {
+            setState(() => _isSubmitting = false);
+            return;
           }
-          return;
         }
 
         _selectedDate = now;
@@ -434,7 +501,7 @@ class _CreateAppointmentScreenState
         SnackBar(
           content:
               Text('${_isCallBy ? 'Call-by' : 'Walk-in'} appointment created!'),
-          backgroundColor: AppColors.success,
+          backgroundColor: context.colors.success,
           behavior: SnackBarBehavior.floating,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -448,7 +515,7 @@ class _CreateAppointmentScreenState
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(err),
-            backgroundColor: AppColors.error,
+            backgroundColor: context.colors.error,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
@@ -463,7 +530,7 @@ class _CreateAppointmentScreenState
     final isClinic = auth.role == UserRole.clinic;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -481,16 +548,16 @@ class _CreateAppointmentScreenState
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: AppColors.surface,
+                          color: context.colors.surface,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: context.colors.border),
                         ),
-                        child: const Icon(Icons.arrow_back_rounded,
-                            size: 20, color: AppColors.textPrimary),
+                        child: Icon(Icons.arrow_back_rounded,
+                            size: 20, color: context.colors.textPrimary),
                       ),
                     ),
                     const SizedBox(width: 14),
-                    Text('New Appointment', style: AppTextStyles.h2),
+                    Text('New Appointment', style: context.textStyles.h2),
                   ],
                 ),
                 const SizedBox(height: 28),
@@ -499,9 +566,9 @@ class _CreateAppointmentScreenState
                 Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
-                    color: AppColors.surface,
+                    color: context.colors.surface,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.border),
+                    border: Border.all(color: context.colors.border),
                   ),
                   child: Row(
                     children: [
@@ -524,7 +591,7 @@ class _CreateAppointmentScreenState
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: (_isCallBy ? AppColors.info : AppColors.accent)
+                    color: (_isCallBy ? context.colors.info : context.colors.accent)
                         .withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -534,7 +601,7 @@ class _CreateAppointmentScreenState
                         _isCallBy
                             ? Icons.info_outline_rounded
                             : Icons.directions_walk_rounded,
-                        color: _isCallBy ? AppColors.info : AppColors.accent,
+                        color: _isCallBy ? context.colors.info : context.colors.accent,
                         size: 20,
                       ),
                       const SizedBox(width: 10),
@@ -543,9 +610,9 @@ class _CreateAppointmentScreenState
                           _isCallBy
                               ? 'Book a future slot — patient calls to schedule.'
                               : 'Patient walked in — select a slot and enter details.',
-                          style: AppTextStyles.caption.copyWith(
+                          style: context.textStyles.caption.copyWith(
                             color:
-                                _isCallBy ? AppColors.info : AppColors.accent,
+                                _isCallBy ? context.colors.info : context.colors.accent,
                             fontSize: 13,
                           ),
                         ),
@@ -559,9 +626,9 @@ class _CreateAppointmentScreenState
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: context.colors.surface,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: context.colors.border),
                     ),
                     child: Row(
                       children: [
@@ -569,15 +636,15 @@ class _CreateAppointmentScreenState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Force Immediate Walk-In', style: AppTextStyles.bodyMedium),
-                              Text('Overrides schedule, books exactly right now', style: AppTextStyles.caption),
+                              Text('Force Immediate Walk-In', style: context.textStyles.bodyMedium),
+                              Text('Overrides schedule, books exactly right now', style: context.textStyles.caption),
                             ],
                           ),
                         ),
                         Switch(
                           value: _forceWalkIn,
                           onChanged: (v) => setState(() => _forceWalkIn = v),
-                          activeColor: AppColors.primary,
+                          activeColor: context.colors.primary,
                         ),
                       ],
                     ),
@@ -587,27 +654,27 @@ class _CreateAppointmentScreenState
 
                 // Doctor selector (clinic only)
                 if (isClinic && _doctors.isNotEmpty) ...[
-                  Text('Select Doctor', style: AppTextStyles.label),
+                  Text('Select Doctor', style: context.textStyles.label),
                   const SizedBox(height: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
-                      color: AppColors.surface,
+                      color: context.colors.surface,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: context.colors.border),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         value: _selectedDoctorId,
                         isExpanded: true,
                         hint: Text('Choose a doctor',
-                            style: AppTextStyles.bodyMedium
-                                .copyWith(color: AppColors.textHint)),
+                            style: context.textStyles.bodyMedium
+                                .copyWith(color: context.colors.textHint)),
                         items: _doctors
                             .map((d) => DropdownMenuItem(
                                   value: d['id'],
                                   child: Text(d['name'] ?? '',
-                                      style: AppTextStyles.bodyMedium),
+                                      style: context.textStyles.bodyMedium),
                                 ))
                             .toList(),
                         onChanged: (v) =>
@@ -622,69 +689,69 @@ class _CreateAppointmentScreenState
                 // Walk-in: slot picker (today only) or Force Walk-In
                 // Date & Time (Unified Slot Picker)
                 if (!_forceWalkIn) ...[
-                  Text('Appointment Slot', style: AppTextStyles.label),
+                  Text('Appointment Slot', style: context.textStyles.label),
                   const SizedBox(height: 8),
                   GestureDetector(
                     onTap: _pickSlot,
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
+                        color: context.colors.surface,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppColors.border),
+                        border: Border.all(color: context.colors.border),
                       ),
                       child: Row(
                         children: [
                           Icon(
                             _hasSlotSelected ? Icons.check_circle_rounded : Icons.access_time_filled_rounded,
-                            color: _hasSlotSelected ? AppColors.success : AppColors.primary,
+                            color: _hasSlotSelected ? context.colors.success : context.colors.primary,
                             size: 20,
                           ),
-                          const SizedBox(width: 12),
+                          SizedBox(width: 12),
                           Expanded(
                             child: Text(
                               _slotDisplayText,
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: _hasSlotSelected ? AppColors.textPrimary : AppColors.textHint,
+                              style: context.textStyles.bodyMedium.copyWith(
+                                color: _hasSlotSelected ? context.colors.textPrimary : context.colors.textHint,
                               ),
                             ),
                           ),
-                          const Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textHint, size: 14),
+                          Icon(Icons.arrow_forward_ios_rounded, color: context.colors.textHint, size: 14),
                         ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                 ] else ...[
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(16),
+                    padding: EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.1),
+                      color: context.colors.success.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                      border: Border.all(color: context.colors.success.withValues(alpha: 0.3)),
                     ),
                     child: Column(
                       children: [
-                        const Icon(Icons.flash_on_rounded, color: AppColors.success, size: 28),
+                        Icon(Icons.flash_on_rounded, color: context.colors.success, size: 28),
                         const SizedBox(height: 8),
-                        Text('Booking Immediately', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.success, fontWeight: FontWeight.bold)),
-                        Text('Time: ${TimeUtils.formatStringTime(DateFormat("HH:mm").format(DateTime.now()))}', style: AppTextStyles.caption.copyWith(color: AppColors.success)),
+                        Text('Booking Immediately', style: context.textStyles.bodyMedium.copyWith(color: context.colors.success, fontWeight: FontWeight.bold)),
+                        Text('Time: ${TimeUtils.formatStringTime(DateFormat("HH:mm").format(DateTime.now()))}', style: context.textStyles.caption.copyWith(color: context.colors.success)),
                       ],
                     ),
                   ),
                   const SizedBox(height: 24),
                 ],
 
-                Text('Patient Info', style: AppTextStyles.h3),
+                Text('Patient Info', style: context.textStyles.h3),
                 const SizedBox(height: 4),
                 Text(
                   _isCallBy
                       ? 'Quick placeholder — full details collected on arrival.'
                       : 'Enter the walk-in patient\'s details.',
-                  style: AppTextStyles.caption,
+                  style: context.textStyles.caption,
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: 14),
 
                 // ── Call-by: quick phone + name only ─────────────────────
                 if (_isCallBy) ...[
@@ -694,7 +761,7 @@ class _CreateAppointmentScreenState
                         controller: _phoneCtrl,
                         label: 'Phone Number',
                         prefixIcon:
-                            const Icon(Icons.phone_outlined, color: AppColors.textHint),
+                            Icon(Icons.phone_outlined, color: context.colors.textHint),
                         keyboardType: TextInputType.phone,
                         validator: Validators.phone,
                       ),
@@ -716,37 +783,37 @@ class _CreateAppointmentScreenState
                   if (_existingPatient != null) ...[
                     const SizedBox(height: 10),
                     Container(
-                      padding: const EdgeInsets.symmetric(
+                      padding: EdgeInsets.symmetric(
                           horizontal: 14, vertical: 10),
                       decoration: BoxDecoration(
-                        color: AppColors.success.withValues(alpha: 0.08),
+                        color: context.colors.success.withValues(alpha: 0.08),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
                             color:
-                                AppColors.success.withValues(alpha: 0.3)),
+                                context.colors.success.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.person_rounded,
-                              color: AppColors.success, size: 18),
+                          Icon(Icons.person_rounded,
+                              color: context.colors.success, size: 18),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               'Returning patient — name auto-filled.',
-                              style: AppTextStyles.caption
-                                  .copyWith(color: AppColors.success),
+                              style: context.textStyles.caption
+                                  .copyWith(color: context.colors.success),
                             ),
                           ),
                         ],
                       ),
                     ),
                   ],
-                  const SizedBox(height: 14),
+                  SizedBox(height: 14),
                   AppTextField(
                     controller: _nameCtrl,
                     label: 'Patient Name',
-                    prefixIcon: const Icon(Icons.person_outline_rounded,
-                        color: AppColors.textHint),
+                    prefixIcon: Icon(Icons.person_outline_rounded,
+                        color: context.colors.textHint),
                     validator: Validators.required,
                     readOnly: _existingPatient != null,
                   ),
@@ -769,8 +836,8 @@ class _CreateAppointmentScreenState
                     emailCtrl: _emailCtrl,
                     selectedGender: _selectedGender,
                     onGenderChanged: (v) => setState(() => _selectedGender = v),
-                    consentGiven: false,
-                    onConsentChanged: (_) {},
+                    consentGiven: _consentGiven,
+                    onConsentChanged: (v) => setState(() => _consentGiven = v),
                     isReturningPatient: _isRegisteredPatient,
                     isCheckingPhone: _isCheckingPhone,
                     nameLocked: _isRegisteredPatient,
@@ -804,7 +871,7 @@ class _CreateAppointmentScreenState
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            gradient: selected ? AppColors.heroGradient : null,
+            gradient: selected ? context.colors.heroGradient : null,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
@@ -812,12 +879,12 @@ class _CreateAppointmentScreenState
             children: [
               Icon(icon,
                   size: 18,
-                  color: selected ? Colors.white : AppColors.textHint),
+                  color: selected ? Colors.white : context.colors.textHint),
               const SizedBox(width: 6),
               Text(
                 label,
-                style: AppTextStyles.label.copyWith(
-                  color: selected ? Colors.white : AppColors.textHint,
+                style: context.textStyles.label.copyWith(
+                  color: selected ? Colors.white : context.colors.textHint,
                   fontSize: 14,
                 ),
               ),

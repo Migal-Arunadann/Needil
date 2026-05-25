@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_text_styles.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class ExpandableFab extends StatefulWidget {
   final bool isExtended;
@@ -73,11 +75,11 @@ class _ExpandableFabState extends State<ExpandableFab>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: context.colors.surface,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
             BoxShadow(
-              color: AppColors.textPrimary.withValues(alpha: 0.1),
+              color: context.colors.textPrimary.withValues(alpha: 0.1),
               blurRadius: 8,
               offset: const Offset(0, 4),
             )
@@ -86,10 +88,10 @@ class _ExpandableFabState extends State<ExpandableFab>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: AppColors.primary, size: 20),
+            Icon(icon, color: context.colors.primary, size: 20),
             const SizedBox(width: 8),
             Text(label,
-                style: AppTextStyles.label.copyWith(color: AppColors.textPrimary)),
+                style: context.textStyles.label.copyWith(color: context.colors.textPrimary)),
           ],
         ),
       ),
@@ -105,11 +107,11 @@ class _ExpandableFabState extends State<ExpandableFab>
         height: 56,
         padding: EdgeInsets.symmetric(horizontal: widget.isExtended ? 20 : 16),
         decoration: BoxDecoration(
-          color: _isOpen ? AppColors.surface : AppColors.primary,
+          color: _isOpen ? context.colors.surface : context.colors.primary,
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(
-              color: (_isOpen ? AppColors.textPrimary : AppColors.primary)
+              color: (_isOpen ? context.colors.textPrimary : context.colors.primary)
                   .withValues(alpha: 0.3),
               blurRadius: 10,
               offset: const Offset(0, 4),
@@ -131,7 +133,7 @@ class _ExpandableFabState extends State<ExpandableFab>
               child: Icon(
                 _isOpen ? Icons.close_rounded : Icons.add_rounded,
                 key: ValueKey(_isOpen ? 'close' : 'add'),
-                color: _isOpen ? AppColors.textPrimary : Colors.white,
+                color: _isOpen ? context.colors.textPrimary : Colors.white,
                 size: 24,
               ),
             ),
@@ -142,8 +144,8 @@ class _ExpandableFabState extends State<ExpandableFab>
                   'New Appointment',
                   overflow: TextOverflow.visible,
                   maxLines: 1,
-                  style: AppTextStyles.buttonMedium.copyWith(
-                    color: _isOpen ? AppColors.textPrimary : Colors.white,
+                  style: context.textStyles.buttonMedium.copyWith(
+                    color: _isOpen ? context.colors.textPrimary : Colors.white,
                   ),
                 ),
               ),

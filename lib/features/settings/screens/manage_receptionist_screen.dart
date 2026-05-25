@@ -6,6 +6,8 @@ import '../../../core/constants/pb_collections.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'add_staff_receptionist_screen.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class ManageReceptionistScreen extends ConsumerStatefulWidget {
   const ManageReceptionistScreen({super.key});
@@ -56,7 +58,7 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: error ? AppColors.error : AppColors.success,
+      backgroundColor: error ? context.colors.error : context.colors.success,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ));
@@ -141,45 +143,45 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: Text('Manage Receptionist', style: AppTextStyles.h3),
-        backgroundColor: AppColors.surface,
+        title: Text('Manage Receptionist', style: context.textStyles.h3),
+        backgroundColor: context.colors.surface,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_rounded, size: 18),
+          icon: Icon(Icons.arrow_back_ios_rounded, size: 18),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_circle_outline_rounded, color: AppColors.primary),
+            icon: Icon(Icons.add_circle_outline_rounded, color: context.colors.primary),
             onPressed: () async {
               final added = await Navigator.push<bool>(
                 context,
-                MaterialPageRoute(builder: (_) => const AddStaffReceptionistScreen()),
+                MaterialPageRoute(builder: (_) => AddStaffReceptionistScreen()),
               );
               if (added == true && mounted) _load();
             },
           ),
           IconButton(
-            icon: const Icon(Icons.refresh_rounded, color: AppColors.primary),
+            icon: Icon(Icons.refresh_rounded, color: context.colors.primary),
             onPressed: _load,
           ),
         ],
       ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator(color: AppColors.primary, strokeWidth: 2))
+          ? Center(child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 2))
           : _error != null
               ? _buildError()
               : RefreshIndicator(
                   onRefresh: _load,
-                  color: AppColors.primary,
+                  color: context.colors.primary,
                   child: _receptionists.isEmpty
                       ? _buildEmpty()
                       : ListView.separated(
                           padding: const EdgeInsets.all(20),
                           itemCount: _receptionists.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 14),
+                          separatorBuilder: (_, __) => SizedBox(height: 14),
                           itemBuilder: (_, i) => _receptionistCard(_receptionists[i]),
                         ),
                 ),
@@ -188,35 +190,35 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
 
   Widget _buildError() => Center(
     child: Padding(
-      padding: const EdgeInsets.all(32),
+      padding: EdgeInsets.all(32),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const Icon(Icons.error_outline_rounded, size: 48, color: AppColors.error),
+        Icon(Icons.error_outline_rounded, size: 48, color: context.colors.error),
         const SizedBox(height: 12),
-        Text('Failed to load', style: AppTextStyles.label),
+        Text('Failed to load', style: context.textStyles.label),
         const SizedBox(height: 8),
-        Text(_error ?? '', style: AppTextStyles.caption, textAlign: TextAlign.center),
+        Text(_error ?? '', style: context.textStyles.caption, textAlign: TextAlign.center),
         const SizedBox(height: 16),
-        ElevatedButton(onPressed: _load, child: const Text('Retry')),
+        ElevatedButton(onPressed: _load, child: Text('Retry')),
       ]),
     ),
   );
 
   Widget _buildEmpty() => ListView(
     children: [
-      const SizedBox(height: 80),
+      SizedBox(height: 80),
       Center(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(
             width: 72, height: 72,
-            decoration: BoxDecoration(color: AppColors.info.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-            child: const Icon(Icons.support_agent_rounded, size: 36, color: AppColors.info),
+            decoration: BoxDecoration(color: context.colors.info.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+            child: Icon(Icons.support_agent_rounded, size: 36, color: context.colors.info),
           ),
           const SizedBox(height: 16),
-          Text('No receptionists yet', style: AppTextStyles.label),
+          Text('No receptionists yet', style: context.textStyles.label),
           const SizedBox(height: 6),
           Text(
             'Receptionists can be added during\nclinic registration.',
-            style: AppTextStyles.caption, textAlign: TextAlign.center,
+            style: context.textStyles.caption, textAlign: TextAlign.center,
           ),
         ]),
       ),
@@ -227,51 +229,51 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
     final isActive = rec['is_active'] as bool? ?? true;
     return Container(
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: isActive ? AppColors.border : AppColors.error.withValues(alpha: 0.3)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: const Offset(0, 2))],
+        border: Border.all(color: isActive ? context.colors.border : context.colors.error.withValues(alpha: 0.3)),
+        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: Offset(0, 2))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // ── Header row ──
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
           child: Row(children: [
             // Avatar
             Container(
               width: 48, height: 48,
               decoration: BoxDecoration(
-                color: AppColors.info.withValues(alpha: 0.1),
+                color: context.colors.info.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: const Icon(Icons.support_agent_rounded, color: AppColors.info, size: 24),
+              child: Icon(Icons.support_agent_rounded, color: context.colors.info, size: 24),
             ),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 Flexible(child: Text(
                   rec['name'] as String? ?? 'Receptionist',
-                  style: AppTextStyles.label.copyWith(fontSize: 15),
+                  style: context.textStyles.label.copyWith(fontSize: 15),
                   overflow: TextOverflow.ellipsis,
                 )),
                 const SizedBox(width: 6),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: (isActive ? AppColors.success : AppColors.error).withValues(alpha: 0.1),
+                    color: (isActive ? context.colors.success : context.colors.error).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     isActive ? 'ACTIVE' : 'INACTIVE',
-                    style: AppTextStyles.caption.copyWith(
-                      color: isActive ? AppColors.success : AppColors.error,
+                    style: context.textStyles.caption.copyWith(
+                      color: isActive ? context.colors.success : context.colors.error,
                       fontSize: 9, fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
               ]),
-              const SizedBox(height: 1),
-              Text('@${rec['username'] ?? ''}', style: AppTextStyles.caption.copyWith(fontSize: 11)),
+              SizedBox(height: 1),
+              Text('@${rec['username'] ?? ''}', style: context.textStyles.caption.copyWith(fontSize: 11)),
             ])),
             // Edit details button
             GestureDetector(
@@ -279,34 +281,34 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
               child: Container(
                 width: 32, height: 32,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.08),
+                  color: context.colors.primary.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.edit_rounded, size: 16, color: AppColors.primary),
+                child: Icon(Icons.edit_rounded, size: 16, color: context.colors.primary),
               ),
             ),
           ]),
         ),
 
-        Divider(height: 1, color: AppColors.border, indent: 16, endIndent: 16),
+        Divider(height: 1, color: context.colors.border, indent: 16, endIndent: 16),
 
         // ── Info row ──
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           child: Row(children: [
-            const Icon(Icons.badge_outlined, size: 13, color: AppColors.textHint),
-            const SizedBox(width: 4),
-            Text('ID: ${rec['receptionist_id'] ?? '—'}', style: AppTextStyles.caption.copyWith(fontSize: 11)),
+            Icon(Icons.badge_outlined, size: 13, color: context.colors.textHint),
+            SizedBox(width: 4),
+            Text('ID: ${rec['receptionist_id'] ?? '—'}', style: context.textStyles.caption.copyWith(fontSize: 11)),
             if ((rec['phone'] as String?)?.isNotEmpty == true) ...[
-              const SizedBox(width: 14),
-              const Icon(Icons.phone_rounded, size: 13, color: AppColors.textHint),
+              SizedBox(width: 14),
+              Icon(Icons.phone_rounded, size: 13, color: context.colors.textHint),
               const SizedBox(width: 4),
-              Text(rec['phone'], style: AppTextStyles.caption.copyWith(fontSize: 11)),
+              Text(rec['phone'], style: context.textStyles.caption.copyWith(fontSize: 11)),
             ],
           ]),
         ),
 
-        Divider(height: 1, color: AppColors.border, indent: 16, endIndent: 16),
+        Divider(height: 1, color: context.colors.border, indent: 16, endIndent: 16),
 
         // ── Active toggle ──
         SwitchListTile.adaptive(
@@ -314,40 +316,40 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
           secondary: Icon(
             Icons.toggle_on_rounded,
             size: 18,
-            color: isActive ? AppColors.success : AppColors.textHint,
+            color: isActive ? context.colors.success : context.colors.textHint,
           ),
-          title: Text('Account Active', style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
+          title: Text('Account Active', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600, fontSize: 12)),
           subtitle: Text(
             isActive ? 'Receptionist can log in' : 'Login is disabled',
-            style: AppTextStyles.caption.copyWith(fontSize: 10),
+            style: context.textStyles.caption.copyWith(fontSize: 10),
           ),
           value: isActive,
           onChanged: (_) => _toggleActive(rec['id'], isActive),
-          activeColor: AppColors.success,
+          activeColor: context.colors.success,
           dense: true,
         ),
 
-        Divider(height: 1, color: AppColors.border, indent: 16, endIndent: 16),
+        Divider(height: 1, color: context.colors.border, indent: 16, endIndent: 16),
 
         // ── Action buttons ──
         Padding(
-          padding: const EdgeInsets.all(14),
+          padding: EdgeInsets.all(14),
           child: Row(children: [
             // Reset Password
             Expanded(
               child: GestureDetector(
                 onTap: () => _showResetPasswordDialog(rec),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  padding: EdgeInsets.symmetric(vertical: 10),
                   decoration: BoxDecoration(
-                    color: AppColors.warning.withValues(alpha: 0.08),
+                    color: context.colors.warning.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                    border: Border.all(color: context.colors.warning.withValues(alpha: 0.3)),
                   ),
                   child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    const Icon(Icons.lock_reset_rounded, size: 15, color: AppColors.warning),
+                    Icon(Icons.lock_reset_rounded, size: 15, color: context.colors.warning),
                     const SizedBox(width: 6),
-                    Text('Reset Password', style: AppTextStyles.caption.copyWith(color: AppColors.warning, fontWeight: FontWeight.w600)),
+                    Text('Reset Password', style: context.textStyles.caption.copyWith(color: context.colors.warning, fontWeight: FontWeight.w600)),
                   ]),
                 ),
               ),
@@ -402,18 +404,18 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    backgroundColor: AppColors.surface,
+    backgroundColor: context.colors.surface,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     title: Row(children: [
       Container(
         width: 36, height: 36,
-        decoration: BoxDecoration(color: AppColors.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-        child: const Icon(Icons.lock_reset_rounded, color: AppColors.warning, size: 18),
+        decoration: BoxDecoration(color: context.colors.warning.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+        child: Icon(Icons.lock_reset_rounded, color: context.colors.warning, size: 18),
       ),
-      const SizedBox(width: 10),
+      SizedBox(width: 10),
       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Reset Password', style: AppTextStyles.h3),
-        Text(widget.label, style: AppTextStyles.caption.copyWith(color: AppColors.textHint, fontSize: 11)),
+        Text('Reset Password', style: context.textStyles.h3),
+        Text(widget.label, style: context.textStyles.caption.copyWith(color: context.colors.textHint, fontSize: 11)),
       ])),
     ]),
     content: SizedBox(
@@ -421,12 +423,12 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         if (_error != null) ...[
           Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+            padding: EdgeInsets.all(10),
+            decoration: BoxDecoration(color: context.colors.error.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
             child: Row(children: [
-              const Icon(Icons.error_outline_rounded, size: 14, color: AppColors.error),
+              Icon(Icons.error_outline_rounded, size: 14, color: context.colors.error),
               const SizedBox(width: 6),
-              Expanded(child: Text(_error!, style: AppTextStyles.caption.copyWith(color: AppColors.error, fontSize: 11))),
+              Expanded(child: Text(_error!, style: context.textStyles.caption.copyWith(color: context.colors.error, fontSize: 11))),
             ]),
           ),
           const SizedBox(height: 12),
@@ -439,19 +441,19 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
     actions: [
       TextButton(
         onPressed: _loading ? null : () => Navigator.pop(context, false),
-        child: Text('Cancel', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+        child: Text('Cancel', style: context.textStyles.caption.copyWith(color: context.colors.textSecondary)),
       ),
       ElevatedButton(
         onPressed: _loading ? null : _submit,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.warning,
+          backgroundColor: context.colors.warning,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         ),
         child: _loading
-            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : Text('Reset', style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+            ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            : Text('Reset', style: context.textStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
       ),
     ],
   );
@@ -460,19 +462,19 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
     TextField(
       controller: ctrl,
       obscureText: obscure,
-      style: AppTextStyles.bodyMedium,
+      style: context.textStyles.bodyMedium,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-        prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.textHint, size: 18),
+        labelStyle: context.textStyles.caption.copyWith(color: context.colors.textHint),
+        prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint, size: 18),
         suffixIcon: IconButton(
-          icon: Icon(obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: AppColors.textHint, size: 18),
+          icon: Icon(obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: context.colors.textHint, size: 18),
           onPressed: toggle,
         ),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary)),
-        filled: true, fillColor: AppColors.background,
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.colors.border)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.colors.primary)),
+        filled: true, fillColor: context.colors.background,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
     );
@@ -520,28 +522,28 @@ class _EditReceptionistDialogState extends State<_EditReceptionistDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    backgroundColor: AppColors.surface,
+    backgroundColor: context.colors.surface,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     title: Row(children: [
       Container(
         width: 36, height: 36,
-        decoration: BoxDecoration(color: AppColors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-        child: const Icon(Icons.edit_rounded, color: AppColors.primary, size: 18),
+        decoration: BoxDecoration(color: context.colors.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+        child: Icon(Icons.edit_rounded, color: context.colors.primary, size: 18),
       ),
-      const SizedBox(width: 10),
-      Text('Edit Receptionist', style: AppTextStyles.h3),
+      SizedBox(width: 10),
+      Text('Edit Receptionist', style: context.textStyles.h3),
     ]),
     content: SizedBox(
       width: double.maxFinite,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         if (_error != null) ...[
           Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: AppColors.error.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
+            padding: EdgeInsets.all(10),
+            decoration: BoxDecoration(color: context.colors.error.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(8)),
             child: Row(children: [
-              const Icon(Icons.error_outline_rounded, size: 14, color: AppColors.error),
+              Icon(Icons.error_outline_rounded, size: 14, color: context.colors.error),
               const SizedBox(width: 6),
-              Expanded(child: Text(_error!, style: AppTextStyles.caption.copyWith(color: AppColors.error, fontSize: 11))),
+              Expanded(child: Text(_error!, style: context.textStyles.caption.copyWith(color: context.colors.error, fontSize: 11))),
             ]),
           ),
           const SizedBox(height: 12),
@@ -556,19 +558,19 @@ class _EditReceptionistDialogState extends State<_EditReceptionistDialog> {
     actions: [
       TextButton(
         onPressed: _loading ? null : () => Navigator.pop(context, false),
-        child: Text('Cancel', style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary)),
+        child: Text('Cancel', style: context.textStyles.caption.copyWith(color: context.colors.textSecondary)),
       ),
       ElevatedButton(
         onPressed: _loading ? null : _submit,
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor: context.colors.primary,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         ),
         child: _loading
             ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : Text('Save', style: AppTextStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+            : Text('Save', style: context.textStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
       ),
     ],
   );
@@ -577,15 +579,15 @@ class _EditReceptionistDialogState extends State<_EditReceptionistDialog> {
     TextField(
       controller: ctrl,
       keyboardType: keyboardType,
-      style: AppTextStyles.bodyMedium,
+      style: context.textStyles.bodyMedium,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: AppTextStyles.caption.copyWith(color: AppColors.textHint),
-        prefixIcon: Icon(icon, color: AppColors.textHint, size: 18),
+        labelStyle: context.textStyles.caption.copyWith(color: context.colors.textHint),
+        prefixIcon: Icon(icon, color: context.colors.textHint, size: 18),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary)),
-        filled: true, fillColor: AppColors.background,
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.colors.border)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: context.colors.primary)),
+        filled: true, fillColor: context.colors.background,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
     );

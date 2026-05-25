@@ -5,6 +5,8 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/services/superadmin_service.dart';
 import 'superadmin_shell.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 final _clinicDetailProvider = FutureProvider.family.autoDispose<Map<String, dynamic>, String>((ref, id) {
   final pb = ref.read(pocketbaseProvider);
@@ -145,7 +147,7 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
         backgroundColor: SAColors.surface,
         elevation: 0,
         iconTheme: const IconThemeData(color: SAColors.textPrimary),
-        title: Text('Clinic Detail', style: AppTextStyles.h4.copyWith(color: SAColors.textPrimary)),
+        title: Text('Clinic Detail', style: context.textStyles.h4.copyWith(color: SAColors.textPrimary)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: SAColors.accent),
@@ -157,7 +159,7 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
           indicatorColor: SAColors.accent,
           labelColor: SAColors.accent,
           unselectedLabelColor: SAColors.textHint,
-          labelStyle: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w700),
+          labelStyle: context.textStyles.caption.copyWith(fontWeight: FontWeight.w700),
           tabs: const [
             Tab(text: 'Info'),
             Tab(text: 'Staff'),
@@ -212,9 +214,9 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title, style: AppTextStyles.h4.copyWith(color: SAColors.textPrimary)),
+            Text(title, style: context.textStyles.h4.copyWith(color: SAColors.textPrimary)),
             const SizedBox(height: 6),
-            Text(subtitle, style: AppTextStyles.caption.copyWith(color: SAColors.textHint)),
+            Text(subtitle, style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
             const SizedBox(height: 20),
             child,
             const SizedBox(height: 20),
@@ -244,10 +246,10 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
     return TextField(
       controller: ctrl,
       obscureText: obscure,
-      style: AppTextStyles.bodyMedium.copyWith(color: SAColors.textPrimary),
+      style: context.textStyles.bodyMedium.copyWith(color: SAColors.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: AppTextStyles.caption.copyWith(color: SAColors.textHint),
+        labelStyle: context.textStyles.caption.copyWith(color: SAColors.textHint),
         prefixIcon: Icon(icon, color: SAColors.textHint, size: 18),
         filled: true,
         fillColor: SAColors.surface,
@@ -342,7 +344,7 @@ class _InfoTabState extends ConsumerState<_InfoTab> {
           child: Row(children: [
             Icon(Icons.verified_rounded, color: _verified ? SAColors.success : SAColors.textHint, size: 22),
             const SizedBox(width: 12),
-            Expanded(child: Text('Clinic Verified', style: AppTextStyles.label.copyWith(color: SAColors.textPrimary))),
+            Expanded(child: Text('Clinic Verified', style: context.textStyles.label.copyWith(color: SAColors.textPrimary))),
             Switch(
               value: _verified,
               activeColor: SAColors.success,
@@ -384,7 +386,7 @@ class _InfoTabState extends ConsumerState<_InfoTab> {
 
   Widget _section(String label) => Padding(
     padding: const EdgeInsets.only(top: 8, bottom: 8),
-    child: Text(label, style: AppTextStyles.caption.copyWith(color: SAColors.textHint, letterSpacing: 1, fontSize: 11)),
+    child: Text(label, style: context.textStyles.caption.copyWith(color: SAColors.textHint, letterSpacing: 1, fontSize: 11)),
   );
 
   Widget _field(TextEditingController ctrl, String label, IconData icon,
@@ -395,10 +397,10 @@ class _InfoTabState extends ConsumerState<_InfoTab> {
         controller: ctrl,
         keyboardType: type,
         readOnly: readOnly,
-        style: AppTextStyles.bodyMedium.copyWith(color: readOnly ? SAColors.textHint : SAColors.textPrimary),
+        style: context.textStyles.bodyMedium.copyWith(color: readOnly ? SAColors.textHint : SAColors.textPrimary),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: AppTextStyles.caption.copyWith(color: SAColors.textHint),
+          labelStyle: context.textStyles.caption.copyWith(color: SAColors.textHint),
           prefixIcon: Icon(icon, color: SAColors.textHint, size: 18),
           filled: true,
           fillColor: SAColors.card,
@@ -432,8 +434,8 @@ class _StaffTab extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _sectionHeader('Doctors (${doctors.length})', Icons.medical_services_outlined, const Color(0xFF06B6D4)),
-        ...doctors.map((d) => _staffCard(
+        _sectionHeader(context, 'Doctors (${doctors.length})', Icons.medical_services_outlined, const Color(0xFF06B6D4)),
+        ...doctors.map((d) => _staffCard(context, 
           name: d.getStringValue('name'),
           username: d.getStringValue('username'),
           icon: Icons.medical_services_outlined,
@@ -442,10 +444,10 @@ class _StaffTab extends StatelessWidget {
           onDelete: () => onDelete('doctor', d.id, d.getStringValue('name')),
         )),
         if (doctors.isEmpty)
-          _emptyLabel('No doctors found'),
+          _emptyLabel(context, 'No doctors found'),
         const SizedBox(height: 20),
-        _sectionHeader('Receptionists (${receptionists.length})', Icons.person_outline_rounded, SAColors.success),
-        ...receptionists.map((r) => _staffCard(
+        _sectionHeader(context, 'Receptionists (${receptionists.length})', Icons.person_outline_rounded, SAColors.success),
+        ...receptionists.map((r) => _staffCard(context, 
           name: r.getStringValue('name'),
           username: r.getStringValue('username'),
           icon: Icons.person_outline_rounded,
@@ -454,23 +456,23 @@ class _StaffTab extends StatelessWidget {
           onDelete: () => onDelete('receptionist', r.id, r.getStringValue('name')),
         )),
         if (receptionists.isEmpty)
-          _emptyLabel('No receptionists found'),
+          _emptyLabel(context, 'No receptionists found'),
       ]),
     );
   }
 
-  Widget _sectionHeader(String label, IconData icon, Color color) {
+  Widget _sectionHeader(BuildContext context, String label, IconData icon, Color color) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(children: [
         Icon(icon, color: color, size: 16),
         const SizedBox(width: 8),
-        Text(label, style: AppTextStyles.label.copyWith(color: SAColors.textSecondary, fontSize: 13)),
+        Text(label, style: context.textStyles.label.copyWith(color: SAColors.textSecondary, fontSize: 13)),
       ]),
     );
   }
 
-  Widget _staffCard({
+  Widget _staffCard(BuildContext context, {
     required String name,
     required String username,
     required IconData icon,
@@ -495,8 +497,8 @@ class _StaffTab extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(name.isEmpty ? '(Unnamed)' : name,
-            style: AppTextStyles.label.copyWith(color: SAColors.textPrimary, fontSize: 14)),
-          Text('@$username', style: AppTextStyles.caption.copyWith(color: SAColors.textHint)),
+            style: context.textStyles.label.copyWith(color: SAColors.textPrimary, fontSize: 14)),
+          Text('@$username', style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
         ])),
         IconButton(
           icon: const Icon(Icons.lock_reset_rounded, color: SAColors.accent, size: 20),
@@ -512,9 +514,9 @@ class _StaffTab extends StatelessWidget {
     );
   }
 
-  Widget _emptyLabel(String msg) => Padding(
+  Widget _emptyLabel(BuildContext context, String msg) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 12),
-    child: Text(msg, style: AppTextStyles.caption.copyWith(color: SAColors.textHint)),
+    child: Text(msg, style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
   );
 }
 
@@ -532,7 +534,7 @@ class _DangerTab extends StatelessWidget {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _actionCard(
+        _actionCard(context, 
           icon: Icons.lock_reset_rounded,
           color: SAColors.accent,
           title: 'Reset Clinic Password',
@@ -552,12 +554,12 @@ class _DangerTab extends StatelessWidget {
             Row(children: [
               const Icon(Icons.warning_amber_rounded, color: SAColors.error, size: 22),
               const SizedBox(width: 10),
-              Text('Danger Zone', style: AppTextStyles.label.copyWith(color: SAColors.error, fontSize: 15)),
+              Text('Danger Zone', style: context.textStyles.label.copyWith(color: SAColors.error, fontSize: 15)),
             ]),
             const SizedBox(height: 10),
             Text(
               'Deleting "$clinicName" is permanent. All doctors, receptionists, and their accounts will be permanently removed. Patient records are not affected.',
-              style: AppTextStyles.caption.copyWith(color: SAColors.textHint, height: 1.5),
+              style: context.textStyles.caption.copyWith(color: SAColors.textHint, height: 1.5),
             ),
             const SizedBox(height: 16),
             SizedBox(
@@ -579,7 +581,7 @@ class _DangerTab extends StatelessWidget {
     );
   }
 
-  Widget _actionCard({
+  Widget _actionCard(BuildContext context, {
     required IconData icon,
     required Color color,
     required String title,
@@ -602,14 +604,14 @@ class _DangerTab extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: AppTextStyles.label.copyWith(color: SAColors.textPrimary)),
-          Text(subtitle, style: AppTextStyles.caption.copyWith(color: SAColors.textHint)),
+          Text(title, style: context.textStyles.label.copyWith(color: SAColors.textPrimary)),
+          Text(subtitle, style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
         ])),
         const SizedBox(width: 8),
         TextButton(
           onPressed: onTap,
           style: TextButton.styleFrom(foregroundColor: color),
-          child: Text(buttonLabel, style: AppTextStyles.caption.copyWith(color: color, fontWeight: FontWeight.w700)),
+          child: Text(buttonLabel, style: context.textStyles.caption.copyWith(color: color, fontWeight: FontWeight.w700)),
         ),
       ]),
     );

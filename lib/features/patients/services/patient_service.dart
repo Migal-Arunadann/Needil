@@ -18,8 +18,26 @@ class PatientService {
 
   /// Fetch all patients assigned to a specific doctor.
   Future<List<PatientModel>> getDoctorPatients(String doctorId) async {
+    Set<String> patientIds = {};
+    try {
+      final appointments = await pb.collection(PBCollections.appointments).getFullList(
+        filter: 'doctor = "$doctorId"',
+        fields: 'patient',
+      );
+      patientIds = appointments
+          .map((a) => a.getStringValue('patient'))
+          .where((id) => id.isNotEmpty)
+          .toSet();
+    } catch (_) {}
+
+    String filter = 'doctor = "$doctorId"';
+    if (patientIds.isNotEmpty) {
+      final idsFilter = patientIds.map((id) => 'id = "$id"').join(' || ');
+      filter = '($filter) || ($idsFilter)';
+    }
+
     final result = await pb.collection(PBCollections.patients).getList(
-      filter: 'doctor = "$doctorId"',
+      filter: filter,
       perPage: 200,
     );
     return result.items.map((r) => PatientModel.fromRecord(r)).toList();

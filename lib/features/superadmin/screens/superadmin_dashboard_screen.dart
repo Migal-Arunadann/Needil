@@ -6,6 +6,8 @@ import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/services/superadmin_service.dart';
 import 'superadmin_shell.dart';
 import 'superadmin_clinics_screen.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 final _dashStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) {
   final pb = ref.read(pocketbaseProvider);
@@ -59,9 +61,9 @@ class SuperadminDashboardScreen extends ConsumerWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Superadmin', style: AppTextStyles.h4.copyWith(color: SAColors.textPrimary)),
+                          Text('Superadmin', style: context.textStyles.h4.copyWith(color: SAColors.textPrimary)),
                           Text(DateFormat('EEEE, d MMM y').format(now),
-                            style: AppTextStyles.caption.copyWith(color: SAColors.textHint)),
+                            style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
                         ],
                       ),
                     ],
@@ -70,29 +72,29 @@ class SuperadminDashboardScreen extends ConsumerWidget {
 
                   // Stats row
                   Text('Platform Overview',
-                    style: AppTextStyles.label.copyWith(color: SAColors.textSecondary, fontSize: 12, letterSpacing: 1)),
+                    style: context.textStyles.label.copyWith(color: SAColors.textSecondary, fontSize: 12, letterSpacing: 1)),
                   const SizedBox(height: 12),
                   statsAsync.when(
                     loading: () => _statsPlaceholder(),
-                    error: (e, _) => _errorCard('Failed to load stats: $e'),
+                    error: (e, _) => _errorCard(context, 'Failed to load stats: $e'),
                     data: (stats) => Column(
                       children: [
                         Row(children: [
-                          Expanded(child: _statCard(
+                          Expanded(child: _statCard(context,
                             Icons.business_rounded,
                             '${stats['total_clinics']}',
                             'Clinics',
                             SAColors.accent,
                           )),
                           const SizedBox(width: 12),
-                          Expanded(child: _statCard(
+                          Expanded(child: _statCard(context,
                             Icons.medical_services_rounded,
                             '${stats['total_doctors']}',
                             'Doctors',
                             const Color(0xFF06B6D4),
                           )),
                           const SizedBox(width: 12),
-                          Expanded(child: _statCard(
+                          Expanded(child: _statCard(context,
                             Icons.person_rounded,
                             '${stats['total_receptionists']}',
                             'Staff',
@@ -109,11 +111,11 @@ class SuperadminDashboardScreen extends ConsumerWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('Recent Registrations',
-                        style: AppTextStyles.label.copyWith(color: SAColors.textSecondary, fontSize: 12, letterSpacing: 1)),
+                        style: context.textStyles.label.copyWith(color: SAColors.textSecondary, fontSize: 12, letterSpacing: 1)),
                       GestureDetector(
                         onTap: () {},
                         child: Text('View All',
-                          style: AppTextStyles.caption.copyWith(color: SAColors.accent, fontWeight: FontWeight.w700)),
+                          style: context.textStyles.caption.copyWith(color: SAColors.accent, fontWeight: FontWeight.w700)),
                       ),
                     ],
                   ),
@@ -125,9 +127,9 @@ class SuperadminDashboardScreen extends ConsumerWidget {
                         child: CircularProgressIndicator(color: SAColors.accent),
                       ),
                     ),
-                    error: (e, _) => _errorCard('Failed to load clinics: $e'),
+                    error: (e, _) => _errorCard(context, 'Failed to load clinics: $e'),
                     data: (clinics) => clinics.isEmpty
-                        ? _emptyCard('No clinics registered yet')
+                        ? _emptyCard(context, 'No clinics registered yet')
                         : Column(
                             children: clinics.map((c) => _clinicTile(context, c)).toList(),
                           ),
@@ -142,7 +144,7 @@ class SuperadminDashboardScreen extends ConsumerWidget {
     );
   }
 
-  Widget _statCard(IconData icon, String value, String label, Color color) {
+  Widget _statCard(BuildContext context, IconData icon, String value, String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
       decoration: BoxDecoration(
@@ -165,8 +167,8 @@ class SuperadminDashboardScreen extends ConsumerWidget {
             child: Icon(icon, color: color, size: 18),
           ),
           const SizedBox(height: 10),
-          Text(value, style: AppTextStyles.h3.copyWith(color: SAColors.textPrimary, fontSize: 22)),
-          Text(label, style: AppTextStyles.caption.copyWith(color: SAColors.textHint, fontSize: 11)),
+          Text(value, style: context.textStyles.h3.copyWith(color: SAColors.textPrimary, fontSize: 22)),
+          Text(label, style: context.textStyles.caption.copyWith(color: SAColors.textHint, fontSize: 11)),
         ],
       ),
     );
@@ -197,12 +199,12 @@ class SuperadminDashboardScreen extends ConsumerWidget {
           child: const Icon(Icons.business_rounded, color: SAColors.accent, size: 20),
         ),
         title: Text(name.isEmpty ? '(Unnamed)' : name,
-          style: AppTextStyles.label.copyWith(color: SAColors.textPrimary)),
+          style: context.textStyles.label.copyWith(color: SAColors.textPrimary)),
         subtitle: Text(
           [if (city.isNotEmpty) city, if (state.isNotEmpty) state].join(', ').isNotEmpty
               ? [if (city.isNotEmpty) city, if (state.isNotEmpty) state].join(', ')
               : 'No location',
-          style: AppTextStyles.caption.copyWith(color: SAColors.textHint),
+          style: context.textStyles.caption.copyWith(color: SAColors.textHint),
         ),
         trailing: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -217,7 +219,7 @@ class SuperadminDashboardScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Text(verified ? 'Verified' : 'Unverified',
-                style: AppTextStyles.caption.copyWith(
+                style: context.textStyles.caption.copyWith(
                   color: verified ? SAColors.success : SAColors.warning,
                   fontWeight: FontWeight.w700,
                   fontSize: 10,
@@ -226,7 +228,7 @@ class SuperadminDashboardScreen extends ConsumerWidget {
             const SizedBox(height: 4),
             if (created != null)
               Text(DateFormat('d MMM y').format(created),
-                style: AppTextStyles.caption.copyWith(color: SAColors.textHint, fontSize: 10)),
+                style: context.textStyles.caption.copyWith(color: SAColors.textHint, fontSize: 10)),
           ],
         ),
         onTap: () => Navigator.of(context).pushNamed('/superadmin/clinic', arguments: clinic.id),
@@ -247,7 +249,7 @@ class SuperadminDashboardScreen extends ConsumerWidget {
     )));
   }
 
-  Widget _errorCard(String msg) {
+  Widget _errorCard(BuildContext context, String msg) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -255,11 +257,11 @@ class SuperadminDashboardScreen extends ConsumerWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: SAColors.error.withValues(alpha: 0.3)),
       ),
-      child: Text(msg, style: AppTextStyles.caption.copyWith(color: SAColors.error)),
+      child: Text(msg, style: context.textStyles.caption.copyWith(color: SAColors.error)),
     );
   }
 
-  Widget _emptyCard(String msg) {
+  Widget _emptyCard(BuildContext context, String msg) {
     return Container(
       padding: const EdgeInsets.all(24),
       alignment: Alignment.center,
@@ -268,7 +270,7 @@ class SuperadminDashboardScreen extends ConsumerWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: SAColors.border),
       ),
-      child: Text(msg, style: AppTextStyles.bodyMedium.copyWith(color: SAColors.textHint)),
+      child: Text(msg, style: context.textStyles.bodyMedium.copyWith(color: SAColors.textHint)),
     );
   }
 }

@@ -8,6 +8,8 @@ import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/constants/pb_collections.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/services/auth_service.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+
 
 class PrivacySecurityScreen extends ConsumerStatefulWidget {
   const PrivacySecurityScreen({super.key});
@@ -75,13 +77,15 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
         _confirmPassCtrl.clear();
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: const Text('Password changed successfully. Please log in again.'),
-          backgroundColor: AppColors.success,
+          backgroundColor: context.colors.success,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           duration: const Duration(seconds: 3),
         ));
         await Future.delayed(const Duration(seconds: 2));
-        if (mounted) ref.read(authProvider.notifier).logout();
+        if (mounted) {
+          ref.read(authProvider.notifier).logout();
+        }
       }
     } catch (e) {
       _showError('Failed to change password. Check your current password and try again.');
@@ -93,7 +97,7 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: AppColors.error,
+      backgroundColor: context.colors.error,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     ));
@@ -105,15 +109,15 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
     final isClinic = auth.role == UserRole.clinic;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+          icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('Privacy & Security', style: AppTextStyles.h4),
+        title: Text('Privacy & Security', style: context.textStyles.h4),
         centerTitle: true,
       ),
       body: ListView(
@@ -125,9 +129,9 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: context.colors.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: context.colors.border),
             ),
             child: Column(
               children: [
@@ -136,7 +140,7 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
                   'Account type',
                   isClinic ? 'Clinic Account' : 'Doctor Account',
                 ),
-                Divider(height: 16, color: AppColors.border),
+                Divider(height: 16, color: context.colors.border),
                 _infoRow(
                   Icons.alternate_email_rounded,
                   'Username',
@@ -145,7 +149,7 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
                       : (auth.doctor?.username ?? '—'),
                 ),
                 if (!isClinic) ...[
-                  Divider(height: 16, color: AppColors.border),
+                  Divider(height: 16, color: context.colors.border),
                   _infoRow(
                     Icons.business_rounded,
                     'Clinic',
@@ -161,13 +165,13 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
 
           // Change password
           _sectionHeader('Change Password', Icons.lock_reset_rounded),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.surface,
+              color: context.colors.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
+              border: Border.all(color: context.colors.border),
             ),
             child: Column(
               children: [
@@ -176,47 +180,47 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
                   label: 'Current Password',
                   hint: 'Enter your current password',
                   obscureText: _obscureCurrent,
-                  prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.textHint),
+                  prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscureCurrent
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
-                      color: AppColors.textHint,
+                      color: context.colors.textHint,
                     ),
                     onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
                   ),
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: 14),
                 AppTextField(
                   controller: _newPassCtrl,
                   label: 'New Password',
                   hint: 'Min. 8 characters',
                   obscureText: _obscureNew,
-                  prefixIcon: const Icon(Icons.lock_rounded, color: AppColors.textHint),
+                  prefixIcon: Icon(Icons.lock_rounded, color: context.colors.textHint),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscureNew
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
-                      color: AppColors.textHint,
+                      color: context.colors.textHint,
                     ),
                     onPressed: () => setState(() => _obscureNew = !_obscureNew),
                   ),
                 ),
-                const SizedBox(height: 14),
+                SizedBox(height: 14),
                 AppTextField(
                   controller: _confirmPassCtrl,
                   label: 'Confirm New Password',
                   hint: 'Re-enter your new password',
                   obscureText: _obscureConfirm,
-                  prefixIcon: const Icon(Icons.lock_rounded, color: AppColors.textHint),
+                  prefixIcon: Icon(Icons.lock_rounded, color: context.colors.textHint),
                   suffixIcon: IconButton(
                     icon: Icon(
                       _obscureConfirm
                           ? Icons.visibility_off_outlined
                           : Icons.visibility_outlined,
-                      color: AppColors.textHint,
+                      color: context.colors.textHint,
                     ),
                     onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                   ),
@@ -238,7 +242,7 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
           const SizedBox(height: 10),
           _infoCard(
             icon: Icons.storage_rounded,
-            iconColor: AppColors.info,
+            iconColor: context.colors.info,
             title: 'Your Data',
             body:
                 'All patient records, appointments, and consultation data are stored securely on your private PocketBase server. Data is not shared with third parties.',
@@ -246,7 +250,7 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
           const SizedBox(height: 10),
           _infoCard(
             icon: Icons.person_off_rounded,
-            iconColor: AppColors.warning,
+            iconColor: context.colors.warning,
             title: 'Patient Confidentiality',
             body:
                 'Patient information is accessible only to authorised clinic staff. Doctors can control data sharing settings from their profile.',
@@ -254,7 +258,7 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
           const SizedBox(height: 10),
           _infoCard(
             icon: Icons.delete_forever_rounded,
-            iconColor: AppColors.error,
+            iconColor: context.colors.error,
             title: 'Account Deletion',
             body:
                 'To request account deletion or data export, please contact your system administrator.',
@@ -267,21 +271,21 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
 
   Widget _sectionHeader(String title, IconData icon) => Row(
         children: [
-          Icon(icon, size: 18, color: AppColors.primary),
+          Icon(icon, size: 18, color: context.colors.primary),
           const SizedBox(width: 8),
-          Text(title, style: AppTextStyles.h3.copyWith(color: AppColors.primary, fontSize: 15)),
+          Text(title, style: context.textStyles.h3.copyWith(color: context.colors.primary, fontSize: 15)),
         ],
       );
 
   Widget _infoRow(IconData icon, String label, String value) => Row(
         children: [
-          Icon(icon, size: 16, color: AppColors.textHint),
+          Icon(icon, size: 16, color: context.colors.textHint),
           const SizedBox(width: 10),
-          Text('$label: ', style: AppTextStyles.caption),
+          Text('$label: ', style: context.textStyles.caption),
           Expanded(
             child: Text(
               value,
-              style: AppTextStyles.label.copyWith(fontSize: 13),
+              style: context.textStyles.label.copyWith(fontSize: 13),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -297,9 +301,9 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
       Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: context.colors.surface,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: context.colors.border),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -318,9 +322,9 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title, style: AppTextStyles.label.copyWith(fontSize: 13)),
+                  Text(title, style: context.textStyles.label.copyWith(fontSize: 13)),
                   const SizedBox(height: 4),
-                  Text(body, style: AppTextStyles.caption.copyWith(fontSize: 11.5)),
+                  Text(body, style: context.textStyles.caption.copyWith(fontSize: 11.5)),
                 ],
               ),
             ),
