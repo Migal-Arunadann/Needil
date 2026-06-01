@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
@@ -21,7 +22,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   bool _missedSession = true;
   bool _clinicAlerts = true;
   bool _appointmentReminders = true;
-  bool _newAppointmentBooked = true;
   bool _appointmentCancelled = true;
   bool _isLoading = true;
 
@@ -42,8 +42,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       _clinicAlerts = prefs.getBool('notif_clinic_alerts') ?? true;
       _appointmentReminders =
           prefs.getBool('notif_appointment_reminders') ?? true;
-      _newAppointmentBooked =
-          prefs.getBool('notif_new_appointment') ?? true;
       _appointmentCancelled =
           prefs.getBool('notif_appointment_cancelled') ?? true;
       _isLoading = false;
@@ -58,7 +56,6 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     await prefs.setBool('notif_missed_session', _missedSession);
     await prefs.setBool('notif_clinic_alerts', _clinicAlerts);
     await prefs.setBool('notif_appointment_reminders', _appointmentReminders);
-    await prefs.setBool('notif_new_appointment', _newAppointmentBooked);
     await prefs.setBool('notif_appointment_cancelled', _appointmentCancelled);
 
     if (mounted) {
@@ -175,17 +172,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     onChanged: (v) =>
                         setState(() => _appointmentReminders = v),
                   ),
-                  const SizedBox(height: 12),
-                  _buildToggleTile(
-                    title: 'New Appointment Booked',
-                    subtitle:
-                        'Notify when a new appointment is scheduled',
-                    icon: Icons.add_circle_outline,
-                    value: _newAppointmentBooked,
-                    color: context.colors.success,
-                    onChanged: (v) =>
-                        setState(() => _newAppointmentBooked = v),
-                  ),
+
                   const SizedBox(height: 12),
                   _buildToggleTile(
                     title: 'Appointment Cancelled',
@@ -265,7 +252,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           const SizedBox(width: 8),
           Switch.adaptive(
             value: value,
-            onChanged: onChanged,
+            onChanged: (v) {
+              HapticFeedback.lightImpact();
+              onChanged(v);
+            },
             activeColor: color,
           ),
         ],
@@ -283,40 +273,45 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         border: Border.all(color: context.colors.warning.withValues(alpha: 0.2)),
       ),
       child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text('Alert after', style: context.textStyles.bodyMedium.copyWith(fontSize: 13)),
-          const SizedBox(width: 12),
-          ...([5, 10, 15, 20].map((mins) => Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: GestureDetector(
-                  onTap: () => setState(() => _lateMins = mins),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
+          const SizedBox(width: 8),
+          Expanded(
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 6,
+              runSpacing: 6,
+              children: [5, 10, 15, 20].map((mins) => GestureDetector(
+                onTap: () => setState(() => _lateMins = mins),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _lateMins == mins
+                        ? context.colors.warning
+                        : context.colors.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
                       color: _lateMins == mins
                           ? context.colors.warning
-                          : context.colors.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: _lateMins == mins
-                            ? context.colors.warning
-                            : context.colors.border,
-                      ),
+                          : context.colors.border,
                     ),
-                    child: Text(
-                      '${mins}m',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color:
-                            _lateMins == mins ? Colors.white : context.colors.textSecondary,
-                      ),
+                  ),
+                  child: Text(
+                    '${mins}m',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color:
+                          _lateMins == mins ? Colors.white : context.colors.textSecondary,
                     ),
                   ),
                 ),
-              ))),
+              )).toList(),
+            ),
+          ),
         ],
       ),
     );

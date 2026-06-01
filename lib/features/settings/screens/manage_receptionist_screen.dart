@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -7,6 +8,8 @@ import '../../../core/providers/pocketbase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'add_staff_receptionist_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import '../../../core/services/audit_service.dart';
+import 'package:intl/intl.dart';
 
 
 class ManageReceptionistScreen extends ConsumerStatefulWidget {
@@ -71,7 +74,7 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
       await _load();
       _snack(!current ? 'Account activated.' : 'Account deactivated.');
     } catch (e) {
-      _snack('Failed. Check PocketBase update rule for receptionists.', error: true);
+      _snack('Failed: ${e.toString()}', error: true);
     }
   }
 
@@ -134,6 +137,22 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
     confirmCtrl.dispose();
 
     if (result == true && mounted) _snack('Password reset successfully.');
+  }
+
+  Future<void> _showActivityLog(Map<String, dynamic> rec) async {
+    final auditService = ref.read(auditServiceProvider);
+    final logs = await auditService.getReceptionistLogs(rec['id'] as String);
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ActivityLogSheet(
+        receptionistName: rec['name'] as String? ?? 'Receptionist',
+        logs: logs,
+      ),
+    );
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -324,7 +343,10 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
             style: context.textStyles.caption.copyWith(fontSize: 10),
           ),
           value: isActive,
-          onChanged: (_) => _toggleActive(rec['id'], isActive),
+          onChanged: (_) {
+            HapticFeedback.lightImpact();
+            _toggleActive(rec['id'], isActive);
+          },
           activeColor: context.colors.success,
           dense: true,
         ),
@@ -350,6 +372,26 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
                     Icon(Icons.lock_reset_rounded, size: 15, color: context.colors.warning),
                     const SizedBox(width: 6),
                     Text('Reset Password', style: context.textStyles.caption.copyWith(color: context.colors.warning, fontWeight: FontWeight.w600)),
+                  ]),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            // Activity Log
+            Expanded(
+              child: GestureDetector(
+                onTap: () => _showActivityLog(rec),
+                child: Container(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: context.colors.info.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: context.colors.info.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Icon(Icons.history_rounded, size: 15, color: context.colors.info),
+                    const SizedBox(width: 6),
+                    Text('Activity Log', style: context.textStyles.caption.copyWith(color: context.colors.info, fontWeight: FontWeight.w600)),
                   ]),
                 ),
               ),
@@ -398,7 +440,7 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
       await widget.onSubmit(newPass, confirm);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      if (mounted) setState(() { _loading = false; _error = 'Failed. Check PocketBase update rule.'; });
+      if (mounted) setState(() { _loading = false; _error = 'Failed: ${e.toString()}'; });
     }
   }
 
@@ -591,4 +633,163 @@ class _EditReceptionistDialogState extends State<_EditReceptionistDialog> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),
     );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Activity Log Bottom Sheet
+// ════════════════════════════════════════════════════════════════════════════
+
+class _ActivityLogSheet extends StatelessWidget {
+  final String receptionistName;
+  final List<Map<String, dynamic>> logs;
+
+  const _ActivityLogSheet({required this.receptionistName, required this.logs});
+
+  IconData _iconForAction(String action) {
+    switch (action) {
+      case 'createAppointment': return Icons.calendar_today_rounded;
+      case 'markArrived': return Icons.how_to_reg_rounded;
+      case 'cancelAppointment': return Icons.cancel_rounded;
+      case 'rescheduleAppointment': return Icons.event_repeat_rounded;
+      case 'createPatient': return Icons.person_add_rounded;
+      case 'updatePatient': return Icons.edit_rounded;
+      case 'viewPatient': return Icons.visibility_rounded;
+      default: return Icons.info_outline_rounded;
+    }
+  }
+
+  Color _colorForAction(BuildContext context, String action) {
+    switch (action) {
+      case 'createAppointment': return context.colors.primary;
+      case 'markArrived': return context.colors.success;
+      case 'cancelAppointment': return context.colors.error;
+      case 'rescheduleAppointment': return context.colors.warning;
+      case 'createPatient': return context.colors.accent;
+      case 'updatePatient': return context.colors.info;
+      default: return context.colors.textSecondary;
+    }
+  }
+
+  String _labelForAction(String action) {
+    switch (action) {
+      case 'createAppointment': return 'Created Appointment';
+      case 'markArrived': return 'Marked Arrived';
+      case 'cancelAppointment': return 'Cancelled Appointment';
+      case 'rescheduleAppointment': return 'Rescheduled';
+      case 'createPatient': return 'Created Patient';
+      case 'updatePatient': return 'Updated Patient';
+      case 'viewPatient': return 'Viewed Patient';
+      default: return action;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.65),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 24, offset: const Offset(0, -4)),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Handle
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Container(
+              width: 44, height: 4,
+              decoration: BoxDecoration(color: context.colors.border, borderRadius: BorderRadius.circular(2)),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(children: [
+              Container(
+                width: 40, height: 40,
+                decoration: BoxDecoration(
+                  color: context.colors.info.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.history_rounded, color: context.colors.info, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Activity Log', style: context.textStyles.h3),
+                Text(receptionistName, style: context.textStyles.caption.copyWith(color: context.colors.textSecondary)),
+              ])),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          Divider(height: 1, color: context.colors.border),
+
+          // Log entries
+          if (logs.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(40),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.inbox_rounded, size: 40, color: context.colors.textHint),
+                const SizedBox(height: 10),
+                Text('No activity recorded yet', style: context.textStyles.caption),
+              ]),
+            )
+          else
+            Flexible(
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shrinkWrap: true,
+                itemCount: logs.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (_, i) {
+                  final log = logs[i];
+                  final action = log['action'] as String? ?? '';
+                  final details = log['details'] as String? ?? '';
+                  final timestamp = log['timestamp'] as String? ?? log['created'] as String? ?? '';
+                  DateTime? dt;
+                  try { dt = DateTime.parse(timestamp).toLocal(); } catch (_) {}
+                  final timeStr = dt != null ? DateFormat('dd MMM, h:mm a').format(dt) : '';
+                  final color = _colorForAction(context, action);
+
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: context.colors.background,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: context.colors.border),
+                    ),
+                    child: Row(children: [
+                      Container(
+                        width: 36, height: 36,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(_iconForAction(action), color: color, size: 18),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text(_labelForAction(action), style: context.textStyles.label.copyWith(fontSize: 13)),
+                        if (details.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(details, style: context.textStyles.caption.copyWith(fontSize: 11), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        ],
+                      ])),
+                      const SizedBox(width: 8),
+                      Text(timeStr, style: context.textStyles.caption.copyWith(fontSize: 10, color: context.colors.textHint)),
+                    ]),
+                  );
+                },
+              ),
+            ),
+          SizedBox(height: MediaQuery.of(context).viewPadding.bottom + 16),
+        ],
+      ),
+    );
+  }
 }

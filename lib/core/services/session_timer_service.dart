@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -194,16 +195,18 @@ class SessionTimerService {
   // ── Init ────────────────────────────────────────────────────────────────────
 
   Future<void> initNotifications(InitializationSettings settings) async {
-    try {
-      await _fln.initialize(
-        settings,
-        onDidReceiveNotificationResponse: _onNotificationTap,
-      );
-      await _fln
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.requestNotificationsPermission();
-    } catch (_) {}
+    if (!kIsWeb) {
+      try {
+        await _fln.initialize(
+          settings,
+          onDidReceiveNotificationResponse: _onNotificationTap,
+        );
+        await _fln
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.requestNotificationsPermission();
+      } catch (_) {}
+    }
 
     // Restore persistent timers from disk
     await loadTimersFromPrefs();
@@ -596,7 +599,7 @@ class SessionTimerService {
 
   /// Plays 5 rapid vibration pulses — the "5-second alarm" effect.
   void _playAlarmVibration() async {
-    if (Platform.isWindows) return;
+    if (kIsWeb || Platform.isWindows) return;
     try {
       for (int i = 0; i < 5; i++) {
         HapticFeedback.heavyImpact();
@@ -607,7 +610,7 @@ class SessionTimerService {
 
   /// Plays the timer-ended sound from assets.
   Future<void> _playAlarmSound() async {
-    if (Platform.isWindows) return;
+    if (kIsWeb || Platform.isWindows) return;
     try {
       final player = AudioPlayer();
       await player.play(AssetSource('audio/timer ended sound.mpeg'));
@@ -621,7 +624,7 @@ class SessionTimerService {
 
   /// Shows/updates the persistent countdown notification for this entry.
   void _postCountdownNotification(_TimerEntry entry) async {
-    if (Platform.isWindows) return;
+    if (kIsWeb || Platform.isWindows) return;
     try {
       final mins = entry.minutesRemaining;
       final label = entry.isPaused
@@ -657,7 +660,7 @@ class SessionTimerService {
 
   /// Shows the alarm notification when a timer finishes.
   void _postAlarmNotification(_TimerEntry entry) async {
-    if (Platform.isWindows) return;
+    if (kIsWeb || Platform.isWindows) return;
     try {
       final details = NotificationDetails(
         android: AndroidNotificationDetails(
@@ -687,7 +690,7 @@ class SessionTimerService {
   }
 
   Future<void> _cancelNotification(int id) async {
-    if (Platform.isWindows) return;
+    if (kIsWeb || Platform.isWindows) return;
     try {
       await _fln.cancel(id);
     } catch (_) {}
@@ -768,7 +771,7 @@ class _TimerAlertDialogState extends State<_TimerAlertDialog>
             ),
           ),
           const SizedBox(height: 18),
-          Text('Session Timer Finished!',
+          Text('Time\'s Up!',
               style: context.textStyles.h3.copyWith(color: context.colors.error),
               textAlign: TextAlign.center),
           const SizedBox(height: 10),
@@ -778,7 +781,7 @@ class _TimerAlertDialogState extends State<_TimerAlertDialog>
               style: context.textStyles.bodyMedium
                   .copyWith(color: context.colors.textSecondary),
               children: [
-                const TextSpan(text: 'Time is up for\n'),
+                const TextSpan(text: 'Time is up for patient :\n'),
                 TextSpan(
                   text: widget.patientName,
                   style: context.textStyles.h4

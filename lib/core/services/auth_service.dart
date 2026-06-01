@@ -235,7 +235,9 @@ class AuthService {
         'passwordConfirm': password,
         'bed_count': bedCount,
         'clinic_id': clinicCode,
-        'subscription_tier': 'free',
+        'subscription_tier': 'base',
+        'photo_limit': 2000,
+        'photos_used': 0,
         'max_doctors': 1,
         if (city != null && city.isNotEmpty) 'city': city,
         if (area != null && area.isNotEmpty) 'area': area,
@@ -248,9 +250,23 @@ class AuthService {
           .create(body: clinicBody);
 
       // ── 2. Authenticate as the clinic immediately ──
-      final loginResult = await pb
-          .collection(PBCollections.clinics)
-          .authWithPassword(username, password);
+      // Retry up to 3 times with delay — PocketBase may not be ready
+      // for auth immediately after create on slow networks / devices.
+      RecordAuth? loginResult;
+      for (int attempt = 1; attempt <= 3; attempt++) {
+        try {
+          loginResult = await pb
+              .collection(PBCollections.clinics)
+              .authWithPassword(username, password);
+          break; // success
+        } catch (e) {
+          if (attempt < 3) {
+            await Future.delayed(Duration(milliseconds: 500 * attempt));
+          } else {
+            rethrow; // give up after 3 tries
+          }
+        }
+      }
 
       // ── 3. Primary Doctor ──
       final primaryDoctorId = _generateUniqueId(8, prefix: 'DR');
@@ -337,7 +353,7 @@ class AuthService {
       }
 
       // ── 6. Save session (already authenticated) ──
-      await _saveSession('clinic', loginResult.token, loginResult.record.id);
+      await _saveSession('clinic', loginResult!.token, loginResult.record.id);
 
       return AuthResult(
         success: true,
@@ -385,7 +401,9 @@ class AuthService {
         'username': username,
         'bed_count': bedCount,
         'clinic_id': clinicCode,
-        'subscription_tier': 'free',
+        'subscription_tier': 'base',
+        'photo_limit': 2000,
+        'photos_used': 0,
         'max_doctors': 1,
         if (city != null && city.isNotEmpty) 'city': city,
         if (area != null && area.isNotEmpty) 'area': area,
@@ -799,7 +817,9 @@ class AuthService {
               'username': tempUsername, // temporary unique username
               'bed_count': 0,
               'clinic_id': tempUsername,
-              'subscription_tier': 'free',
+              'subscription_tier': 'base',
+              'photo_limit': 2000,
+              'photos_used': 0,
               'max_doctors': 1,
             },
           );

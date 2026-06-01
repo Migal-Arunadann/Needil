@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,6 +12,7 @@ import '../../../../core/utils/validators.dart';
 import '../../../../core/utils/time_utils.dart';
 import '../../providers/registration_cache_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import '../../../../core/utils/image_helper.dart';
 
 
 // A break time range
@@ -183,8 +185,13 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
     if (source == null) return;
     try {
       final picker = ImagePicker();
-      final picked = await picker.pickImage(source: source, imageQuality: 80);
-      if (picked != null && mounted) setState(() => _doctorPhotoFile = File(picked.path));
+      final picked = await picker.pickImage(source: source, imageQuality: 60);
+      if (picked != null && mounted) {
+        final compressed = await ImageHelper.compressToWebP(picked);
+        if (compressed != null && mounted) {
+          setState(() => _doctorPhotoFile = File(compressed.path));
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -412,39 +419,56 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                     style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
                   const SizedBox(height: 24),
 
-                  // Photo
-                  Center(child: GestureDetector(
-                    onTap: _pickDoctorPhoto,
-                    child: Stack(children: [
-                      Container(
-                        width: 96, height: 96,
-                        decoration: BoxDecoration(
-                          gradient: _doctorPhotoFile == null ? context.colors.heroGradient : null,
-                          borderRadius: BorderRadius.circular(28),
-                          image: _doctorPhotoFile != null
-                              ? DecorationImage(image: FileImage(_doctorPhotoFile!), fit: BoxFit.cover)
-                              : null,
-                        ),
-                        child: _doctorPhotoFile == null
-                            ? const Icon(Icons.person_rounded, color: Colors.white, size: 42) : null,
-                      ),
-                      Positioned(bottom: 0, right: 0,
-                        child: Container(
-                          width: 30, height: 30,
-                          decoration: BoxDecoration(
-                            color: context.colors.primary,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.white, width: 2),
+                   // Photo
+                  if (kIsWeb) ...[
+                    Center(
+                      child: Column(
+                        children: [
+                          Icon(Icons.person_outline_rounded, color: context.colors.textHint, size: 52),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Doctor photo upload is available on the mobile app.',
+                            style: context.textStyles.caption.copyWith(color: context.colors.textHint),
+                            textAlign: TextAlign.center,
                           ),
-                          child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
-                        ),
+                        ],
                       ),
-                    ]),
-                  )),
-                  SizedBox(height: 6),
-                  Center(child: Text('Doctor Photo (Optional)',
-                    style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))),
-                  SizedBox(height: 20),
+                    ),
+                    const SizedBox(height: 20),
+                  ] else ...[
+                    Center(child: GestureDetector(
+                      onTap: _pickDoctorPhoto,
+                      child: Stack(children: [
+                        Container(
+                          width: 96, height: 96,
+                          decoration: BoxDecoration(
+                            gradient: _doctorPhotoFile == null ? context.colors.heroGradient : null,
+                            borderRadius: BorderRadius.circular(28),
+                            image: _doctorPhotoFile != null
+                                ? DecorationImage(image: FileImage(_doctorPhotoFile!), fit: BoxFit.cover)
+                                : null,
+                          ),
+                          child: _doctorPhotoFile == null
+                              ? const Icon(Icons.person_rounded, color: Colors.white, size: 42) : null,
+                        ),
+                        Positioned(bottom: 0, right: 0,
+                          child: Container(
+                            width: 30, height: 30,
+                            decoration: BoxDecoration(
+                              color: context.colors.primary,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.white, width: 2),
+                            ),
+                            child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
+                          ),
+                        ),
+                      ]),
+                    )),
+                    SizedBox(height: 6),
+                    Center(child: Text('Doctor Photo (Optional)',
+                      style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))),
+                    SizedBox(height: 20),
+                  ],
 
                   // Name
                   AppTextField(
@@ -466,6 +490,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                         initialDate: _dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
                         firstDate: DateTime(1940),
                         lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+                        locale: const Locale('en', 'IN'),
                       );
                       if (!mounted) return;
                       FocusManager.instance.primaryFocus?.unfocus();
@@ -484,7 +509,7 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                         Expanded(child: Text(
                           _dateOfBirth == null
                               ? 'Date of Birth'
-                              : '${_dateOfBirth!.day}/${_dateOfBirth!.month}/${_dateOfBirth!.year}',
+                              : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
                           style: context.textStyles.bodyMedium.copyWith(
                             color: _dateOfBirth == null ? context.colors.textHint : context.colors.textPrimary),
                         )),

@@ -1,7 +1,11 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/location_fields.dart';
 import '../utils/validators.dart';
+import '../utils/image_helper.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
 
@@ -11,8 +15,9 @@ import 'package:pms_app/core/theme/app_theme.dart';
 ///   • PatientInfoScreen   → "Fill Details" button on call-by appointment card
 ///   • CreateAppointmentScreen → walk-in patient registration section
 ///
-/// Fields: Phone, Name, Gender*, DoB* (age auto-calc), Location, Occupation, Email, Consent.
-/// Removed: Full address, Emergency contact, Chronic diseases.
+/// Fields: Phone, Name, Photo, Gender*, DoB* (age auto-calc), Location,
+///         Occupation, Email, Reference, Family Members, How Did You Know Us,
+///         Consent.
 /// ─────────────────────────────────────────────────────────────────────────────
 class PatientDetailsForm extends StatefulWidget {
   // ── Controllers ───────────────────────────────────────────────────────────
@@ -26,6 +31,7 @@ class PatientDetailsForm extends StatefulWidget {
   final TextEditingController areaCtrl;
   final TextEditingController occupationCtrl;
   final TextEditingController emailCtrl;
+  final TextEditingController referenceCtrl;
 
   // ── State bindings ────────────────────────────────────────────────────────
   final String? selectedGender;
@@ -33,6 +39,16 @@ class PatientDetailsForm extends StatefulWidget {
 
   final bool consentGiven;
   final ValueChanged<bool> onConsentChanged;
+
+  // ── New fields ────────────────────────────────────────────────────────────
+  final File? photoFile;
+  final ValueChanged<File?> onPhotoChanged;
+
+  final List<Map<String, String>> familyMembers; // [{name, relation}]
+  final ValueChanged<List<Map<String, String>>> onFamilyMembersChanged;
+
+  final String? howDidYouHear;
+  final ValueChanged<String?> onHowDidYouHearChanged;
 
   // ── Misc ──────────────────────────────────────────────────────────────────
   final bool nameLocked;
@@ -52,10 +68,17 @@ class PatientDetailsForm extends StatefulWidget {
     required this.areaCtrl,
     required this.occupationCtrl,
     required this.emailCtrl,
+    required this.referenceCtrl,
     required this.selectedGender,
     required this.onGenderChanged,
     required this.consentGiven,
     required this.onConsentChanged,
+    this.photoFile,
+    required this.onPhotoChanged,
+    this.familyMembers = const [],
+    required this.onFamilyMembersChanged,
+    this.howDidYouHear,
+    required this.onHowDidYouHearChanged,
     this.nameLocked = false,
     this.phoneLocked = false,
     this.isReturningPatient = false,
@@ -68,6 +91,16 @@ class PatientDetailsForm extends StatefulWidget {
 
 class _PatientDetailsFormState extends State<PatientDetailsForm> {
   int? _calculatedAge;
+
+  static const List<String> _howDidYouHearOptions = [
+    'Google',
+    'Social Media',
+    'Friend / Family',
+    'Doctor Referral',
+    'Walk-in',
+    'Newspaper / Flyer',
+    'Other',
+  ];
 
   void _recomputeAge() {
     final dob = DateTime.tryParse(widget.dobCtrl.text);
@@ -90,6 +123,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
       initialDate: DateTime(1990),
       firstDate: DateTime(1920),
       lastDate: DateTime.now(),
+      locale: const Locale('en', 'IN'),
     );
     if (picked != null && mounted) {
       widget.dobCtrl.text =
@@ -104,6 +138,108 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
     final dt = DateTime.tryParse(raw);
     if (dt == null) return raw;
     return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+  }
+
+  Future<void> _pickPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: context.colors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          const SizedBox(height: 12),
+          Container(width: 40, height: 4,
+            decoration: BoxDecoration(color: context.colors.border, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 16),
+          Text('Patient Photo', style: context.textStyles.h3),
+          const SizedBox(height: 8),
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: context.colors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.photo_library_rounded, color: context.colors.primary),
+            ),
+            title: const Text('Choose from Gallery'),
+            onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+          ),
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: context.colors.accent.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.camera_alt_rounded, color: context.colors.accent),
+            ),
+            title: const Text('Take a Photo'),
+            onTap: () => Navigator.pop(ctx, ImageSource.camera),
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+    if (source == null) return;
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(source: source, imageQuality: 60);
+      if (picked != null && mounted) {
+        final compressed = await ImageHelper.compressToWebP(picked);
+        if (compressed != null && mounted) {
+          widget.onPhotoChanged(File(compressed.path));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to pick image: $e'),
+          backgroundColor: context.colors.error,
+        ));
+      }
+    }
+  }
+
+  void _addFamilyMember() {
+    final nameCtrl = TextEditingController();
+    final relationCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: context.colors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Add Family Member', style: context.textStyles.h3),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppTextField(controller: nameCtrl, label: 'Name', hint: 'e.g. John'),
+            const SizedBox(height: 12),
+            AppTextField(controller: relationCtrl, label: 'Relation', hint: 'e.g. Spouse, Parent, Child'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: context.colors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (nameCtrl.text.trim().isNotEmpty && relationCtrl.text.trim().isNotEmpty) {
+                final updated = List<Map<String, String>>.from(widget.familyMembers);
+                updated.add({'name': nameCtrl.text.trim(), 'relation': relationCtrl.text.trim()});
+                widget.onFamilyMembersChanged(updated);
+                Navigator.pop(ctx);
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: context.colors.primary),
+            child: const Text('Add', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -183,6 +319,58 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
           readOnly: widget.nameLocked,
         ),
         const SizedBox(height: 14),
+
+        // ── Patient Photo ──────────────────────────────────────────────────
+        if (kIsWeb) ...[
+          Center(
+            child: Column(
+              children: [
+                Icon(Icons.person_outline_rounded, color: context.colors.textHint, size: 48),
+                const SizedBox(height: 6),
+                Text(
+                  'Patient photo upload is available on the mobile app.',
+                  style: context.textStyles.caption.copyWith(color: context.colors.textHint),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+        ] else ...[
+          Center(child: GestureDetector(
+            onTap: _pickPhoto,
+            child: Stack(children: [
+              Container(
+                width: 80, height: 80,
+                decoration: BoxDecoration(
+                  color: context.colors.surface,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: context.colors.border),
+                  image: widget.photoFile != null
+                      ? DecorationImage(image: FileImage(widget.photoFile!), fit: BoxFit.cover)
+                      : null,
+                ),
+                child: widget.photoFile == null
+                    ? Icon(Icons.person_add_alt_1_rounded, color: context.colors.textHint, size: 32) : null,
+              ),
+              Positioned(bottom: 0, right: 0,
+                child: Container(
+                  width: 26, height: 26,
+                  decoration: BoxDecoration(
+                    color: context.colors.primary,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
+                ),
+              ),
+            ]),
+          )),
+          const SizedBox(height: 4),
+          Center(child: Text('Patient Photo (Optional)',
+            style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))),
+          const SizedBox(height: 14),
+        ],
 
         // ── Gender (required) ──────────────────────────────────────────────
         Column(
@@ -303,6 +491,112 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
           prefixIcon: Icon(Icons.email_outlined, color: context.colors.textHint),
           keyboardType: TextInputType.emailAddress,
         ),
+        const SizedBox(height: 14),
+
+        // ── Reference (optional dropdown) ──────────────────────────────────
+        _ReferredByDropdown(referenceCtrl: widget.referenceCtrl),
+        const SizedBox(height: 14),
+
+        // ── How Did You Know Us ────────────────────────────────────────────
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('How Did You Know Us? (Optional)', style: context.textStyles.label),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              decoration: BoxDecoration(
+                color: context.colors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.colors.border),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: widget.howDidYouHear,
+                  isExpanded: true,
+                  hint: Text('Select an option',
+                      style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint)),
+                  items: _howDidYouHearOptions
+                      .map((o) => DropdownMenuItem(value: o, child: Text(o, style: context.textStyles.bodyMedium)))
+                      .toList(),
+                  onChanged: widget.onHowDidYouHearChanged,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+
+        // ── Family Members ─────────────────────────────────────────────────
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.family_restroom_rounded, color: context.colors.textHint, size: 18),
+                const SizedBox(width: 8),
+                Text('Family Members (Optional)', style: context.textStyles.label),
+                const Spacer(),
+                GestureDetector(
+                  onTap: _addFamilyMember,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: context.colors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.add_rounded, color: context.colors.primary, size: 14),
+                      const SizedBox(width: 3),
+                      Text('Add', style: context.textStyles.caption.copyWith(
+                        color: context.colors.primary, fontWeight: FontWeight.w600)),
+                    ]),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (widget.familyMembers.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                decoration: BoxDecoration(
+                  color: context.colors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.colors.border),
+                ),
+                child: Text('No family members added.',
+                  style: context.textStyles.caption.copyWith(color: context.colors.textHint)),
+              ),
+            ...widget.familyMembers.asMap().entries.map((entry) {
+              final i = entry.key;
+              final fm = entry.value;
+              return Container(
+                margin: const EdgeInsets.only(bottom: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: context.colors.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: context.colors.border),
+                ),
+                child: Row(children: [
+                  Icon(Icons.person_outline_rounded, size: 16, color: context.colors.textSecondary),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text('${fm['name']} (${fm['relation']})',
+                    style: context.textStyles.bodyMedium)),
+                  GestureDetector(
+                    onTap: () {
+                      final updated = List<Map<String, String>>.from(widget.familyMembers);
+                      updated.removeAt(i);
+                      widget.onFamilyMembersChanged(updated);
+                    },
+                    child: Icon(Icons.close_rounded, size: 16, color: context.colors.error),
+                  ),
+                ]),
+              );
+            }),
+          ],
+        ),
         const SizedBox(height: 24),
 
         // ── Consent ────────────────────────────────────────────────────────
@@ -340,6 +634,115 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+// ─── Referred-By Dropdown ──────────────────────────────────────────────────────
+/// Dropdown for "Referred By" with common referral options + custom "Other" input.
+/// Syncs to the existing [referenceCtrl] so parent screens don't need changes.
+class _ReferredByDropdown extends StatefulWidget {
+  final TextEditingController referenceCtrl;
+  const _ReferredByDropdown({required this.referenceCtrl});
+
+  @override
+  State<_ReferredByDropdown> createState() => _ReferredByDropdownState();
+}
+
+class _ReferredByDropdownState extends State<_ReferredByDropdown> {
+  static const List<String> _options = [
+    'Doctor Referral',
+    'Friend / Family',
+    'Social Media',
+    'Google / Web Search',
+    'Walk-in / Passerby',
+    'Newspaper / Flyer',
+    'TV / Radio',
+    'Other',
+  ];
+
+  String? _selected;
+  bool _showCustomField = false;
+  final _customCtrl = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Pre-fill from existing controller value (e.g. returning patient)
+    final existing = widget.referenceCtrl.text.trim();
+    if (existing.isNotEmpty) {
+      if (_options.contains(existing)) {
+        _selected = existing;
+      } else {
+        _selected = 'Other';
+        _showCustomField = true;
+        _customCtrl.text = existing;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _customCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Referred By (Optional)', style: context.textStyles.label),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: context.colors.border),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selected,
+              isExpanded: true,
+              icon: Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textHint),
+              hint: Row(children: [
+                Icon(Icons.handshake_outlined, color: context.colors.textHint, size: 18),
+                const SizedBox(width: 10),
+                Text('Select referral source',
+                    style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint)),
+              ]),
+              items: _options
+                  .map((o) => DropdownMenuItem(value: o, child: Text(o, style: context.textStyles.bodyMedium)))
+                  .toList(),
+              onChanged: (val) {
+                setState(() {
+                  _selected = val;
+                  _showCustomField = val == 'Other';
+                  if (val != null && val != 'Other') {
+                    widget.referenceCtrl.text = val;
+                    _customCtrl.clear();
+                  } else if (val == 'Other') {
+                    widget.referenceCtrl.text = _customCtrl.text;
+                  } else {
+                    widget.referenceCtrl.text = '';
+                  }
+                });
+              },
+            ),
+          ),
+        ),
+        if (_showCustomField) ...[
+          const SizedBox(height: 10),
+          AppTextField(
+            controller: _customCtrl,
+            label: '',
+            hint: 'Enter referral source...',
+            prefixIcon: Icon(Icons.edit_rounded, color: context.colors.textHint, size: 18),
+            onChanged: (val) => widget.referenceCtrl.text = val,
+          ),
+        ],
       ],
     );
   }

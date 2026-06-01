@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
@@ -42,6 +43,10 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
   final _areaCtrl = TextEditingController();
   final _occupationCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+  final _referenceCtrl = TextEditingController();
+  File? _patientPhoto;
+  List<Map<String, String>> _familyMembers = [];
+  String? _howDidYouHear;
 
   @override
   void initState() {
@@ -84,11 +89,16 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     _areaCtrl.dispose();
     _occupationCtrl.dispose();
     _emailCtrl.dispose();
+    _referenceCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Capture navigator before async gap — fixes Vivo/iQOO devices where
+    // context-based navigation silently fails after await calls.
+    final navigator = Navigator.of(context);
 
     if (_selectedGender == null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -184,6 +194,12 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
           occupation: _occupationCtrl.text.isNotEmpty ? _occupationCtrl.text : null,
           email: _emailCtrl.text.isNotEmpty ? _emailCtrl.text : null,
           age: calculatedAge,
+          reference: _referenceCtrl.text.isNotEmpty ? _referenceCtrl.text : null,
+          familyMembers: _familyMembers.isNotEmpty
+              ? _familyMembers.map((fm) => '${fm['name']} (${fm['relation']})').toList()
+              : null,
+          howDidYouHear: _howDidYouHear,
+          photoPath: _patientPhoto?.path,
         );
       }
 
@@ -201,7 +217,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ));
         }
-        Navigator.pop(context);
+        navigator.pop();
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -285,10 +301,17 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                   areaCtrl: _areaCtrl,
                   occupationCtrl: _occupationCtrl,
                   emailCtrl: _emailCtrl,
+                  referenceCtrl: _referenceCtrl,
                   selectedGender: _selectedGender,
                   onGenderChanged: (v) => setState(() => _selectedGender = v),
                   consentGiven: _consentGiven,
                   onConsentChanged: (v) => setState(() => _consentGiven = v),
+                  photoFile: _patientPhoto,
+                  onPhotoChanged: (f) => setState(() => _patientPhoto = f),
+                  familyMembers: _familyMembers,
+                  onFamilyMembersChanged: (fm) => setState(() => _familyMembers = fm),
+                  howDidYouHear: _howDidYouHear,
+                  onHowDidYouHearChanged: (v) => setState(() => _howDidYouHear = v),
                   nameLocked: (widget.appointment.patientName ?? '').isNotEmpty,
                   phoneLocked: (widget.appointment.patientPhone ?? '').isNotEmpty,
                 ),

@@ -18,9 +18,14 @@ import '../../treatments/providers/treatment_provider.dart';
 import '../../treatments/models/session_model.dart';
 import '../models/consultation_model.dart';
 import 'package:pocketbase/pocketbase.dart';
+import '../../../core/utils/image_helper.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import '../../../core/services/idle_reminder_service.dart';
-import '../../../core/widgets/voice_dictation_dialog.dart';
+import '../../../core/services/photo_quota_service.dart';
+import '../../../core/widgets/photo_limit_dialog.dart';
+import '../../auth/providers/auth_provider.dart' show authProvider;
+import '../../../core/services/auth_service.dart' show UserRole;
+
 
 
 class ConsultationScreen extends ConsumerStatefulWidget {
@@ -72,9 +77,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   bool _hasDrugAllergy = false;
   bool _hasEnvAllergy = false;
   bool _hasFoodAllergy = false;
+  bool _hasOtherAllergy = false;
   final _drugAllergyCtrl = TextEditingController();
   final _envAllergyCtrl = TextEditingController();
   final _foodAllergyCtrl = TextEditingController();
+  final _otherAllergyCtrl = TextEditingController();
 
   // Chronic Diseases
   List<String> _selectedChronicDiseases = [];
@@ -151,6 +158,14 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   final _cholesterolCtrl = TextEditingController();
   
   final _chargeCtrl = TextEditingController();
+
+  // Diagnosis fields
+  final _acupunctureDiagnosisCtrl = TextEditingController();
+  final _eyeDiagnosisCtrl = TextEditingController();
+  final _pulseDiagnosisCtrl = TextEditingController();
+
+  // Corona vaccination
+  bool _coronaVaccinated = false;
 
   final List<XFile> _photos = [];
   final ImagePicker _picker = ImagePicker();
@@ -239,9 +254,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         _hasDrugAllergy             = data['hasDrugAllergy'] ?? false;
         _hasEnvAllergy              = data['hasEnvAllergy'] ?? false;
         _hasFoodAllergy             = data['hasFoodAllergy'] ?? false;
+        _hasOtherAllergy            = data['hasOtherAllergy'] ?? false;
         _drugAllergyCtrl.text       = data['drugAllergy'] ?? '';
         _envAllergyCtrl.text        = data['envAllergy'] ?? '';
         _foodAllergyCtrl.text       = data['foodAllergy'] ?? '';
+        _otherAllergyCtrl.text      = data['otherAllergy'] ?? '';
         
         _selectedChronicDiseases    = List<String>.from(data['chronicDiseases'] ?? []);
         _chronicOtherCtrl.text      = data['chronicOther'] ?? '';
@@ -268,6 +285,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         _pregnancyMonths = data['pregnancyMonths'] as int?;
         _consentGiven    = data['consent']   ?? false;
         _charged         = data['charged']   ?? true;
+        _acupunctureDiagnosisCtrl.text = data['acupunctureDiagnosis'] ?? '';
+        _eyeDiagnosisCtrl.text         = data['eyeDiagnosis']         ?? '';
+        _pulseDiagnosisCtrl.text       = data['pulseDiagnosis']       ?? '';
+        _coronaVaccinated              = data['coronaVaccinated']     ?? false;
         _draftLoaded = true;
       });
     } catch (_) {
@@ -294,9 +315,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         'hasDrugAllergy':     _hasDrugAllergy,
         'hasEnvAllergy':      _hasEnvAllergy,
         'hasFoodAllergy':     _hasFoodAllergy,
+        'hasOtherAllergy':    _hasOtherAllergy,
         'drugAllergy':        _drugAllergyCtrl.text,
         'envAllergy':         _envAllergyCtrl.text,
         'foodAllergy':        _foodAllergyCtrl.text,
+        'otherAllergy':       _otherAllergyCtrl.text,
         
         'chronicDiseases':    _selectedChronicDiseases,
         'chronicOther':       _chronicOtherCtrl.text,
@@ -323,6 +346,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         'pregnancyMonths': _pregnancyMonths,
         'consent':   _consentGiven,
         'charged':   _charged,
+        'acupunctureDiagnosis': _acupunctureDiagnosisCtrl.text,
+        'eyeDiagnosis':         _eyeDiagnosisCtrl.text,
+        'pulseDiagnosis':       _pulseDiagnosisCtrl.text,
+        'coronaVaccinated':     _coronaVaccinated,
       };
       await prefs.setString(_draftKey, jsonEncode(data));
     } catch (_) {}
@@ -382,9 +409,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
              _hasDrugAllergy = algs['hasDrug'] ?? false;
              _hasEnvAllergy  = algs['hasEnv'] ?? false;
              _hasFoodAllergy = algs['hasFood'] ?? false;
+             _hasOtherAllergy = algs['hasOther'] ?? false;
              _drugAllergyCtrl.text = algs['drugDesc'] ?? '';
              _envAllergyCtrl.text  = algs['envDesc'] ?? '';
              _foodAllergyCtrl.text = algs['foodDesc'] ?? '';
+             _otherAllergyCtrl.text = algs['otherDesc'] ?? '';
            }
         } catch (_) {}
 
@@ -426,6 +455,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       _chargeCtrl.text = _existingConsultation?.chargeAmount?.toString() ?? '';
       _charged = _existingConsultation?.charged ?? false;
       _consentGiven = _existingConsultation?.consentGiven ?? false;
+      _acupunctureDiagnosisCtrl.text = _existingConsultation?.acupunctureDiagnosis ?? '';
+      _eyeDiagnosisCtrl.text = _existingConsultation?.eyeDiagnosis ?? '';
+      _pulseDiagnosisCtrl.text = _existingConsultation?.pulseDiagnosis ?? '';
+      _coronaVaccinated = _existingConsultation?.coronaVaccinated ?? false;
 
       // Load associated sessions via treatment_plans
       // (sessions don't have a direct 'consultation' field — they're linked via treatment_plan)
@@ -511,16 +544,34 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   }
 
   Future<void> _pickPhoto() async {
+    // ── Quota check ──
+    final clinicId = ref.read(authProvider).clinicId;
+    if (clinicId != null) {
+      try {
+        final quota = ref.read(photoQuotaServiceProvider);
+        if (!await quota.canUpload(clinicId, 1)) {
+          if (mounted) {
+            final (used, limit) = await quota.getQuota(clinicId);
+            showPhotoLimitDialog(context, used: used, limit: limit,
+              isClinicAdmin: ref.read(authProvider).role == UserRole.clinic);
+          }
+          return;
+        }
+      } catch (_) {}
+    }
     try {
       final img = await _picker.pickImage(
         source: ImageSource.camera,
-        maxWidth: 1200,
-        maxHeight: 1200,
-        imageQuality: 80,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 60,
       );
       if (img != null && mounted) {
-        setState(() => _photos.add(img));
-        _onInteraction();
+        final compressed = await ImageHelper.compressToWebP(img);
+        if (compressed != null && mounted) {
+          setState(() => _photos.add(compressed));
+          _onInteraction();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -532,15 +583,66 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   }
 
   Future<void> _pickFromGallery() async {
+    // ── Quota check ──
+    final clinicId = ref.read(authProvider).clinicId;
+    if (clinicId != null) {
+      try {
+        final quota = ref.read(photoQuotaServiceProvider);
+        if (!await quota.canUpload(clinicId, 1)) {
+          if (mounted) {
+            final (used, limit) = await quota.getQuota(clinicId);
+            showPhotoLimitDialog(context, used: used, limit: limit,
+              isClinicAdmin: ref.read(authProvider).role == UserRole.clinic);
+          }
+          return;
+        }
+      } catch (_) {}
+    }
     try {
       final imgs = await _picker.pickMultiImage(
-        maxWidth: 1200,
-        maxHeight: 1200,
-        imageQuality: 80,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 60,
       );
       if (imgs.isNotEmpty && mounted) {
-        setState(() => _photos.addAll(imgs));
-        _onInteraction();
+        // Check quota for batch
+        if (clinicId != null) {
+          try {
+            final quota = ref.read(photoQuotaServiceProvider);
+            if (!await quota.canUpload(clinicId, imgs.length)) {
+              final remaining = await quota.getRemainingQuota(clinicId);
+              if (remaining <= 0) {
+                final (used, limit) = await quota.getQuota(clinicId);
+                if (mounted) showPhotoLimitDialog(context, used: used, limit: limit,
+                  isClinicAdmin: ref.read(authProvider).role == UserRole.clinic);
+                return;
+              }
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Only $remaining photo(s) remaining in your quota. Selecting first $remaining.'),
+                    backgroundColor: context.colors.warning,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+              }
+              // Trim to remaining quota
+              imgs.removeRange(remaining, imgs.length);
+            }
+          } catch (_) {}
+        }
+        final compressedList = <XFile>[];
+        for (final file in imgs) {
+          final comp = await ImageHelper.compressToWebP(file);
+          if (comp != null) {
+            compressedList.add(comp);
+          }
+        }
+        if (compressedList.isNotEmpty && mounted) {
+          setState(() => _photos.addAll(compressedList));
+          _onInteraction();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -552,6 +654,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   }
 
   Future<void> _confirmEndConsultation() async {
+    // Capture navigator before async gap — fixes Vivo/iQOO devices
+    final navigator = Navigator.of(context);
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -590,7 +695,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Treatment ended. All pending sessions cancelled.'), backgroundColor: context.colors.success),
           );
-          Navigator.pop(context);
+          navigator.pop();
         }
       } catch (e) {
         if (mounted) {
@@ -604,6 +709,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Capture navigator before async gap — fixes Vivo/iQOO devices
+    final navigator = Navigator.of(context);
 
     if (_notesCtrl.text.trim().isEmpty) {
       if (mounted) {
@@ -622,6 +730,19 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Consent must be given to proceed.'),
+            backgroundColor: context.colors.error,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Validate charge amount
+    if (_charged && _chargeCtrl.text.trim().isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Please enter the consultation fee amount or toggle off charging.'),
             backgroundColor: context.colors.error,
           ),
         );
@@ -655,9 +776,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           'hasDrug': _hasDrugAllergy,
           'hasEnv': _hasEnvAllergy,
           'hasFood': _hasFoodAllergy,
+          'hasOther': _hasOtherAllergy,
           'drugDesc': _drugAllergyCtrl.text.trim(),
           'envDesc': _envAllergyCtrl.text.trim(),
           'foodDesc': _foodAllergyCtrl.text.trim(),
+          'otherDesc': _otherAllergyCtrl.text.trim(),
         });
 
         consultation = await service.updateConsultation(
@@ -693,6 +816,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           
           charged: _charged,
           chargeAmount: _charged && _chargeCtrl.text.isNotEmpty ? int.tryParse(_chargeCtrl.text.trim()) : null,
+          acupunctureDiagnosis: _acupunctureDiagnosisCtrl.text.trim(),
+          eyeDiagnosis: _eyeDiagnosisCtrl.text.trim(),
+          pulseDiagnosis: _pulseDiagnosisCtrl.text.trim(),
+          coronaVaccinated: _coronaVaccinated,
           newPhotoPaths: _photos.map((p) => p.path).toList(),
         );
       } else {
@@ -714,6 +841,16 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       _formSubmitted = true;
       await _clearDraft();
 
+      // ── Increment photo quota ──
+      if (_photos.isNotEmpty) {
+        final clinicId = ref.read(authProvider).clinicId;
+        if (clinicId != null) {
+          try {
+            await ref.read(photoQuotaServiceProvider).incrementUsage(clinicId, _photos.length);
+          } catch (_) {}
+        }
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -724,7 +861,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           ),
         );
         // Return the consultation so the caller can create a treatment plan
-        Navigator.pop(context, consultation);
+        navigator.pop(consultation);
       }
     } catch (e) {
       if (mounted) {
@@ -1051,55 +1188,17 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         // ─── Conversational / Medical ───
         _buildSectionHeader('Consulting Conversations', Icons.chat_bubble_outline_rounded),
 
-        // Chief Complaint field with mic button
+        // Chief Complaint label
         if (!_isViewing)
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Chief Complaint / Main Problem',
-                  style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold),
-                ),
-              ),
-              GestureDetector(
-                onTap: () => VoiceDictationDialog.show(
-                  context: context,
-                  controller: _notesCtrl,
-                  fieldLabel: 'Chief Complaint',
-                ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: context.colors.primary.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: context.colors.primary.withValues(alpha: 0.25),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.mic_rounded, size: 15, color: context.colors.primary),
-                      const SizedBox(width: 5),
-                      Text(
-                        'Dictate',
-                        style: context.textStyles.caption.copyWith(
-                          color: context.colors.primary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            'Chief Complaint / Main Problem',
+            style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold),
           ),
         if (!_isViewing) const SizedBox(height: 8),
         AppTextField(
           controller: _notesCtrl,
           label: _isViewing ? 'Chief Complaint / Main Problem' : '',
-          hint: 'As discussed with the client...',
+          hint: 'As discussed with patient...',
           maxLines: 3,
           readOnly: _isViewing,
         ),
@@ -1203,17 +1302,31 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         _buildAllergyCheckbox('Drug / Medication Allergies', _hasDrugAllergy, (v) => setState(() => _hasDrugAllergy = v), _drugAllergyCtrl, 'Which drugs?'),
         _buildAllergyCheckbox('Environmental Allergies', _hasEnvAllergy, (v) => setState(() => _hasEnvAllergy = v), _envAllergyCtrl, 'Dust, pollen, etc.'),
         _buildAllergyCheckbox('Food Allergies', _hasFoodAllergy, (v) => setState(() => _hasFoodAllergy = v), _foodAllergyCtrl, 'Dairy, nuts, etc.'),
+        _buildAllergyCheckbox('Other Allergies', _hasOtherAllergy, (v) => setState(() => _hasOtherAllergy = v), _otherAllergyCtrl, 'Please specify...'),
 
         const SizedBox(height: 24),
         Text('Chronic Diseases', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         _buildMultiSelectGrid(
-          ['Arthritis', 'Sinus', 'Asthma', 'Thyroid', 'Diabetes', 'BP', 'Heart problems', 'Other'],
+          ['None', 'Arthritis', 'Sinus', 'Asthma', 'Thyroid', 'Diabetes', 'BP', 'Heart problems', 'Other'],
           _selectedChronicDiseases,
           (val, selected) {
             setState(() {
-              if (selected) _selectedChronicDiseases.add(val);
-              else _selectedChronicDiseases.remove(val);
+              if (val == 'None') {
+                // Selecting 'None' clears all others
+                if (selected) {
+                  _selectedChronicDiseases.clear();
+                  _selectedChronicDiseases.add('None');
+                  _chronicOtherCtrl.clear();
+                } else {
+                  _selectedChronicDiseases.remove('None');
+                }
+              } else {
+                // Selecting any disease removes 'None'
+                _selectedChronicDiseases.remove('None');
+                if (selected) _selectedChronicDiseases.add(val);
+                else _selectedChronicDiseases.remove(val);
+              }
             });
           },
           otherCtrl: _chronicOtherCtrl,
@@ -1347,6 +1460,61 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         ),
         const SizedBox(height: 32),
 
+        // ─── Diagnosis ───
+        _buildSectionHeader('Diagnosis', Icons.medical_information_outlined),
+        AppTextField(
+          controller: _acupunctureDiagnosisCtrl,
+          label: 'Acupuncture Diagnosis',
+          hint: 'Meridian findings, point sensitivity...',
+          maxLines: 3,
+          readOnly: _isViewing,
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: _eyeDiagnosisCtrl,
+          label: 'Eye Diagnosis',
+          hint: 'Iridology, sclera findings...',
+          maxLines: 3,
+          readOnly: _isViewing,
+        ),
+        const SizedBox(height: 16),
+        AppTextField(
+          controller: _pulseDiagnosisCtrl,
+          label: 'Pulse Diagnosis',
+          hint: 'Pulse characteristics, rhythm, strength...',
+          maxLines: 3,
+          readOnly: _isViewing,
+        ),
+        const SizedBox(height: 32),
+
+        // ─── Corona Vaccination ───
+        _buildSectionHeader('Vaccination', Icons.vaccines_outlined),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: context.colors.border),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text('Corona Vaccinated?',
+                    style: context.textStyles.bodyMedium),
+              ),
+              Switch(
+                value: _coronaVaccinated,
+                onChanged: (_isViewing) ? null : (v) {
+                  setState(() => _coronaVaccinated = v);
+                  _onInteraction();
+                },
+                activeColor: context.colors.success,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 32),
+
         // ─── Report Files & Media ───
         _buildSectionHeader('Report Files', Icons.science_outlined),
         Text('Upload X-Rays, MRI, Blood Test Reports', style: context.textStyles.caption),
@@ -1359,8 +1527,18 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
               ..._existingConsultation!.photos.map((p) => _remotePhotoThumb(p)),
             if (!_isViewing) ...[
               ..._photos.asMap().entries.map((e) => _photoThumb(e.key)),
-              _addPhotoBtn(Icons.camera_alt_rounded, 'Camera', _pickPhoto),
-              _addPhotoBtn(Icons.photo_library_rounded, 'Gallery', _pickFromGallery),
+              if (kIsWeb)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: Text(
+                    '⚠️ Report file uploads are only supported on the mobile app.',
+                    style: context.textStyles.caption.copyWith(color: context.colors.warning),
+                  ),
+                )
+              else ...[
+                _addPhotoBtn(Icons.camera_alt_rounded, 'Camera', _pickPhoto),
+                _addPhotoBtn(Icons.photo_library_rounded, 'Gallery', _pickFromGallery),
+              ],
             ],
           ],
         ),

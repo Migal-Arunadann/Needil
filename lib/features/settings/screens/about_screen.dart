@@ -8,8 +8,8 @@ import 'package:pms_app/core/theme/app_theme.dart';
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
 
-  static const _appVersion = '1.0.0';
-  static const _buildNumber = '1';
+  static const _appVersion = '1.0.1';
+  static const _buildNumber = '3';
 
   @override
   Widget build(BuildContext context) {
@@ -55,12 +55,12 @@ class AboutScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'PMS',
+                  'Needil',
                   style: context.textStyles.h1.copyWith(color: Colors.white, fontSize: 28),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Practice Management System',
+                  'Advanced Clinic Management System',
                   style: context.textStyles.caption.copyWith(
                     color: Colors.white.withValues(alpha: 0.85),
                     fontSize: 13,
@@ -87,10 +87,10 @@ class AboutScreen extends StatelessWidget {
           const SizedBox(height: 24),
 
           // What is PMS
-          _sectionHeader(context, 'About PMS', Icons.info_outline_rounded),
+          _sectionHeader(context, 'About Needil', Icons.info_outline_rounded),
           const SizedBox(height: 10),
           _textCard(context, 
-            'PMS is a comprehensive Practice Management System designed for clinics offering session-based treatments such as physiotherapy, acupuncture, and reflexology.\n\nIt streamlines patient registration, appointment booking, consultation management, and treatment session planning — all in one place.',
+            'Needil is a comprehensive clinical management system designed for clinics offering session-based treatments such as physiotherapy, acupuncture, and reflexology.\n\nIt streamlines patient registration, appointment booking, consultation management, and treatment session planning — all in one place.',
           ),
           const SizedBox(height: 20),
 
@@ -112,15 +112,11 @@ class AboutScreen extends StatelessWidget {
             ),
             child: Column(
               children: [
-                _techRow(context, 'Framework', 'Flutter'),
-                _divider(context),
-                _techRow(context, 'Backend', 'PocketBase'),
-                _divider(context),
                 _techRow(context, 'App Version', _appVersion),
                 _divider(context),
                 _techRow(context, 'Build Number', _buildNumber),
                 _divider(context),
-                _techRow(context, 'Min SDK', 'Android 6.0 / iOS 12'),
+                _techRow(context, 'Compatibility', 'Android 6.0+ / iOS 12+'),
               ],
             ),
           ),
@@ -135,7 +131,7 @@ class AboutScreen extends StatelessWidget {
             title: 'Terms of Use',
             subtitle: 'Usage terms for clinic and doctor accounts',
             content:
-                'By using PMS, you agree to use this software solely for legitimate medical practice management. Patient data must be handled in accordance with applicable data protection laws. Unauthorised access, data misuse, or sharing of credentials is strictly prohibited.',
+                'By using Needil, you agree to use this software solely for legitimate medical practice management. Patient data must be handled in accordance with applicable data protection laws. Unauthorised access, data misuse, or sharing of credentials is strictly prohibited.',
           ),
           SizedBox(height: 8),
           _legalTile(
@@ -144,14 +140,14 @@ class AboutScreen extends StatelessWidget {
             title: 'Privacy Policy',
             subtitle: 'How patient and clinic data is handled',
             content:
-                'PMS stores all data on your self-hosted PocketBase server. No data is transmitted to third-party servers. Patient records, appointment history, and consultation data are encrypted at rest. You are responsible for maintaining the security of your server.',
+                'Needil stores all data on your self-hosted PocketBase server. No data is transmitted to third-party servers. Patient records, appointment history, and consultation data are encrypted at rest. You are responsible for maintaining the security of your server.',
           ),
           SizedBox(height: 8),
 
           // Copy build info
           GestureDetector(
             onTap: () {
-              Clipboard.setData(ClipboardData(text: 'PMS v$_appVersion (Build $_buildNumber)'));
+              Clipboard.setData(ClipboardData(text: 'Needil v$_appVersion (Build $_buildNumber)'));
               ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                 content: const Text('Build info copied'),
                 backgroundColor: context.colors.primary,

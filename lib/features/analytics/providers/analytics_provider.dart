@@ -57,6 +57,7 @@ class AnalyticsData {
   // --- Revenue ---
   /// Total revenue = paid consultation charges + (session fee × completed sessions)
   final int totalRevenue;
+  final int selectedDays;
 
   final bool isLoading;
 
@@ -86,6 +87,7 @@ class AnalyticsData {
     this.totalConsultations = 0,
     this.consultationsWithPlan = 0,
     this.totalRevenue = 0,
+    this.selectedDays = 30,
     this.isLoading = false,
   });
 
@@ -121,8 +123,8 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
   final Ref _ref;
   AnalyticsNotifier(this._ref) : super(const AnalyticsData(isLoading: true));
 
-  Future<void> load() async {
-    state = const AnalyticsData(isLoading: true);
+  Future<void> load({int days = 30}) async {
+    state = AnalyticsData(isLoading: true, selectedDays: days);
     final pb = _ref.read(pocketbaseProvider);
     final auth = _ref.read(authProvider);
     final userId = auth.userId;
@@ -142,10 +144,10 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
     final todayStr =
         '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-    // Date 30 days ago
-    final thirtyDaysAgo = now.subtract(const Duration(days: 30));
+    // Date days ago
+    final daysAgo = now.subtract(Duration(days: days));
     final fromStr =
-        '${thirtyDaysAgo.year}-${thirtyDaysAgo.month.toString().padLeft(2, '0')}-${thirtyDaysAgo.day.toString().padLeft(2, '0')}';
+        '${daysAgo.year}-${daysAgo.month.toString().padLeft(2, '0')}-${daysAgo.day.toString().padLeft(2, '0')}';
 
     // Helper: safe count
     Future<int> safeCount(String col, String filter) async {
@@ -263,13 +265,13 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
     final weeklyScheduled = <int>[];
     final weeklyCompleted = <int>[];
     final weeklyCancelled = <int>[];
-    final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
     for (int i = 6; i >= 0; i--) {
       final d = now.subtract(Duration(days: i));
       final dStr =
           '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
-      dayLabels.add(days[d.weekday - 1]);
+      dayLabels.add(weekdays[d.weekday - 1]);
       final dayAppts = recentAppointments.where((a) => a.date == dStr).toList();
       weeklyScheduled.add(
         dayAppts.where((a) => a.status == AppointmentStatus.scheduled).length,
@@ -413,6 +415,7 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
       ageGroupDistribution: ageGroup,
       locationDistribution: top6Loc,
       totalRevenue: totalRevenue,
+      selectedDays: days,
       isLoading: false,
     );
   }

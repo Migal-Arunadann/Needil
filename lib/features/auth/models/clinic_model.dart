@@ -18,6 +18,12 @@ class ClinicModel {
   final String? pin;
   final String? location;
   final String? logoUrl;
+  // Patient ID prefix
+  final String? patientIdPrefix;  // e.g., "HSK" → generates HSK-001, HSK-002
+  // Subscription & photo quota
+  final String subscriptionTier;
+  final int photosUsed;
+  final int photoLimit;
   final DateTime? created;
   final DateTime? updated;
 
@@ -37,6 +43,10 @@ class ClinicModel {
     this.pin,
     this.location,
     this.logoUrl,
+    this.patientIdPrefix,
+    this.subscriptionTier = 'base',
+    this.photosUsed = 0,
+    this.photoLimit = 2000,
     this.created,
     this.updated,
   });
@@ -65,6 +75,14 @@ class ClinicModel {
       pin: record.getStringValue('pin'),
       location: record.getStringValue('location'),
       logoUrl: logoUrl,
+      patientIdPrefix: record.getStringValue('patient_id_prefix'),
+      subscriptionTier: record.getStringValue('subscription_tier').isNotEmpty
+          ? record.getStringValue('subscription_tier')
+          : 'base',
+      photosUsed: record.getIntValue('photos_used'),
+      photoLimit: record.getIntValue('photo_limit') > 0
+          ? record.getIntValue('photo_limit')
+          : 2000,
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
     );
@@ -84,6 +102,7 @@ class ClinicModel {
       if (state != null && state!.isNotEmpty) 'state': state,
       if (pin != null && pin!.isNotEmpty) 'pin': pin,
       if (location != null && location!.isNotEmpty) 'location': location,
+      if (patientIdPrefix != null && patientIdPrefix!.isNotEmpty) 'patient_id_prefix': patientIdPrefix,
     };
   }
 }

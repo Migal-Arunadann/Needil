@@ -20,6 +20,9 @@ class SessionLifecycleService {
   ///
   /// Returns a list of human-readable summaries of rescheduled sessions
   /// so the caller can show a notification.
+  /// 
+  /// If a plan hits the 3-miss limit, the summary will contain a special
+  /// entry starting with `PAUSE_PROMPT:` followed by the plan ID.
   Future<List<String>> checkAndMarkMissedSessions(String doctorId) async {
     final today = _formatDate(DateTime.now());
     final summaries = <String>[];
@@ -47,6 +50,18 @@ class SessionLifecycleService {
         final planId = entry.key;
         final missedSessions = entry.value;
 
+        // Load plan to check consecutive misses
+        TreatmentPlanModel plan;
+        try {
+          final planRec = await pb.collection(PBCollections.treatmentPlans).getOne(planId);
+          plan = TreatmentPlanModel.fromRecord(planRec);
+        } catch (_) {
+          continue;
+        }
+
+        // Skip if plan is already paused
+        if (plan.isPaused) continue;
+
         // Mark each as missed + update linked appointment
         for (final s in missedSessions) {
           await pb.collection(PBCollections.sessions).update(
@@ -54,6 +69,24 @@ class SessionLifecycleService {
             body: {'status': 'missed'},
           );
           await _syncAppointmentStatus(s, 'cancelled');
+        }
+
+        // Increment consecutive miss count
+        final newMissCount = plan.consecutiveMisses + missedSessions.length;
+        await pb.collection(PBCollections.treatmentPlans).update(planId, body: {
+          'consecutive_misses': newMissCount,
+        });
+
+        // If 3+ consecutive misses, signal pause prompt instead of rescheduling
+        if (newMissCount >= 3) {
+          // Fetch patient name for the prompt
+          String patientName = 'Patient';
+          try {
+            final patRec = await pb.collection('patients').getOne(plan.patientId);
+            patientName = patRec.getStringValue('full_name');
+          } catch (_) {}
+          summaries.add('PAUSE_PROMPT:$planId:$patientName:$newMissCount');
+          continue;
         }
 
         // Auto-reschedule the missed session(s) and cascade subsequent ones
@@ -174,6 +207,8 @@ class SessionLifecycleService {
         await pb.collection(PBCollections.sessions).update(session.id, body: {
           'scheduled_date': newDate,
           'scheduled_time': newTime,
+          'is_rescheduled': true,
+          'original_date': session.scheduledDate,
           // If it was missed, keep it missed. If upcoming, keep upcoming.
           if (session.status == SessionStatus.missed) 'status': 'upcoming',
         });

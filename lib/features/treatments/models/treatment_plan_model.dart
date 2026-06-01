@@ -16,6 +16,9 @@ class TreatmentPlanModel {
   final String planType;       // 'treatment' or 'maintenance'
   final String intervalUnit;   // 'days', 'months', 'years'
   final String? parentPlanId;  // links maintenance → original treatment plan
+  final int consecutiveMisses;
+  final bool isPaused;
+  final String? pausedAt;
   final DateTime? created;
   final DateTime? updated;
 
@@ -36,6 +39,9 @@ class TreatmentPlanModel {
     this.planType = 'treatment',
     this.intervalUnit = 'days',
     this.parentPlanId,
+    this.consecutiveMisses = 0,
+    this.isPaused = false,
+    this.pausedAt,
     this.created,
     this.updated,
     this.patientName,
@@ -74,6 +80,11 @@ class TreatmentPlanModel {
       parentPlanId: record.getStringValue('parent_plan').isNotEmpty
           ? record.getStringValue('parent_plan')
           : null,
+      consecutiveMisses: record.getIntValue('consecutive_misses'),
+      isPaused: record.getBoolValue('is_paused'),
+      pausedAt: record.getStringValue('paused_at').isNotEmpty
+          ? record.getStringValue('paused_at')
+          : null,
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
       patientName: patientName,
@@ -96,6 +107,9 @@ class TreatmentPlanModel {
       'interval_unit': intervalUnit,
       if (parentPlanId != null && parentPlanId!.isNotEmpty)
         'parent_plan': parentPlanId,
+      'consecutive_misses': consecutiveMisses,
+      'is_paused': isPaused,
+      if (pausedAt != null && pausedAt!.isNotEmpty) 'paused_at': pausedAt,
     };
   }
 

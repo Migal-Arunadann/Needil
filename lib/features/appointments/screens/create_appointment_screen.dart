@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -19,6 +20,7 @@ import '../providers/appointment_provider.dart';
 import '../../../core/services/auth_service.dart';
 import '../../patients/models/patient_model.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import '../../../core/services/audit_service.dart';
 
 
 class CreateAppointmentScreen extends ConsumerStatefulWidget {
@@ -54,8 +56,12 @@ class _CreateAppointmentScreenState
   final _areaCtrl = TextEditingController();
   final _occupationCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+  final _referenceCtrl = TextEditingController();
   String? _selectedGender;
   bool _consentGiven = false;
+  File? _patientPhoto;
+  List<Map<String, String>> _familyMembers = [];
+  String? _howDidYouHear;
 
   // Slot selection
   DateTime? _selectedDate;
@@ -115,6 +121,7 @@ class _CreateAppointmentScreenState
     _areaCtrl.dispose();
     _occupationCtrl.dispose();
     _emailCtrl.dispose();
+    _referenceCtrl.dispose();
     super.dispose();
   }
 
@@ -217,6 +224,9 @@ class _CreateAppointmentScreenState
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Capture navigator before async gap — fixes Vivo/iQOO devices
+    final navigator = Navigator.of(context);
 
     // Gender is mandatory for walk-in
     if (!_isCallBy && _selectedGender == null) {
@@ -490,6 +500,12 @@ class _CreateAppointmentScreenState
         email: _emailCtrl.text.isNotEmpty ? _emailCtrl.text : null,
         age: calculatedAge,
         existingPatientId: _existingPatient?.id,
+        reference: _referenceCtrl.text.isNotEmpty ? _referenceCtrl.text : null,
+        familyMembers: _familyMembers.isNotEmpty
+            ? _familyMembers.map((fm) => '${fm['name']} (${fm['relation']})').toList()
+            : null,
+        howDidYouHear: _howDidYouHear,
+        photoPath: _patientPhoto?.path,
       );
       success = result != null;
     }
@@ -497,6 +513,16 @@ class _CreateAppointmentScreenState
     setState(() => _isSubmitting = false);
 
     if (success && mounted) {
+      // Audit log for receptionist actions
+      final auth = ref.read(authProvider);
+      if (auth.role == UserRole.receptionist) {
+        ref.read(auditServiceProvider).log(
+          userId: auth.userId ?? '',
+          userRole: 'receptionist',
+          action: AuditAction.createAppointment,
+          details: 'Created ${_isCallBy ? 'call-by' : 'walk-in'} for ${_nameCtrl.text.trim()}',
+        );
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
@@ -507,7 +533,7 @@ class _CreateAppointmentScreenState
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
-      Navigator.pop(context);
+      navigator.pop();
     } else if (mounted) {
       // Show error from provider state
       final err = ref.read(appointmentListProvider).error;
@@ -834,10 +860,17 @@ class _CreateAppointmentScreenState
                     areaCtrl: _areaCtrl,
                     occupationCtrl: _occupationCtrl,
                     emailCtrl: _emailCtrl,
+                    referenceCtrl: _referenceCtrl,
                     selectedGender: _selectedGender,
                     onGenderChanged: (v) => setState(() => _selectedGender = v),
                     consentGiven: _consentGiven,
                     onConsentChanged: (v) => setState(() => _consentGiven = v),
+                    photoFile: _patientPhoto,
+                    onPhotoChanged: (f) => setState(() => _patientPhoto = f),
+                    familyMembers: _familyMembers,
+                    onFamilyMembersChanged: (fm) => setState(() => _familyMembers = fm),
+                    howDidYouHear: _howDidYouHear,
+                    onHowDidYouHearChanged: (v) => setState(() => _howDidYouHear = v),
                     isReturningPatient: _isRegisteredPatient,
                     isCheckingPhone: _isCheckingPhone,
                     nameLocked: _isRegisteredPatient,

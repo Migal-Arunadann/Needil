@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -842,7 +843,10 @@ class _EditDoctorDetailsScreenState
                   ),
                   Switch(
                     value: enabled,
-                    onChanged: (v) => setState(() => _treatmentEnabled[type] = v),
+                    onChanged: (v) {
+                      HapticFeedback.lightImpact();
+                      setState(() => _treatmentEnabled[type] = v);
+                    },
                     activeTrackColor: context.colors.primary,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),

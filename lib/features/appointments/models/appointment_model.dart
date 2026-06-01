@@ -25,6 +25,7 @@ class AppointmentModel {
   final bool treatmentPlanPartial;           // true once treatment plan form opened but not submitted
   final String? linkedTreatmentPlanId;       // ID of created treatment plan (prevents duplicates)
   final String? linkedConsultationId;        // ID of linked consultation stub (avoids list queries)
+  final bool isRescheduled;                   // true when appointment has been rescheduled
   final DateTime? created;
   final DateTime? updated;
 
@@ -54,6 +55,7 @@ class AppointmentModel {
     this.treatmentPlanPartial = false,
     this.linkedTreatmentPlanId,
     this.linkedConsultationId,
+    this.isRescheduled = false,
     this.created,
     this.updated,
     this.doctorName,
@@ -113,6 +115,7 @@ class AppointmentModel {
       linkedConsultationId: record.getStringValue('linked_consultation_id').isNotEmpty
           ? record.getStringValue('linked_consultation_id')
           : null,
+      isRescheduled: record.getBoolValue('is_rescheduled'),
       created: DateTime.tryParse(record.get<String>('created')),
       updated: DateTime.tryParse(record.get<String>('updated')),
       doctorName: doctorName,
@@ -149,6 +152,7 @@ class AppointmentModel {
         'linked_treatment_plan_id': linkedTreatmentPlanId,
       if (linkedConsultationId != null && linkedConsultationId!.isNotEmpty)
         'linked_consultation_id': linkedConsultationId,
+      if (isRescheduled) 'is_rescheduled': true,
     };
   }
 

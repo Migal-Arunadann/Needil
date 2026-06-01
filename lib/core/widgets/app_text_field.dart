@@ -15,7 +15,8 @@ class AppTextField extends StatelessWidget {
   final bool obscureText;
   final Widget? prefixIcon;
   final Widget? suffixIcon;
-  final int maxLines;
+  final int? maxLines;
+  final int? minLines;
   final bool enabled;
   final void Function(String)? onChanged;
   final FocusNode? focusNode;
@@ -37,6 +38,7 @@ class AppTextField extends StatelessWidget {
     this.prefixIcon,
     this.suffixIcon,
     this.maxLines = 1,
+    this.minLines,
     this.enabled = true,
     this.onChanged,
     this.focusNode,
@@ -60,6 +62,7 @@ class AppTextField extends StatelessWidget {
           keyboardType: keyboardType,
           obscureText: obscureText,
           maxLines: maxLines,
+          minLines: minLines,
           enabled: enabled,
           readOnly: readOnly,
           onTap: onTap,

@@ -43,6 +43,10 @@ class TreatmentService {
     String? cholesterolLevel,
     bool charged = false,
     int? chargeAmount,
+    String? acupunctureDiagnosis,
+    String? eyeDiagnosis,
+    String? pulseDiagnosis,
+    bool coronaVaccinated = false,
     List<String> photoPaths = const [],
   }) async {
     final body = <String, dynamic>{
@@ -73,6 +77,10 @@ class TreatmentService {
       if (cholesterolLevel != null && cholesterolLevel.isNotEmpty) 'cholesterol_level': cholesterolLevel,
       'charged': charged,
       if (chargeAmount != null) 'charge_amount': chargeAmount,
+      if (acupunctureDiagnosis != null && acupunctureDiagnosis.isNotEmpty) 'acupuncture_diagnosis': acupunctureDiagnosis,
+      if (eyeDiagnosis != null && eyeDiagnosis.isNotEmpty) 'eye_diagnosis': eyeDiagnosis,
+      if (pulseDiagnosis != null && pulseDiagnosis.isNotEmpty) 'pulse_diagnosis': pulseDiagnosis,
+      'corona_vaccinated': coronaVaccinated,
       'status': 'ongoing',
     };
 
@@ -115,6 +123,10 @@ class TreatmentService {
     String? cholesterolLevel,
     bool? charged,
     int? chargeAmount,
+    String? acupunctureDiagnosis,
+    String? eyeDiagnosis,
+    String? pulseDiagnosis,
+    bool? coronaVaccinated,
     List<String> newPhotoPaths = const [],
   }) async {
     // NOTE: Status is intentionally NOT changed here.
@@ -145,6 +157,10 @@ class TreatmentService {
       if (cholesterolLevel != null) 'cholesterol_level': cholesterolLevel,
       if (charged != null) 'charged': charged,
       if (chargeAmount != null) 'charge_amount': chargeAmount,
+      if (acupunctureDiagnosis != null) 'acupuncture_diagnosis': acupunctureDiagnosis,
+      if (eyeDiagnosis != null) 'eye_diagnosis': eyeDiagnosis,
+      if (pulseDiagnosis != null) 'pulse_diagnosis': pulseDiagnosis,
+      if (coronaVaccinated != null) 'corona_vaccinated': coronaVaccinated,
     };
 
     final files = <http.MultipartFile>[];
@@ -826,6 +842,202 @@ class TreatmentService {
         });
       }
     } catch (_) {}
+  }
+
+  // ─── Pause / Resume ─────────────────────────────────────────
+
+  /// Pause a treatment plan: change all upcoming sessions → paused,
+  /// cancel their linked appointments, and set plan's is_paused flag.
+  Future<void> pauseSessions(String planId) async {
+    // 1) Set plan as paused
+    await pb.collection(PBCollections.treatmentPlans).update(planId, body: {
+      'is_paused': true,
+      'paused_at': DateTime.now().toUtc().toIso8601String(),
+      'status': 'paused',
+    });
+
+    // 2) Find all upcoming sessions for this plan
+    final sessRes = await pb.collection(PBCollections.sessions).getList(
+      filter: 'treatment_plan = "$planId" && status = "upcoming"',
+      sort: 'session_number',
+      perPage: 200,
+    );
+
+    // 3) Mark each as paused and cancel linked appointments
+    for (final sess in sessRes.items) {
+      await pb.collection(PBCollections.sessions).update(sess.id, body: {
+        'status': 'paused',
+      });
+
+      // Cancel linked appointment
+      final rawDate = sess.getStringValue('scheduled_date');
+      String datePart = rawDate;
+      try {
+        final dt = DateTime.parse(rawDate);
+        datePart = _formatDate(dt);
+      } catch (_) {}
+      final timeStr = sess.getStringValue('scheduled_time');
+      final doctorId = sess.getStringValue('doctor');
+      final patientId = sess.getStringValue('patient');
+      try {
+        final appts = await pb.collection(PBCollections.appointments).getList(
+          filter:
+              'patient = "$patientId" && doctor = "$doctorId" '
+              '&& date >= "$datePart 00:00:00.000Z" && date <= "$datePart 23:59:59.999Z" '
+              '&& time = "$timeStr" && type = "session" && status != "cancelled"',
+        );
+        for (final appt in appts.items) {
+          await pb.collection(PBCollections.appointments).update(appt.id, body: {'status': 'cancelled'});
+        }
+      } catch (_) {}
+    }
+  }
+
+  /// Resume a treatment plan: reschedule all paused sessions from today
+  /// using the smart scheduling engine. If [startFromFirst] is true,
+  /// all paused sessions are rescheduled starting from the lowest session
+  /// number. Otherwise, they continue from where they left off (same order).
+  ///
+  /// Both modes reschedule from today forward — the difference is only
+  /// semantic (both reschedule the same paused sessions in order).
+  Future<void> resumeSessions(String planId, {bool startFromFirst = false}) async {
+    // 1) Load plan
+    final planRec = await pb.collection(PBCollections.treatmentPlans).getOne(planId);
+    final plan = TreatmentPlanModel.fromRecord(planRec);
+
+    // 2) Load doctor info for working days
+    List<int> validDays = [];
+    int maxBeds = 3;
+    String? validClinicId;
+    try {
+      final docRec = await pb.collection('doctors').getOne(plan.doctorId);
+      final doctor = DoctorModel.fromRecord(docRec);
+      validDays = doctor.workingDays;
+      validClinicId = doctor.clinicId;
+      if (validClinicId != null && validClinicId.isNotEmpty) {
+        try {
+          final clinicRec = await pb.collection('clinics').getOne(validClinicId);
+          maxBeds = clinicRec.getIntValue('bed_count');
+          if (maxBeds <= 0) maxBeds = 3;
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    // 3) Get all paused sessions sorted by session_number
+    final sessRes = await pb.collection(PBCollections.sessions).getList(
+      filter: 'treatment_plan = "$planId" && status = "paused"',
+      sort: 'session_number',
+      perPage: 200,
+    );
+
+    if (sessRes.items.isEmpty) return;
+
+    // 4) Determine preferred time from the plan's first session
+    String preferredTime = '10:00';
+    try {
+      final allSessions = await pb.collection(PBCollections.sessions).getList(
+        filter: 'treatment_plan = "$planId"',
+        sort: 'session_number',
+        perPage: 1,
+      );
+      if (allSessions.items.isNotEmpty) {
+        final t = allSessions.items.first.getStringValue('scheduled_time');
+        if (t.isNotEmpty) preferredTime = t;
+      }
+    } catch (_) {}
+
+    final timeParts = preferredTime.split(':');
+    final pTimeHr = int.parse(timeParts[0]);
+    final pTimeMn = int.parse(timeParts[1]);
+
+    // 5) Schedule from today forward
+    DateTime cursor = DateTime.now();
+    final pausedSessions = sessRes.items.toList();
+
+    for (int i = 0; i < pausedSessions.length; i++) {
+      final sess = pausedSessions[i];
+
+      if (i > 0) {
+        cursor = cursor.add(Duration(days: plan.intervalDays));
+      }
+
+      // Skip to next working day
+      if (validDays.isNotEmpty) {
+        while (!validDays.contains(cursor.weekday)) {
+          cursor = cursor.add(const Duration(days: 1));
+        }
+      }
+
+      // Find available slot
+      String resolvedTime = preferredTime;
+      bool foundSlot = false;
+      DateTime tryDate = cursor;
+      int dayAttempts = 0;
+
+      while (!foundSlot && dayAttempts < 30) {
+        if (validDays.isNotEmpty) {
+          while (!validDays.contains(tryDate.weekday)) {
+            tryDate = tryDate.add(const Duration(days: 1));
+          }
+        }
+
+        final tryDateStr = _formatDate(tryDate);
+        DateTime slotAttempt = DateTime(tryDate.year, tryDate.month, tryDate.day, pTimeHr, pTimeMn);
+
+        for (int attempt = 0; attempt < 16; attempt++) {
+          if (slotAttempt.hour >= 20) break;
+          final checkTimeStr =
+              '${slotAttempt.hour.toString().padLeft(2, "0")}:${slotAttempt.minute.toString().padLeft(2, "0")}';
+
+          final existing = await pb.collection(PBCollections.appointments).getList(
+            filter: 'doctor = "${plan.doctorId}" && date = "$tryDateStr" && time = "$checkTimeStr" && status != "cancelled"',
+          );
+          if (existing.totalItems < maxBeds) {
+            resolvedTime = checkTimeStr;
+            cursor = tryDate;
+            foundSlot = true;
+            break;
+          }
+          slotAttempt = slotAttempt.add(const Duration(minutes: 30));
+        }
+
+        if (!foundSlot) {
+          tryDate = tryDate.add(const Duration(days: 1));
+          dayAttempts++;
+        }
+      }
+
+      final newDate = _formatDate(cursor);
+
+      // Update session
+      await pb.collection(PBCollections.sessions).update(sess.id, body: {
+        'scheduled_date': newDate,
+        'scheduled_time': resolvedTime,
+        'status': 'upcoming',
+        'is_rescheduled': true,
+      });
+
+      // Recreate linked appointment
+      try {
+        await pb.collection('appointments').create(body: {
+          'patient': sess.getStringValue('patient'),
+          'doctor': sess.getStringValue('doctor'),
+          if (validClinicId != null && validClinicId.isNotEmpty) 'clinic': validClinicId,
+          'type': 'session',
+          'date': newDate,
+          'time': resolvedTime,
+          'status': 'scheduled',
+        });
+      } catch (_) {}
+    }
+
+    // 6) Un-pause the plan
+    await pb.collection(PBCollections.treatmentPlans).update(planId, body: {
+      'is_paused': false,
+      'paused_at': '',
+      'status': 'active',
+      'consecutive_misses': 0,
+    });
   }
 
   /// Sync a session's status change to its linked appointment record.

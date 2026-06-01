@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../models/session_model.dart';
 import '../models/treatment_plan_model.dart';
 import '../providers/treatment_provider.dart';
@@ -19,9 +17,12 @@ class SessionListScreen extends ConsumerStatefulWidget {
 }
 
 class _SessionListScreenState extends ConsumerState<SessionListScreen> {
+  bool _isPaused = false;
+
   @override
   void initState() {
     super.initState();
+    _isPaused = widget.plan.isPaused;
     Future.microtask(() {
       ref.read(sessionsProvider.notifier).loadPlanSessions(widget.plan.id);
     });
@@ -77,6 +78,9 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
                       ],
                     ),
                   ),
+                  // Pause / Resume button
+                  if (widget.plan.status != TreatmentPlanStatus.completed)
+                    _buildPauseResumeButton(),
                 ],
               ),
             ),
@@ -319,6 +323,24 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
                 ),
               ),
             ),
+            // Rescheduled indicator
+            if (session.isRescheduled) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.event_repeat_rounded, size: 10, color: const Color(0xFFF59E0B)),
+                  const SizedBox(width: 3),
+                  Text('R', style: context.textStyles.caption.copyWith(
+                    color: const Color(0xFFF59E0B), fontSize: 9, fontWeight: FontWeight.w700,
+                  )),
+                ]),
+              ),
+            ],
             if (session.status == SessionStatus.upcoming ||
                 session.status == SessionStatus.inProgress ||
                 session.status == SessionStatus.waiting) ...[
@@ -349,6 +371,8 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
         return context.colors.warning;
       case SessionStatus.cancelled:
         return context.colors.error;
+      case SessionStatus.paused:
+        return context.colors.info;
     }
   }
 
@@ -366,6 +390,168 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
         return 'Missed';
       case SessionStatus.cancelled:
         return 'Cancelled';
+      case SessionStatus.paused:
+        return 'Paused';
+    }
+  }
+
+  // ─── Pause / Resume ─────────────────────────────────────────
+
+  Widget _buildPauseResumeButton() {
+    return GestureDetector(
+      onTap: _isPaused ? _showResumeDialog : _pauseSessions,
+      child: Container(
+        width: 40, height: 40,
+        decoration: BoxDecoration(
+          color: _isPaused
+              ? context.colors.success.withValues(alpha: 0.12)
+              : context.colors.warning.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _isPaused
+                ? context.colors.success.withValues(alpha: 0.3)
+                : context.colors.warning.withValues(alpha: 0.3),
+          ),
+        ),
+        child: Icon(
+          _isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+          size: 20,
+          color: _isPaused ? context.colors.success : context.colors.warning,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pauseSessions() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: context.colors.surface,
+        title: Row(children: [
+          Icon(Icons.pause_circle_rounded, color: context.colors.warning, size: 24),
+          const SizedBox(width: 10),
+          Text('Pause Sessions?', style: context.textStyles.h3),
+        ]),
+        content: Text(
+          'All upcoming sessions will be paused and removed from the schedule.\n\nYou can resume them at any time.',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(ctx, true),
+            icon: const Icon(Icons.pause_rounded, size: 18),
+            label: const Text('Pause'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.colors.warning,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    try {
+      final service = ref.read(treatmentServiceProvider);
+      await service.pauseSessions(widget.plan.id);
+      ref.read(sessionsProvider.notifier).loadPlanSessions(widget.plan.id);
+      if (mounted) {
+        setState(() => _isPaused = true);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Sessions paused ⏸'),
+          backgroundColor: context.colors.info,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to pause: $e'),
+          backgroundColor: context.colors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      }
+    }
+  }
+
+  Future<void> _showResumeDialog() async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: context.colors.surface,
+        title: Row(children: [
+          Icon(Icons.play_circle_rounded, color: context.colors.success, size: 24),
+          const SizedBox(width: 10),
+          Text('Resume Sessions', style: context.textStyles.h3),
+        ]),
+        content: Text(
+          'How would you like to resume?\n\n'
+          '• Continue — picks up from where you left off\n'
+          '• Start from first — redo from the first paused session\n\n'
+          'Completed sessions are never redone.',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton.icon(
+            onPressed: () => Navigator.pop(ctx, 'first'),
+            icon: Icon(Icons.first_page_rounded, size: 18, color: context.colors.primary),
+            label: Text('Start from First', style: TextStyle(color: context.colors.primary)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(ctx, 'continue'),
+            icon: const Icon(Icons.play_arrow_rounded, size: 18),
+            label: const Text('Continue'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.colors.success,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null || !mounted) return;
+
+    try {
+      final service = ref.read(treatmentServiceProvider);
+      await service.resumeSessions(
+        widget.plan.id,
+        startFromFirst: result == 'first',
+      );
+      ref.read(sessionsProvider.notifier).loadPlanSessions(widget.plan.id);
+      if (mounted) {
+        setState(() => _isPaused = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Sessions resumed ▶'),
+          backgroundColor: context.colors.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed to resume: $e'),
+          backgroundColor: context.colors.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ));
+      }
     }
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
@@ -386,7 +387,10 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
         title: Text(label, style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600, fontSize: 12, color: context.colors.textPrimary)),
         subtitle: Text(subtitle, style: context.textStyles.caption.copyWith(fontSize: 10)),
         value: value,
-        onChanged: onChanged,
+        onChanged: (v) {
+          HapticFeedback.lightImpact();
+          onChanged(v);
+        },
         activeColor: activeColor,
         dense: true,
       ),

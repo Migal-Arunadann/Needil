@@ -1,6 +1,6 @@
 import 'package:pocketbase/pocketbase.dart';
 
-enum SessionStatus { upcoming, waiting, inProgress, completed, missed, cancelled }
+enum SessionStatus { upcoming, waiting, inProgress, completed, missed, cancelled, paused }
 
 class SessionModel {
   final String id;
@@ -17,6 +17,9 @@ class SessionModel {
   final int? pulse;
   final List<String> photos;
   final String? remarks;
+  final bool isRescheduled;
+  final int rescheduleCount;
+  final String? originalDate;
   final DateTime? created;
   final DateTime? updated;
 
@@ -35,6 +38,9 @@ class SessionModel {
     this.pulse,
     this.photos = const [],
     this.remarks,
+    this.isRescheduled = false,
+    this.rescheduleCount = 0,
+    this.originalDate,
     this.created,
     this.updated,
   });
@@ -58,6 +64,11 @@ class SessionModel {
       pulse: record.getIntValue('vitals_pulse'),
       photos: record.getListValue<String>('photos'),
       remarks: record.getStringValue('session_remarks'),
+      isRescheduled: record.getBoolValue('is_rescheduled'),
+      rescheduleCount: record.getIntValue('reschedule_count'),
+      originalDate: record.getStringValue('original_date').isNotEmpty
+          ? record.getStringValue('original_date')
+          : null,
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
     );
@@ -76,6 +87,9 @@ class SessionModel {
       if (notes != null && notes!.isNotEmpty) 'session_notes_': notes,
       if (bpLevel != null && bpLevel!.isNotEmpty) 'vitals_bp': bpLevel,
       if (pulse != null) 'vitals_pulse': pulse,
+      if (isRescheduled) 'is_rescheduled': true,
+      if (rescheduleCount > 0) 'reschedule_count': rescheduleCount,
+      if (originalDate != null && originalDate!.isNotEmpty) 'original_date': originalDate,
     };
   }
 
@@ -87,6 +101,8 @@ class SessionModel {
         return SessionStatus.missed;
       case 'cancelled':
         return SessionStatus.cancelled;
+      case 'paused':
+        return SessionStatus.paused;
       case 'waiting':
         return SessionStatus.waiting;
       case 'in_progress':
@@ -110,6 +126,8 @@ class SessionModel {
         return 'missed';
       case SessionStatus.cancelled:
         return 'cancelled';
+      case SessionStatus.paused:
+        return 'paused';
     }
   }
 }

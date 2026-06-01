@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -92,15 +93,22 @@ class _LocationFieldsState extends State<LocationFields> {
     // ── Try primary API (India Post) with retry ──
     for (int attempt = 0; attempt < 2; attempt++) {
       try {
-        final innerClient = HttpClient()
-          ..badCertificateCallback = (X509Certificate cert, String host, int port) {
-            return host == 'api.postalpincode.in';
-          };
-        final client = IOClient(innerClient);
-        final res = await client.get(
-          Uri.parse('https://api.postalpincode.in/pincode/$pin'),
-        ).timeout(const Duration(seconds: 12));
-        client.close();
+        final http.Response res;
+        if (kIsWeb) {
+          res = await http.get(
+            Uri.parse('https://api.postalpincode.in/pincode/$pin'),
+          ).timeout(const Duration(seconds: 12));
+        } else {
+          final innerClient = HttpClient()
+            ..badCertificateCallback = (X509Certificate cert, String host, int port) {
+              return host == 'api.postalpincode.in';
+            };
+          final client = IOClient(innerClient);
+          res = await client.get(
+            Uri.parse('https://api.postalpincode.in/pincode/$pin'),
+          ).timeout(const Duration(seconds: 12));
+          client.close();
+        }
 
         if (!mounted) return;
 

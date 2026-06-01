@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
@@ -14,6 +15,7 @@ import '../../../core/constants/pb_collections.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/services/auth_service.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import '../../../core/utils/image_helper.dart';
 
 
 class EditProfileScreen extends ConsumerStatefulWidget {
@@ -41,6 +43,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   final _pinCtrl = TextEditingController();
   final _countryCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
+  final _patientIdPrefixCtrl = TextEditingController();
   File? _logoFile;
   String? _existingLogoUrl;
 
@@ -68,6 +71,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
       _pinCtrl.text = c.pin ?? '';
       _countryCtrl.text = 'India'; // default; update when country saved to PB model
       _locationCtrl.text = c.location ?? '';
+      _patientIdPrefixCtrl.text = c.patientIdPrefix ?? '';
       _existingLogoUrl = c.logoUrl;
     } else if (auth.role == UserRole.doctor && auth.doctor != null) {
       final d = auth.doctor!;
@@ -93,6 +97,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     _pinCtrl.dispose();
     _countryCtrl.dispose();
     _locationCtrl.dispose();
+    _patientIdPrefixCtrl.dispose();
     _ageCtrl.dispose();
     _doctorPhoneCtrl.dispose();
     _dobCtrl.dispose();
@@ -101,15 +106,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
   Future<void> _pickImage(bool isLogo) async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 60);
     if (picked != null && mounted) {
-      setState(() {
-        if (isLogo) {
-          _logoFile = File(picked.path);
-        } else {
-          _photoFile = File(picked.path);
-        }
-      });
+      final compressed = await ImageHelper.compressToWebP(picked);
+      if (compressed != null && mounted) {
+        setState(() {
+          if (isLogo) {
+            _logoFile = File(compressed.path);
+          } else {
+            _photoFile = File(compressed.path);
+          }
+        });
+      }
     }
   }
 
@@ -129,6 +137,9 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
 
+    // Capture navigator before async gap — fixes Vivo/iQOO devices
+    final navigator = Navigator.of(context);
+
     setState(() => _isLoading = true);
     try {
       final pb = ref.read(pocketbaseProvider);
@@ -146,6 +157,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           'state': _stateCtrl.text.trim(),
           'pin': _pinCtrl.text.trim(),
           'location': _locationCtrl.text.trim(),
+          'patient_id_prefix': _patientIdPrefixCtrl.text.trim().toUpperCase(),
         };
 
         if (_logoFile != null) {
@@ -199,7 +211,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
-        Navigator.pop(context);
+        navigator.pop();
       }
     } catch (e) {
       if (mounted) {
@@ -247,31 +259,32 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   // ── Photo / Logo Picker ──
                   Center(
                     child: GestureDetector(
-                      onTap: () => _pickImage(isClinic),
+                      onTap: kIsWeb ? null : () => _pickImage(isClinic),
                       child: Stack(
                         children: [
                           CircleAvatar(
                             radius: 52,
                             backgroundColor: context.colors.surface,
                             backgroundImage: isClinic
-                                ? (_logoFile != null ? FileImage(_logoFile!) : (_existingLogoUrl != null ? NetworkImage(_existingLogoUrl!) as ImageProvider : null))
-                                : (_photoFile != null ? FileImage(_photoFile!) : (_existingPhotoUrl != null ? NetworkImage(_existingPhotoUrl!) as ImageProvider : null)),
+                                ? (!kIsWeb && _logoFile != null ? FileImage(_logoFile!) : (_existingLogoUrl != null ? NetworkImage(_existingLogoUrl!) as ImageProvider : null))
+                                : (!kIsWeb && _photoFile != null ? FileImage(_photoFile!) : (_existingPhotoUrl != null ? NetworkImage(_existingPhotoUrl!) as ImageProvider : null)),
                             child: (isClinic ? (_logoFile == null && _existingLogoUrl == null) : (_photoFile == null && _existingPhotoUrl == null))
                                 ? Icon(isClinic ? Icons.business_rounded : Icons.person_rounded, size: 40, color: context.colors.textHint)
                                 : null,
                           ),
-                          Positioned(
-                            right: 0, bottom: 0,
-                            child: Container(
-                              width: 30, height: 30,
-                              decoration: BoxDecoration(
-                                color: context.colors.primary,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: context.colors.background, width: 2),
+                          if (!kIsWeb)
+                            Positioned(
+                              right: 0, bottom: 0,
+                              child: Container(
+                                width: 30, height: 30,
+                                decoration: BoxDecoration(
+                                  color: context.colors.primary,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: context.colors.background, width: 2),
+                                ),
+                                child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
                               ),
-                              child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
                             ),
-                          ),
                         ],
                       ),
                     ),
@@ -279,8 +292,11 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                   const SizedBox(height: 8),
                   Center(
                     child: Text(
-                      isClinic ? 'Tap to upload clinic logo' : 'Tap to upload profile photo',
+                      kIsWeb 
+                          ? 'Logo/photo uploads are available on the mobile app.'
+                          : (isClinic ? 'Tap to upload clinic logo' : 'Tap to upload profile photo'),
                       style: context.textStyles.caption,
+                      textAlign: TextAlign.center,
                     ),
                   ),
                   SizedBox(height: 24),
@@ -310,6 +326,13 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                       label: 'Bed Count',
                       keyboardType: TextInputType.number,
                       prefixIcon: Icon(Icons.bed_outlined, color: context.colors.textHint),
+                    ),
+                    SizedBox(height: 14),
+                    AppTextField(
+                      controller: _patientIdPrefixCtrl,
+                      label: 'Patient ID Prefix (e.g. HSK)',
+                      hint: 'Auto-generates HSK-001, HSK-002...',
+                      prefixIcon: Icon(Icons.badge_outlined, color: context.colors.textHint),
                     ),
                     SizedBox(height: 24),
                     _sectionLabel('Contact & Location'),

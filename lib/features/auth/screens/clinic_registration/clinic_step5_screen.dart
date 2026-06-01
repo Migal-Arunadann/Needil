@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -174,7 +175,7 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
       password: widget.clinicData['password'],
       bedCount: widget.clinicData['bed_count'],
       primaryDoctorData: primaryDoctorData,
-      doctorPhotoFile: photoPath != null ? File(photoPath) : null,
+      doctorPhotoFile: !kIsWeb && photoPath != null ? File(photoPath) : null,
       additionalDoctors: additionalDoctors,
       receptionistData: receptionistData,
       city: widget.clinicData['city'],

@@ -1,3 +1,4 @@
+import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
 import '../constants/pb_collections.dart';
 import '../utils/time_utils.dart';
@@ -98,10 +99,26 @@ class AppointmentService {
     String? dateFilter,
   }) async {
     final date = dateFilter ?? _todayString();
+    String filter;
+    String sortOrder = 'time';
+    if (date == 'all') {
+      filter = 'doctor = "$doctorId"';
+      sortOrder = 'date,time';
+    } else if (date.startsWith('range:')) {
+      final parts = date.substring(6).split(':');
+      final start = parts[0];
+      final end = parts[1];
+      filter = 'doctor = "$doctorId" && date >= "$start" && date <= "$end"';
+      sortOrder = 'date,time';
+    } else {
+      filter = 'doctor = "$doctorId" && date = "$date"';
+    }
+
     final result = await pb.collection(PBCollections.appointments).getList(
-      filter: 'doctor = "$doctorId" && date = "$date"',
-      sort: 'time',
+      filter: filter,
+      sort: sortOrder,
       expand: 'patient,doctor',
+      perPage: 100,
     );
     return result.items.map((r) => AppointmentModel.fromRecord(r)).toList();
   }
@@ -112,10 +129,26 @@ class AppointmentService {
     String? dateFilter,
   }) async {
     final date = dateFilter ?? _todayString();
+    String filter;
+    String sortOrder = 'time';
+    if (date == 'all') {
+      filter = 'clinic = "$clinicId"';
+      sortOrder = 'date,time';
+    } else if (date.startsWith('range:')) {
+      final parts = date.substring(6).split(':');
+      final start = parts[0];
+      final end = parts[1];
+      filter = 'clinic = "$clinicId" && date >= "$start" && date <= "$end"';
+      sortOrder = 'date,time';
+    } else {
+      filter = 'clinic = "$clinicId" && date = "$date"';
+    }
+
     final result = await pb.collection(PBCollections.appointments).getList(
-      filter: 'clinic = "$clinicId" && date = "$date"',
-      sort: 'time',
+      filter: filter,
+      sort: sortOrder,
       expand: 'patient,doctor',
+      perPage: 100,
     );
     return result.items.map((r) => AppointmentModel.fromRecord(r)).toList();
   }
@@ -220,6 +253,7 @@ class AppointmentService {
     required String phone,
     required String doctorId,
     String? clinicId,
+    String? patientId,
     String? dateOfBirth,
     String? city,
     String? area,
@@ -231,12 +265,47 @@ class AppointmentService {
     String? occupation,
     String? email,
     int? age,
+    String? reference,
+    List<String>? familyMembers,
+    String? howDidYouHear,
+    String? photoPath,
   }) async {
+    // ── Auto-generate patient ID from clinic prefix ──
+    String? resolvedPatientId = patientId;
+    if ((resolvedPatientId == null || resolvedPatientId.isEmpty) &&
+        clinicId != null && clinicId.isNotEmpty) {
+      try {
+        final clinicRec = await pb.collection(PBCollections.clinics).getOne(clinicId);
+        final prefix = clinicRec.getStringValue('patient_id_prefix');
+        if (prefix.isNotEmpty) {
+          // Find the highest existing patient_id with this prefix
+          int nextNumber = 1;
+          try {
+            final existing = await pb.collection(PBCollections.patients).getList(
+              filter: 'clinic = "$clinicId" && patient_id ~ "$prefix-"',
+              sort: '-patient_id',
+              perPage: 1,
+            );
+            if (existing.items.isNotEmpty) {
+              final lastId = existing.items.first.getStringValue('patient_id');
+              final parts = lastId.split('-');
+              if (parts.length >= 2) {
+                final lastNum = int.tryParse(parts.last);
+                if (lastNum != null) nextNumber = lastNum + 1;
+              }
+            }
+          } catch (_) {}
+          resolvedPatientId = '$prefix-${nextNumber.toString().padLeft(3, '0')}';
+        }
+      } catch (_) {}
+    }
+
     final body = {
       'full_name': fullName,
       'phone': phone,
       'doctor': doctorId,
       if (clinicId != null && clinicId.isNotEmpty) 'clinic': clinicId,
+      if (resolvedPatientId != null && resolvedPatientId.isNotEmpty) 'patient_id': resolvedPatientId,
       if (dateOfBirth != null && dateOfBirth.isNotEmpty)
         'date_of_birth': dateOfBirth,
       if (city != null && city.isNotEmpty) 'city': city,
@@ -251,9 +320,25 @@ class AppointmentService {
       if (occupation != null && occupation.isNotEmpty) 'occupation': occupation,
       if (email != null && email.isNotEmpty) 'email': email,
       if (age != null) 'age': age,
+      if (reference != null && reference.isNotEmpty) 'reference': reference,
+      if (familyMembers != null && familyMembers.isNotEmpty)
+        'family_members': familyMembers,
+      if (howDidYouHear != null && howDidYouHear.isNotEmpty)
+        'how_did_you_hear': howDidYouHear,
       'consent_given': true,
       'consent_date': _todayString(),
     };
+
+    if (photoPath != null && photoPath.isNotEmpty) {
+      final files = [
+        await http.MultipartFile.fromPath('photo', photoPath),
+      ];
+      final record = await pb.collection(PBCollections.patients).create(
+        body: body,
+        files: files,
+      );
+      return PatientModel.fromRecord(record);
+    }
 
     final record =
         await pb.collection(PBCollections.patients).create(body: body);
@@ -329,14 +414,15 @@ class AppointmentService {
     return null;
   }
 
-  /// Check if a scheduled appointment already exists for this phone + doctor on a specific date.
-  /// Only warns about double-booking on the SAME date. Different dates are freely allowed.
+  /// Check if a scheduled appointment already exists for this phone + doctor today or in the future.
+  /// Warns about double-booking if the patient already has an active scheduled appointment today or in the future.
   Future<AppointmentModel?> findExistingAppointment(String phone, String doctorId, {required String date}) async {
     try {
+      final today = _todayString();
       final result = await pb.collection(PBCollections.appointments).getList(
-        filter: 'patient_phone = "$phone" && doctor = "$doctorId" && status = "scheduled" && date = "$date"',
+        filter: 'patient_phone = "$phone" && doctor = "$doctorId" && status = "scheduled" && date >= "$today"',
         perPage: 1,
-        sort: 'time',
+        sort: 'date,time',
       );
       if (result.items.isNotEmpty) {
         return AppointmentModel.fromRecord(result.items.first);
@@ -524,7 +610,7 @@ class AppointmentService {
     // Update appointment first
     final record = await pb.collection(PBCollections.appointments).update(
       appointmentId,
-      body: {'date': newDate, 'time': newTime},
+      body: {'date': newDate, 'time': newTime, 'is_rescheduled': true},
     );
     // Sync the linked sessions record
     if (apt.patientId != null) {
@@ -539,6 +625,7 @@ class AppointmentService {
           await pb.collection(PBCollections.sessions).update(s.id, body: {
             'scheduled_date': newDate,
             'scheduled_time': newTime,
+            'is_rescheduled': true,
           });
         }
       } catch (_) {}
@@ -550,7 +637,7 @@ class AppointmentService {
   Future<AppointmentModel> rescheduleAppointment(String appointmentId, String newDate, String newTime) async {
     final record = await pb.collection(PBCollections.appointments).update(
       appointmentId,
-      body: {'date': newDate, 'time': newTime},
+      body: {'date': newDate, 'time': newTime, 'is_rescheduled': true},
     );
     return AppointmentModel.fromRecord(record);
   }

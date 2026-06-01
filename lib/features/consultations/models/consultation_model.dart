@@ -42,6 +42,13 @@ class ConsultationModel {
 
   final bool charged;
   final int? chargeAmount;
+
+  // Diagnosis
+  final String? acupunctureDiagnosis;
+  final String? eyeDiagnosis;
+  final String? pulseDiagnosis;
+  final bool coronaVaccinated;
+
   final List<String> photos;
   final DateTime? created;
   final DateTime? updated;
@@ -80,6 +87,10 @@ class ConsultationModel {
     this.cholesterolLevel,
     this.charged = false,
     this.chargeAmount,
+    this.acupunctureDiagnosis,
+    this.eyeDiagnosis,
+    this.pulseDiagnosis,
+    this.coronaVaccinated = false,
     this.photos = const [],
     this.created,
     this.updated,
@@ -131,6 +142,10 @@ class ConsultationModel {
       cholesterolLevel: record.getStringValue('cholesterol_level'),
       charged: record.getBoolValue('charged'),
       chargeAmount: record.getIntValue('charge_amount'),
+      acupunctureDiagnosis: record.getStringValue('acupuncture_diagnosis'),
+      eyeDiagnosis: record.getStringValue('eye_diagnosis'),
+      pulseDiagnosis: record.getStringValue('pulse_diagnosis'),
+      coronaVaccinated: record.getBoolValue('corona_vaccinated'),
       photos: record.getListValue<String>('photos'),
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
@@ -169,6 +184,10 @@ class ConsultationModel {
       if (cholesterolLevel != null && cholesterolLevel!.isNotEmpty) 'cholesterol_level': cholesterolLevel,
       'charged': charged,
       if (chargeAmount != null) 'charge_amount': chargeAmount,
+      if (acupunctureDiagnosis != null && acupunctureDiagnosis!.isNotEmpty) 'acupuncture_diagnosis': acupunctureDiagnosis,
+      if (eyeDiagnosis != null && eyeDiagnosis!.isNotEmpty) 'eye_diagnosis': eyeDiagnosis,
+      if (pulseDiagnosis != null && pulseDiagnosis!.isNotEmpty) 'pulse_diagnosis': pulseDiagnosis,
+      'corona_vaccinated': coronaVaccinated,
     };
   }
 

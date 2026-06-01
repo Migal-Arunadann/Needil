@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -12,6 +13,7 @@ import '../../providers/registration_cache_provider.dart';
 import '../../providers/auth_provider.dart';
 import 'clinic_step3_screen.dart' show BreakTime, DayOverride;
 import 'package:pms_app/core/theme/app_theme.dart';
+import '../../../../core/utils/image_helper.dart';
 
 
 // Full doctor data model used within step 4
@@ -410,11 +412,11 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
                 decoration: BoxDecoration(
                   color: context.colors.accent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  image: doc.photoFile != null
+                  image: !kIsWeb && doc.photoFile != null
                       ? DecorationImage(image: FileImage(doc.photoFile!), fit: BoxFit.cover)
                       : null,
                 ),
-                child: doc.photoFile == null ? Icon(Icons.person_rounded, color: context.colors.accent, size: 22) : null,
+                child: (kIsWeb || doc.photoFile == null) ? Icon(Icons.person_rounded, color: context.colors.accent, size: 22) : null,
               ),
               SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -438,32 +440,49 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
             padding: const EdgeInsets.all(16),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               // Photo
-              Center(child: GestureDetector(
-                onTap: () => _pickPhoto(doc),
-                child: Stack(children: [
-                  Container(
-                    width: 80, height: 80,
-                    decoration: BoxDecoration(
-                      gradient: doc.photoFile == null ? context.colors.heroGradient : null,
-                      borderRadius: BorderRadius.circular(22),
-                      image: doc.photoFile != null
-                          ? DecorationImage(image: FileImage(doc.photoFile!), fit: BoxFit.cover)
-                          : null,
-                    ),
-                    child: doc.photoFile == null
-                        ? const Icon(Icons.person_rounded, color: Colors.white, size: 36) : null,
+              if (kIsWeb) ...[
+                Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.person_outline_rounded, color: context.colors.textHint, size: 48),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Doctor photo upload is available on the mobile app.',
+                        style: context.textStyles.caption.copyWith(color: context.colors.textHint),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
-                  Positioned(bottom: 0, right: 0,
-                    child: Container(
-                      width: 26, height: 26,
-                      decoration: BoxDecoration(color: context.colors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white, width: 2)),
-                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
-                    )),
-                ]),
-              )),
-              const SizedBox(height: 6),
-              Center(child: Text('Photo (Optional)', style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))),
-              const SizedBox(height: 16),
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
+                Center(child: GestureDetector(
+                  onTap: () => _pickPhoto(doc),
+                  child: Stack(children: [
+                    Container(
+                      width: 80, height: 80,
+                      decoration: BoxDecoration(
+                        gradient: doc.photoFile == null ? context.colors.heroGradient : null,
+                        borderRadius: BorderRadius.circular(22),
+                        image: doc.photoFile != null
+                            ? DecorationImage(image: FileImage(doc.photoFile!), fit: BoxFit.cover)
+                            : null,
+                      ),
+                      child: doc.photoFile == null
+                          ? const Icon(Icons.person_rounded, color: Colors.white, size: 36) : null,
+                    ),
+                    Positioned(bottom: 0, right: 0,
+                      child: Container(
+                        width: 26, height: 26,
+                        decoration: BoxDecoration(color: context.colors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white, width: 2)),
+                        child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
+                      )),
+                  ]),
+                )),
+                const SizedBox(height: 6),
+                Center(child: Text('Photo (Optional)', style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))),
+                const SizedBox(height: 16),
+              ],
 
               // Name
               _field('Doctor Name', 'e.g. Dr. Vijayan', Icons.person_outline_rounded, controller: doc.nameCtrl),
@@ -518,6 +537,7 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
                     initialDate: doc.dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
                     firstDate: DateTime(1940),
                     lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+                    locale: const Locale('en', 'IN'),
                   );
                   if (!mounted) return;
                   FocusManager.instance.primaryFocus?.unfocus();
@@ -535,7 +555,7 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
                     Expanded(child: Text(
                       doc.dateOfBirth == null
                           ? 'Date of Birth'
-                          : '${doc.dateOfBirth!.day}/${doc.dateOfBirth!.month}/${doc.dateOfBirth!.year}',
+                          : '${doc.dateOfBirth!.day.toString().padLeft(2, '0')}/${doc.dateOfBirth!.month.toString().padLeft(2, '0')}/${doc.dateOfBirth!.year}',
                       style: context.textStyles.bodyMedium.copyWith(
                         color: doc.dateOfBirth == null ? context.colors.textHint : context.colors.textPrimary),
                     )),
@@ -624,8 +644,13 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
     );
     if (source == null) return;
     try {
-      final picked = await ImagePicker().pickImage(source: source, imageQuality: 80);
-      if (picked != null && mounted) setState(() => doc.photoFile = File(picked.path));
+      final picked = await ImagePicker().pickImage(source: source, imageQuality: 60);
+      if (picked != null && mounted) {
+        final compressed = await ImageHelper.compressToWebP(picked);
+        if (compressed != null && mounted) {
+          setState(() => doc.photoFile = File(compressed.path));
+        }
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(

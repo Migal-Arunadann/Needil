@@ -377,6 +377,10 @@ class _CreateTreatmentPlanScreenState
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+
+    // Capture navigator before async gap — fixes Vivo/iQOO devices
+    final navigator = Navigator.of(context);
+
     if (_selectedTreatment == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Please select a treatment type'), backgroundColor: context.colors.error),
@@ -444,7 +448,7 @@ class _CreateTreatmentPlanScreenState
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
-        Navigator.pop(context, {
+        navigator.pop({
           'success': true,
           'firstSessionToday': !widget.isMaintenance && _firstSessionCompletedToday,
         });
@@ -961,13 +965,17 @@ class _CreateTreatmentPlanScreenState
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      CircularProgressIndicator(
-                        color: context.colors.primary,
-                        strokeWidth: 3,
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: LinearProgressIndicator(
+                          color: context.colors.primary,
+                          backgroundColor: context.colors.primary.withValues(alpha: 0.15),
+                          minHeight: 6,
+                        ),
                       ),
                       const SizedBox(height: 24),
                       Text(
-                        'Scheduling sessions...',
+                        'Sessions are being scheduled...',
                         style: context.textStyles.h4,
                         textAlign: TextAlign.center,
                       ),

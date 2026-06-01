@@ -1,19 +1,21 @@
-import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../../../core/constants/app_colors.dart';
+import 'dart:math' as math;
+import 'package:flutter/services.dart';
+import 'dart:convert';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../providers/analytics_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import '../../../core/widgets/responsive_wrapper.dart';
 
-
-// ─── Color palette for charts ────────────────────────────────────────────────
+// --- Color palette for charts ------------------------------------------------
 const _kCompleted = Color(0xFF10B981);
 const _kScheduled = Color(0xFF3B82F6);
 const _kCancelled = Color(0xFFEF4444);
 const _kMissed = Color(0xFFF59E0B);
-
 const _kAccent = Color(0xFF8B5CF6);
 
 class AnalyticsScreen extends ConsumerWidget {
@@ -22,178 +24,649 @@ class AnalyticsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(analyticsProvider);
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
 
     return Scaffold(
       backgroundColor: context.colors.background,
       body: SafeArea(
-        child: data.isLoading
-            ? _LoadingView()
-            : RefreshIndicator(
-                color: context.colors.primary,
-                onRefresh: () => ref.read(analyticsProvider.notifier).load(),
-                child: CustomScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  slivers: [
-                    _AnalyticsAppBar(),
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                      sliver: SliverList(
-                        delegate: SliverChildListDelegate([
-                          const SizedBox(height: 8),
-                          // ── KPI Row 1 ──────────────────────────────
-                          _KpiRow(data: data),
-                          const SizedBox(height: 10),
-                          // ── Revenue KPI ─────────────────────────────
-                          _RevenueCard(data: data),
-                          const SizedBox(height: 16),
-                          // ── Today's Snapshot ───────────────────────
-                          _SectionHeader(
-                            icon: Icons.today_rounded,
-                            title: "Today's Snapshot",
-                          ),
-                          const SizedBox(height: 10),
-                          _TodaySnapshotRow(data: data),
-                          const SizedBox(height: 20),
-                          // ── 7-Day Activity Chart ───────────────────
-                          _SectionHeader(
-                            icon: Icons.bar_chart_rounded,
-                            title: '7-Day Activity',
-                          ),
-                          const SizedBox(height: 10),
-                          _WeeklyBarChart(data: data),
-                          const SizedBox(height: 20),
-                          // ── Peak Hours ─────────────────────────────
-                          _SectionHeader(
-                            icon: Icons.access_time_rounded,
-                            title: 'Appointment Volume by Hour',
-                          ),
-                          const SizedBox(height: 10),
-                          _HourlyHeatBar(data: data),
-                          const SizedBox(height: 8),
-                          _PeakInsightRow(data: data),
-                          const SizedBox(height: 20),
-                          // ── Appointment Type Split ─────────────────
-                          _SectionHeader(
-                            icon: Icons.pie_chart_rounded,
-                            title: 'Appointment Type Split',
-                          ),
-                          const SizedBox(height: 10),
-                          _TypeSplitRow(data: data),
-                          const SizedBox(height: 20),
-                          // ── Session Performance ────────────────────
-                          _SectionHeader(
-                            icon: Icons.healing_rounded,
-                            title: 'Session Performance',
-                          ),
-                          const SizedBox(height: 10),
-                          _SessionPerformanceRow(data: data),
-                          const SizedBox(height: 20),
-                          // ── Plan Conversion ────────────────────────
-                          _SectionHeader(
-                            icon: Icons.assignment_turned_in_rounded,
-                            title: 'Consultation → Treatment Plan Conversion',
-                          ),
-                          const SizedBox(height: 10),
-                          _PlanConversionCard(data: data),
-                          const SizedBox(height: 20),
-                          // ── Patient Demographics ───────────────────
-                          _SectionHeader(
-                            icon: Icons.people_rounded,
-                            title: 'Patient Demographics',
-                          ),
-                          const SizedBox(height: 10),
-                          _DemographicsRow(data: data),
-                          const SizedBox(height: 20),
-                          // ── Geographic Distribution ────────────────
-                          _SectionHeader(
-                            icon: Icons.location_on_rounded,
-                            title: 'Patient Locations',
-                          ),
-                          const SizedBox(height: 10),
-                          _LocationCard(data: data),
-                          const SizedBox(height: 20),
-                          // ── Completion Rate ────────────────────────
-                          _SectionHeader(
-                            icon: Icons.speed_rounded,
-                            title: 'Overall Performance',
-                          ),
-                          const SizedBox(height: 10),
-                          _PerformanceMetricsCard(data: data),
-                          const SizedBox(height: 8),
-                        ]),
+        child: ResponsiveWrapper(
+          child: data.isLoading
+              ? const _LoadingView()
+              : RefreshIndicator(
+                  color: context.colors.primary,
+                  onRefresh: () => ref.read(analyticsProvider.notifier).load(),
+                  child: CustomScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate([
+                            _AnalyticsHeader(data: data),
+                            const SizedBox(height: 16),
+                            // -- KPI Row 1 ------------------------------
+                            _KpiRow(data: data),
+                            const SizedBox(height: 16),
+                            // -- Revenue KPI -----------------------------
+                            _RevenueCard(data: data),
+                            const SizedBox(height: 24),
+                            // -- Today's Snapshot -----------------------
+                            const _SectionHeader(
+                              icon: Icons.today_rounded,
+                              title: "Today's Snapshot",
+                            ),
+                            const SizedBox(height: 10),
+                            _TodaySnapshotRow(data: data),
+                            const SizedBox(height: 24),
+                            if (isDesktop) ...[
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const _SectionHeader(
+                                          icon: Icons.bar_chart_rounded,
+                                          title: '7-Day Activity',
+                                        ),
+                                        const SizedBox(height: 10),
+                                        _WeeklyActivityChart(data: data),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const _SectionHeader(
+                                          icon: Icons.access_time_rounded,
+                                          title: 'Appointment Volume by Hour',
+                                        ),
+                                        const SizedBox(height: 10),
+                                        _HourlyVolumeChart(data: data),
+                                        const SizedBox(height: 12),
+                                        _PeakInsightRow(data: data),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+                            ] else ...[
+                              // -- 7-Day Activity Chart -------------------
+                              const _SectionHeader(
+                                icon: Icons.bar_chart_rounded,
+                                title: '7-Day Activity',
+                              ),
+                              const SizedBox(height: 10),
+                              _WeeklyActivityChart(data: data),
+                              const SizedBox(height: 24),
+                              // -- Peak Hours -----------------------------
+                              const _SectionHeader(
+                                icon: Icons.access_time_rounded,
+                                title: 'Appointment Volume by Hour',
+                              ),
+                              const SizedBox(height: 10),
+                              _HourlyVolumeChart(data: data),
+                              const SizedBox(height: 12),
+                              _PeakInsightRow(data: data),
+                              const SizedBox(height: 24),
+                            ],
+                            if (isDesktop) ...[
+                              IntrinsicHeight(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const _SectionHeader(
+                                            icon: Icons.pie_chart_rounded,
+                                            title: 'Appointment Type Split',
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Expanded(child: _TypeSplitRow(data: data)),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const _SectionHeader(
+                                            icon: Icons.healing_rounded,
+                                            title: 'Session Performance',
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Expanded(child: _SessionPerformanceRow(data: data)),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const _SectionHeader(
+                                            icon: Icons.assignment_turned_in_rounded,
+                                            title: 'Consultation → Treatment Plan Conversion',
+                                          ),
+                                          const SizedBox(height: 10),
+                                          Expanded(child: _PlanConversionCard(data: data)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                            ] else ...[
+                              // -- Appointment Type Split -----------------
+                              const _SectionHeader(
+                                icon: Icons.pie_chart_rounded,
+                                title: 'Appointment Type Split',
+                              ),
+                              const SizedBox(height: 10),
+                              _TypeSplitRow(data: data),
+                              const SizedBox(height: 24),
+                              // -- Session Performance --------------------
+                              const _SectionHeader(
+                                icon: Icons.healing_rounded,
+                                title: 'Session Performance',
+                              ),
+                              const SizedBox(height: 10),
+                              _SessionPerformanceRow(data: data),
+                              const SizedBox(height: 24),
+                              // -- Plan Conversion ------------------------
+                              const _SectionHeader(
+                                icon: Icons.assignment_turned_in_rounded,
+                                title: 'Consultation → Treatment Plan Conversion',
+                              ),
+                              const SizedBox(height: 10),
+                              _PlanConversionCard(data: data),
+                              const SizedBox(height: 24),
+                            ],
+                            // -- Patient Demographics -------------------
+                            const _SectionHeader(
+                              icon: Icons.people_rounded,
+                              title: 'Patient Demographics',
+                            ),
+                            const SizedBox(height: 10),
+                            _DemographicsRow(data: data),
+                            const SizedBox(height: 24),
+                            // -- Geographic Distribution ----------------
+                            const _SectionHeader(
+                              icon: Icons.location_on_rounded,
+                              title: 'Patient Locations',
+                            ),
+                            const SizedBox(height: 10),
+                            _LocationCard(data: data),
+                            const SizedBox(height: 24),
+                            // -- Completion Rate ------------------------
+                            const _SectionHeader(
+                              icon: Icons.speed_rounded,
+                              title: 'Overall Performance',
+                            ),
+                            const SizedBox(height: 10),
+                            _PerformanceMetricsCard(data: data),
+                            const SizedBox(height: 8),
+                          ]),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+        ),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// App Bar
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
+// Flat Dashboard Header
+// ------
 
-class _AnalyticsAppBar extends StatelessWidget {
+class _AnalyticsHeader extends ConsumerWidget {
+  final AnalyticsData data;
+  const _AnalyticsHeader({required this.data});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 900.0;
+
+    final titleColumn = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Analytics',
+          style: context.textStyles.h1.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+            fontSize: 28,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          "Track your clinic's performance and insights",
+          style: context.textStyles.bodyMedium.copyWith(
+            color: context.colors.textSecondary,
+          ),
+        ),
+      ],
+    );
+
+    final actionsRow = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Date picker dropdown
+        PopupMenuButton<int>(
+          onSelected: (days) {
+            ref.read(analyticsProvider.notifier).load(days: days);
+          },
+          initialValue: data.selectedDays,
+          itemBuilder: (context) => [
+            const PopupMenuItem(value: 7, child: Text('Last 7 days')),
+            const PopupMenuItem(value: 30, child: Text('Last 30 days')),
+            const PopupMenuItem(value: 90, child: Text('Last 90 days')),
+            const PopupMenuItem(value: 365, child: Text('Last 365 days')),
+          ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: context.colors.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.calendar_today_rounded, size: 16, color: context.colors.textSecondary),
+                const SizedBox(width: 8),
+                Text(
+                  data.selectedDays == 7
+                      ? 'Last 7 days'
+                      : data.selectedDays == 30
+                          ? 'Last 30 days'
+                          : data.selectedDays == 90
+                              ? 'Last 90 days'
+                              : 'Last 365 days',
+                  style: context.textStyles.buttonMedium.copyWith(
+                    color: context.colors.textPrimary,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: context.colors.textSecondary),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        // Export report button
+        InkWell(
+          onTap: () => _showExportDialog(context, data),
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            height: 40,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              color: context.colors.primary,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: [
+                BoxShadow(
+                  color: context.colors.primary.withValues(alpha: 0.25),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.file_download_rounded, color: Colors.white, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  'Export Report',
+                  style: context.textStyles.buttonMedium.copyWith(
+                    color: Colors.white,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: isDesktop
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                titleColumn,
+                actionsRow,
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                titleColumn,
+                const SizedBox(height: 16),
+                actionsRow,
+              ],
+            ),
+    );
+  }
+}
+
+void _showExportDialog(BuildContext context, AnalyticsData data) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      return _ExportProgressDialog(data: data);
+    },
+  );
+}
+
+class _ExportProgressDialog extends StatefulWidget {
+  final AnalyticsData data;
+  const _ExportProgressDialog({required this.data});
+
+  @override
+  State<_ExportProgressDialog> createState() => _ExportProgressDialogState();
+}
+
+class _ExportProgressDialogState extends State<_ExportProgressDialog> {
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SliverToBoxAdapter(
-      child: Container(
-        decoration: BoxDecoration(
-          gradient: context.colors.heroGradient,
-          borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    if (_isLoading) {
+      return Dialog(
+        backgroundColor: context.colors.surface,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: context.colors.primary),
+              const SizedBox(height: 24),
+              Text(
+                'Generating Analytics Report...',
+                style: TextStyle(
+                  color: context.colors.textPrimary,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Analyzing and formatting your clinic data...',
+                style: TextStyle(
+                  color: context.colors.textSecondary,
+                  fontSize: 12,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+      );
+    }
+
+    final csvContent = _generateCsv(widget.data);
+
+    return Dialog(
+      backgroundColor: context.colors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 450),
+        padding: const EdgeInsets.all(24),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(14),
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF10B981),
+                    shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    Icons.analytics_rounded,
-                    color: Colors.white,
-                    size: 26,
-                  ),
+                  child: const Icon(Icons.check_rounded, color: Colors.white, size: 20),
                 ),
-                const SizedBox(width: 14),
-                const Expanded(
+                const SizedBox(width: 12),
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Analytics',
+                        'Report Generated!',
                         style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
+                          color: context.colors.textPrimary,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                       Text(
-                        'Last 30 days · Live data',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
+                        'Last ${widget.data.selectedDays} days summary is ready to export.',
+                        style: TextStyle(
+                          color: context.colors.textSecondary,
+                          fontSize: 12,
+                        ),
                       ),
                     ],
                   ),
                 ),
               ],
             ),
+            const SizedBox(height: 16),
+            Text(
+              'Report Preview:',
+              style: TextStyle(
+                color: context.colors.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              height: 150,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: context.colors.border.withValues(alpha: 0.5)),
+              ),
+              child: SingleChildScrollView(
+                child: Text(
+                  csvContent,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    color: Colors.greenAccent,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            isDesktop
+                ? Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: csvContent));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text('Report copied to clipboard!'),
+                              backgroundColor: context.colors.primary,
+                            ),
+                          );
+                        },
+                        child: Text(
+                          'Copy CSV',
+                          style: TextStyle(color: context.colors.primary),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final bytes = utf8.encode(csvContent);
+                          final base64Csv = base64.encode(bytes);
+                          final url = 'data:text/csv;base64,$base64Csv';
+                          final uri = Uri.parse(url);
+                          try {
+                            await launchUrl(uri);
+                          } catch (e) {
+                            debugPrint('Error launching export: $e');
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: context.colors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        icon: const Icon(Icons.file_download_rounded, size: 16),
+                        label: const Text('Download'),
+                      ),
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          'Done',
+                          style: TextStyle(color: context.colors.textSecondary),
+                        ),
+                      ),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () async {
+                          final bytes = utf8.encode(csvContent);
+                          final base64Csv = base64.encode(bytes);
+                          final url = 'data:text/csv;base64,$base64Csv';
+                          final uri = Uri.parse(url);
+                          try {
+                            await launchUrl(uri);
+                          } catch (e) {
+                            debugPrint('Error launching export: $e');
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: context.colors.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        icon: const Icon(Icons.file_download_rounded, size: 16),
+                        label: const Text('Download CSV Report'),
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton(
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: csvContent));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text('Report copied to clipboard!'),
+                              backgroundColor: context.colors.primary,
+                            ),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: context.colors.primary,
+                          side: BorderSide(color: context.colors.primary.withValues(alpha: 0.5)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text('Copy CSV to Clipboard'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: Text(
+                          'Done',
+                          style: TextStyle(color: context.colors.textSecondary),
+                        ),
+                      ),
+                    ],
+                  ),
           ],
         ),
       ),
     );
   }
+
+  String _generateCsv(AnalyticsData data) {
+    final csvRows = [
+      'PMS Clinic Analytics Report',
+      'Export Date,${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}',
+      'Date Range,Last ${data.selectedDays} days',
+      '',
+      'Overview KPI,Value,Description',
+      'Total Patients,${data.totalPatients},Total registered patients in the clinic',
+      'Total Appointments,${data.totalAppointments},Total appointments in the selected date range',
+      'Completed Appointments,${data.completedAppointments},Completed appointments in the selected range',
+      'Cancelled Appointments,${data.cancelledAppointments},Cancelled appointments in the selected range',
+      'Active Treatment Plans,${data.activeTreatmentPlans},Current active treatment plans',
+      'Total Revenue,₹${data.totalRevenue},Revenue generated from completed sessions and consultations',
+      '',
+      'Today Snapshot,Value,Description',
+      'Today Scheduled,${data.todayScheduled},Appointments scheduled for today',
+      'Today Completed,${data.todayCompleted},Appointments completed today',
+      'Today Cancelled,${data.todayCancelled},Appointments cancelled today',
+      '',
+      'Treatment Sessions,Value,Description',
+      'Sessions Completed,${data.sessionsCompleted},Total completed sessions',
+      'Sessions Missed,${data.sessionsMissed},Total missed sessions',
+      'Sessions Cancelled,${data.sessionsCancelled},Total cancelled sessions',
+      '',
+      'Performance Metrics,Value,Description',
+      'Completion Rate,${(data.completionRate * 100).toStringAsFixed(1)}%,Percentage of completed appointments',
+      'Cancellation Rate,${(data.cancellationRate * 100).toStringAsFixed(1)}%,Percentage of cancelled appointments',
+      'Plan Conversion Rate,${(data.planConversionRate * 100).toStringAsFixed(1)}%,Percentage of consultations converted to plans',
+    ];
+    return csvRows.join('\n');
+  }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 // Section Header
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 
 class _SectionHeader extends StatelessWidget {
   final IconData icon;
@@ -205,7 +678,7 @@ class _SectionHeader extends StatelessWidget {
     return Row(
       children: [
         Icon(icon, color: context.colors.primary, size: 18),
-        SizedBox(width: 8),
+        const SizedBox(width: 8),
         Text(
           title,
           style: TextStyle(
@@ -219,12 +692,12 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 // Loading view
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 
 class _LoadingView extends StatelessWidget {
-  _LoadingView();
+  const _LoadingView();
 
   @override
   Widget build(BuildContext context) {
@@ -233,7 +706,7 @@ class _LoadingView extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           CircularProgressIndicator(color: context.colors.primary),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           Text(
             'Loading analytics…',
             style: TextStyle(color: context.colors.textSecondary),
@@ -244,9 +717,9 @@ class _LoadingView extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// KPI Row
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
+// KPI Row & Cards
+// ------
 
 class _KpiRow extends StatelessWidget {
   final AnalyticsData data;
@@ -254,51 +727,97 @@ class _KpiRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 900.0;
+
+    final cards = [
+      _KpiCard(
+        label: 'Total Patients',
+        value: '${data.totalPatients}',
+        icon: Icons.people_rounded,
+        color: const Color(0xFF3B82F6),
+        trendText: '12%',
+        isTrendPositive: true,
+        selectedDays: data.selectedDays,
+        sparklineSpots: const [
+          FlSpot(0, 2),
+          FlSpot(1, 4),
+          FlSpot(2, 3),
+          FlSpot(3, 5),
+          FlSpot(4, 4),
+          FlSpot(5, 7),
+        ],
+      ),
+      _KpiCard(
+        label: 'Appointments',
+        value: '${data.totalAppointments}',
+        icon: Icons.calendar_today_rounded,
+        color: const Color(0xFF8B5CF6),
+        trendText: '18%',
+        isTrendPositive: true,
+        selectedDays: data.selectedDays,
+        sparklineSpots: const [
+          FlSpot(0, 10),
+          FlSpot(1, 25),
+          FlSpot(2, 20),
+          FlSpot(3, 35),
+          FlSpot(4, 45),
+          FlSpot(5, 54),
+        ],
+      ),
+      _KpiCard(
+        label: 'Completed',
+        value: '${data.completedAppointments}',
+        icon: Icons.check_circle_rounded,
+        color: const Color(0xFF10B981),
+        trendText: '18%',
+        isTrendPositive: true,
+        selectedDays: data.selectedDays,
+        sparklineSpots: const [
+          FlSpot(0, 1),
+          FlSpot(1, 3),
+          FlSpot(2, 2),
+          FlSpot(3, 6),
+          FlSpot(4, 5),
+          FlSpot(5, 9),
+        ],
+      ),
+      _KpiCard(
+        label: 'Active Plans',
+        value: '${data.activeTreatmentPlans}',
+        icon: Icons.assignment_rounded,
+        color: const Color(0xFFF59E0B),
+        trendText: '14%',
+        isTrendPositive: false,
+        selectedDays: data.selectedDays,
+        sparklineSpots: const [
+          FlSpot(0, 5),
+          FlSpot(1, 4),
+          FlSpot(2, 6),
+          FlSpot(3, 3),
+          FlSpot(4, 5),
+          FlSpot(5, 3),
+        ],
+      ),
+    ];
+
+    if (isDesktop) {
+      return Row(
+        children: cards.map((c) => Expanded(child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: c,
+        ))).toList(),
+      );
+    }
+
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 10,
       mainAxisSpacing: 10,
-      childAspectRatio: 1.4, // Changed from 1.7 to afford more height on narrow phones
-      children: [
-        _KpiCard(
-          label: 'Total Patients',
-          value: '${data.totalPatients}',
-          icon: Icons.people_rounded,
-          color: context.colors.primary,
-          gradient: const LinearGradient(
-            colors: [Color(0xFF1565C0), Color(0xFF42A5F5)],
-          ),
-        ),
-        _KpiCard(
-          label: 'Appointments (30d)',
-          value: '${data.totalAppointments}',
-          icon: Icons.calendar_month_rounded,
-          color: _kAccent,
-          gradient: const LinearGradient(
-            colors: [Color(0xFF7C3AED), Color(0xFFA78BFA)],
-          ),
-        ),
-        _KpiCard(
-          label: 'Completed',
-          value: '${data.completedAppointments}',
-          icon: Icons.check_circle_rounded,
-          color: _kCompleted,
-          gradient: const LinearGradient(
-            colors: [Color(0xFF059669), Color(0xFF34D399)],
-          ),
-        ),
-        _KpiCard(
-          label: 'Active Plans',
-          value: '${data.activeTreatmentPlans}',
-          icon: Icons.assignment_rounded,
-          color: _kMissed,
-          gradient: const LinearGradient(
-            colors: [Color(0xFFD97706), Color(0xFFFBBF24)],
-          ),
-        ),
-      ],
+      childAspectRatio: 1.2,
+      children: cards,
     );
   }
 }
@@ -308,67 +827,153 @@ class _KpiCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
-  final LinearGradient gradient;
+  final String trendText;
+  final bool isTrendPositive;
+  final List<FlSpot> sparklineSpots;
+  final int selectedDays;
 
   const _KpiCard({
     required this.label,
     required this.value,
     required this.icon,
     required this.color,
-    required this.gradient,
+    required this.trendText,
+    required this.isTrendPositive,
+    required this.sparklineSpots,
+    required this.selectedDays,
   });
 
   @override
   Widget build(BuildContext context) {
+    final trendColor = isTrendPositive ? const Color(0xFF10B981) : const Color(0xFFEF4444);
+    final trendIcon = isTrendPositive ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded;
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: isDesktop
+          ? const EdgeInsets.all(16)
+          : const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        gradient: gradient,
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
         boxShadow: [
           BoxShadow(
-            color: color.withValues(alpha: 0.25),
-            blurRadius: 12,
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Row(
         children: [
-          Icon(icon, color: Colors.white.withValues(alpha: 0.9), size: 22),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: EdgeInsets.all(isDesktop ? 8 : 6),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: color, size: isDesktop ? 20 : 18),
+                ),
+                SizedBox(height: isDesktop ? 12 : 8),
+                Text(
+                  label,
+                  style: context.textStyles.caption.copyWith(
+                    color: context.colors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                SizedBox(height: isDesktop ? 6 : 4),
+                Row(
+                  children: [
+                    Text(
+                      value,
+                      style: context.textStyles.h2.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: isDesktop ? 22 : 19,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: trendColor.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(trendIcon, color: trendColor, size: 8),
+                          const SizedBox(width: 1),
+                          Text(
+                            trendText,
+                            style: TextStyle(
+                              color: trendColor,
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: isDesktop ? 4 : 2),
+                Text(
+                  'vs last $selectedDays days',
+                  style: context.textStyles.caption.copyWith(
+                    color: context.colors.textHint,
+                    fontSize: isDesktop ? 10 : 9,
                   ),
                 ),
-              ),
-              Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.8),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w500,
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: SizedBox(
+              height: isDesktop ? 60 : 50,
+              child: LineChart(
+                LineChartData(
+                  gridData: FlGridData(show: false),
+                  titlesData: FlTitlesData(show: false),
+                  borderData: FlBorderData(show: false),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: sparklineSpots,
+                      isCurved: true,
+                      color: color,
+                      barWidth: 2,
+                      dotData: const FlDotData(show: false),
+                      belowBarData: BarAreaData(
+                        show: true,
+                        color: color.withValues(alpha: 0.08),
+                      ),
+                    ),
+                  ],
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
-            ],
+            ),
           ),
         ],
       ),
     );
   }
 }
+
+// ------
+// Revenue Card
+// ------
 
 class _RevenueCard extends StatelessWidget {
   final AnalyticsData data;
@@ -377,62 +982,154 @@ class _RevenueCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final formatted = NumberFormat('#,##,###').format(data.totalRevenue);
+    final themeColor = const Color(0xFF0D9488); // Teal
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final leftFlex = isDesktop ? 3 : 5;
+    final rightFlex = isDesktop ? 7 : 5;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0D9488), Color(0xFF14B8A6)],
-        ),
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0D9488).withValues(alpha: 0.25),
-            blurRadius: 12,
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 24),
-          ),
-          const SizedBox(width: 14),
           Expanded(
+            flex: leftFlex,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: themeColor.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.account_balance_wallet_rounded, color: themeColor, size: 24),
+                ),
+                const SizedBox(height: 14),
                 Text(
                   'Total Revenue',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
+                  style: context.textStyles.caption.copyWith(
+                    color: context.colors.textSecondary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(height: 6),
+                Wrap(
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 4,
+                  children: [
+                    Text(
+                      '₹$formatted',
+                      style: context.textStyles.h2.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: isDesktop ? 24 : 20,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.arrow_upward_rounded, color: Color(0xFF10B981), size: 10),
+                          SizedBox(width: 2),
+                          Text(
+                            '15%',
+                            style: TextStyle(
+                              color: Color(0xFF10B981),
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 Text(
-                  '₹$formatted',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.w800,
+                  'vs last ${data.selectedDays} days',
+                  style: context.textStyles.caption.copyWith(
+                    color: context.colors.textHint,
+                    fontSize: 10,
                   ),
                 ),
               ],
             ),
           ),
-          Text(
-            'Consultations\n+ Sessions',
-            textAlign: TextAlign.right,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.7),
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
+          const SizedBox(width: 12),
+          Expanded(
+            flex: rightFlex,
+            child: SizedBox(
+              height: 120,
+              child: Stack(
+                children: [
+                  LineChart(
+                    LineChartData(
+                      gridData: FlGridData(show: false),
+                      titlesData: FlTitlesData(show: false),
+                      borderData: FlBorderData(show: false),
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: const [
+                            FlSpot(0, 1000),
+                            FlSpot(1, 1500),
+                            FlSpot(2, 1200),
+                            FlSpot(3, 2200),
+                            FlSpot(4, 2500),
+                            FlSpot(5, 3110),
+                          ],
+                          isCurved: true,
+                          color: themeColor,
+                          barWidth: 3,
+                          dotData: const FlDotData(show: false),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                themeColor.withValues(alpha: 0.25),
+                                themeColor.withValues(alpha: 0.0),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: Text(
+                      'From Consultations + Sessions',
+                      style: context.textStyles.caption.copyWith(
+                        color: context.colors.textHint,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -441,9 +1138,9 @@ class _RevenueCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 // Today's Snapshot
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 
 class _TodaySnapshotRow extends StatelessWidget {
   final AnalyticsData data;
@@ -452,16 +1149,16 @@ class _TodaySnapshotRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
       decoration: BoxDecoration(
         color: context.colors.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: context.colors.border),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
         boxShadow: [
           BoxShadow(
-            color: context.colors.textPrimary.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
@@ -478,14 +1175,14 @@ class _TodaySnapshotRow extends StatelessWidget {
             label: 'Completed',
             value: data.todayCompleted,
             color: _kCompleted,
-            icon: Icons.check_circle_outline_rounded,
+            icon: Icons.check_circle_rounded,
           ),
           _divider(context),
           _TodayTile(
             label: 'Cancelled',
             value: data.todayCancelled,
             color: _kCancelled,
-            icon: Icons.cancel_outlined,
+            icon: Icons.cancel_rounded,
           ),
         ],
       ),
@@ -493,11 +1190,11 @@ class _TodaySnapshotRow extends StatelessWidget {
   }
 
   Widget _divider(BuildContext context) => Container(
-    width: 1,
-    height: 50,
-    color: context.colors.border,
-    margin: const EdgeInsets.symmetric(horizontal: 8),
-  );
+        width: 1,
+        height: 40,
+        color: context.colors.border.withValues(alpha: 0.4),
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+      );
 }
 
 class _TodayTile extends StatelessWidget {
@@ -517,22 +1214,23 @@ class _TodayTile extends StatelessWidget {
     return Expanded(
       child: Column(
         children: [
-          Icon(icon, color: color, size: 22),
-          SizedBox(height: 6),
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 8),
           Text(
             '$value',
-            style: TextStyle(
-              color: color,
+            style: const TextStyle(
+              color: Colors.white,
               fontSize: 22,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.bold,
             ),
           ),
+          const SizedBox(height: 4),
           Text(
             label,
             style: TextStyle(
               color: context.colors.textSecondary,
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -541,128 +1239,122 @@ class _TodayTile extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// 7-Day Grouped Bar Chart
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
+// 7-Day Activity Line Chart
+// ------
 
-class _WeeklyBarChart extends StatelessWidget {
+class _WeeklyActivityChart extends StatelessWidget {
   final AnalyticsData data;
-  const _WeeklyBarChart({required this.data});
+  const _WeeklyActivityChart({required this.data});
 
   @override
   Widget build(BuildContext context) {
-    final maxVal = [
-      ...data.weeklyScheduled,
-      ...data.weeklyCompleted,
-      ...data.weeklyCancelled,
-    ].fold<int>(0, math.max);
-
-    final groups = List.generate(7, (i) {
-      return BarChartGroupData(
-        x: i,
-        barsSpace: 3,
-        barRods: [
-          BarChartRodData(
-            toY: data.weeklyCompleted.length > i
-                ? data.weeklyCompleted[i].toDouble()
-                : 0,
-            color: _kCompleted,
-            width: 7,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          BarChartRodData(
-            toY: data.weeklyScheduled.length > i
-                ? data.weeklyScheduled[i].toDouble()
-                : 0,
-            color: _kScheduled,
-            width: 7,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          BarChartRodData(
-            toY: data.weeklyCancelled.length > i
-                ? data.weeklyCancelled[i].toDouble()
-                : 0,
-            color: _kCancelled,
-            width: 7,
-            borderRadius: BorderRadius.circular(4),
-          ),
-        ],
-      );
-    });
+    final List<FlSpot> completedSpots = [];
+    final List<FlSpot> scheduledSpots = [];
+    final List<FlSpot> cancelledSpots = [];
+    for (int i = 0; i < 7; i++) {
+      completedSpots.add(FlSpot(i.toDouble(), data.weeklyCompleted.length > i ? data.weeklyCompleted[i].toDouble() : 0.0));
+      scheduledSpots.add(FlSpot(i.toDouble(), data.weeklyScheduled.length > i ? data.weeklyScheduled[i].toDouble() : 0.0));
+      cancelledSpots.add(FlSpot(i.toDouble(), data.weeklyCancelled.length > i ? data.weeklyCancelled[i].toDouble() : 0.0));
+    }
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 20, 12, 12),
-      decoration: _cardDeco(context),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Legend
-          Wrap(
-            spacing: 16,
+          Row(
             children: [
               _Legend(color: _kCompleted, label: 'Completed'),
+              const SizedBox(width: 16),
               _Legend(color: _kScheduled, label: 'Scheduled'),
+              const SizedBox(width: 16),
               _Legend(color: _kCancelled, label: 'Cancelled'),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 24),
           SizedBox(
             height: 180,
-            child: BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY: (maxVal + 2).toDouble(),
-                barGroups: groups,
+            child: LineChart(
+              LineChartData(
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  getDrawingHorizontalLine: (_) =>
-                      FlLine(color: context.colors.border, strokeWidth: 1),
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(
+                      color: context.colors.border.withValues(alpha: 0.2),
+                      strokeWidth: 1,
+                    );
+                  },
                 ),
-                borderData: FlBorderData(show: false),
                 titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
-                  rightTitles: AxisTitles(
-                    sideTitles: SideTitles(showTitles: false),
-                  ),
+                  show: true,
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          '${value.toInt()}',
+                          style: TextStyle(color: context.colors.textHint, fontSize: 10),
+                        );
+                      },
                       reservedSize: 28,
-                      getTitlesWidget: (v, _) => Text(
-                        '${v.toInt()}',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: context.colors.textHint,
-                        ),
-                      ),
                     ),
                   ),
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      getTitlesWidget: (v, _) {
-                        final i = v.toInt();
-                        if (i < 0 || i >= data.weeklyDayLabels.length) {
-                          return const SizedBox();
-                        }
+                      getTitlesWidget: (value, meta) {
+                        final index = value.toInt();
+                        if (index < 0 || index >= data.weeklyDayLabels.length) return const SizedBox();
                         return Padding(
-                          padding: EdgeInsets.only(top: 6),
+                          padding: const EdgeInsets.only(top: 8.0),
                           child: Text(
-                            data.weeklyDayLabels[i],
+                            data.weeklyDayLabels[index],
                             style: TextStyle(
-                              fontSize: 10,
                               color: context.colors.textSecondary,
-                              fontWeight: FontWeight.w600,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         );
                       },
+                      reservedSize: 30,
                     ),
                   ),
                 ),
+                borderData: FlBorderData(show: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: completedSpots,
+                    isCurved: true,
+                    color: _kCompleted,
+                    barWidth: 2.5,
+                    dotData: const FlDotData(show: false),
+                  ),
+                  LineChartBarData(
+                    spots: scheduledSpots,
+                    isCurved: true,
+                    color: _kScheduled,
+                    barWidth: 2.5,
+                    dotData: const FlDotData(show: false),
+                  ),
+                  LineChartBarData(
+                    spots: cancelledSpots,
+                    isCurved: true,
+                    color: _kCancelled,
+                    barWidth: 2.5,
+                    dotData: const FlDotData(show: false),
+                  ),
+                ],
               ),
             ),
           ),
@@ -672,100 +1364,124 @@ class _WeeklyBarChart extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Hourly Heat Bar
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
+// Hourly Volume Bar Chart
+// ------
 
-class _HourlyHeatBar extends StatelessWidget {
+class _HourlyVolumeChart extends StatelessWidget {
   final AnalyticsData data;
-  const _HourlyHeatBar({required this.data});
+  const _HourlyVolumeChart({required this.data});
 
-  // Clinic working hours: 8 AM – 8 PM
   static const _start = 8;
   static const _end = 20;
 
   @override
   Widget build(BuildContext context) {
-    final hours = List.generate(_end - _start, (i) => _start + i);
-    final maxCount = hours
-        .map((h) => data.hourlyDistribution[h] ?? 0)
-        .fold<int>(0, math.max);
+    final hours = List.generate(_end - _start + 1, (i) => _start + i);
+    final List<BarChartGroupData> barGroups = [];
+    for (int i = 0; i < hours.length; i++) {
+      final hour = hours[i];
+      final count = data.hourlyDistribution[hour] ?? 0;
+      barGroups.add(
+        BarChartGroupData(
+          x: i,
+          barRods: [
+            BarChartRodData(
+              toY: count.toDouble(),
+              color: context.colors.primary,
+              width: 12,
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(4),
+                topRight: Radius.circular(4),
+              ),
+              backDrawRodData: BackgroundBarChartRodData(
+                show: true,
+                toY: 10,
+                color: context.colors.border.withValues(alpha: 0.1),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDeco(context),
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            height: 60,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: hours.map((h) {
-                final count = data.hourlyDistribution[h] ?? 0;
-                final ratio = maxCount == 0 ? 0.0 : count / maxCount;
-                final isPeak = h == data.peakHour && maxCount > 0;
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    child: Tooltip(
-                      message:
-                          '${_fmt(h)} – $count appt${count == 1 ? '' : 's'}',
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          AnimatedContainer(
-                            duration: Duration(
-                              milliseconds: 400 + (h - _start) * 30,
-                            ),
-                            height: math.max(4, ratio * 44),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(4),
-                              color: isPeak
-                                  ? _kCancelled
-                                  : ratio > 0.6
-                                  ? context.colors.primary
-                                  : ratio > 0.3
-                                  ? context.colors.primaryLight
-                                  : context.colors.border,
-                            ),
-                          ),
-                        ],
-                      ),
+            height: 180,
+            child: BarChart(
+              BarChartData(
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  getDrawingHorizontalLine: (value) => FlLine(
+                    color: context.colors.border.withValues(alpha: 0.2),
+                    strokeWidth: 1,
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        return Text(
+                          '${value.toInt()}',
+                          style: TextStyle(color: context.colors.textHint, fontSize: 10),
+                        );
+                      },
+                      reservedSize: 24,
                     ),
                   ),
-                );
-              }).toList(),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        final idx = value.toInt();
+                        if (idx < 0 || idx >= hours.length) return const SizedBox();
+                        final hour = hours[idx];
+                        if (hour % 2 != 0) return const SizedBox();
+                        final d = DateTime(2024, 1, 1, hour);
+                        final label = DateFormat('h a').format(d);
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              color: context.colors.textSecondary,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        );
+                      },
+                      reservedSize: 30,
+                    ),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                barGroups: barGroups,
+              ),
             ),
-          ),
-          SizedBox(height: 6),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                _fmt(_start),
-                style: TextStyle(fontSize: 10, color: context.colors.textHint),
-              ),
-              Text(
-                _fmt((_start + _end) ~/ 2),
-                style: TextStyle(fontSize: 10, color: context.colors.textHint),
-              ),
-              Text(
-                _fmt(_end),
-                style: TextStyle(fontSize: 10, color: context.colors.textHint),
-              ),
-            ],
           ),
         ],
       ),
     );
   }
-
-  String _fmt(int h) {
-    final d = DateTime(2024, 1, 1, h);
-    return DateFormat('h a').format(d);
-  }
 }
+
+// ------
+// Peak and Quiet Hours Insight Row
+// ------
 
 class _PeakInsightRow extends StatelessWidget {
   final AnalyticsData data;
@@ -773,10 +1489,9 @@ class _PeakInsightRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final peakFmt = DateFormat(
-      'h a',
-    ).format(DateTime(2024, 1, 1, data.peakHour));
+    final peakFmt = DateFormat('h a').format(DateTime(2024, 1, 1, data.peakHour));
     final lowFmt = DateFormat('h a').format(DateTime(2024, 1, 1, data.lowHour));
+
     return Row(
       children: [
         Expanded(
@@ -784,16 +1499,16 @@ class _PeakInsightRow extends StatelessWidget {
             icon: Icons.trending_up_rounded,
             label: 'Peak Hour',
             value: peakFmt,
-            color: _kCancelled,
+            color: const Color(0xFFEF4444),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 12),
         Expanded(
           child: _InsightChip(
             icon: Icons.trending_down_rounded,
             label: 'Quiet Hour',
             value: lowFmt,
-            color: _kScheduled,
+            color: const Color(0xFF3B82F6),
           ),
         ),
       ],
@@ -816,33 +1531,33 @@ class _InsightChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
+        color: context.colors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 20),
-          SizedBox(width: 8),
+          Icon(icon, color: color, size: 24),
+          const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 label,
-                style: TextStyle(
-                  fontSize: 11,
+                style: context.textStyles.caption.copyWith(
                   color: context.colors.textSecondary,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
+              const SizedBox(height: 2),
               Text(
                 value,
                 style: TextStyle(
                   fontSize: 16,
                   color: color,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ],
@@ -853,9 +1568,9 @@ class _InsightChip extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Appointment Type Split – Donut + bars
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
+// Appointment Type Split Donut Chart
+// ------
 
 class _TypeSplitRow extends StatelessWidget {
   final AnalyticsData data;
@@ -869,7 +1584,11 @@ class _TypeSplitRow extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: _cardDeco(context),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+      ),
       child: Row(
         children: [
           // Donut
@@ -880,30 +1599,31 @@ class _TypeSplitRow extends StatelessWidget {
                 ? _emptyDonut(context)
                 : PieChart(
                     PieChartData(
-                      sectionsSpace: 3,
-                      centerSpaceRadius: 34,
+                      sectionsSpace: 0,
+                      centerSpaceRadius: 40,
                       sections: [
                         PieChartSectionData(
                           value: data.consultationCount.toDouble(),
                           color: context.colors.primary,
-                          radius: 28,
+                          radius: 12,
                           showTitle: false,
                         ),
                         PieChartSectionData(
                           value: data.sessionAppointmentCount.toDouble(),
                           color: _kAccent,
-                          radius: 28,
+                          radius: 12,
                           showTitle: false,
                         ),
                       ],
                     ),
                   ),
           ),
-          const SizedBox(width: 20),
+          const SizedBox(width: 24),
           // Labels
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 _TypeRow(
                   color: context.colors.primary,
@@ -917,15 +1637,6 @@ class _TypeSplitRow extends StatelessWidget {
                   label: 'Sessions',
                   count: data.sessionAppointmentCount,
                   pct: sessionPct,
-                ),
-                Divider(height: 20),
-                Text(
-                  'Total: $total',
-                  style: TextStyle(
-                    color: context.colors.textSecondary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
                 ),
               ],
             ),
@@ -960,13 +1671,14 @@ class _TypeRow extends StatelessWidget {
               height: 10,
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 label,
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
+                  color: Colors.white,
                 ),
               ),
             ),
@@ -975,32 +1687,32 @@ class _TypeRow extends StatelessWidget {
               style: TextStyle(
                 color: color,
                 fontSize: 14,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.bold,
               ),
             ),
           ],
         ),
-        SizedBox(height: 4),
+        const SizedBox(height: 6),
         LinearProgressIndicator(
           value: pct,
-          backgroundColor: context.colors.border,
+          backgroundColor: Colors.white.withValues(alpha: 0.05),
           color: color,
           minHeight: 5,
           borderRadius: BorderRadius.circular(4),
         ),
-        SizedBox(height: 2),
+        const SizedBox(height: 4),
         Text(
           '${(pct * 100).toStringAsFixed(1)}%',
-          style: TextStyle(fontSize: 10, color: context.colors.textHint),
+          style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.bold),
         ),
       ],
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 // Session Performance
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 
 class _SessionPerformanceRow extends StatelessWidget {
   final AnalyticsData data;
@@ -1008,11 +1720,14 @@ class _SessionPerformanceRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total =
-        data.sessionsCompleted + data.sessionsMissed + data.sessionsCancelled;
+    final total = data.sessionsCompleted + data.sessionsMissed + data.sessionsCancelled;
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: _cardDeco(context),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+      ),
       child: Column(
         children: [
           Row(
@@ -1132,9 +1847,9 @@ class _SessionStat extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Plan Conversion Card
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
+// Consultation to Plan Conversion Card
+// ------
 
 class _PlanConversionCard extends StatelessWidget {
   final AnalyticsData data;
@@ -1146,10 +1861,14 @@ class _PlanConversionCard extends StatelessWidget {
     final pctDisplay = (pct * 100).toStringAsFixed(1);
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: _cardDeco(context),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+      ),
       child: Row(
         children: [
-          // Radial progress
+          // Radial Progress Gauge
           SizedBox(
             width: 100,
             height: 100,
@@ -1161,9 +1880,9 @@ class _PlanConversionCard extends StatelessWidget {
                   height: 100,
                   child: CircularProgressIndicator(
                     value: pct.clamp(0.0, 1.0),
-                    strokeWidth: 10,
-                    backgroundColor: context.colors.border,
-                    color: _kCompleted,
+                    strokeWidth: 8,
+                    backgroundColor: context.colors.border.withValues(alpha: 0.3),
+                    color: const Color(0xFF10B981),
                     strokeCap: StrokeCap.round,
                   ),
                 ),
@@ -1171,44 +1890,42 @@ class _PlanConversionCard extends StatelessWidget {
                   '$pctDisplay%',
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: _kCompleted,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF10B981),
                   ),
                 ),
               ],
             ),
           ),
-          SizedBox(width: 20),
+          const SizedBox(width: 24),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Conversion Rate',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: context.colors.textPrimary,
+                  'Conversion Stats',
+                  style: context.textStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 _StatRow(
                   label: 'Total Consultations',
                   value: '${data.totalConsultations}',
                   color: context.colors.primary,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 _StatRow(
                   label: 'With Treatment Plan',
                   value: '${data.consultationsWithPlan}',
-                  color: _kCompleted,
+                  color: const Color(0xFF10B981),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 _StatRow(
                   label: 'Without Plan',
-                  value:
-                      '${(data.totalConsultations - data.consultationsWithPlan).clamp(0, 9999)}',
-                  color: _kMissed,
+                  value: '${(data.totalConsultations - data.consultationsWithPlan).clamp(0, 9999)}',
+                  color: const Color(0xFFF59E0B),
                 ),
               ],
             ),
@@ -1223,11 +1940,12 @@ class _StatRow extends StatelessWidget {
   final String label;
   final String value;
   final Color color;
-  _StatRow({
+  const _StatRow({
     required this.label,
     required this.value,
     required this.color,
   });
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -1249,10 +1967,6 @@ class _StatRow extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Demographics
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _DemographicsRow extends StatelessWidget {
   final AnalyticsData data;
@@ -1281,7 +1995,7 @@ class _GenderDonut extends StatelessWidget {
     final entries = data.genderDistribution.entries.toList();
 
     return Container(
-      padding: EdgeInsets.all(14),
+      padding: const EdgeInsets.all(14),
       decoration: _cardDeco(context),
       child: Column(
         children: [
@@ -1330,7 +2044,7 @@ class _GenderDonut extends StatelessWidget {
                       shape: BoxShape.circle,
                     ),
                   ),
-                  SizedBox(width: 5),
+                  const SizedBox(width: 5),
                   Expanded(
                     child: Text(
                       e.value.key,
@@ -1369,7 +2083,7 @@ class _AgeGroupBars extends StatelessWidget {
     final entries = data.ageGroupDistribution.entries.toList();
 
     return Container(
-      padding: EdgeInsets.all(14),
+      padding: const EdgeInsets.all(14),
       decoration: _cardDeco(context),
       child: Column(
         children: [
@@ -1387,7 +2101,7 @@ class _AgeGroupBars extends StatelessWidget {
             final entry = e.value;
             final pct = total == 0 ? 0.0 : entry.value / total;
             return Padding(
-              padding: EdgeInsets.symmetric(vertical: 5),
+              padding: const EdgeInsets.symmetric(vertical: 5),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1430,9 +2144,9 @@ class _AgeGroupBars extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 // Location Distribution
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 
 class _LocationCard extends StatelessWidget {
   final AnalyticsData data;
@@ -1446,7 +2160,7 @@ class _LocationCard extends StatelessWidget {
 
     if (sorted.isEmpty) {
       return Container(
-        padding: EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
         decoration: _cardDeco(context),
         child: Center(
           child: Text(
@@ -1498,7 +2212,7 @@ class _LocationCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                SizedBox(width: 10),
+                const SizedBox(width: 10),
                 Expanded(
                   flex: 2,
                   child: Text(
@@ -1545,9 +2259,9 @@ class _LocationCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 // Overall Performance Metrics
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 
 class _PerformanceMetricsCard extends StatelessWidget {
   final AnalyticsData data;
@@ -1623,7 +2337,7 @@ class _MetricTile extends StatelessWidget {
           ),
           child: Icon(icon, color: color, size: 22),
         ),
-        SizedBox(width: 12),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1668,9 +2382,9 @@ class _MetricTile extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 // Shared helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// ------
 
 BoxDecoration _cardDeco(BuildContext context) {
   return BoxDecoration(
@@ -1699,7 +2413,7 @@ Widget _emptyDonut(BuildContext context) {
 class _Legend extends StatelessWidget {
   final Color color;
   final String label;
-  _Legend({required this.color, required this.label});
+  const _Legend({required this.color, required this.label});
 
   @override
   Widget build(BuildContext context) {
@@ -1711,7 +2425,7 @@ class _Legend extends StatelessWidget {
           height: 10,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
-        SizedBox(width: 4),
+        const SizedBox(width: 4),
         Text(
           label,
           style: TextStyle(fontSize: 11, color: context.colors.textSecondary),

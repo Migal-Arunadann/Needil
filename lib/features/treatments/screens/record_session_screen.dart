@@ -1,5 +1,6 @@
 import 'dart:async';
-import 'dart:io';
+import 'dart:io' show Platform, File;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,8 +16,13 @@ import '../../appointments/providers/appointment_provider.dart';
 import '../models/session_model.dart';
 import '../providers/treatment_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import '../../../core/utils/image_helper.dart';
 import '../../../core/services/idle_reminder_service.dart';
-import '../../../core/widgets/voice_dictation_dialog.dart';
+import '../../../core/services/photo_quota_service.dart';
+import '../../../core/widgets/photo_limit_dialog.dart';
+import '../../auth/providers/auth_provider.dart';
+import '../../../core/services/auth_service.dart' show UserRole;
+
 
 
 class RecordSessionScreen extends ConsumerStatefulWidget {
@@ -174,16 +180,34 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
   }
 
   Future<void> _pickPhoto() async {
+    // ── Quota check ──
+    final clinicId = ref.read(authProvider).clinicId;
+    if (clinicId != null) {
+      try {
+        final quota = ref.read(photoQuotaServiceProvider);
+        if (!await quota.canUpload(clinicId, 1)) {
+          if (mounted) {
+            final (used, limit) = await quota.getQuota(clinicId);
+            showPhotoLimitDialog(context, used: used, limit: limit,
+              isClinicAdmin: ref.read(authProvider).role == UserRole.clinic);
+          }
+          return;
+        }
+      } catch (_) {}
+    }
     try {
       final img = await _picker.pickImage(
         source: ImageSource.camera,
-        maxWidth: 1200,
-        maxHeight: 1200,
-        imageQuality: 80,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 60,
       );
       if (img != null && mounted) {
-        setState(() => _photos.add(img));
-        _onFieldChanged();
+        final compressed = await ImageHelper.compressToWebP(img);
+        if (compressed != null && mounted) {
+          setState(() => _photos.add(compressed));
+          _onFieldChanged();
+        }
       }
     } catch (_) {
       // Camera access failed or user denied — silently ignore
@@ -191,15 +215,65 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
   }
 
   Future<void> _pickFromGallery() async {
+    // ── Quota check ──
+    final clinicId = ref.read(authProvider).clinicId;
+    if (clinicId != null) {
+      try {
+        final quota = ref.read(photoQuotaServiceProvider);
+        if (!await quota.canUpload(clinicId, 1)) {
+          if (mounted) {
+            final (used, limit) = await quota.getQuota(clinicId);
+            showPhotoLimitDialog(context, used: used, limit: limit,
+              isClinicAdmin: ref.read(authProvider).role == UserRole.clinic);
+          }
+          return;
+        }
+      } catch (_) {}
+    }
     try {
       final imgs = await _picker.pickMultiImage(
-        maxWidth: 1200,
-        maxHeight: 1200,
-        imageQuality: 80,
+        maxWidth: 800,
+        maxHeight: 800,
+        imageQuality: 60,
       );
       if (imgs.isNotEmpty && mounted) {
-        setState(() => _photos.addAll(imgs));
-        _onFieldChanged();
+        // Check quota for batch
+        if (clinicId != null) {
+          try {
+            final quota = ref.read(photoQuotaServiceProvider);
+            if (!await quota.canUpload(clinicId, imgs.length)) {
+              final remaining = await quota.getRemainingQuota(clinicId);
+              if (remaining <= 0) {
+                final (used, limit) = await quota.getQuota(clinicId);
+                if (mounted) showPhotoLimitDialog(context, used: used, limit: limit,
+                  isClinicAdmin: ref.read(authProvider).role == UserRole.clinic);
+                return;
+              }
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Only $remaining photo(s) remaining in your quota. Selecting first $remaining.'),
+                    backgroundColor: context.colors.warning,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                );
+              }
+              imgs.removeRange(remaining, imgs.length);
+            }
+          } catch (_) {}
+        }
+        final compressedList = <XFile>[];
+        for (final file in imgs) {
+          final comp = await ImageHelper.compressToWebP(file);
+          if (comp != null) {
+            compressedList.add(comp);
+          }
+        }
+        if (compressedList.isNotEmpty && mounted) {
+          setState(() => _photos.addAll(compressedList));
+          _onFieldChanged();
+        }
       }
     } catch (_) {
       // Gallery access failed or user denied — silently ignore
@@ -207,11 +281,8 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
   }
 
   Future<void> _submit() async {
-    // End any running timer and log the elapsed time
-    final timerSvc = SessionTimerService.instance;
-    if (timerSvc.hasActiveTimer(_liveSession.id)) {
-      timerSvc.endTimer(_liveSession.id);
-    }
+    // NOTE: Do NOT end running timer here — timer should persist in background
+    // even when saving session details. Only "End Session" on the card stops it.
     // Flush any pending auto-save first
     _autoSaveTimer?.cancel();
     setState(() => _isSubmitting = true);
@@ -232,7 +303,15 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
       setState(() {
         _isSubmitting = false;
         _liveSession = result;
+        // ── Increment photo quota ──
+        final photoCount = _photos.length;
         _photos.clear(); // Photos now in PB — avoid duplicates
+        if (photoCount > 0) {
+          final clinicId = ref.read(authProvider).clinicId;
+          if (clinicId != null) {
+            ref.read(photoQuotaServiceProvider).incrementUsage(clinicId, photoCount);
+          }
+        }
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -258,6 +337,9 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
   }
 
   Future<void> _markMissed() async {
+    // Capture navigator before async gap — fixes Vivo/iQOO devices
+    final navigator = Navigator.of(context);
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -272,7 +354,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
     );
     if (confirm == true) {
       await ref.read(sessionsProvider.notifier).markMissed(_liveSession.id);
-      if (mounted) Navigator.pop(context);
+      if (mounted) navigator.pop();
     }
   }
 
@@ -292,6 +374,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
       case SessionStatus.completed:  return context.colors.success;
       case SessionStatus.missed:     return context.colors.warning;
       case SessionStatus.cancelled:  return context.colors.error;
+      case SessionStatus.paused:     return context.colors.info;
     }
   }
 
@@ -303,6 +386,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
       case SessionStatus.completed:  return 'Done';
       case SessionStatus.missed:     return 'Missed';
       case SessionStatus.cancelled:  return 'Cancelled';
+      case SessionStatus.paused:     return 'Paused';
     }
   }
 
@@ -462,51 +546,13 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Session Notes with Dictate button
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Session Notes',
-                          style: context.textStyles.label,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => VoiceDictationDialog.show(
-                          context: context,
-                          controller: _notesCtrl,
-                          fieldLabel: 'Session Notes',
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: context.colors.primary.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: context.colors.primary.withValues(alpha: 0.25),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.mic_rounded, size: 15, color: context.colors.primary),
-                              const SizedBox(width: 5),
-                              Text(
-                                'Dictate',
-                                style: context.textStyles.caption.copyWith(
-                                  color: context.colors.primary,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                  // Session Notes
+                  Text(
+                    'Session Notes',
+                    style: context.textStyles.label,
                   ),
                   const SizedBox(height: 8),
-                  AppTextField(controller: _notesCtrl, label: '', hint: 'Observations, treatment applied...', maxLines: 4),
+                  AppTextField(controller: _notesCtrl, label: '', hint: 'Observations, treatment applied...', maxLines: null, minLines: 4),
                   SizedBox(height: 16),
                   Text('Vitals (Optional)', style: context.textStyles.label),
                   SizedBox(height: 8),
@@ -553,53 +599,25 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                     }),
                     // Show newly picked photos
                     ..._photos.asMap().entries.map((e) => _photoThumb(e.key)),
-                    if (!Platform.isWindows)
-                      _addPhotoBtn(Icons.camera_alt_rounded, 'Camera', _pickPhoto),
-                    _addPhotoBtn(Icons.photo_library_rounded, 'Gallery', _pickFromGallery),
+                    if (kIsWeb)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8.0),
+                        child: Text(
+                          '⚠️ Photo uploads are only supported on the mobile app.',
+                          style: context.textStyles.caption.copyWith(color: context.colors.warning),
+                        ),
+                      )
+                    else ...[
+                      if (!Platform.isWindows)
+                        _addPhotoBtn(Icons.camera_alt_rounded, 'Camera', _pickPhoto),
+                      _addPhotoBtn(Icons.photo_library_rounded, 'Gallery', _pickFromGallery),
+                    ],
                   ]),
                   const SizedBox(height: 16),
-                  // Remarks with Dictate button
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Remarks',
-                          style: context.textStyles.label,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => VoiceDictationDialog.show(
-                          context: context,
-                          controller: _remarksCtrl,
-                          fieldLabel: 'Remarks',
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: context.colors.primary.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: context.colors.primary.withValues(alpha: 0.25),
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.mic_rounded, size: 15, color: context.colors.primary),
-                              const SizedBox(width: 5),
-                              Text(
-                                'Dictate',
-                                style: context.textStyles.caption.copyWith(
-                                  color: context.colors.primary,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                  // Remarks
+                  Text(
+                    'Remarks',
+                    style: context.textStyles.label,
                   ),
                   const SizedBox(height: 8),
                   AppTextField(controller: _remarksCtrl, label: '', hint: 'Follow-up notes...', maxLines: 2),

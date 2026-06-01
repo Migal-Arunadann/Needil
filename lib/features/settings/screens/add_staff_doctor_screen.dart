@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,6 +12,7 @@ import '../../../../core/utils/time_utils.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../auth/screens/clinic_registration/clinic_step3_screen.dart' show BreakTime, DayOverride;
 import 'package:pms_app/core/theme/app_theme.dart';
+import '../../../../core/utils/image_helper.dart';
 
 
 class AddStaffDoctorScreen extends ConsumerStatefulWidget {
@@ -193,7 +195,10 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery, maxWidth: 800, maxHeight: 800);
     if (picked != null) {
-      setState(() => photoFile = File(picked.path));
+      final compressed = await ImageHelper.compressToWebP(picked);
+      if (compressed != null) {
+        setState(() => photoFile = File(compressed.path));
+      }
     }
   }
 
@@ -234,30 +239,47 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Avatar
-                Center(child: GestureDetector(
-                  onTap: _pickPhoto,
-                  child: Stack(children: [
-                    Container(
-                      width: 80, height: 80,
-                      decoration: BoxDecoration(
-                        gradient: photoFile == null ? context.colors.heroGradient : null,
-                        borderRadius: BorderRadius.circular(22),
-                        image: photoFile != null
-                            ? DecorationImage(image: FileImage(photoFile!), fit: BoxFit.cover)
-                            : null,
-                      ),
-                      child: photoFile == null
-                          ? const Icon(Icons.person_rounded, color: Colors.white, size: 36) : null,
+                if (kIsWeb) ...[
+                  Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.person_outline_rounded, color: context.colors.textHint, size: 48),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Doctor photo upload is available on the mobile app.',
+                          style: context.textStyles.caption.copyWith(color: context.colors.textHint),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
                     ),
-                    Positioned(bottom: 0, right: 0,
-                      child: Container(
-                        width: 26, height: 26,
-                        decoration: BoxDecoration(color: context.colors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white, width: 2)),
-                        child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
-                      )),
-                  ]),
-                )),
-                const SizedBox(height: 24),
+                  ),
+                  const SizedBox(height: 24),
+                ] else ...[
+                  Center(child: GestureDetector(
+                    onTap: _pickPhoto,
+                    child: Stack(children: [
+                      Container(
+                        width: 80, height: 80,
+                        decoration: BoxDecoration(
+                          gradient: photoFile == null ? context.colors.heroGradient : null,
+                          borderRadius: BorderRadius.circular(22),
+                          image: photoFile != null
+                              ? DecorationImage(image: FileImage(photoFile!), fit: BoxFit.cover)
+                              : null,
+                        ),
+                        child: photoFile == null
+                            ? const Icon(Icons.person_rounded, color: Colors.white, size: 36) : null,
+                      ),
+                      Positioned(bottom: 0, right: 0,
+                        child: Container(
+                          width: 26, height: 26,
+                          decoration: BoxDecoration(color: context.colors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white, width: 2)),
+                          child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
+                        )),
+                    ]),
+                  )),
+                  const SizedBox(height: 24),
+                ],
 
                 // Name
                 _field('Full Name', 'e.g. Dr. John Doe', Icons.person_outline_rounded, controller: nameCtrl),

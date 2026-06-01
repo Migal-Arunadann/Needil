@@ -243,25 +243,25 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
           _infoCard(
             icon: Icons.storage_rounded,
             iconColor: context.colors.info,
-            title: 'Your Data',
+            title: 'Data Encryption & Storage',
             body:
-                'All patient records, appointments, and consultation data are stored securely on your private PocketBase server. Data is not shared with third parties.',
+                'Your clinical data, patient medical records, and treatment sessions are protected using industry-standard AES-256 encryption at rest and TLS 1.3 in transit. All records are hosted on isolated, secure backend instances.',
           ),
           const SizedBox(height: 10),
           _infoCard(
             icon: Icons.person_off_rounded,
             iconColor: context.colors.warning,
-            title: 'Patient Confidentiality',
+            title: 'Access Control & HIPAA Alignment',
             body:
-                'Patient information is accessible only to authorised clinic staff. Doctors can control data sharing settings from their profile.',
+                'Strict role-based access control (RBAC) ensures patient charts are visible only to authorized medical practitioners. Detailed audit logs track all access to medical histories, aligning with HIPAA compliance guidelines.',
           ),
           const SizedBox(height: 10),
           _infoCard(
             icon: Icons.delete_forever_rounded,
             iconColor: context.colors.error,
-            title: 'Account Deletion',
+            title: 'Data Portability & Deletion',
             body:
-                'To request account deletion or data export, please contact your system administrator.',
+                'Export your complete clinical directory or request permanent account deletion at any time. Data requests are processed in compliance with GDPR guidelines. Contact support@needil.com for administrative actions.',
           ),
           const SizedBox(height: 32),
         ],

@@ -162,6 +162,10 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     String? email,
     int? age,
     String? existingPatientId, // If set, skip patient creation and reuse this ID
+    String? reference,
+    List<String>? familyMembers,
+    String? howDidYouHear,
+    String? photoPath,
   }) async {
     try {
       final schedulingService = _ref.read(schedulingServiceProvider);
@@ -192,6 +196,10 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
           occupation: occupation,
           email: email,
           age: age,
+          reference: reference,
+          familyMembers: familyMembers,
+          howDidYouHear: howDidYouHear,
+          photoPath: photoPath,
         );
         patientId = patient.id;
       }

@@ -47,6 +47,7 @@ class WhatsAppHelper {
   /// [clinicName]      — optional clinic / doctor name to personalise messages  
   /// [isEnded]         — when true, shows Follow-up; hides Reminder and Reschedule
   /// [isMissed]        — when true, shows missed-schedule messaging options
+  /// [clinicLocation]  — optional clinic Google Maps link or address for location sharing
   static Future<void> showMenu({
     required BuildContext context,
     required String phone,
@@ -56,6 +57,7 @@ class WhatsAppHelper {
     String? clinicName,
     bool isEnded = false,
     bool isMissed = false,
+    String? clinicLocation,
   }) {
     return showModalBottomSheet(
       context: context,
@@ -69,6 +71,7 @@ class WhatsAppHelper {
         clinicName: clinicName,
         isEnded: isEnded,
         isMissed: isMissed,
+        clinicLocation: clinicLocation,
       ),
     );
   }
@@ -82,6 +85,7 @@ class _WhatsAppSheet extends StatefulWidget {
   final String? clinicName;
   final bool isEnded;
   final bool isMissed;
+  final String? clinicLocation;
 
   const _WhatsAppSheet({
     required this.phone,
@@ -91,6 +95,7 @@ class _WhatsAppSheet extends StatefulWidget {
     this.clinicName,
     this.isEnded = false,
     this.isMissed = false,
+    this.clinicLocation,
   });
 
   @override
@@ -136,6 +141,9 @@ class _WhatsAppSheetState extends State<_WhatsAppSheet> {
     return 'Hello $_firstName,\n\nWe noticed you missed your scheduled appointment $date $time at $_clinic.\n\nWe hope everything is alright. Please let us know if you would like to reschedule to a convenient time.\n\nTake care! 🙏';
   }
 
+  String get _locationMsg =>
+      'Hello $_firstName 👋,\n\nHere is the location of $_clinic:\n\n📍 ${widget.clinicLocation}\n\nSee you soon! 🙏';
+
   Future<void> _send(String message) async {
     setState(() => _launching = true);
     final ok = await WhatsAppHelper._launch(widget.phone, message);
@@ -163,6 +171,7 @@ class _WhatsAppSheetState extends State<_WhatsAppSheet> {
     final showReschedule = !widget.isEnded && !widget.isMissed;
     final showFollowUp = widget.isEnded;
     final showMissed = widget.isMissed;
+    final showLocation = widget.clinicLocation != null && widget.clinicLocation!.isNotEmpty;
 
     return Container(
       decoration: BoxDecoration(
@@ -268,6 +277,16 @@ class _WhatsAppSheetState extends State<_WhatsAppSheet> {
                 title: 'Missed Appointment',
                 subtitle: 'Inform about the missed appointment & offer reschedule',
                 onTap: () => _send(_missedMsg),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (showLocation) ...[
+              _option(
+                icon: Icons.location_on_rounded,
+                color: const Color(0xFF1A73E8),
+                title: 'Send Clinic Location',
+                subtitle: 'Share Google Maps link to reach the clinic',
+                onTap: () => _send(_locationMsg),
               ),
               const SizedBox(height: 10),
             ],

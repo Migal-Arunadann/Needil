@@ -1718,6 +1718,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       case SessionStatus.completed:   return context.colors.success;
       case SessionStatus.missed:      return context.colors.warning;
       case SessionStatus.cancelled:   return context.colors.error;
+      case SessionStatus.paused:       return context.colors.info;
     }
   }
 

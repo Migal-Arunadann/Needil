@@ -15,8 +15,10 @@ import 'privacy_security_screen.dart';
 import 'about_screen.dart';
 import 'manage_doctors_screen.dart';
 import 'manage_receptionist_screen.dart';
+import 'manage_photos_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import '../../../core/theme/theme_provider.dart';
+import '../../../core/widgets/responsive_wrapper.dart';
 
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -110,147 +112,186 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return completed / fields.length;
   }
 
+  Widget _buildSettingsRightColumn(BuildContext context, AuthState auth, bool isClinic) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (isClinic) ...[
+          // CLINIC ACCOUNT SECTIONS
+
+          _sectionHeader('Clinic Details', Icons.business_rounded),
+          const SizedBox(height: 10),
+          _buildClinicDetailsCard(),
+          const SizedBox(height: 10),
+
+          // ── Manage Photos tile ──
+          _buildManagePhotosTile(),
+          const SizedBox(height: 24),
+
+          _sectionHeader('Staff Management', Icons.manage_accounts_rounded),
+          const SizedBox(height: 10),
+
+          // ── Manage Doctors button ──
+          _staffManagementTile(
+            icon: Icons.medical_services_rounded,
+            iconColor: context.colors.primary,
+            title: 'Manage Doctors',
+            subtitle: 'View schedules, set restrictions, reset passwords',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ManageDoctorsScreen()),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // ── Manage Receptionist button ──
+          _staffManagementTile(
+            icon: Icons.support_agent_rounded,
+            iconColor: context.colors.info,
+            title: 'Manage Receptionist',
+            subtitle: 'Edit details, toggle access, reset passwords',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ManageReceptionistScreen()),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+        ] else if (auth.role == UserRole.doctor) ...[
+          // DOCTOR ACCOUNT SECTIONS
+
+          _sectionHeader('Personal Details', Icons.person_outline_rounded),
+          const SizedBox(height: 10),
+          _buildDoctorDetailsCard(),
+          const SizedBox(height: 24),
+
+          // Read-only clinic info
+          _sectionHeader('My Clinic', Icons.business_rounded),
+          const SizedBox(height: 10),
+          _buildDoctorClinicInfo(),
+          const SizedBox(height: 24),
+        ] else if (auth.role == UserRole.receptionist) ...[
+          // RECEPTIONIST ACCOUNT SECTIONS
+
+          _sectionHeader('Staff Details', Icons.support_agent_rounded),
+          const SizedBox(height: 10),
+          _buildReceptionistDetailsCard(),
+          const SizedBox(height: 24),
+        ],
+
+        // ── General Settings ──
+        _sectionHeader('Settings', Icons.tune_rounded),
+        const SizedBox(height: 10),
+        _settingsTile(
+          icon: Icons.notifications_outlined,
+          title: 'Notifications',
+          subtitle: 'Manage notification preferences',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _settingsTile(
+          icon: Icons.palette_outlined,
+          title: 'Theme',
+          subtitle: 'Choose system default, light or dark mode',
+          onTap: () => _showThemePicker(context),
+        ),
+        const SizedBox(height: 8),
+        _settingsTile(
+          icon: Icons.lock_outline_rounded,
+          title: 'Privacy & Security',
+          subtitle: 'Update password and security settings',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const PrivacySecurityScreen()),
+          ),
+        ),
+        const SizedBox(height: 8),
+        _settingsTile(
+          icon: Icons.info_outline_rounded,
+          title: 'About',
+          subtitle: 'App version and legal information',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AboutScreen()),
+          ),
+        ),
+        const SizedBox(height: 24),
+
+        // ── Account / Sign Out ──
+        _sectionHeader('Account', Icons.shield_rounded),
+        const SizedBox(height: 10),
+        AppButton(
+          label: 'Sign Out',
+          isOutlined: true,
+          icon: Icons.logout_rounded,
+          onPressed: _confirmSignOut,
+        ),
+        const SizedBox(height: 40),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final isClinic = auth.role == UserRole.clinic;
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
 
     return Scaffold(
       backgroundColor: context.colors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Header ──
-              Row(
-                children: [
-                  const SizedBox(width: 14),
-                  Text('Profile', style: context.textStyles.h2),
+        child: ResponsiveWrapper(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Header ──
+                Row(
+                  children: [
+                    const SizedBox(width: 14),
+                    Text('Profile', style: context.textStyles.h2),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                if (isDesktop)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left Column: Profile Card + Completion
+                      Expanded(
+                        flex: 2,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildProfileHero(isClinic),
+                            const SizedBox(height: 24),
+                            _buildProfileCompletion(isClinic),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      // Right Column: Settings Sections
+                      Expanded(
+                        flex: 3,
+                        child: _buildSettingsRightColumn(context, auth, isClinic),
+                      ),
+                    ],
+                  )
+                else ...[
+                  // Mobile: Stacks Vertically
+                  _buildProfileHero(isClinic),
+                  const SizedBox(height: 24),
+                  _buildProfileCompletion(isClinic),
+                  const SizedBox(height: 24),
+                  _buildSettingsRightColumn(context, auth, isClinic),
                 ],
-              ),
-              const SizedBox(height: 24),
-
-              // ── Profile Card (Hero) ──
-              _buildProfileHero(isClinic),
-              const SizedBox(height: 24),
-
-              // ── Profile Completion ──
-              _buildProfileCompletion(isClinic),
-              const SizedBox(height: 24),
-
-              if (isClinic) ...[
-                // CLINIC ACCOUNT SECTIONS
-
-                _sectionHeader('Clinic Details', Icons.business_rounded),
-                const SizedBox(height: 10),
-                _buildClinicDetailsCard(),
-                const SizedBox(height: 24),
-
-                _sectionHeader('Staff Management', Icons.manage_accounts_rounded),
-                const SizedBox(height: 10),
-
-                // ── Manage Doctors button ──
-                _staffManagementTile(
-                  icon: Icons.medical_services_rounded,
-                  iconColor: context.colors.primary,
-                  title: 'Manage Doctors',
-                  subtitle: 'View schedules, set restrictions, reset passwords',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ManageDoctorsScreen()),
-                  ),
-                ),
-                const SizedBox(height: 10),
-
-                // ── Manage Receptionist button ──
-                _staffManagementTile(
-                  icon: Icons.support_agent_rounded,
-                  iconColor: context.colors.info,
-                  title: 'Manage Receptionist',
-                  subtitle: 'Edit details, toggle access, reset passwords',
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ManageReceptionistScreen()),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-              ] else if (auth.role == UserRole.doctor) ...[
-                // DOCTOR ACCOUNT SECTIONS
-
-                _sectionHeader('Personal Details', Icons.person_outline_rounded),
-                const SizedBox(height: 10),
-                _buildDoctorDetailsCard(),
-                const SizedBox(height: 24),
-
-                // Read-only clinic info
-                _sectionHeader('My Clinic', Icons.business_rounded),
-                const SizedBox(height: 10),
-                _buildDoctorClinicInfo(),
-                const SizedBox(height: 24),
-              ] else if (auth.role == UserRole.receptionist) ...[
-                // RECEPTIONIST ACCOUNT SECTIONS
-
-                _sectionHeader('Staff Details', Icons.support_agent_rounded),
-                const SizedBox(height: 10),
-                _buildReceptionistDetailsCard(),
-                const SizedBox(height: 24),
               ],
-
-              // ── General Settings ──
-              _sectionHeader('Settings', Icons.tune_rounded),
-              const SizedBox(height: 10),
-              _settingsTile(
-                icon: Icons.notifications_outlined,
-                title: 'Notifications',
-                subtitle: 'Manage notification preferences',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const NotificationsScreen()),
-                ),
-              ),
-              const SizedBox(height: 8),
-              _settingsTile(
-                icon: Icons.palette_outlined,
-                title: 'Theme',
-                subtitle: 'Choose system default, light or dark mode',
-                onTap: () => _showThemePicker(context),
-              ),
-              const SizedBox(height: 8),
-              _settingsTile(
-                icon: Icons.lock_outline_rounded,
-                title: 'Privacy & Security',
-                subtitle: 'Update password and security settings',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PrivacySecurityScreen()),
-                ),
-              ),
-              const SizedBox(height: 8),
-              _settingsTile(
-                icon: Icons.info_outline_rounded,
-                title: 'About',
-                subtitle: 'App version and legal information',
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AboutScreen()),
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // ── Account / Sign Out ──
-              _sectionHeader('Account', Icons.shield_rounded),
-              const SizedBox(height: 10),
-              AppButton(
-                label: 'Sign Out',
-                isOutlined: true,
-                icon: Icons.logout_rounded,
-                onPressed: _confirmSignOut,
-              ),
-              const SizedBox(height: 40),
-            ],
+            ),
           ),
         ),
       ),
@@ -452,7 +493,90 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _infoRow('Email', clinic?.email?.isNotEmpty == true ? clinic!.email! : 'Not set'),
       _infoRow('Clinic ID', clinic?.clinicId ?? '—', copyable: true),
       _infoRow('Bed Count', '${clinic?.bedCount ?? 0}'),
+      _infoRow('Plan', (clinic?.subscriptionTier ?? 'base').toUpperCase()),
     ]);
+  }
+
+  // ════════════════════════════════════════════════════════════
+  //  CLINIC ACCOUNT: Manage Photos Tile
+  // ════════════════════════════════════════════════════════════
+
+  Widget _buildManagePhotosTile() {
+    final clinic = ref.read(authProvider).clinic;
+    final used = clinic?.photosUsed ?? 0;
+    final limit = clinic?.photoLimit ?? 2000;
+    final progress = limit > 0 ? (used / limit).clamp(0.0, 1.0) : 0.0;
+    final progressColor = progress > 0.9
+        ? context.colors.error
+        : progress > 0.75
+            ? context.colors.warning
+            : context.colors.success;
+
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const ManagePhotosScreen()),
+        );
+        if (mounted) setState(() {}); // Refresh quota display
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: context.colors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: progressColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.photo_library_rounded, color: progressColor, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Manage Photos', style: context.textStyles.label.copyWith(fontSize: 14)),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            backgroundColor: context.colors.border,
+                            valueColor: AlwaysStoppedAnimation(progressColor),
+                            minHeight: 4,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$used / $limit',
+                        style: context.textStyles.caption.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: progressColor,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(Icons.arrow_forward_ios_rounded, size: 14, color: context.colors.textHint),
+          ],
+        ),
+      ),
+    );
   }
 
 

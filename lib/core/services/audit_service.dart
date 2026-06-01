@@ -1,4 +1,6 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketbase/pocketbase.dart';
+import '../providers/pocketbase_provider.dart';
 
 /// Actions that can be audited.
 enum AuditAction {
@@ -17,6 +19,9 @@ enum AuditAction {
   updateSharingPrefs,
   consentGiven,
   consentWithdrawn,
+  markArrived,
+  cancelAppointment,
+  rescheduleAppointment,
 }
 
 /// Audit logging service for compliance tracking.
@@ -61,4 +66,24 @@ class AuditService {
       return [];
     }
   }
+
+  /// Get audit logs for a specific receptionist.
+  Future<List<Map<String, dynamic>>> getReceptionistLogs(String receptionistId, {int perPage = 50}) async {
+    try {
+      final result = await pb.collection('audit_logs').getList(
+        filter: 'user_id = "$receptionistId" && user_role = "receptionist"',
+        sort: '-created',
+        perPage: perPage,
+      );
+      return result.items.map((r) => r.toJson()).toList();
+    } catch (_) {
+      return [];
+    }
+  }
 }
+
+/// Riverpod provider for [AuditService].
+final auditServiceProvider = Provider<AuditService>((ref) {
+  final pb = ref.read(pocketbaseProvider);
+  return AuditService(pb);
+});

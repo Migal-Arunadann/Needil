@@ -9,6 +9,7 @@ import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/clinic_registration/clinic_step1_screen.dart';
 import 'features/superadmin/screens/superadmin_shell.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'core/services/notification_service.dart';
 
 
 /// Global navigator key so the timer service can push dialogs from anywhere.
@@ -32,6 +33,9 @@ class _PmsAppState extends ConsumerState<PmsApp> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep notification service alive across the entire app session
+    ref.watch(notificationServiceProvider);
+
     final authState = ref.watch(authProvider);
 
     return MaterialApp(
