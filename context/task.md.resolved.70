@@ -1,0 +1,11 @@
+# Implementation Tasks
+
+- `[x]` Update `treatment_service.dart` to set first session to `waiting` instead of `in_progress` when generated.
+- `[x]` Update `appointment_list_screen.dart`:
+  - `[x]` Determine `activeConsultationPatientIds` and hide those patients' sessions from the "Treatments" tab.
+  - `[x]` Change "Appointment Ended" button label to "End Consultation".
+  - `[x]` Add `DateTime.now()` boundary check against doctor working hours inside `_markArrived()`.
+- `[x]` Update `create_appointment_screen.dart`:
+  - `[x]` Inside Walk-in submission (`_forceWalkIn`), fetch doctor's working schedule and validate `DateTime.now()` before proceeding.
+- `[x]` Update `available_slots_screen.dart`:
+  - `[x]` Modify date disabling logic from `date.isAfter(now)` to `date.isAfter(earliest_today)` to reliably block tomorrow.

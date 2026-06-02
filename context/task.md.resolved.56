@@ -1,0 +1,23 @@
+# Appointment Workflow Overhaul
+
+## Bug Fix 1: Double-Booking False Positives
+- [x] Fix [findExistingAppointment](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#208-224) — confirmed it only matches `status=scheduled`
+- [x] Updated service comment for clarity
+
+## Bug Fix 2: Appointment Ending Prematurely → Start Consultation
+- [x] Add `consultation_start_time` field to [appointment_model.dart](file:///c:/App%20Development/PMS/lib/features/appointments/models/appointment_model.dart)
+- [x] Create PocketBase migration script
+- [x] Add [findOngoingConsultation](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#273-288), [createConsultation](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#289-301), [setConsultationStartTime](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#302-311), [isConsultationCompleted](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#312-324) to [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart)
+- [x] Replace "Appointment Ended" with "Start Consultation" in [_ScheduleCard](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#643-678)
+- [x] Add [_startConsultation](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#301-351) method in [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart)
+- [x] "Appointment Ended" shows only after consultation has been started
+- [x] Verify with `flutter analyze` — 0 errors
+
+## Bug Fix 3: Consultation Form Validation
+- [x] Make conversational/medical fields mandatory in [ConsultationScreen](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#16-35)
+- [x] Make consent and safety fields mandatory in [ConsultationScreen](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#16-35)
+
+## Bug Fix 4: Session Date and "Session 0" Rendering
+- [x] Fix [record_session_screen.dart](file:///c:/App%20Development/PMS/lib/features/treatments/screens/record_session_screen.dart) parsing PocketBase ISO string dates directly
+- [x] Fix [ConsultationScreen](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#16-35) local timezone parsing leading to formatting issues
+- [x] Identify "Session 0" cause (Missing `session_number` field in PocketBase schema)

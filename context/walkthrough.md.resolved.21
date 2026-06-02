@@ -1,0 +1,50 @@
+# Appointment Workflow Overhaul — Walkthrough
+
+## Changes Made
+
+### 1. Double-Booking Detection Fix
+- [findExistingAppointment](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#208-224) already correctly filters by `status = "scheduled"` — cancelled appointments won't match
+- Added clearer JSDoc comments on the method
+- The phone debounce check will only match truly active (scheduled) appointments for the same doctor
+
+### 2. Start Consultation Workflow (replaces premature "Appointment Ended")
+
+**Before:** Patient details filled → card shows "Appointment Ended" immediately
+
+**After (new flow):**
+```
+Scheduled → Patient Arrived → Fill Details → Start Consultation → [Consultation Form] → Appointment Ended
+```
+
+- After patient details are filled, card now shows **"Start Consultation"** button
+- Clicking it:
+  1. Checks for existing ongoing consultation for the patient
+  2. If none → creates a new one
+  3. Records `consultation_start_time` on the appointment
+  4. Navigates to the ConsultationScreen
+- **"Appointment Ended"** only appears after the consultation has been started (`consultationStartTime != null`)
+
+## Files Modified
+
+| File | What Changed |
+|------|-------------|
+| [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart) | Added [_startConsultation()](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#301-351), `onStartConsultation` prop to [_ScheduleCard](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#643-678), split button logic |
+| [appointment_model.dart](file:///c:/App%20Development/PMS/lib/features/appointments/models/appointment_model.dart) | Added `consultationStartTime` field |
+| [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart) | Added [findOngoingConsultation](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#273-288), [createConsultation](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#289-301), [setConsultationStartTime](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#302-311), [isConsultationCompleted](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#312-324) |
+| [add_consultation_start_time.dart](file:///c:/App%20Development/PMS/scripts/add_consultation_start_time.dart) | PocketBase migration script (reference) |
+
+## ⚠️ Required: PocketBase Admin Step
+
+You need to **manually add a `consultation_start_time` field** to the [appointments](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#149-164) collection in PocketBase admin:
+
+1. Go to PocketBase admin → Collections → [appointments](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#149-164)
+2. Click the edit (pencil) icon
+3. Add a new field:
+   - **Name:** `consultation_start_time`
+   - **Type:** Date
+   - **Required:** No
+4. Save the collection
+
+## Verification
+- ✅ Dart analysis: **0 errors** across all 5 modified files
+- ✅ No breaking changes to existing API

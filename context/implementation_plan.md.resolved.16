@@ -1,0 +1,98 @@
+# Phase 32: Schedule Overhaul & Double-Booking Prevention
+
+Major overhaul of the Appointments screen, booking flow, and schedule card interactions based on 8 detailed user requirements.
+
+## User Review Required
+
+> [!IMPORTANT]
+> This is a large overhaul that will **completely rewrite** [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart) (~667 lines) and significantly modify [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart) (~695 lines), [patient_info_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/patient_info_screen.dart) (310 lines), and [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart). Please review carefully.
+
+> [!WARNING]
+> The phone number will become the **unique patient identifier** for double-booking prevention. Patients with no phone number stored will not trigger duplicate checks.
+
+## Proposed Changes
+
+### Component 1: Double-Booking Prevention & Auto-Fill
+
+#### [MODIFY] [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart)
+
+**Phone-based duplicate detection (Call-By):**
+- Add an `onChanged` listener to `_phoneCtrl` that debounces (500ms) and queries PocketBase for:
+  1. **Existing patient record** matching phone → prompt "Patient already exists. Auto-fill details?" → pre-fill name, DOB, address, etc.
+  2. **Existing scheduled appointment** for the same doctor on the same/selected date → show warning dialog: "An appointment is already scheduled for this patient: [Date] at [Time]. Replace it?" with option to cancel or replace.
+- For Walk-In: same phone check logic applies — warn if patient already has scheduled appointment today.
+
+#### [MODIFY] [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart)
+
+- Add `Future<PatientModel?> findPatientByPhone(String phone, String doctorId)` — queries patients collection by phone.
+- Add `Future<AppointmentModel?> findExistingAppointment(String phone, String doctorId, String date)` — queries appointments by `patient_phone` + doctor + date + status=scheduled.
+
+---
+
+### Component 2: Schedule Cards Split (Consultation vs Session)
+
+#### [MODIFY] [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart)
+
+**Complete rewrite of the list body:**
+- Replace the single flat list with **two collapsible sections**:
+  1. **📋 Consultations** — appointments where `type == call_by || type == walk_in`
+  2. **💊 Sessions** — appointments where `type == session`
+- Each section has its own header with count badge and a `ListView` of cards.
+- Both sections are visible simultaneously (no tabs), separated by a styled divider.
+
+---
+
+### Component 3: Redesigned Schedule Cards
+
+#### [MODIFY] [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart)
+
+**New card layout with rich interactions:**
+
+- **Header row**: Patient name, type badge (Call-By / Walk-In / Session), scheduled time.
+- **Late indicator**: If `status == scheduled` AND current time > appointment time on the same day → show pulsing red "⏰ Patient Late" badge.
+- **"Patient Arrived" button**: Large, prominent green button visible when `status == scheduled`. On tap:
+  - Records `check_in_time` = `DateTime.now()`.
+  - Updates status to `in_progress`.
+  - Refreshes the card to reveal the "Fill Details" button.
+  - For Walk-In: the initial form submission already serves as check-in, so this button is **hidden** for walk-ins (walk-in form submission = check-in).
+- **"Fill Details" button**: Only visible after patient has arrived (status=in_progress, check_in_time set). Tapping opens [PatientInfoScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/patient_info_screen.dart#13-21).
+- **"Appointment Ended" button**: Only visible after patient details are filled (i.e., `patientId` is linked/non-empty). On tap:
+  - Records `check_out_time` = `DateTime.now()`.
+  - Updates status to `completed`.
+- **Cancel via Long Press**: Remove the inline cancel icon. Instead, `onLongPress` on the card shows a confirmation dialog to cancel the appointment.
+- **Tap to Patient Profile**: Regular `onTap` on the card navigates to the patient's profile in the Patients tab (if `patientId` is linked).
+
+---
+
+### Component 4: Walk-In Arrival Logic
+
+#### [MODIFY] [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart)
+
+- Walk-in appointments already have `check_in_time` set on creation and `status=in_progress`.
+- So the "Patient Arrived" button is automatically **not shown** for walk-ins.
+- Walk-ins only need the "Appointment Ended" button (same mechanism).
+
+---
+
+### Component 5: Patient Profile Navigation
+
+#### [MODIFY] [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart)
+
+- On card tap: If `patientId` is set, navigate to `/patient-profile` with the patient record.
+- If `patientId` is not set (call-by before arrival), show a snackbar: "Patient hasn't arrived yet."
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- Run `flutter analyze` to confirm zero errors.
+- Hot-reload and test each card state transition manually.
+
+### Manual Verification
+1. **Call-By flow**: Create call-by → see card with "Patient Arrived" button → tap Arrived → see "Fill Details" → fill form → see "Appointment Ended" → tap to complete.
+2. **Walk-In flow**: Create walk-in → card shows directly with "Appointment Ended" button (check_in already recorded).
+3. **Double-booking**: Enter same phone twice for call-by → see warning with existing appointment details.
+4. **Late indicator**: Create appointment for a past time slot today → verify red "Patient Late" badge appears.
+5. **Long-press cancel**: Long-press a scheduled card → confirm cancel dialog.
+6. **Tap navigation**: Tap a linked card → verify it opens PatientProfileScreen.

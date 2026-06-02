@@ -1,0 +1,68 @@
+# Appointment Workflow Overhaul — Walkthrough
+
+## Changes Made
+
+### 1. Double-Booking Detection Fix
+- [findExistingAppointment](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#208-224) already correctly filters by `status = "scheduled"` — cancelled appointments won't match
+- Added clearer JSDoc comments on the method
+- The phone debounce check will only match truly active (scheduled) appointments for the same doctor
+
+### 2. Start Consultation Workflow (replaces premature "Appointment Ended")
+
+**Before:** Patient details filled → card shows "Appointment Ended" immediately
+
+**After (new flow):**
+```
+Scheduled → Patient Arrived → Fill Details → Start Consultation → [Consultation Form] → Appointment Ended
+```
+
+- After patient details are filled, card now shows **"Start Consultation"** button
+- Clicking it:
+  1. Checks for existing ongoing consultation for the patient
+  2. If none → creates a new one
+  3. Records `consultation_start_time` on the appointment
+  4. Navigates to the ConsultationScreen
+- **"Appointment Ended"** only appears after the consultation has been started (`consultationStartTime != null`)
+
+## Files Modified
+
+| File | What Changed |
+|------|-------------|
+| [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart) | Added [_startConsultation()](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#301-351), `onStartConsultation` prop to [_ScheduleCard](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#643-678), split button logic |
+| [appointment_model.dart](file:///c:/App%20Development/PMS/lib/features/appointments/models/appointment_model.dart) | Added `consultationStartTime` field |
+| [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart) | Added [findOngoingConsultation](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#273-288), [createConsultation](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#289-301), [setConsultationStartTime](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#302-311), [isConsultationCompleted](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#312-324) |
+| [add_consultation_start_time.dart](file:///c:/App%20Development/PMS/scripts/add_consultation_start_time.dart) | PocketBase migration script (reference) |
+
+## ⚠️ Required: PocketBase Admin Step
+
+You need to **manually add a `consultation_start_time` field** to the `appointments` collection in PocketBase admin:
+
+1. Go to PocketBase admin → Collections → `appointments`
+2. Click the edit (pencil) icon
+3. Add a new field:
+   - **Name:** `consultation_start_time`
+   - **Type:** Date
+   - **Required:** No
+4. Save the collection
+
+## Verification
+- ✅ Dart analysis: **0 errors** across all 5 modified files
+- ✅ No breaking changes to existing API
+
+## 3. Consultation Form Overhauls (Phase 1-3)
+- Replaced basic free-text [AppTextField](file:///c:/App%20Development/PMS/lib/core/widgets/app_text_field.dart#7-112) inputs with structured [Dropdown](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#986-1013) inputs for:
+  - **Diet Pattern**
+  - **Sleep Duration** & **Sleep Quality**
+  - **Exercise / Physical Activity**
+  - **Stress / Mental Health Notes**
+- Created custom [_buildDropdown](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#986-1013) and [_buildRadioGroup](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#1014-1061) widget helpers within [consultation_screen.dart](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart) to handle state properly.
+- Split **Addictions** into four Yes/No Radio groups (Smoking, Alcohol, Tobacco Chewing, Recreational Drugs). These are concatenated into the single `addictions` string payload upon submission to avoid PocketBase schema changes.
+- Changed **Pregnancy Status** to a Yes/No Radio group and made it conditionally hidden for male patients.
+- Added a `TextInputFormatter` inline for the **BP Level** field to automatically insert a `/` character after the user types 2 or 3 digits.
+- Defaulted the **Consultation Fee** toggle (`_charged`) to ON.
+- Fixed the issue in local photo viewing where a network request broke thumbnail rendering. Implemented `kIsWeb ? Image.network() : Image.file()` check for local image picks.
+
+## 4. Treatment Plan & Smart Scheduling Update (Phase 4)
+- Modified `TreatmentService.createSmartTreatmentPlan`:
+- The service now loops through sequential days but forcefully skips any day that is not listed in the Doctor's `workingDays` configuration.
+- Checks the `appointments` collection directly during slot generation rather than `sessions` to ensure both consultations AND treatments aren't overlapped beyond the clinic's maximum bed limit.

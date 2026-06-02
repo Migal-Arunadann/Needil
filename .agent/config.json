@@ -1,0 +1,4 @@
+{
+  "workflows": "./workflows",
+  "rules": "./rules"
+}

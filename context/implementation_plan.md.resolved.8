@@ -1,0 +1,91 @@
+# Comprehensive Consultation & Session Module Plan
+
+This plan outlines the architecture for the new Consultation Form and the subsequent Treatment Plan creation workflow.
+
+## User Action Required (PocketBase Changes)
+
+Please open your PocketBase Admin panel and make the following schema changes to the collections:
+
+### 1. [consultations](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#165-179) collection
+Add the following fields:
+- `chief_complaint` (Text)
+- `medical_history` (Text)
+- `past_illnesses` (Text)
+- `current_medications` (Text)
+- `allergies` (Text)
+- `chronic_diseases` (Text)
+- `diet_pattern` (Text)
+- `sleep_quality` (Text)
+- `exercise_level` (Text)
+- `addictions` (Text) // Smoking/alcohol
+- `stress_level` (Text)
+- `pregnancy_status` (Text) // For females
+- `consent_given` (Bool)
+
+### 2. [sessions](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#196-214) collection
+Add the following fields:
+- `vitals_bp` (Text)
+- `vitals_pulse` (Number)
+- `session_notes` (Text) // What happened during the session
+- `photos` (File, Multiple) // To upload session-specific records/images
+- `scheduled_time` (Date/Time) // The specific time slot the patient booked
+
+*(Once you add these, let me know, and I will proceed with the code!)*
+
+## Proposed Code Changes
+
+### Data Models
+- **[MODIFY] [ConsultationModel](file:///c:/App%20Development/PMS/lib/features/consultations/models/consultation_model.dart#3-133)**: Add all the new properties listed above (`chiefComplaint`, `medicalHistory`, etc.).
+- **[MODIFY] [SessionModel](file:///c:/App%20Development/PMS/lib/features/treatments/models/session_model.dart#5-102)**: Add `vitalsBp`, `vitalsPulse`, `sessionNotes`, `photos`, and `scheduledTime`.
+
+### Consultation Screen (UI)
+- **[MODIFY] [ConsultationScreen](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#10-25)**: 
+  - Restructure into tabs or a long scrollable form with sections: Conversations, Lifestyle & Habits, Consent & Safety, and Charge.
+  - Implement image compression before upload (using `flutter_image_compress` or similar logic) to save database space.
+  - Add a "Create Treatment Plan" button that appears upon successful consultation submission.
+
+### Treatment Plan & Scheduling (UI & Logic)
+- **[NEW] [CreateTreatmentPlanScreen](file:///c:/App%20Development/PMS/lib/features/treatments/screens/create_treatment_plan_screen.dart#12-29)**:
+  - Opened after a consultation.
+  - Form: Select Treatment Type (Dropdown from doctor's treatments), Total Sessions, Interval Days, Session Fee (auto-filled from treatment defaults), and Time Slot preference.
+  - **Scheduling Logic**: When saving, the app will iterate `Total Sessions` times, adding `Interval Days` to the start date for each iteration. It will check the doctor's schedule for the preferred time slot on those calculated dates. If the slot is filled (exceeding bed count), it will prompt the user or automatically find the next available slot on that day.
+  - Create the [TreatmentPlan](file:///c:/App%20Development/PMS/lib/features/treatments/models/treatment_plan_model.dart#5-100) record, and concurrently create all the [Session](file:///c:/App%20Development/PMS/lib/features/treatments/models/session_model.dart#5-102) records linked to that plan.
+
+### Session Management (UI)
+- **[MODIFY] [SessionListScreen](file:///c:/App%20Development/PMS/lib/features/treatments/screens/session_list_screen.dart#10-18) / `SessionDetailScreen`**:
+  - Allow clicking a specific session to open a detail view.
+  - In the detail view: Add forms to record `vitals`, upload compressed `photos`, and write `session_notes`.
+  - For sessions > 1, display a strictly read-only view of the *previous* session's notes for context.
+
+## Verification Plan
+1. **Schema Sync**: Verify PocketBase fields map correctly to Dart models via `fromJson` / [toJson](file:///c:/App%20Development/PMS/lib/features/consultations/models/consultation_model.dart#108-132).
+2. **Consultation Flow**: Submit a massive consultation form -> check PB that all fields and compressed photos saved correctly.
+3. **Scheduling Algorithm**: Create a 5-session plan with 2-day intervals -> check PB that exactly 5 sessions are created on the correct dates at the requested times.
+4. **Session Details**: Click a session, add notes and vitals, save -> verify they appear in the UI and PB. Open the *next* session and ensure the previous session's notes are visible.
+
+## Phase 21: Consultation & Treatment Architecture Overhaul
+
+This phase redefines the hierarchy of treatments and consultations, nesting Treatment Plans (and their generated Sessions) firmly inside the Consultation object they originate from. It also expands the base Patient data model.
+
+### 1. Patient Model Expansion
+- **PocketBase Schema Update**: Instruct the user to add `gender` (Select: Male/Female/Other), `occupation` (Text), and `email` (Email) to the [patients](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#132-148) collection.
+- **Flutter Model Update**: Modify [PatientModel](file:///c:/App%20Development/PMS/lib/features/patients/models/patient_model.dart#3-71) to parse and serialize these new fields.
+- **Form Updates**: Inject the 3 new fields into the Walk-In booking form ([CreateAppointmentScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart#15-24)) and the Basic Details tab inside [PatientProfileScreen](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart#11-19). 
+  - *Note*: Ensure the form handles Age calculation from Date of Birth, or allows direct Age entry if needed.
+
+### 2. Profile UI Restructuring
+- Rename the 'History' tab in [PatientProfileScreen](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart#11-19) to 'Treatments'.
+- **Treatments Tab Design**: Instead of a flat timeline, list **Consultations** as root expandable cards. 
+- Clicking a Consultation card opens [ConsultationScreen](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#10-25) in **View Mode**.
+
+### 3. Consultation Screen Deep Dive (View Mode)
+- **Read-Only Switch**: When opened from history, [ConsultationScreen](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#10-25) will disable text field editing but allow reviewing the vitals and logged conversational history.
+- **Embedded Sessions**: Below the consultation details, the UI will query and render associated [sessions](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#196-214) that belong to that consultation. 
+- **Session Interactivity**: Each rendered session will be clickable, popping up the [RecordSessionScreen](file:///c:/App%20Development/PMS/lib/features/treatments/screens/record_session_screen.dart#11-20) for the doctor to add vitals and upload photos.
+- **Missing Plan Logic**: If a Consultation has 0 sessions (meaning the doctor clicked "Later" upon creation), display a bold **Create Treatment Plan** button inside the Consultation View so the doctor can resume scheduling sessions at any point in the future.
+
+### Verification Plan
+- Create a Walk-In patient with the new details (Gender, Email, Occupation).
+- Book a Consultation, click "Later" on the Treatment Plan prompt.
+- Open the resulting Consultation from the Treatments tab, verify the "Create Treatment Plan" button exists.
+- Click it, schedule sessions, and verify the sessions populate inside the Consultation View and are individually clickable for recording.

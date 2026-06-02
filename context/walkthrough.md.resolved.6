@@ -1,0 +1,37 @@
+# Implementation Complete (Phase 8)
+
+The UI restructuring and appointment logic fixes requested in the latest phase are fully implemented.
+
+### 5-Tab Layout Architecture
+- Created [MainLayout](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/main_layout.dart#12-18) using standard `BottomNavigationBar`.
+- Added 5 tabs: **Home, Appointments, Analytics, Patients, Settings**.
+- Reconfigured AppRouter so the `/dashboard` route directs users to [MainLayout](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/main_layout.dart#12-18).
+- Removed native back arrows from top-level screens (Appointments list, Settings) so they sit comfortably inside the tab bar context without trapping the user.
+
+### Standardized 30-Min Intervals
+- Created a custom [TimeSlotPicker](file:///c:/App%20Development/PMS/lib/core/widgets/time_slot_picker.dart#6-35) bottom sheet widget.
+- Unlike native clocks which allow minute-level scrolling (e.g., 09:14 AM), [TimeSlotPicker](file:///c:/App%20Development/PMS/lib/core/widgets/time_slot_picker.dart#6-35) strictly renders a grid of discrete clickable times separated by 30-minute intervals (09:00 AM, 09:30 AM).
+- Replaced `showTimePicker` in both **Clinic** and **Doctor Registration** forms to use this new widget for defining Working Schedules and breaks.
+
+### Call-By and Walk-In Availability Logic
+- The Create Appointment form no longer features a free-form Date and Time picker. Clicking "Select Slot" now directs the user to the [AvailableSlotsScreen](file:///c:/App%20Development/PMS/lib/features/scheduling/screens/available_slots_screen.dart#12-32).
+- This restricts both Walk-In and Call-By appointments to times that are explicitly valid based on the doctor's working schedule and breaks.
+- Injected a strict server-side check directly into the [AppointmentListNotifier](file:///c:/App%20Development/PMS/lib/features/appointments/providers/appointment_provider.dart#45-168) ([createCallBy](file:///c:/App%20Development/PMS/lib/features/appointments/providers/appointment_provider.dart#93-124) and [createWalkIn](file:///c:/App%20Development/PMS/lib/features/appointments/providers/appointment_provider.dart#125-152) methods) calling `SchedulingService.isSlotBooked()`. This makes it completely impossible to create a double-booked appointment, even if two receptionists select the same slot at the exact same time.
+
+### Bug Fixes
+- Addressed the Call-By Appointment freezing bug by ensuring `Navigator.pop(context)` runs on successful submission.
+
+# Home Page Redesign (Phase 9)
+
+### Minimalist Dashboards
+- Removed the 'Quick Stats' and 'Quick Actions' sections from both the **Clinic** and **Doctor** Dashboard screens.
+- The Home page is now a drastically simplified greeting indicating the active user and clinic membership.
+
+### Dynamic Interactive FAB
+- Introduced an [ExpandableFab](file:///c:/App%20Development/PMS/lib/core/widgets/expandable_fab.dart#5-20) docked at the bottom center of the [MainLayout](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/main_layout.dart#12-18), seamlessly superimposed above the 5 tabs.
+- **Form Transition**: 
+  - On the **Home Tab**, the FAB extends smoothly into a wide pill shape labeled "New Appointment".
+  - Switching to any of the other four tabs causes the FAB to instantly collapse into a standard circle icon resting neatly in the corner.
+- **Functionality**:
+  - Tapping the FAB triggers an upward slide transition revealing two options: **Call-By** and **Walk-In**.
+  - Selecting either automatically routes the user to `/appointments/create` with an argument forcing the requested appointment mode tab to be pre-selected on arrival.

@@ -1,0 +1,77 @@
+# Consultation & Treatment System Rework — Walkthrough
+
+## Changes Summary
+
+### 1. 🔧 Auto-Schedule Engine Critical Fix
+**File**: [treatment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart)
+
+**Bug**: The scheduler only checked the `appointments` table for slot conflicts, missing the `sessions` table entirely. Two treatment plans for different patients could book overlapping sessions at the same time.
+
+**Fix**:
+- Now queries **both** `appointments` AND `sessions` tables when checking slot availability
+- Uses `Math.max(appointments, sessions)` as the true occupancy count
+- If all time slots on a day are full, **automatically advances to the next working day** (up to 30 day attempts) instead of blindly defaulting to the preferred time
+- Expanded slot attempts from 8 to 16 (covering up to 8 hours) with a hard cutoff at 20:00
+
+### 2. 🚫 Delete → End Consultation
+**File**: [consultation_screen.dart](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart)
+
+- **Removed**: Delete consultation button and `_confirmDelete()` method
+- **Added**: "End Consultation" button (⏹ icon with warning color) that:
+  - Shows a detailed confirmation dialog listing consequences
+  - Cancels all `upcoming` sessions linked to the consultation
+  - Removes corresponding synced appointments from the schedule
+  - Marks associated treatment plans as `completed`
+  - Marks the consultation itself as `completed`
+- The "End Consultation" button is **hidden** for already-completed consultations
+
+### 3. 📋 Consultation Creation Decoupled from Treatment Plan
+**File**: [patient_profile_screen.dart](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart)
+
+The flow now works as:
+1. User creates a consultation → saves it
+2. After returning, user is prompted: "Would you like to auto-schedule a Treatment Plan?"
+3. If yes → navigates to the treatment plan creator
+
+This was **already implemented** in the previous session and remains intact.
+
+### 4. 🎯 Session #1 Started Today — Expanded Consultation Card
+**File**: [patient_profile_screen.dart](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart)
+
+- Extracted consultation cards into a self-contained [_ConsultationCard](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart#390-414) widget
+- Each card fetches its own session data to display:
+  - **Session count progress**: "3 / 10 sessions completed"
+  - **Session #1 banner**: Green gradient banner with "Session #1 Started Today" when applicable
+  - **Green border highlight** on cards where Session #1 started today
+
+### 5. ✏️ Treatment Session Editing (Reschedule & Cancel)
+**Files**: [consultation_screen.dart](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart), [treatment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart)
+
+- **Reworked session cards** in the consultation detail view:
+  - Color-coded status badges (blue=upcoming, green=completed, red=missed, grey=cancelled)
+  - Session number badges (#1, #2, etc.)
+  - Time display with clock icon
+  - Strikethrough text for cancelled sessions
+- **Reschedule button** on each upcoming session:
+  - Opens native date picker → time picker
+  - Updates both the session record AND the synced appointment in PocketBase
+- **Cancel button** on each upcoming session:
+  - Confirmation dialog → cancels session + synced appointment
+- **"Create Treatment Plan" button** hidden for completed consultations
+
+### 6. 🧹 Cleanup
+- Removed unused [appointment_model.dart](file:///c:/App%20Development/PMS/lib/features/appointments/models/appointment_model.dart) import from [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart)
+- Removed duplicate [app_text_styles.dart](file:///c:/App%20Development/PMS/lib/core/constants/app_text_styles.dart) import from [create_treatment_plan_screen.dart](file:///c:/App%20Development/PMS/lib/features/treatments/screens/create_treatment_plan_screen.dart)
+
+## Files Modified
+
+| File | Changes |
+|------|---------|
+| [treatment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart) | Fixed scheduler, added [endConsultation()](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart#452-492), [rescheduleSession()](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart#493-524), improved [cancelSession()](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart#432-451) |
+| [consultation_screen.dart](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart) | Replaced delete with end consultation, reworked session UI, added reschedule/cancel |
+| [patient_profile_screen.dart](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart) | Extracted [_ConsultationCard](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart#390-414) widget with session progress and #1-today indicator |
+| [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart) | Removed unused import |
+| [create_treatment_plan_screen.dart](file:///c:/App%20Development/PMS/lib/features/treatments/screens/create_treatment_plan_screen.dart) | Removed duplicate import |
+
+> [!IMPORTANT]
+> Make sure the PocketBase `sessions` collection has a `consultation` relation field. If it doesn't exist, the "End Consultation" cascade won't find sessions to cancel.

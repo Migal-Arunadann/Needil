@@ -1,0 +1,88 @@
+# Implementation Complete (Phase 8)
+
+The UI restructuring and appointment logic fixes requested in the latest phase are fully implemented.
+
+### 5-Tab Layout Architecture
+- Created [MainLayout](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/main_layout.dart#13-19) using standard `BottomNavigationBar`.
+- Added 5 tabs: **Home, Appointments, Analytics, Patients, Settings**.
+- Reconfigured AppRouter so the `/dashboard` route directs users to [MainLayout](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/main_layout.dart#13-19).
+- Removed native back arrows from top-level screens (Appointments list, Settings) so they sit comfortably inside the tab bar context without trapping the user.
+
+### Standardized 30-Min Intervals
+- Created a custom [TimeSlotPicker](file:///c:/App%20Development/PMS/lib/core/widgets/time_slot_picker.dart#6-47) bottom sheet widget.
+- Unlike native clocks which allow minute-level scrolling (e.g., 09:14 AM), [TimeSlotPicker](file:///c:/App%20Development/PMS/lib/core/widgets/time_slot_picker.dart#6-47) strictly renders a grid of discrete clickable times separated by 30-minute intervals (09:00 AM, 09:30 AM).
+- Replaced `showTimePicker` in both **Clinic** and **Doctor Registration** forms to use this new widget for defining Working Schedules and breaks.
+
+### Call-By and Walk-In Availability Logic
+- The Create Appointment form no longer features a free-form Date and Time picker. Clicking "Select Slot" now directs the user to the [AvailableSlotsScreen](file:///c:/App%20Development/PMS/lib/features/scheduling/screens/available_slots_screen.dart#12-34).
+- This restricts both Walk-In and Call-By appointments to times that are explicitly valid based on the doctor's working schedule and breaks.
+- Injected a strict server-side check directly into the [AppointmentListNotifier](file:///c:/App%20Development/PMS/lib/features/appointments/providers/appointment_provider.dart#45-190) ([createCallBy](file:///c:/App%20Development/PMS/lib/features/appointments/providers/appointment_provider.dart#93-124) and [createWalkIn](file:///c:/App%20Development/PMS/lib/features/appointments/providers/appointment_provider.dart#125-174) methods) calling `SchedulingService.isSlotBooked()`. This makes it completely impossible to create a double-booked appointment, even if two receptionists select the same slot at the exact same time.
+
+### Bug Fixes
+- Addressed the Call-By Appointment freezing bug by ensuring `Navigator.pop(context)` runs on successful submission.
+
+# Home Page Redesign (Phase 9)
+
+### Minimalist Dashboards
+- Removed the 'Quick Stats' and 'QuickActions' sections from both the **Clinic** and **Doctor** Dashboard screens.
+- The Home page is now a drastically simplified greeting indicating the daily summary.
+## Phase 9: Home Dashboard Simplification & Dynamic Routing FAB
+
+**Goal**: Minimize information overload on the dashboards and implement a globally accessible, context-aware "New Appointment" FAB.
+
+### Actions Taken
+1. **Simplified Dashboards**: [ClinicDashboardScreen](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/clinic_dashboard_screen.dart#10-189) and [DoctorDashboardScreen](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/doctor_dashboard_screen.dart#10-189) were stripped down, removing "Quick Stats" boxes (beds, doctors, patients) and "Quick Actions" to create a cleaner, focused workspace.
+2. **Expandable Routing FAB**: 
+   - Built a highly customized [ExpandableFab](file:///c:/App%20Development/PMS/lib/core/widgets/expandable_fab.dart#5-22) supporting complex state transitions.
+   - Integrated logic to morph the FAB into an expanded Pill on the "Home" tab and a compact Circle on secondary tabs via an `isExtended` property mapped to the `_currentIndex`.
+   - On expansion, mini "Call-By" and "Walk-In" buttons slide out fluidly (animated vertical/horizontal sliders based on anchor tab).
+3. **Direct Navigation Architecture**: Hooked up the mini FAB buttons to pass a dynamic `isCallBy` boolean argument via `/appointments/create`. The [CreateAppointmentScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart#15-24)'s state was updated to dynamically read this and auto-focus the desired tab without friction.
+4. **Layout Hitbox Fix**: Re-architected the [ExpandableFab](file:///c:/App%20Development/PMS/lib/core/widgets/expandable_fab.dart#5-22) out of a constrained `Scaffold.floatingActionButton` and into a native absolute `Stack` overlay spanning the [MainLayout](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/main_layout.dart#13-19). This explicitly allows the expanded Row/Column layout zones to register touch events seamlessly, fixing a bug where button hitboxes were blocked by transparent bounds.
+
+## Phase 10: Appointments Screen Modernization
+
+**Goal**: Restructure the Appointments tab to match a sleek, modern UI reference featuring a horizontally scrollable timeline and structured data cards.
+
+### Actions Taken
+1. **Header & Context**: Replaced the native text headers with a clean "Appointments" title atop a dynamic `MMMM yyyy` subtitle, pushing the full-screen calendar picker to a minimal icon button on the right edge.
+2. **Horizontal Date Strip**: Built a `ListView.builder` generating a continuous ribbon of previous/future dates (7 days back, 30 days forward). The current layout auto-scrolls to "Today" on render and highlights selected dates with bold styling and a subtle indicator dot.
+3. **Inline Filter Chips**: Scrapped the bulky search bar and modal filter in favor of immediate, horizontally swiping `ChoiceChip`-style containers ([All](file:///c:/App%20Development/PMS/lib/features/auth/screens/clinic_registration/clinic_step3_screen.dart#146-156), `Scheduled`, `Done`, `Missed`).
+4. **Multi-Row Appointment Cards**: Re-coded the individual list tile cards entirely. 
+   - **Top Row**: Added dynamic avatar icons corresponding to the appointment type (Phone vs Person), Patient Context, Date and Time.
+   - **Bottom Action Bar**: Separated by a thin divider, the bottom half houses a distinctly colored Status pill and dedicated Quick Action icons (swap, open, delete) mapped tightly to the established color matrix.
+
+
+## Phase 11: Patients Tab Setup & Clinic Scheduling Fix
+**Goal**: Connect the 4th tab ("Patients") to real backend data and ensure Clinic accounts can schedule Call-By appointments without getting a "Day Off" error.
+
+### Actions Taken
+- **Dynamic Scheduling Fix**: Updated [AvailableSlotsScreen](file:///c:/App%20Development/PMS/lib/features/scheduling/screens/available_slots_screen.dart#12-34) to lazily fetch doctor schedules from PocketBase directly, circumventing the issue where Clinic accounts lacked a [doctor](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#112-131) object in their local AuthState.
+- **Patient Provider**: Built [patient_provider.dart](file:///c:/App%20Development/PMS/lib/features/patients/providers/patient_provider.dart) and [patient_service.dart](file:///c:/App%20Development/PMS/lib/features/patients/services/patient_service.dart) to fetch global patient records mapped to the authenticated user ID (`doctor_id` vs `clinic_id` scopes).
+- **Patient List Screen**: Designed a smooth, animated [PatientListScreen](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_list_screen.dart#9-15) with a responsive real-time search bar that filters correctly by name or phone. Hooked to tab index 3 in [MainLayout](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/main_layout.dart#13-19).
+
+## Phase 12: Home Dashboard Redesign & Appointment Flow Fixes
+**Goal**: Elevate the Home dashboards to a professional PMS standard, secure the sign-out process, and eliminate all bugs in the appointment booking flow.
+
+### Actions Taken
+1. **Rich Dashboards**: Completely rewrote [ClinicDashboardScreen](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/clinic_dashboard_screen.dart#10-189) and [DoctorDashboardScreen](file:///c:/App%20Development/PMS/lib/features/dashboard/screens/doctor_dashboard_screen.dart#10-189). Removed the rudimentary clinic ID and sign-out buttons. Introduced a dynamic greeting, a "Today's Overview" section with 4 colorful stat cards (Appointments, Scheduled, Completed, Cancelled), a "Practice Overview" block, and a list of visually distinct "Upcoming Today" appointment previews.
+2. **Dashboard Provider Expansion**: Upgraded [dashboard_provider.dart](file:///c:/App%20Development/PMS/lib/features/dashboard/providers/dashboard_provider.dart) to query all these new metrics dynamically, supporting both Doctor and Clinic roles with targeted PocketBase filters.
+3. **Sign-Out Confirmation**: Migrated the sign-out button exclusively to the [SettingsScreen](file:///c:/App%20Development/PMS/lib/features/settings/screens/settings_screen.dart#13-19) and wrapped it in a polished bottom-sheet style confirmation dialog to prevent accidental clicks.
+4. **Appointment Creation Overhaul**: 
+   - **Slot Selection Fix**: [AvailableSlotsScreen](file:///c:/App%20Development/PMS/lib/features/scheduling/screens/available_slots_screen.dart#12-34) returned raw time strings, but [CreateAppointmentScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart#15-24) expected [TimeOfDay](file:///c:/App%20Development/PMS/lib/core/utils/time_utils.dart#20-25), causing it to always display the current time. Fixed the typing mismatch and formatting.
+   - **Walk-in Parity**: Added the required "Patient Name" and "Phone Number" fields to the Walk-In creation flow, matching Call-By, and wired these through the provider down to `AppointmentService.createWalkInAppointment`.
+   - **Error Handling**: Added robust validation ensuring a slot is selected before submission, and wired the Riverpod provider's error state to a SnackBar, so the UI doesn't silently fail if a slot is double-booked.
+5. **Interactive Schedule Actions**: The action icons (Open, Swap, Delete) on the [AppointmentListScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart#11-18) cards were purely decorative. Wired them up:
+   - **Open**: Navigates directly to [PatientInfoScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/patient_info_screen.dart#13-21) to collect full details upon walk-in/arrival.
+   - **Cancel (Delete)**: Triggers a confirmation dialog before mutating the status to `cancelled`.
+   - **Complete (Swap)**: For `in_progress` appointments, provides a one-click action to mark them as `completed`.
+
+## Phase 15: Appointment Logic Refinements
+**Goal**: Resolve the "Bad State" error on booking success, strictly limit Walk-Ins, and populate the empty Patients tab.
+
+### Actions Taken
+1. **Bad State Fix**: Walk-ins do not immediately create attached [Patient](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#94-103) objects. Protected `AppointmentModel.fromRecord` with a `try-catch` block so `record.expand['patient']` doesn't crash the list fetch when null.
+2. **Walk-in Date Lock**: Walk-ins strictly represent patients arriving *now*. Passed `allowFutureDates` down to [AvailableSlotsScreen](file:///c:/App%20Development/PMS/lib/features/scheduling/screens/available_slots_screen.dart#12-34) from the creation form, disabling the arrows and date-picker if `isCallBy == false`, restricting walk-ins explicitly to `<Today>`.
+3. **Solitary Doctor Default**: Updated [CreateAppointmentScreen](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart#15-24) so Clinic users do not have to manually click the dropdown if there is only 1 doctor linked to the clinic. The doctor is auto-assigned.
+4. **Auto-Populate Patient DB**: Updated `AppointmentListNotifier.createWalkIn` so that placing a walk-in automatically initializes a skeleton record in the [patients](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#132-148) table, linking it instantly to the appointment. This resolves the bug where the Walk-in patients were never showing up in the Patients List tab.
+5. **Infinite Loading Fix**: Fixed a silent lock-up on [AvailableSlotsScreen](file:///c:/App%20Development/PMS/lib/features/scheduling/screens/available_slots_screen.dart#12-34) where the initial [_loadSlots()](file:///c:/App%20Development/PMS/lib/features/scheduling/screens/available_slots_screen.dart#59-67) triggered during the [initState](file:///c:/App%20Development/PMS/lib/features/scheduling/screens/available_slots_screen.dart#51-58) build phase, causing Riverpod to freeze the loading state for "Today" indefinitely. Wrapped the call in a `postFrameCallback`.
+6. **Dynamic Date Slider Integration**: Rewrote the logic governing the horizontal date strip in the [Appointments](file:///c:/App%20Development/PMS/lib/features/appointments/providers/appointment_provider.dart#55-88) tab. It now dynamically generates the entire month's dates anchoring on the newly selected calendar date, and automatically auto-scrolls so that "Yesterday" is always placed neatly at the left edge of the visible week window.
