@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -13,6 +14,7 @@ import '../../treatments/models/session_model.dart';
 import '../../treatments/screens/create_treatment_plan_screen.dart';
 import '../../treatments/providers/treatment_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import '../../dashboard/widgets/dashboard_widgets.dart';
 
 
 class PatientProfileScreen extends ConsumerStatefulWidget {
@@ -35,10 +37,12 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
   /// Incremented to force FutureBuilder + card rebuild after plan creation.
   int _refreshKey = 0;
+  int _desktopTabIndex = 0;
 
   @override
   void initState() {
     super.initState();
+    _desktopTabIndex = widget.initialTabIndex == 2 ? 0 : widget.initialTabIndex;
     _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTabIndex);
     _tabController.addListener(() {
       if (mounted) setState(() {});
@@ -80,6 +84,132 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   @override
   Widget build(BuildContext context) {
     final hasOngoing = _ongoingConsultationId != null && _ongoingConsultationId!.isNotEmpty;
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+
+    if (isDesktop) {
+      return Scaffold(
+        // No AppBar — we paint our own header row inside the body to keep the
+        // gradient background fully visible edge-to-edge (AppBar would paint
+        // a white/surface strip on top of the Stack).
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            // ── Dark gradient background ──────────────────────────────────────
+            Positioned.fill(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF0D101C),
+                      Color(0xFF07080F),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // ── Ambient glows ─────────────────────────────────────────────────
+            Positioned(
+              top: -100,
+              right: -100,
+              child: Container(
+                width: 300,
+                height: 300,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF3B82F6).withOpacity(0.08),
+                ),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
+                  child: const SizedBox.shrink(),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -100,
+              left: -100,
+              child: Container(
+                width: 300,
+                height: 300,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF10B981).withOpacity(0.05),
+                ),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
+                  child: const SizedBox.shrink(),
+                ),
+              ),
+            ),
+            // ── Full-page content column ──────────────────────────────────────
+            Positioned.fill(
+              child: SafeArea(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Inline header row (replaces AppBar)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 8, 36, 0),
+                      child: Row(
+                        children: [
+                          // Back button
+                          Material(
+                            color: Colors.white.withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: () => Navigator.pop(context),
+                              child: const Padding(
+                                padding: EdgeInsets.all(8),
+                                child: Icon(Icons.arrow_back_rounded, color: Colors.white70, size: 20),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          const Text(
+                            'Patient Profile',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: -0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Split-pane body — stretch so both panes fill remaining height
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(36, 0, 36, 20),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Left details pane (flex 3)
+                            Expanded(
+                              flex: 3,
+                              child: _buildDesktopDetailsPane(),
+                            ),
+                            const SizedBox(width: 24),
+                            // Right tabs pane (flex 7)
+                            Expanded(
+                              flex: 7,
+                              child: _buildDesktopTabsSection(),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: context.colors.background,
@@ -113,57 +243,341 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     );
   }
 
+  Future<void> _startConsultation() async {
+    final aptService = ref.read(appointmentServiceProvider);
+    try {
+      String consultationId;
+      if (widget.appointment != null) {
+        final (id, _) = await aptService.getOrCreateConsultationForAppointment(widget.appointment!);
+        consultationId = id;
+      } else {
+        final newC = await aptService.createConsultation(
+          widget.patient.id,
+          widget.patient.doctorId,
+        );
+        consultationId = newC.id;
+      }
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ConsultationScreen(
+            patientId: widget.patient.id,
+            patientName: widget.patient.fullName,
+            doctorId: widget.patient.doctorId,
+            consultationId: consultationId,
+            appointmentId: widget.appointment?.id,
+          ),
+        ),
+      );
+      if (mounted) {
+        await _checkOngoingConsultation();
+        setState(() {
+          _refreshKey++;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e', style: const TextStyle(color: Colors.white)),
+          backgroundColor: context.colors.error,
+        ));
+      }
+    }
+  }
+
   Widget? _buildFAB(bool hasOngoing) {
     if (_tabController.index != 0) return null;
     if (hasOngoing) return null;
 
     return FloatingActionButton.extended(
-      onPressed: () async {
-        final aptService = ref.read(appointmentServiceProvider);
-        try {
-          String consultationId;
-          if (widget.appointment != null) {
-            final (id, _) = await aptService.getOrCreateConsultationForAppointment(widget.appointment!);
-            consultationId = id;
-          } else {
-            final newC = await aptService.createConsultation(
-              widget.patient.id,
-              widget.patient.doctorId,
-            );
-            consultationId = newC.id;
-          }
-          if (!mounted) return;
-          await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ConsultationScreen(
-                patientId: widget.patient.id,
-                patientName: widget.patient.fullName,
-                doctorId: widget.patient.doctorId,
-                consultationId: consultationId,
-                appointmentId: widget.appointment?.id,
-              ),
-            ),
-          );
-          if (mounted) {
-            await _checkOngoingConsultation();
-            setState(() {
-              _refreshKey++;
-            });
-          }
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: Text('Error: $e', style: const TextStyle(color: Colors.white)),
-              backgroundColor: context.colors.error,
-            ));
-          }
-        }
-      },
+      onPressed: _startConsultation,
       backgroundColor: context.colors.primary,
       icon: const Icon(Icons.add_comment_rounded, color: Colors.white),
       label: const Text('Start Consult',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _buildDesktopDetailsPane() {
+    final p = widget.patient;
+    final initials = p.fullName.trim().split(' ')
+        .where((s) => s.isNotEmpty)
+        .take(2)
+        .map((s) => s[0].toUpperCase())
+        .join();
+    
+    final hasOngoing = _ongoingConsultationId != null && _ongoingConsultationId!.isNotEmpty;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: SingleChildScrollView(
+      child: WebGlassCard(
+        borderRadius: 28,
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Avatar
+            Center(
+              child: Container(
+                width: 96, height: 96,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF60A5FA), Color(0xFF1D4ED8)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF3B82F6).withOpacity(0.3),
+                      blurRadius: 20,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Text(
+                    initials.isNotEmpty ? initials : '?',
+                    style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(p.fullName, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.phone_rounded, size: 14, color: Colors.white38),
+                const SizedBox(width: 6),
+                Text(p.phone, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+              ],
+            ),
+            const SizedBox(height: 24),
+            
+            // Start / Resume Consult Button
+            _buildDesktopConsultAction(hasOngoing),
+            const SizedBox(height: 24),
+
+            // Personal Info
+            _buildDesktopSectionHeader('Personal Info', Icons.person_rounded),
+            const SizedBox(height: 12),
+            if (p.age != null) _buildDesktopDetailRow('Age', '${p.age} years'),
+            if (p.dateOfBirth?.isNotEmpty == true) _buildDesktopDetailRow('Date of Birth', p.dateOfBirth!),
+            if (p.gender?.isNotEmpty == true) _buildDesktopDetailRow('Gender', p.gender!),
+            if (p.occupation?.isNotEmpty == true) _buildDesktopDetailRow('Occupation', p.occupation!),
+            
+            const SizedBox(height: 24),
+            
+            // Contact & Location
+            _buildDesktopSectionHeader('Contact & Location', Icons.location_on_rounded),
+            const SizedBox(height: 12),
+            if (p.city?.isNotEmpty == true) _buildDesktopDetailRow('City', p.city!),
+            if (p.area?.isNotEmpty == true) _buildDesktopDetailRow('Area', p.area!),
+            if (p.email?.isNotEmpty == true) _buildDesktopDetailRow('Email', p.email!),
+          ],
+        ),
+      ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopSectionHeader(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 16, color: const Color(0xFF60A5FA)),
+        const SizedBox(width: 8),
+        Text(title, style: const TextStyle(color: Color(0xFF60A5FA), fontSize: 13, fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+
+  Widget _buildDesktopDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(label, style: const TextStyle(color: Colors.white38, fontSize: 12)),
+          ),
+          Expanded(
+            child: Text(value, style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopConsultAction(bool hasOngoing) {
+    if (_ongoingConsultationId == null) {
+      return const SizedBox(
+        height: 44,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+
+    if (hasOngoing) {
+      return Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFD97706).withOpacity(0.25),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ElevatedButton.icon(
+          onPressed: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ConsultationScreen(
+                  patientId: widget.patient.id,
+                  patientName: widget.patient.fullName,
+                  doctorId: widget.patient.doctorId,
+                  consultationId: _ongoingConsultationId!,
+                  appointmentId: widget.appointment?.id,
+                ),
+              ),
+            );
+            await _checkOngoingConsultation();
+            setState(() {
+              _refreshKey++;
+            });
+          },
+          icon: const Icon(Icons.play_arrow_rounded, color: Colors.white),
+          label: const Text('Resume Consult', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFD97706),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 0,
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF3B82F6).withOpacity(0.25),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ElevatedButton.icon(
+        onPressed: _startConsultation,
+        icon: const Icon(Icons.add_comment_rounded, color: Colors.white),
+        label: const Text('Start Consult', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF3B82F6),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          elevation: 0,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopTabsSection() {
+    // Outer glass container with sticky tab bar at top and scrollable content below.
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            color: const Color(0xFF131A26).withOpacity(0.07),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.08),
+              width: 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.35),
+                blurRadius: 36,
+                offset: const Offset(0, 16),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Tab bar header ────────────────────────────────────────────
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Colors.white.withOpacity(0.07),
+                      width: 1,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    _buildDesktopTabHeader('Treatments', 0),
+                    const SizedBox(width: 4),
+                    _buildDesktopTabHeader('History', 1),
+                    const Spacer(),
+                  ],
+                ),
+              ),
+              // ── Tab content ───────────────────────────────────────────────
+              Expanded(
+                child: _desktopTabIndex == 0
+                    ? _buildTreatmentsTab()
+                    : _buildHistoryTab(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopTabHeader(String text, int index) {
+    final active = _desktopTabIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _desktopTabIndex = index),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        decoration: BoxDecoration(
+          color: active ? Colors.white.withOpacity(0.07) : Colors.transparent,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+          border: Border(
+            bottom: BorderSide(
+              color: active ? const Color(0xFF60A5FA) : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Text(
+          text,
+          style: TextStyle(
+            color: active ? Colors.white : Colors.white38,
+            fontWeight: active ? FontWeight.bold : FontWeight.normal,
+            fontSize: 13.5,
+            letterSpacing: active ? -0.1 : 0,
+          ),
+        ),
+      ),
     );
   }
 
@@ -700,6 +1114,98 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    
+    if (isDesktop) {
+      final activeColor = _cardColor;
+      return WebGlassCard(
+        borderRadius: 24,
+        glowColor: activeColor,
+        child: Column(
+          children: [
+            // Tappable header
+            GestureDetector(
+              onTap: () => setState(() => _expanded = !_expanded),
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: activeColor.withOpacity(0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.medical_information_rounded,
+                        color: activeColor,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  c.chiefComplaint?.isNotEmpty == true
+                                      ? c.chiefComplaint!
+                                      : 'General Consultation',
+                                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              _statusChip(),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            c.created != null
+                                ? DateFormat('MMM d, yyyy · h:mm a').format(c.created!.toLocal())
+                                : '—',
+                            style: const TextStyle(color: Colors.white38, fontSize: 11),
+                          ),
+                          if (_planLoaded && _treatmentPlan != null) ...[
+                            const SizedBox(height: 4),
+                            Builder(builder: (_) {
+                              final activeSessions = _treatmentSessions.where((s) => _displayStatus(s) != SessionStatus.cancelled).toList();
+                              final doneCount = activeSessions.where((s) => _displayStatus(s) == SessionStatus.completed).length;
+                              final mActiveSessions = _maintenanceSessions.where((s) => _displayStatus(s) != SessionStatus.cancelled).toList();
+                              final mDoneCount = mActiveSessions.where((s) => _displayStatus(s) == SessionStatus.completed).length;
+                              return Text(
+                                '$doneCount/${activeSessions.length} treatment sessions done'
+                                '${_maintenancePlan != null ? ' · $mDoneCount/${mActiveSessions.length} maintenance' : ''}',
+                                style: const TextStyle(color: Color(0xFF60A5FA), fontSize: 11, fontWeight: FontWeight.w600),
+                              );
+                            }),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                      color: Colors.white38,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Expanded body
+            if (_expanded) ...[
+              Divider(height: 1, indent: 20, endIndent: 20, color: Colors.white.withOpacity(0.08)),
+              _buildConsultationDetails(),
+              if (_planLoaded) _buildSessionsSection(),
+              const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      );
+    }
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -819,6 +1325,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   }
 
   Widget _statusChip() {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
     final String label;
     final Color color;
     if (!_isOngoing) {
@@ -830,6 +1337,27 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     } else {
       label = 'Plan Needed'; color = context.colors.primary;
     }
+    
+    if (isDesktop) {
+      return Container(
+        margin: const EdgeInsets.only(left: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: color.withOpacity(0.25), width: 1),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: color,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.only(left: 8),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -850,8 +1378,12 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   }
 
   Widget _buildConsultationDetails() {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      padding: isDesktop
+          ? const EdgeInsets.fromLTRB(20, 16, 20, 12)
+          : const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -878,8 +1410,15 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 icon: const Icon(Icons.play_arrow_rounded, size: 18),
                 label: const Text('Resume Consultation'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: context.colors.warning,
-                  foregroundColor: Colors.white,
+                  backgroundColor: isDesktop
+                      ? const Color(0xFFD97706).withOpacity(0.2)
+                      : context.colors.warning,
+                  foregroundColor: isDesktop
+                      ? const Color(0xFFFBBF24)
+                      : Colors.white,
+                  side: isDesktop
+                      ? const BorderSide(color: Color(0xFFD97706), width: 1)
+                      : null,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   textStyle: const TextStyle(fontWeight: FontWeight.bold),
@@ -914,8 +1453,12 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                       icon: const Icon(Icons.description_rounded, size: 14),
                       label: const Text('View Consult'),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: context.colors.info,
-                        side: BorderSide(color: context.colors.info.withValues(alpha: 0.5)),
+                        foregroundColor: isDesktop ? const Color(0xFF60A5FA) : context.colors.info,
+                        side: BorderSide(
+                          color: isDesktop
+                              ? const Color(0xFF3B82F6).withOpacity(0.4)
+                              : context.colors.info.withValues(alpha: 0.5),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
@@ -958,8 +1501,15 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                       icon: const Icon(Icons.add_chart_rounded, size: 14),
                       label: const Text('Create Plan'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: context.colors.primary,
-                        foregroundColor: Colors.white,
+                        backgroundColor: isDesktop
+                            ? const Color(0xFF2563EB).withOpacity(0.3)
+                            : context.colors.primary,
+                        foregroundColor: isDesktop
+                            ? const Color(0xFF60A5FA)
+                            : Colors.white,
+                        side: isDesktop
+                            ? const BorderSide(color: Color(0xFF3B82F6), width: 1)
+                            : null,
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
@@ -991,8 +1541,12 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                   icon: const Icon(Icons.description_rounded, size: 16),
                   label: const Text('View Consultation'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: context.colors.info,
-                    side: BorderSide(color: context.colors.info.withValues(alpha: 0.5)),
+                    foregroundColor: isDesktop ? const Color(0xFF60A5FA) : context.colors.info,
+                    side: BorderSide(
+                      color: isDesktop
+                          ? const Color(0xFF3B82F6).withOpacity(0.4)
+                          : context.colors.info.withValues(alpha: 0.5),
+                    ),
                     padding: const EdgeInsets.symmetric(vertical: 10),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
@@ -1007,14 +1561,17 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     );
   }
 
-
   Widget _buildSessionsSection() {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: isDesktop
+          ? const EdgeInsets.fromLTRB(20, 0, 20, 8)
+          : const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Divider(height: 1, color: context.colors.border),
+          Divider(height: 1, color: isDesktop ? Colors.white.withOpacity(0.08) : context.colors.border),
           const SizedBox(height: 12),
 
           if (!_planLoaded)
@@ -1028,13 +1585,13 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               _planHeader(
                 label: 'Treatment Plan',
                 plan: _treatmentPlan!,
-                color: context.colors.primary,
+                color: isDesktop ? const Color(0xFF60A5FA) : context.colors.primary,
                 icon: Icons.healing_rounded,
               ),
               const SizedBox(height: 8),
               if (_treatmentSessions.isEmpty)
                 Text('No sessions found.',
-                    style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))
+                    style: TextStyle(color: isDesktop ? Colors.white38 : context.colors.textSecondary, fontSize: 12))
               else
                 ...List.generate(
                   _treatmentSessions.length,
@@ -1056,8 +1613,12 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                     icon: const Icon(Icons.stop_circle_rounded, size: 16),
                     label: const Text('End Sessions for this Consultation'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: context.colors.error,
-                      side: BorderSide(color: context.colors.error.withValues(alpha: 0.5)),
+                      foregroundColor: isDesktop ? const Color(0xFFF87171) : context.colors.error,
+                      side: BorderSide(
+                        color: isDesktop
+                            ? const Color(0xFFEF4444).withOpacity(0.4)
+                            : context.colors.error.withValues(alpha: 0.5),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
@@ -1101,8 +1662,15 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                   icon: const Icon(Icons.autorenew_rounded, size: 18),
                   label: const Text('Create Maintenance Plan'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: context.colors.success,
-                    foregroundColor: Colors.white,
+                    backgroundColor: isDesktop
+                        ? const Color(0xFF10B981).withOpacity(0.2)
+                        : context.colors.success,
+                    foregroundColor: isDesktop
+                        ? const Color(0xFF34D399)
+                        : Colors.white,
+                    side: isDesktop
+                        ? const BorderSide(color: Color(0xFF10B981), width: 1)
+                        : null,
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     textStyle: const TextStyle(fontWeight: FontWeight.bold),
@@ -1118,13 +1686,13 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               _planHeader(
                 label: 'Maintenance Plan',
                 plan: _maintenancePlan!,
-                color: context.colors.success,
+                color: isDesktop ? const Color(0xFF34D399) : context.colors.success,
                 icon: Icons.autorenew_rounded,
               ),
               const SizedBox(height: 8),
               if (_maintenanceSessions.isEmpty)
                 Text('No maintenance sessions found.',
-                    style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))
+                    style: TextStyle(color: isDesktop ? Colors.white38 : context.colors.textSecondary, fontSize: 12))
               else
                 ...List.generate(
                   _maintenanceSessions.length,
@@ -1143,21 +1711,31 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     required Color color,
     required IconData icon,
   }) {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    
     return Row(
       children: [
         Icon(icon, size: 16, color: color),
         const SizedBox(width: 6),
-        Text(label, style: context.textStyles.label.copyWith(fontSize: 13, color: color)),
+        Text(
+          label,
+          style: isDesktop
+              ? TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)
+              : context.textStyles.label.copyWith(fontSize: 13, color: color),
+        ),
         const Spacer(),
         Text(
           '${plan.treatmentType} · ₹${plan.sessionFee.toInt()}/session',
-          style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
+          style: isDesktop
+              ? const TextStyle(color: Colors.white38, fontSize: 11)
+              : context.textStyles.caption.copyWith(color: context.colors.textSecondary),
         ),
       ],
     );
   }
 
   Widget _sessionTile(SessionModel session, int index, int totalCount) {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
     final isMaintenance = session.isMaintenance;
     final effectiveStatus = _displayStatus(session);
     final statusColor = _sessionStatusColor(effectiveStatus);
@@ -1233,14 +1811,14 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
         width: 24,
         height: 24,
         decoration: BoxDecoration(
-          color: context.colors.surface,
+          color: isDesktop ? Colors.white.withOpacity(0.04) : context.colors.surface,
           shape: BoxShape.circle,
-          border: Border.all(color: context.colors.border, width: 2),
+          border: Border.all(color: isDesktop ? Colors.white.withOpacity(0.12) : context.colors.border, width: 2),
         ),
         alignment: Alignment.center,
         child: Text(
           '${session.sessionNumber}',
-          style: TextStyle(color: context.colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w700),
+          style: TextStyle(color: isDesktop ? Colors.white38 : context.colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w700),
         ),
       );
     }
@@ -1301,14 +1879,22 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                   Expanded(
                     child: Container(
                       width: 2,
-                      color: index == 0 ? Colors.transparent : context.colors.border.withValues(alpha: 0.8),
+                      color: index == 0
+                          ? Colors.transparent
+                          : (isDesktop
+                              ? Colors.white.withOpacity(0.08)
+                              : context.colors.border.withValues(alpha: 0.8)),
                     ),
                   ),
                   dotWidget,
                   Expanded(
                     child: Container(
                       width: 2,
-                      color: index == totalCount - 1 ? Colors.transparent : context.colors.border.withValues(alpha: 0.8),
+                      color: index == totalCount - 1
+                          ? Colors.transparent
+                          : (isDesktop
+                              ? Colors.white.withOpacity(0.08)
+                              : context.colors.border.withValues(alpha: 0.8)),
                     ),
                   ),
                 ],
@@ -1321,14 +1907,22 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 margin: const EdgeInsets.symmetric(vertical: 4),
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isEditable
-                      ? accentColor.withValues(alpha: 0.03)
-                      : context.colors.background.withValues(alpha: 0.5),
+                  color: isDesktop
+                      ? (isEditable
+                          ? accentColor.withOpacity(0.08)
+                          : Colors.white.withOpacity(0.02))
+                      : (isEditable
+                          ? accentColor.withValues(alpha: 0.03)
+                          : context.colors.background.withValues(alpha: 0.5)),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                    color: isEditable
-                        ? accentColor.withValues(alpha: 0.2)
-                        : context.colors.border.withValues(alpha: 0.5),
+                    color: isDesktop
+                        ? (isEditable
+                            ? accentColor.withOpacity(0.3)
+                            : Colors.white.withOpacity(0.06))
+                        : (isEditable
+                            ? accentColor.withValues(alpha: 0.2)
+                            : context.colors.border.withValues(alpha: 0.5)),
                   ),
                 ),
                 child: Row(
@@ -1341,10 +1935,12 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                             children: [
                               Text(
                                 '${isMaintenance ? "Maintenance" : "Session"} ${session.sessionNumber}',
-                                style: context.textStyles.label.copyWith(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700,
-                                ),
+                                style: isDesktop
+                                    ? const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)
+                                    : context.textStyles.label.copyWith(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                               ),
                               if (isMaintenance) ...[
                                 const SizedBox(width: 6),
@@ -1362,7 +1958,12 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                             ],
                           ),
                           const SizedBox(height: 2),
-                          Text(dateLabel, style: context.textStyles.caption.copyWith(fontSize: 11)),
+                          Text(
+                            dateLabel,
+                            style: isDesktop
+                                ? const TextStyle(color: Colors.white38, fontSize: 11)
+                                : context.textStyles.caption.copyWith(fontSize: 11),
+                          ),
                         ],
                       ),
                     ),
@@ -1370,23 +1971,29 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.1),
+                        color: statusColor.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: statusColor.withValues(alpha: 0.15)),
+                        border: Border.all(color: statusColor.withOpacity(0.25)),
                       ),
                       child: Text(
                         _sessionStatusLabel(session, effectiveStatus),
-                        style: context.textStyles.caption.copyWith(
-                          color: statusColor,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                        ),
+                        style: isDesktop
+                            ? TextStyle(
+                                color: statusColor,
+                                fontSize: 9,
+                                fontWeight: FontWeight.bold,
+                              )
+                            : context.textStyles.caption.copyWith(
+                                color: statusColor,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                              ),
                       ),
                     ),
                     if (isEditable) ...[
                       const SizedBox(width: 4),
-                      Icon(Icons.chevron_right_rounded, color: context.colors.textHint, size: 16),
-                      Icon(Icons.more_vert_rounded, color: context.colors.textHint.withValues(alpha: 0.4), size: 13),
+                      Icon(Icons.chevron_right_rounded, color: isDesktop ? Colors.white38 : context.colors.textHint, size: 16),
+                      Icon(Icons.more_vert_rounded, color: isDesktop ? Colors.white12 : context.colors.textHint.withValues(alpha: 0.4), size: 13),
                     ],
                   ],
                 ),

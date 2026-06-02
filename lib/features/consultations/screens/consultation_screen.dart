@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -54,6 +55,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isSubmitting = false;
   bool _charged = false;
+  bool _bypassChiefComplaintCheck = false;
 
   final _notesCtrl = TextEditingController(); // Chief Complaint / Main Problem
   final _currentMedicationsCtrl = TextEditingController();
@@ -228,6 +230,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   void _onInteraction() {
     final trackingId = widget.consultationId ?? widget.appointmentId ?? 'consultation_${widget.patientId}';
     IdleReminderService.instance.recordInteraction(trackingId);
+    if (_notesCtrl.text.trim().isNotEmpty && _bypassChiefComplaintCheck) {
+      setState(() {
+        _bypassChiefComplaintCheck = false;
+      });
+    }
   }
 
   /// Load a previously saved draft into the form fields.
@@ -713,16 +720,32 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     // Capture navigator before async gap — fixes Vivo/iQOO devices
     final navigator = Navigator.of(context);
 
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
     if (_notesCtrl.text.trim().isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Please fill out the Chief Complaint field.'),
-            backgroundColor: context.colors.error,
-          ),
-        );
+      if (isDesktop) {
+        if (!_bypassChiefComplaintCheck) {
+          final proceed = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (ctx) => _ChiefComplaintWarningDialog(),
+          );
+          if (proceed == true) {
+            _bypassChiefComplaintCheck = true;
+          } else {
+            return;
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Please fill out the Chief Complaint field.'),
+              backgroundColor: context.colors.error,
+            ),
+          );
+        }
+        return;
       }
-      return;
     }
 
     if (!_consentGiven) {
@@ -1195,12 +1218,25 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
             style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold),
           ),
         if (!_isViewing) const SizedBox(height: 8),
-        AppTextField(
-          controller: _notesCtrl,
-          label: _isViewing ? 'Chief Complaint / Main Problem' : '',
-          hint: 'As discussed with patient...',
-          maxLines: 3,
-          readOnly: _isViewing,
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _notesCtrl,
+          builder: (context, value, child) {
+            return AppTextField(
+              controller: _notesCtrl,
+              label: _isViewing ? 'Chief Complaint / Main Problem' : '',
+              hint: 'As discussed with patient...',
+              maxLines: 3,
+              readOnly: _isViewing,
+              suffixIcon: (!_isViewing && value.text.isNotEmpty)
+                  ? IconButton(
+                      icon: Icon(Icons.clear_rounded, color: context.colors.textSecondary, size: 20),
+                      onPressed: () {
+                        _notesCtrl.clear();
+                      },
+                    )
+                  : null,
+            );
+          },
         ),
         const SizedBox(height: 16),
         Text('Previous Treatments', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
@@ -1887,6 +1923,91 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChiefComplaintWarningDialog extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+      child: AlertDialog(
+        backgroundColor: context.colors.surface.withOpacity(0.85),
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(color: Colors.white.withOpacity(0.08)),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: context.colors.warning.withOpacity(0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.warning_amber_rounded,
+                color: context.colors.warning,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Missing Chief Complaint',
+                style: context.textStyles.h3.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'You are submitting the consultation without recording the patient\'s Chief Complaint or Main Problem. Would you like to go back and edit, or submit anyway?',
+          style: context.textStyles.bodyMedium.copyWith(
+            color: context.colors.textSecondary,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: Text(
+              'Go Back',
+              style: TextStyle(
+                color: context.colors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.colors.warning,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text(
+              'Submit Anyway',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),

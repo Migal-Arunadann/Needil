@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/foundation.dart' show AsyncCallback, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,6 +11,7 @@ import 'patient_profile_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import '../../../core/widgets/responsive_wrapper.dart';
 import '../../appointments/providers/appointment_provider.dart';
+import '../../dashboard/widgets/dashboard_widgets.dart';
 
 class PatientListScreen extends ConsumerStatefulWidget {
   const PatientListScreen({super.key});
@@ -195,36 +197,7 @@ class _WebPatientScreen extends ConsumerWidget {
           ),
         ),
       ],
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: context.colors.primary,
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: context.colors.primary.withValues(alpha: 0.25),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.add, color: Colors.white, size: 18),
-            const SizedBox(width: 8),
-            Text(
-              'New Appointment',
-              style: context.textStyles.buttonMedium.copyWith(color: Colors.white),
-            ),
-            const SizedBox(width: 8),
-            const VerticalDivider(color: Colors.white24, width: 1, indent: 10, endIndent: 10),
-            const SizedBox(width: 8),
-            const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
-          ],
-        ),
-      ),
+      child: const _NewAppointmentCTAButton(),
     );
   }
 
@@ -243,7 +216,7 @@ class _WebPatientScreen extends ConsumerWidget {
         : filteredList.sublist(pageStart, pageEnd);
 
     return Scaffold(
-      backgroundColor: context.colors.background,
+      backgroundColor: isDesktop ? Colors.transparent : context.colors.background,
       body: SafeArea(
         child: ResponsiveWrapper(
           child: Column(
@@ -251,7 +224,7 @@ class _WebPatientScreen extends ConsumerWidget {
             children: [
               // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               Padding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 20, 20, isDesktop ? 36 : 20, 0),
                 child: isDesktop
                     ? Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
@@ -365,7 +338,7 @@ class _WebPatientScreen extends ConsumerWidget {
 
               // â”€â”€ Sort chips â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: EdgeInsets.symmetric(horizontal: isDesktop ? 36 : 20),
                 child: Row(
                   children: [
                     _WebSortChip(
@@ -576,71 +549,57 @@ class _WebDesktopTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.colors.surface,
-          borderRadius: BorderRadius.circular(18),
-          border:
-              Border.all(color: context.colors.border.withValues(alpha: 0.6)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+      padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 20, 0, isDesktop ? 36 : 20, 8),
+      child: WebGlassCard(
+        borderRadius: 24,
+        child: Column(
+          children: [
+            // Header row
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: isDesktop ? Colors.white.withOpacity(0.02) : context.colors.background.withValues(alpha: 0.6),
+                border: Border(
+                  bottom: BorderSide(
+                      color: isDesktop ? Colors.white.withOpacity(0.08) : context.colors.border.withValues(alpha: 0.5)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: _tableHeader(context, 'Patient'),
+                  ),
+                  Expanded(flex: 2, child: _tableHeader(context, 'Phone')),
+                  Expanded(
+                      flex: 2, child: _tableHeader(context, 'Last Visit')),
+                  SizedBox(
+                      width: 80,
+                      child: _tableHeader(context, 'Actions')),
+                  const SizedBox(width: 24),
+                ],
+              ),
+            ),
+            // Rows
+            Expanded(
+              child: ListView.builder(
+                physics: const AlwaysScrollableScrollPhysics(),
+                itemCount: patients.length,
+                itemBuilder: (context, index) {
+                  return _WebAnimatedRow(
+                    index: index,
+                    child: _WebDesktopTableRow(
+                      patient: patients[index],
+                      onTap: () => onPatientTap(patients[index]),
+                    ),
+                  );
+                },
+              ),
             ),
           ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
-          child: Column(
-            children: [
-              // Header row
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                decoration: BoxDecoration(
-                  color: context.colors.background.withValues(alpha: 0.6),
-                  border: Border(
-                    bottom: BorderSide(
-                        color: context.colors.border.withValues(alpha: 0.5)),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: _tableHeader(context, 'Patient'),
-                    ),
-                    Expanded(flex: 2, child: _tableHeader(context, 'Phone')),
-                    Expanded(
-                        flex: 2, child: _tableHeader(context, 'Last Visit')),
-                    SizedBox(
-                        width: 80,
-                        child: _tableHeader(context, 'Actions')),
-                    const SizedBox(width: 24),
-                  ],
-                ),
-              ),
-              // Rows
-              Expanded(
-                child: ListView.builder(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  itemCount: patients.length,
-                  itemBuilder: (context, index) {
-                    return _WebAnimatedRow(
-                      index: index,
-                      child: _WebDesktopTableRow(
-                        patient: patients[index],
-                        onTap: () => onPatientTap(patients[index]),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -673,6 +632,7 @@ class _WebDesktopTableRowState extends State<_WebDesktopTableRow> {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
     final patient = widget.patient;
     final lastVisit = (patient.updated ?? patient.created) != null
         ? DateFormat('MMM d, yyyy').format(patient.updated ?? patient.created!)
@@ -690,11 +650,11 @@ class _WebDesktopTableRowState extends State<_WebDesktopTableRow> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           decoration: BoxDecoration(
             color: _hovered
-                ? context.colors.primary.withValues(alpha: 0.04)
+                ? (isDesktop ? Colors.white.withOpacity(0.04) : context.colors.primary.withValues(alpha: 0.04))
                 : Colors.transparent,
             border: Border(
               bottom: BorderSide(
-                  color: context.colors.border.withValues(alpha: 0.3)),
+                  color: isDesktop ? Colors.white.withOpacity(0.05) : context.colors.border.withValues(alpha: 0.3)),
             ),
           ),
           child: Row(
@@ -1739,3 +1699,83 @@ class _AppSortChip extends StatelessWidget {
     );
   }
 }
+
+class _NewAppointmentCTAButton extends StatefulWidget {
+  const _NewAppointmentCTAButton();
+
+  @override
+  State<_NewAppointmentCTAButton> createState() => _NewAppointmentCTAButtonState();
+}
+
+class _NewAppointmentCTAButtonState extends State<_NewAppointmentCTAButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        transform: Matrix4.identity()..scale(_isHovered ? 1.03 : 1.0),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF3B82F6).withOpacity(_isHovered ? 0.35 : 0.2),
+              blurRadius: _isHovered ? 20 : 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              height: 40,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    const Color(0xFF60A5FA).withOpacity(_isHovered ? 0.4 : 0.3),
+                    const Color(0xFF1D4ED8).withOpacity(0.15),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFF60A5FA).withOpacity(_isHovered ? 0.45 : 0.35),
+                  width: 1.0,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'New Appointment',
+                    style: context.textStyles.buttonMedium.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const VerticalDivider(color: Colors.white24, width: 1, indent: 10, endIndent: 10),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 18),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

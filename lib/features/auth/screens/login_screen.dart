@@ -392,7 +392,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                   ],
                 ),
                 child: Image.asset(
-                  'assets/images/needil_icon.png',
+                  isDesktop ? 'assets/images/neediliconforweb.png' : 'assets/images/needil_icon.png',
                   fit: BoxFit.contain,
                 ),
               ),
@@ -527,7 +527,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                             Row(
                               children: [
                                 Image.asset(
-                                  'assets/images/needil_icon.png',
+                                  'assets/images/neediliconforweb.png',
                                   width: 32,
                                   height: 32,
                                   fit: BoxFit.contain,

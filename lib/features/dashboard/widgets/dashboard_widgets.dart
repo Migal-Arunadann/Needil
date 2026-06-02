@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
@@ -24,7 +25,7 @@ String formatTimeString(String timeStr) {
 }
 
 // ─── Today's Summary Card Item ──────────────────────────────────
-class SummaryCard extends StatelessWidget {
+class SummaryCard extends StatefulWidget {
   final IconData icon;
   final String label;
   final String value;
@@ -41,14 +42,31 @@ class SummaryCard extends StatelessWidget {
   });
 
   @override
+  State<SummaryCard> createState() => _SummaryCardState();
+}
+
+class _SummaryCardState extends State<SummaryCard> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final textStyles = context.textStyles;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 900.0;
+
+    Widget content = Container(
+      padding: isDesktop
+          ? const EdgeInsets.symmetric(horizontal: 24, vertical: 20)
+          : const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFF131924),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        color: isDesktop
+            ? const Color(0xFF131A26).withOpacity(0.07)
+            : const Color(0xFF131924),
+        borderRadius: BorderRadius.circular(isDesktop ? 28 : 16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.06),
+          width: 1.0,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -61,14 +79,14 @@ class SummaryCard extends StatelessWidget {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
+                  color: widget.color.withOpacity(0.12),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: color, size: 18),
+                child: Icon(widget.icon, color: widget.color, size: 18),
               ),
               // Value
               Text(
-                value,
+                widget.value,
                 style: textStyles.h2.copyWith(
                   fontWeight: FontWeight.w800,
                   fontSize: 24,
@@ -83,7 +101,7 @@ class SummaryCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  label,
+                  widget.label,
                   style: textStyles.bodySmall.copyWith(
                     color: Colors.white70,
                     fontWeight: FontWeight.w500,
@@ -94,25 +112,26 @@ class SummaryCard extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               // Delta badge
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: delta.startsWith('+')
-                      ? const Color(0xFF065F46).withValues(alpha: 0.3)
-                      : Colors.white.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  delta,
-                  style: TextStyle(
-                    color: delta.startsWith('+')
-                        ? const Color(0xFF34D399)
-                        : Colors.white38,
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
+              if (widget.delta != '-')
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: widget.delta.startsWith('+') || widget.delta.startsWith('↗')
+                        ? const Color(0xFF065F46).withOpacity(0.3)
+                        : Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    widget.delta,
+                    style: TextStyle(
+                      color: widget.delta.startsWith('+') || widget.delta.startsWith('↗')
+                          ? const Color(0xFF34D399)
+                          : Colors.white38,
+                      fontSize: 9,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -123,6 +142,50 @@ class SummaryCard extends StatelessWidget {
         ],
       ),
     );
+
+    if (isDesktop) {
+      final translationY = _isHovered ? -3.0 : 0.0;
+      final hoverGlowOpacity = _isHovered ? 0.08 : 0.04;
+      final mainShadowOpacity = _isHovered ? 0.40 : 0.35;
+
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          transform: Matrix4.translationValues(0.0, translationY, 0.0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(mainShadowOpacity),
+                blurRadius: 36,
+                offset: const Offset(0, 16),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: widget.color.withOpacity(hoverGlowOpacity),
+                blurRadius: 20,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+              child: content,
+            ),
+          ),
+        ),
+      );
+    }
+    return content;
   }
 }
 
@@ -178,9 +241,9 @@ class TodaySummaryBar extends StatelessWidget {
       return Row(
         children: [
           Expanded(child: cards[0]),
-          const SizedBox(width: 16),
+          const SizedBox(width: 20),
           Expanded(child: cards[1]),
-          const SizedBox(width: 16),
+          const SizedBox(width: 20),
           Expanded(child: cards[2]),
         ],
       );
@@ -199,28 +262,45 @@ class TodaySummaryBar extends StatelessWidget {
 }
 
 // ─── Practice Overview Quick Stat Row ───────────────────────
-class QuickStatRow extends StatelessWidget {
+class QuickStatRow extends StatefulWidget {
   final IconData icon;
   final String label;
   final String value;
   final Color color;
 
   const QuickStatRow({
-    key,
+    super.key,
     required this.icon,
     required this.label,
     required this.value,
     required this.color,
-  }) : super(key: key);
+  });
+
+  @override
+  State<QuickStatRow> createState() => _QuickStatRowState();
+}
+
+class _QuickStatRowState extends State<QuickStatRow> {
+  bool _isHovered = false;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 900.0;
+
+    Widget content = Container(
+      padding: isDesktop
+          ? const EdgeInsets.symmetric(horizontal: 20, vertical: 16)
+          : const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF131924),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        color: isDesktop
+            ? const Color(0xFF131A26).withOpacity(0.07)
+            : const Color(0xFF131924),
+        borderRadius: BorderRadius.circular(isDesktop ? 28 : 14),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.06),
+          width: 1.0,
+        ),
       ),
       child: Row(
         children: [
@@ -228,20 +308,20 @@ class QuickStatRow extends StatelessWidget {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
+              color: widget.color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(icon, color: color, size: 20),
+            child: Icon(widget.icon, color: widget.color, size: 20),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Text(
-              label,
+              widget.label,
               style: context.textStyles.bodyMedium.copyWith(color: Colors.white),
             ),
           ),
           Text(
-            value,
+            widget.value,
             style: context.textStyles.h3.copyWith(
               fontWeight: FontWeight.bold,
               fontSize: 18,
@@ -251,6 +331,50 @@ class QuickStatRow extends StatelessWidget {
         ],
       ),
     );
+
+    if (isDesktop) {
+      final translationY = _isHovered ? -3.0 : 0.0;
+      final hoverGlowOpacity = _isHovered ? 0.08 : 0.04;
+      final mainShadowOpacity = _isHovered ? 0.40 : 0.35;
+
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          transform: Matrix4.translationValues(0.0, translationY, 0.0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(mainShadowOpacity),
+                blurRadius: 36,
+                offset: const Offset(0, 16),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: widget.color.withOpacity(hoverGlowOpacity),
+                blurRadius: 20,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+              child: content,
+            ),
+          ),
+        ),
+      );
+    }
+    return content;
   }
 }
 
@@ -395,16 +519,16 @@ class DashboardOverviewSection extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: card1),
-              const SizedBox(width: 16),
+              const SizedBox(width: 20),
               Expanded(child: card2),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(child: card3),
-              const SizedBox(width: 16),
+              const SizedBox(width: 20),
               Expanded(child: card4),
             ],
           ),
@@ -424,7 +548,7 @@ class DashboardOverviewSection extends StatelessWidget {
 }
 
 // ─── Dashboard Helper Card widget ────────────────────────────
-class DashboardOverviewCard extends StatelessWidget {
+class DashboardOverviewCard extends StatefulWidget {
   final String title;
   final IconData icon;
   final Color color;
@@ -439,14 +563,30 @@ class DashboardOverviewCard extends StatelessWidget {
   });
 
   @override
+  State<DashboardOverviewCard> createState() => _DashboardOverviewCardState();
+}
+
+class _DashboardOverviewCardState extends State<DashboardOverviewCard> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 900.0;
+
+    Widget content = Container(
+      padding: isDesktop
+          ? const EdgeInsets.symmetric(horizontal: 24, vertical: 20)
+          : const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF131924),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        color: isDesktop
+            ? const Color(0xFF131A26).withOpacity(0.07)
+            : const Color(0xFF131924),
+        borderRadius: BorderRadius.circular(isDesktop ? 28 : 16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.06),
+          width: 1.0,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -457,14 +597,14 @@ class DashboardOverviewCard extends StatelessWidget {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
+                  color: widget.color.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, color: color, size: 16),
+                child: Icon(widget.icon, color: widget.color, size: 16),
               ),
               const SizedBox(width: 10),
               Text(
-                title,
+                widget.title,
                 style: context.textStyles.h3.copyWith(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
@@ -473,13 +613,60 @@ class DashboardOverviewCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 18),
           Row(
-            children: children,
+            children: widget.children,
           ),
         ],
       ),
     );
+
+    if (isDesktop) {
+      final translationY = _isHovered ? -3.0 : 0.0;
+      final hoverGlowOpacity = _isHovered ? 0.08 : 0.04;
+      final mainShadowOpacity = _isHovered ? 0.40 : 0.35;
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => setState(() => _isHovered = true),
+          onExit: (_) => setState(() => _isHovered = false),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            transform: Matrix4.translationValues(0.0, translationY, 0.0),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(mainShadowOpacity),
+                  blurRadius: 36,
+                  offset: const Offset(0, 16),
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: widget.color.withOpacity(hoverGlowOpacity),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: content,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    return content;
   }
 }
 
@@ -540,17 +727,32 @@ class DashboardOverviewDivider extends StatelessWidget {
 }
 
 // ─── Weekly Appointments Trend Chart ─────────────────────────
-class AppointmentsTrendChart extends StatelessWidget {
+class AppointmentsTrendChart extends StatefulWidget {
   const AppointmentsTrendChart({super.key});
 
   @override
+  State<AppointmentsTrendChart> createState() => _AppointmentsTrendChartState();
+}
+
+class _AppointmentsTrendChartState extends State<AppointmentsTrendChart> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 900.0;
+
+    Widget content = Container(
+      padding: isDesktop ? const EdgeInsets.all(24) : const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: const Color(0xFF131924),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        color: isDesktop
+            ? const Color(0xFF131A26).withOpacity(0.07)
+            : const Color(0xFF131924),
+        borderRadius: BorderRadius.circular(isDesktop ? 28 : 16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.06),
+          width: 1.0,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -571,7 +773,7 @@ class AppointmentsTrendChart extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFF1C2230),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                  border: Border.all(color: Colors.white.withOpacity(0.05)),
                 ),
                 child: Row(
                   children: [
@@ -670,8 +872,8 @@ class AppointmentsTrendChart extends StatelessWidget {
                       show: true,
                       gradient: LinearGradient(
                         colors: [
-                          const Color(0xFF3B82F6).withValues(alpha: 0.15),
-                          const Color(0xFF3B82F6).withValues(alpha: 0.0),
+                          const Color(0xFF3B82F6).withOpacity(0.15),
+                          const Color(0xFF3B82F6).withOpacity(0.0),
                         ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
@@ -685,13 +887,64 @@ class AppointmentsTrendChart extends StatelessWidget {
         ],
       ),
     );
+
+    if (isDesktop) {
+      final translationY = _isHovered ? -3.0 : 0.0;
+      final hoverGlowOpacity = _isHovered ? 0.08 : 0.04;
+      final mainShadowOpacity = _isHovered ? 0.40 : 0.35;
+
+      return MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          transform: Matrix4.translationValues(0.0, translationY, 0.0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(28),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(mainShadowOpacity),
+                blurRadius: 36,
+                offset: const Offset(0, 16),
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: const Color(0xFF3B82F6).withOpacity(hoverGlowOpacity),
+                blurRadius: 20,
+                spreadRadius: 2,
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+              child: content,
+            ),
+          ),
+        ),
+      );
+    }
+    return content;
   }
 }
 
 // ─── Patient Timeline Stream ──────────────────────────────────
-class PatientTimelineStream extends StatelessWidget {
+class PatientTimelineStream extends StatefulWidget {
   final List<AppointmentModel> appointments;
   const PatientTimelineStream({super.key, required this.appointments});
+
+  @override
+  State<PatientTimelineStream> createState() => _PatientTimelineStreamState();
+}
+
+class _PatientTimelineStreamState extends State<PatientTimelineStream> {
+  bool _isHovered = false;
 
   String _getTypeLabel(AppointmentType type) {
     switch (type) {
@@ -706,14 +959,24 @@ class PatientTimelineStream extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (appointments.isEmpty) {
-      return Container(
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 900.0;
+
+    Widget content;
+    
+    if (widget.appointments.isEmpty) {
+      content = Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 32),
         decoration: BoxDecoration(
-          color: const Color(0xFF131924),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          color: isDesktop
+              ? const Color(0xFF131A26).withOpacity(0.07)
+              : const Color(0xFF131924),
+          borderRadius: BorderRadius.circular(isDesktop ? 28 : 16),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.06),
+            width: 1.0,
+          ),
         ),
         child: Center(
           child: Column(
@@ -729,188 +992,349 @@ class PatientTimelineStream extends StatelessWidget {
           ),
         ),
       );
-    }
+    } else {
+      // Sort chronologically by scheduled time
+      final sorted = List<AppointmentModel>.from(widget.appointments)
+        ..sort((a, b) => a.time.compareTo(b.time));
 
-    // Sort chronologically by scheduled time
-    final sorted = List<AppointmentModel>.from(appointments)
-      ..sort((a, b) => a.time.compareTo(b.time));
+      content = Container(
+        padding: isDesktop
+            ? const EdgeInsets.symmetric(horizontal: 24, vertical: 20)
+            : const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDesktop
+              ? const Color(0xFF131A26).withOpacity(0.07)
+              : const Color(0xFF131924),
+          borderRadius: BorderRadius.circular(isDesktop ? 28 : 16),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.06),
+            width: 1.0,
+          ),
+        ),
+        child: ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: sorted.length,
+          itemBuilder: (context, index) {
+            final appt = sorted[index];
+            final isLast = index == sorted.length - 1;
 
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: sorted.length,
-      itemBuilder: (context, index) {
-        final appt = sorted[index];
-        final isLast = index == sorted.length - 1;
+            // Determine icon, colors, and timeline descriptions
+            IconData nodeIcon;
+            Color nodeColor;
+            String statusText = '';
+            String timeText = formatTimeString(appt.time);
+            
+            final inProgress = appt.status == AppointmentStatus.inProgress;
+            final isCompleted = appt.status == AppointmentStatus.completed;
+            final isCancelled = appt.status == AppointmentStatus.cancelled;
+            final isWaiting = appt.status == AppointmentStatus.waiting;
 
-        // Determine icon, colors, and timeline descriptions
-        IconData nodeIcon;
-        Color nodeColor;
-        String statusText = '';
-        String timeText = formatTimeString(appt.time);
-        
-        final inProgress = appt.status == AppointmentStatus.inProgress;
-        final isCompleted = appt.status == AppointmentStatus.completed;
-        final isCancelled = appt.status == AppointmentStatus.cancelled;
-        final isWaiting = appt.status == AppointmentStatus.waiting;
+            if (isCompleted) {
+              nodeIcon = Icons.check_circle_rounded;
+              nodeColor = context.colors.success;
+              
+              if (appt.checkInTime != null && appt.consultationStartTime != null) {
+                final waitDiff = appt.consultationStartTime!.difference(appt.checkInTime!);
+                final waitMin = waitDiff.inMinutes;
+                statusText = 'Completed • Waited ${waitMin}m';
+              } else {
+                statusText = 'Completed';
+              }
+              if (appt.consultationStartTime != null) {
+                timeText = DateFormat('h:mm a').format(appt.consultationStartTime!.toLocal());
+              }
+            } else if (inProgress) {
+              nodeIcon = Icons.play_circle_filled_rounded;
+              nodeColor = context.colors.info;
+              
+              if (appt.checkInTime != null && appt.consultationStartTime != null) {
+                final waitDiff = appt.consultationStartTime!.difference(appt.checkInTime!);
+                statusText = 'In Session • Waited ${waitDiff.inMinutes}m';
+              } else {
+                statusText = 'In Session';
+              }
+              if (appt.consultationStartTime != null) {
+                timeText = DateFormat('h:mm a').format(appt.consultationStartTime!.toLocal());
+              }
+            } else if (isWaiting) {
+              nodeIcon = Icons.hourglass_empty_rounded;
+              nodeColor = const Color(0xFFFBBF24); // Warm yellow
+              
+              if (appt.checkInTime != null) {
+                final waitDiff = DateTime.now().difference(appt.checkInTime!);
+                statusText = 'Waiting Room • Arrived ${DateFormat('h:mm a').format(appt.checkInTime!.toLocal())} (${waitDiff.inMinutes}m ago)';
+              } else {
+                statusText = 'Waiting Room';
+              }
+            } else if (isCancelled) {
+              nodeIcon = Icons.cancel_rounded;
+              nodeColor = context.colors.error;
+              statusText = 'Cancelled';
+            } else {
+              // Scheduled / Upcoming
+              nodeIcon = Icons.radio_button_unchecked_rounded;
+              nodeColor = context.colors.textHint;
+              statusText = 'Scheduled';
+            }
 
-        if (isCompleted) {
-          nodeIcon = Icons.check_circle_rounded;
-          nodeColor = context.colors.success;
-          
-          if (appt.checkInTime != null && appt.consultationStartTime != null) {
-            final waitDiff = appt.consultationStartTime!.difference(appt.checkInTime!);
-            final waitMin = waitDiff.inMinutes;
-            statusText = 'Completed • Waited ${waitMin}m';
-          } else {
-            statusText = 'Completed';
-          }
-          if (appt.consultationStartTime != null) {
-            timeText = DateFormat('h:mm a').format(appt.consultationStartTime!.toLocal());
-          }
-        } else if (inProgress) {
-          nodeIcon = Icons.play_circle_filled_rounded;
-          nodeColor = context.colors.info;
-          
-          if (appt.checkInTime != null && appt.consultationStartTime != null) {
-            final waitDiff = appt.consultationStartTime!.difference(appt.checkInTime!);
-            statusText = 'In Session • Waited ${waitDiff.inMinutes}m';
-          } else {
-            statusText = 'In Session';
-          }
-          if (appt.consultationStartTime != null) {
-            timeText = DateFormat('h:mm a').format(appt.consultationStartTime!.toLocal());
-          }
-        } else if (isWaiting) {
-          nodeIcon = Icons.hourglass_empty_rounded;
-          nodeColor = const Color(0xFFFBBF24); // Warm yellow
-          
-          if (appt.checkInTime != null) {
-            final waitDiff = DateTime.now().difference(appt.checkInTime!);
-            statusText = 'Waiting Room • Arrived ${DateFormat('h:mm a').format(appt.checkInTime!.toLocal())} (${waitDiff.inMinutes}m ago)';
-          } else {
-            statusText = 'Waiting Room';
-          }
-        } else if (isCancelled) {
-          nodeIcon = Icons.cancel_rounded;
-          nodeColor = context.colors.error;
-          statusText = 'Cancelled';
-        } else {
-          // Scheduled / Upcoming
-          nodeIcon = Icons.radio_button_unchecked_rounded;
-          nodeColor = context.colors.textHint;
-          statusText = 'Scheduled';
-        }
-
-        return IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Left timeline lines and circle
-              Column(
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Container(
-                    width: 24,
-                    height: 24,
-                    decoration: BoxDecoration(
-                      color: nodeColor.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      nodeIcon,
-                      color: nodeColor,
-                      size: 15,
+                  // Left timeline lines and circle
+                  Column(
+                    children: [
+                      Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: nodeColor.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        alignment: Alignment.center,
+                        child: Icon(
+                          nodeIcon,
+                          color: nodeColor,
+                          size: 15,
+                        ),
+                      ),
+                      if (!isLast)
+                        Expanded(
+                          child: Container(
+                            width: 2,
+                            color: Colors.white.withValues(alpha: 0.08),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 14),
+                  // Right contents
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                appt.displayName,
+                                style: context.textStyles.bodyMedium.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  fontSize: 14.5,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              timeText,
+                              style: context.textStyles.caption.copyWith(
+                                color: Colors.white54,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          statusText,
+                          style: context.textStyles.caption.copyWith(
+                            color: inProgress ? context.colors.info : (isWaiting ? const Color(0xFFFBBF24) : Colors.white38),
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.05),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                _getTypeLabel(appt.type),
+                                style: TextStyle(
+                                  color: appt.type == AppointmentType.session 
+                                      ? const Color(0xFF34D399) 
+                                      : (appt.type == AppointmentType.walkIn ? const Color(0xFFFBBF24) : const Color(0xFF60A5FA)),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            if (appt.doctorName != null && appt.doctorName!.isNotEmpty) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                'Dr. ${appt.doctorName}',
+                                style: context.textStyles.caption.copyWith(
+                                  color: Colors.white24,
+                                  fontSize: 9.5,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 16), // Bottom spacing for nodes
+                      ],
                     ),
                   ),
-                  if (!isLast)
-                    Expanded(
-                      child: Container(
-                        width: 2,
-                        color: Colors.white.withValues(alpha: 0.08),
-                      ),
-                    ),
                 ],
               ),
-              const SizedBox(width: 14),
-              // Right contents
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            appt.displayName,
-                            style: context.textStyles.bodyMedium.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontSize: 14.5,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          timeText,
-                          style: context.textStyles.caption.copyWith(
-                            color: Colors.white54,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      statusText,
-                      style: context.textStyles.caption.copyWith(
-                        color: inProgress ? context.colors.info : (isWaiting ? const Color(0xFFFBBF24) : Colors.white38),
-                        fontSize: 11,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            _getTypeLabel(appt.type),
-                            style: TextStyle(
-                              color: appt.type == AppointmentType.session 
-                                  ? const Color(0xFF34D399) 
-                                  : (appt.type == AppointmentType.walkIn ? const Color(0xFFFBBF24) : const Color(0xFF60A5FA)),
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        if (appt.doctorName != null && appt.doctorName!.isNotEmpty) ...[
-                          const SizedBox(width: 8),
-                          Text(
-                            'Dr. ${appt.doctorName}',
-                            style: context.textStyles.caption.copyWith(
-                              color: Colors.white24,
-                              fontSize: 9.5,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 16), // Bottom spacing for nodes
-                  ],
+            );
+          },
+        ),
+      );
+    }
+
+    if (isDesktop) {
+      final translationY = _isHovered ? -3.0 : 0.0;
+      final hoverGlowOpacity = _isHovered ? 0.06 : 0.02;
+      final mainShadowOpacity = _isHovered ? 0.40 : 0.35;
+
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => setState(() => _isHovered = true),
+          onExit: (_) => setState(() => _isHovered = false),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            transform: Matrix4.translationValues(0.0, translationY, 0.0),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(mainShadowOpacity),
+                  blurRadius: 36,
+                  offset: const Offset(0, 16),
                 ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+                BoxShadow(
+                  color: const Color(0xFF10B981).withOpacity(hoverGlowOpacity),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: content,
               ),
-            ],
+            ),
           ),
-        );
-      },
+        ),
+      );
+    }
+    return content;
+  }
+}
+
+class WebGlassCard extends StatefulWidget {
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsetsGeometry? padding;
+  final Color? glowColor;
+  final bool animateHover;
+
+  const WebGlassCard({
+    super.key,
+    required this.child,
+    this.borderRadius = 28,
+    this.padding,
+    this.glowColor,
+    this.animateHover = true,
+  });
+
+  @override
+  State<WebGlassCard> createState() => _WebGlassCardState();
+}
+
+class _WebGlassCardState extends State<WebGlassCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+
+    if (!isDesktop) {
+      return Container(
+        padding: widget.padding,
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: widget.child,
+      );
+    }
+
+    final translationY = widget.animateHover && _isHovered ? -3.0 : 0.0;
+    final hoverGlowOpacity = widget.animateHover && _isHovered ? 0.08 : 0.04;
+    final mainShadowOpacity = widget.animateHover && _isHovered ? 0.40 : 0.35;
+    final activeGlowColor = widget.glowColor ?? const Color(0xFF3B82F6);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        transform: Matrix4.translationValues(0.0, translationY, 0.0),
+        decoration: BoxDecoration(
+          color: const Color(0xFF131A26).withOpacity(0.07),
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.08),
+            width: 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(mainShadowOpacity),
+              blurRadius: 36,
+              offset: const Offset(0, 16),
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: activeGlowColor.withOpacity(hoverGlowOpacity),
+              blurRadius: 20,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Padding(
+              padding: widget.padding ?? EdgeInsets.zero,
+              child: widget.child,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
+

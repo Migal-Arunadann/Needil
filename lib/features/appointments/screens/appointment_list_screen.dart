@@ -1,5 +1,6 @@
 // AUTO-GENERATED â€” Web-only layout.
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -1239,7 +1240,7 @@ class _AppointmentListScreenState
     }
 
     return Scaffold(
-      backgroundColor: context.colors.background,
+      backgroundColor: isDesktop ? Colors.transparent : context.colors.background,
       floatingActionButton: isDesktop
           ? null
           : FloatingActionButton(
@@ -1289,22 +1290,11 @@ class _AppointmentListScreenState
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Left Column: Custom Interactive control panel
-                            Container(
-                              width: 300,
-                              decoration: BoxDecoration(
-                                color: context.colors.surface,
-                                borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: context.colors.textPrimary.withValues(alpha: 0.015),
-                                    blurRadius: 20,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
+                            WebGlassCard(
+                              borderRadius: 26,
+                              child: Container(
+                                width: 300,
+                                child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -1430,6 +1420,7 @@ class _AppointmentListScreenState
                                 ],
                               ),
                             ),
+                          ),
                             const SizedBox(width: 24),
                             // Right Column: Appointments List with Filter Tabs
                             Expanded(
@@ -2532,20 +2523,46 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
         child: Opacity(
           opacity: widget.isMissed || apt.status == AppointmentStatus.cancelled ? 0.65 : 1.0,
           child: Container(
-            decoration: BoxDecoration(
-              color: context.colors.surface,
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: [
-                BoxShadow(
-                  color: accentColor.withValues(alpha: 0.07),
-                  blurRadius: 16,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
+            decoration: isDesktop
+                ? BoxDecoration(
+                    color: Colors.white.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.08),
+                      width: 1.0,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                      BoxShadow(
+                        color: accentColor.withValues(alpha: 0.05),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  )
+                : BoxDecoration(
+                    color: context.colors.surface,
+                    borderRadius: BorderRadius.circular(18),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accentColor.withValues(alpha: 0.07),
+                        blurRadius: 16,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(18),
-              child: IntrinsicHeight(
+              borderRadius: BorderRadius.circular(isDesktop ? 24 : 18),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(
+                  sigmaX: isDesktop ? 10 : 0,
+                  sigmaY: isDesktop ? 10 : 0,
+                ),
+                child: IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -2983,6 +3000,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                   ],
                 ),
               ),
+            ),
             ),
           ),
         ),
@@ -4303,6 +4321,105 @@ class _CalendarDayCellState extends State<_CalendarDayCell> {
     );
   }
 }
+
+class WebGlassCard extends StatefulWidget {
+  final Widget child;
+  final double borderRadius;
+  final EdgeInsetsGeometry? padding;
+  final Color? glowColor;
+  final bool animateHover;
+
+  const WebGlassCard({
+    super.key,
+    required this.child,
+    this.borderRadius = 28,
+    this.padding,
+    this.glowColor,
+    this.animateHover = true,
+  });
+
+  @override
+  State<WebGlassCard> createState() => _WebGlassCardState();
+}
+
+class _WebGlassCardState extends State<WebGlassCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+
+    if (!isDesktop) {
+      return Container(
+        padding: widget.padding,
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: widget.child,
+      );
+    }
+
+    final translationY = widget.animateHover && _isHovered ? -3.0 : 0.0;
+    final hoverGlowOpacity = widget.animateHover && _isHovered ? 0.08 : 0.04;
+    final mainShadowOpacity = widget.animateHover && _isHovered ? 0.40 : 0.35;
+    final activeGlowColor = widget.glowColor ?? const Color(0xFF3B82F6);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        transform: Matrix4.translationValues(0.0, translationY, 0.0),
+        decoration: BoxDecoration(
+          color: const Color(0xFF131A26).withOpacity(0.07),
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.08),
+            width: 1.0,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(mainShadowOpacity),
+              blurRadius: 36,
+              offset: const Offset(0, 16),
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+            BoxShadow(
+              color: activeGlowColor.withOpacity(hoverGlowOpacity),
+              blurRadius: 20,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Padding(
+              padding: widget.padding ?? EdgeInsets.zero,
+              child: widget.child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 
 

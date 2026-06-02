@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../providers/analytics_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import '../../../core/widgets/responsive_wrapper.dart';
+import '../../dashboard/widgets/dashboard_widgets.dart';
 
 // --- Color palette for charts ------------------------------------------------
 const _kCompleted = Color(0xFF10B981);
@@ -27,7 +28,7 @@ class AnalyticsScreen extends ConsumerWidget {
     final isDesktop = MediaQuery.of(context).size.width >= 900;
 
     return Scaffold(
-      backgroundColor: context.colors.background,
+      backgroundColor: isDesktop ? Colors.transparent : context.colors.background,
       body: SafeArea(
         child: ResponsiveWrapper(
           child: data.isLoading
@@ -39,7 +40,9 @@ class AnalyticsScreen extends ConsumerWidget {
                     physics: const AlwaysScrollableScrollPhysics(),
                     slivers: [
                       SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                        padding: isDesktop
+                            ? const EdgeInsets.fromLTRB(36, 12, 36, 100)
+                            : const EdgeInsets.fromLTRB(16, 0, 16, 100),
                         sliver: SliverList(
                           delegate: SliverChildListDelegate([
                             _AnalyticsHeader(data: data),
@@ -444,10 +447,11 @@ class _ExportProgressDialogState extends State<_ExportProgressDialog> {
       child: Container(
         constraints: const BoxConstraints(maxWidth: 450),
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             Row(
               children: [
                 Container(
@@ -626,6 +630,7 @@ class _ExportProgressDialogState extends State<_ExportProgressDialog> {
                     ],
                   ),
           ],
+        ),
         ),
       ),
     );
@@ -816,7 +821,7 @@ class _KpiRow extends StatelessWidget {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 10,
       mainAxisSpacing: 10,
-      childAspectRatio: 1.2,
+      childAspectRatio: 1.0,
       children: cards,
     );
   }
@@ -849,23 +854,7 @@ class _KpiCard extends StatelessWidget {
     final trendIcon = isTrendPositive ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded;
     final isDesktop = MediaQuery.of(context).size.width >= 900;
 
-    return Container(
-      padding: isDesktop
-          ? const EdgeInsets.all(16)
-          : const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: BoxDecoration(
-        color: context.colors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
+    final content = Row(
         children: [
           Expanded(
             flex: 3,
@@ -966,7 +955,32 @@ class _KpiCard extends StatelessWidget {
             ),
           ),
         ],
+      );
+
+    if (isDesktop) {
+      return WebGlassCard(
+        borderRadius: 28,
+        glowColor: color,
+        padding: const EdgeInsets.all(16),
+        child: content,
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
+      child: content,
     );
   }
 }
@@ -987,21 +1001,7 @@ class _RevenueCard extends StatelessWidget {
     final leftFlex = isDesktop ? 3 : 5;
     final rightFlex = isDesktop ? 7 : 5;
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: context.colors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
+    final content = Row(
         children: [
           Expanded(
             flex: leftFlex,
@@ -1133,7 +1133,32 @@ class _RevenueCard extends StatelessWidget {
             ),
           ),
         ],
+      );
+
+    if (isDesktop) {
+      return WebGlassCard(
+        borderRadius: 28,
+        glowColor: themeColor,
+        padding: const EdgeInsets.all(18),
+        child: content,
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
+      child: content,
     );
   }
 }
@@ -1148,21 +1173,8 @@ class _TodaySnapshotRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-      decoration: BoxDecoration(
-        color: context.colors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final content = Row(
         children: [
           _TodayTile(
             label: 'Scheduled',
@@ -1185,7 +1197,32 @@ class _TodaySnapshotRow extends StatelessWidget {
             icon: Icons.cancel_rounded,
           ),
         ],
+      );
+
+    if (isDesktop) {
+      return WebGlassCard(
+        borderRadius: 28,
+        glowColor: context.colors.primary,
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        child: content,
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
+      child: content,
     );
   }
 
@@ -1258,14 +1295,8 @@ class _WeeklyActivityChart extends StatelessWidget {
       cancelledSpots.add(FlSpot(i.toDouble(), data.weeklyCancelled.length > i ? data.weeklyCancelled[i].toDouble() : 0.0));
     }
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-      decoration: BoxDecoration(
-        color: context.colors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
-      ),
-      child: Column(
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final content = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Legend
@@ -1359,7 +1390,25 @@ class _WeeklyActivityChart extends StatelessWidget {
             ),
           ),
         ],
+      );
+
+    if (isDesktop) {
+      return WebGlassCard(
+        borderRadius: 28,
+        glowColor: context.colors.primary,
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+        child: content,
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
       ),
+      child: content,
     );
   }
 }
@@ -1405,14 +1454,8 @@ class _HourlyVolumeChart extends StatelessWidget {
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-      decoration: BoxDecoration(
-        color: context.colors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
-      ),
-      child: Column(
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final content = Column(
         children: [
           SizedBox(
             height: 180,
@@ -1474,7 +1517,25 @@ class _HourlyVolumeChart extends StatelessWidget {
             ),
           ),
         ],
+      );
+
+    if (isDesktop) {
+      return WebGlassCard(
+        borderRadius: 28,
+        glowColor: context.colors.primary,
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+        child: content,
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
       ),
+      child: content,
     );
   }
 }

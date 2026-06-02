@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -127,20 +128,25 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
     if (isDesktop) {
       return Scaffold(
-        backgroundColor: context.colors.background,
-        body: Row(
+        body: Stack(
           children: [
-            _buildSidebar(context, tabs),
-            VerticalDivider(
-              width: 1,
-              thickness: 1,
-              color: context.colors.border,
-            ),
-            Expanded(
-              child: IndexedStack(
-                index: _currentIndex,
-                children: pages,
-              ),
+            const AmbientBackground(),
+            Row(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(left: 24, top: 24, bottom: 24),
+                  child: _buildSidebar(context, tabs),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 16, right: 24, top: 24, bottom: 24),
+                    child: IndexedStack(
+                      index: _currentIndex,
+                      children: pages,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -207,210 +213,243 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     }
 
     return Container(
-      width: 250,
-      color: const Color(0xFF090C16), // Dark Sidebar Background
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Branding / Header ──
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
-            child: Row(
-              children: [
-                // Custom App Icon
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Image.asset(
-                    'assets/images/needil_icon.png',
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Icon(Icons.add_rounded, color: Colors.blue, size: 20);
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Needil',
-                  style: context.textStyles.h2.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 20,
-                  ),
-                ),
-              ],
-            ),
+      width: 232,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(40),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFFFAF6EE).withOpacity(0.24),
+            const Color(0xFF141722).withOpacity(0.06),
+          ],
+        ),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.15),
+          width: 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 40,
+            offset: const Offset(0, 12),
           ),
-          
-          // Navigation Section Label
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Text(
-              'MAIN',
-              style: context.textStyles.caption.copyWith(
-                color: Colors.white30,
-                fontWeight: FontWeight.bold,
-                fontSize: 10,
-                letterSpacing: 1.2,
-              ),
-            ),
-          ),
-
-          // ── Navigation Tabs ──
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: tabs.length,
-              itemBuilder: (context, index) {
-                final tab = tabs[index];
-                final isSelected = _currentIndex == index;
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: _SidebarNavItem(
-                    icon: tab.icon,
-                    label: tab.label == 'Appts' ? 'Appointments' : (tab.label == 'Profile' ? 'Profile' : tab.label),
-                    isSelected: isSelected,
-                    onTap: () {
-                      if (_currentIndex == index) return;
-                      HapticFeedback.selectionClick();
-                      setState(() => _currentIndex = index);
-                      final isApptsTab = tab.label == 'Appts';
-                      if (isApptsTab) {
-                        ref.read(appointmentListProvider.notifier).loadAppointments();
-                      }
-                    },
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // ── User Profile Footer Card ──
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFF131924),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withOpacity(0.04)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      shape: BoxShape.circle,
-                      image: photoUrl != null
-                          ? DecorationImage(
-                              image: NetworkImage(photoUrl),
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                    ),
-                    child: photoUrl == null
-                        ? Icon(fallbackIcon, color: Colors.white70, size: 16)
-                        : null,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          name,
-                          style: context.textStyles.bodyMedium.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontSize: 13,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 1),
-                        Text(
-                          roleStr,
-                          style: context.textStyles.caption.copyWith(
-                            color: Colors.white38,
-                            fontSize: 10,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    color: Colors.white38,
-                    size: 16,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // ── Bottom Logout ──
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: InkWell(
-              onTap: () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    backgroundColor: const Color(0xFF1E1E2C),
-                    title: const Text('Confirm Sign Out', style: TextStyle(color: Colors.white)),
-                    content: const Text('Are you sure you want to sign out from your account?', style: TextStyle(color: Colors.white70)),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel', style: TextStyle(color: Colors.white38)),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
-                        child: const Text('Sign Out'),
-                      ),
-                    ],
-                  ),
-                );
-                if (confirm == true) {
-                  ref.read(authProvider.notifier).logout();
-                }
-              },
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(40),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Branding / Header ──
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.only(left: 18, top: 36, bottom: 28),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Icon(
-                      Icons.logout_rounded,
-                      color: Colors.redAccent,
-                      size: 18,
+                    Image.asset(
+                      'assets/images/neediliconforweb.png',
+                      width: 52,
+                      height: 52,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return const Icon(Icons.add_rounded, color: Colors.white, size: 24);
+                      },
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Sign Out',
-                        style: context.textStyles.bodyMedium.copyWith(
-                          color: Colors.redAccent,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Needil',
+                      style: context.textStyles.h2.copyWith(
+                        color: const Color(0xFFFAF8F5),
+                        fontWeight: FontWeight.w900,
+                        fontSize: 26,
+                        letterSpacing: -0.8,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
+              
+              const SizedBox(height: 8),
+
+              // ── Navigation Tabs ──
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: tabs.length,
+                  itemBuilder: (context, index) {
+                    final tab = tabs[index];
+                    final isSelected = _currentIndex == index;
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: _SidebarNavItem(
+                        icon: tab.icon,
+                        label: tab.label == 'Appts' ? 'Appointments' : (tab.label == 'Profile' ? 'Profile' : tab.label),
+                        isSelected: isSelected,
+                        onTap: () {
+                          if (_currentIndex == index) return;
+                          HapticFeedback.selectionClick();
+                          setState(() => _currentIndex = index);
+                          final isApptsTab = tab.label == 'Appts';
+                          if (isApptsTab) {
+                            ref.read(appointmentListProvider.notifier).loadAppointments();
+                          }
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+              // ── User Profile Footer Card ──
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: InkWell(
+                  onTap: () {
+                    final profileIndex = tabs.indexWhere((t) => t.label == 'Profile');
+                    if (profileIndex != -1) {
+                      setState(() => _currentIndex = profileIndex);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.04),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            shape: BoxShape.circle,
+                            image: photoUrl != null
+                                ? DecorationImage(
+                                    image: NetworkImage(photoUrl),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                          ),
+                          child: photoUrl == null
+                              ? Icon(fallbackIcon, color: Colors.white70, size: 16)
+                              : null,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                name,
+                                style: context.textStyles.bodyMedium.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                roleStr,
+                                style: context.textStyles.caption.copyWith(
+                                  color: Colors.white38,
+                                  fontSize: 10,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.chevron_right_rounded,
+                          color: Colors.white70,
+                          size: 16,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── Bottom Logout ──
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                child: InkWell(
+                  onTap: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        backgroundColor: const Color(0xFF1E1E2C),
+                        title: const Text('Confirm Sign Out', style: TextStyle(color: Colors.white)),
+                        content: const Text('Are you sure you want to sign out from your account?', style: TextStyle(color: Colors.white70)),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel', style: TextStyle(color: Colors.white38)),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                            child: const Text('Sign Out'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      ref.read(authProvider.notifier).logout();
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFEE2E2).withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.redAccent.withOpacity(0.15)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.logout_rounded,
+                          color: Colors.redAccent,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Sign Out',
+                            style: context.textStyles.bodyMedium.copyWith(
+                              color: Colors.redAccent,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -483,59 +522,85 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
 
   @override
   Widget build(BuildContext context) {
-    const activeBgColor = Color(0xFF172033); // Slate Navy
     final hoverBgColor = Colors.white.withOpacity(0.04);
-    const activeColor = Colors.white;
-    const inactiveColor = Color(0xFF64748B);
+    final activeBgColor = Colors.white.withOpacity(0.08);
 
-    final color = widget.isSelected ? activeColor : inactiveColor;
+    final color = widget.isSelected ? Colors.white : Colors.white.withOpacity(0.4);
     final bgColor = widget.isSelected 
         ? activeBgColor 
         : (_isHovered ? hoverBgColor : Colors.transparent);
 
+    Widget itemContent = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(99),
+        border: widget.isSelected 
+            ? Border.all(color: Colors.white.withOpacity(0.14), width: 1.0)
+            : Border.all(color: Colors.transparent, width: 1.0),
+        boxShadow: widget.isSelected ? [
+          BoxShadow(
+            color: Colors.white.withOpacity(0.05),
+            blurRadius: 12,
+            spreadRadius: 0,
+          )
+        ] : null,
+      ),
+      child: Row(
+        children: [
+          Icon(
+            widget.icon, 
+            color: color, 
+            size: 20,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              widget.label,
+              style: context.textStyles.bodyMedium.copyWith(
+                color: color,
+                fontWeight: widget.isSelected ? FontWeight.bold : FontWeight.w500,
+              ),
+            ),
+          ),
+          if (widget.isSelected)
+            Container(
+              width: 3,
+              height: 16,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    if (widget.isSelected) {
+      itemContent = ClipRRect(
+        borderRadius: BorderRadius.circular(99),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: itemContent,
+        ),
+      );
+    }
+
+    final translationY = _isHovered && !widget.isSelected ? -1.5 : 0.0;
+    final scaleVal = _isHovered && !widget.isSelected ? 1.025 : 1.0;
+
     return MouseRegion(
+      cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(12),
-            border: widget.isSelected
-                ? Border.all(color: const Color(0xFF3B82F6).withOpacity(0.2))
-                : null,
-          ),
-          child: Row(
-            children: [
-              Icon(
-                widget.icon, 
-                color: widget.isSelected ? const Color(0xFF3B82F6) : color, 
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  widget.label,
-                  style: context.textStyles.bodyMedium.copyWith(
-                    color: color,
-                    fontWeight: widget.isSelected ? FontWeight.bold : FontWeight.w500,
-                  ),
-                ),
-              ),
-              if (widget.isSelected)
-                Container(
-                  width: 4,
-                  height: 16,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF3B82F6),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-            ],
-          ),
+          transform: Matrix4.identity()
+            ..translate(0.0, translationY)
+            ..scale(scaleVal),
+          child: itemContent,
         ),
       ),
     );
@@ -546,4 +611,94 @@ class _TabConfig {
   final IconData icon;
   final String label;
   const _TabConfig(this.icon, this.label);
+}
+
+class AmbientBackground extends StatelessWidget {
+  const AmbientBackground({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // Base dark navy/black background
+        Positioned.fill(
+          child: Container(
+            color: const Color(0xFF0C0E15),
+          ),
+        ),
+        // Glow streak 1 - top left
+        Positioned(
+          left: -150,
+          top: -150,
+          width: 650,
+          height: 650,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xFF1D4ED8).withOpacity(0.25),
+                  const Color(0xFF0C0E15).withOpacity(0.0),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Glow streak 2 - bottom right
+        Positioned(
+          right: -200,
+          bottom: -200,
+          width: 850,
+          height: 850,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xFF2563EB).withOpacity(0.18),
+                  const Color(0xFF0C0E15).withOpacity(0.0),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Glow streak 3 - top right secondary
+        Positioned(
+          right: 50,
+          top: -100,
+          width: 500,
+          height: 500,
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  const Color(0xFF1D4ED8).withOpacity(0.10),
+                  const Color(0xFF0C0E15).withOpacity(0.0),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Glow streak 4 - vertical ambient in middle
+        Positioned(
+          left: MediaQuery.of(context).size.width * 0.3,
+          top: 0,
+          bottom: 0,
+          width: 450,
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                radius: 0.8,
+                colors: [
+                  const Color(0xFF3B82F6).withOpacity(0.12),
+                  const Color(0xFF0C0E15).withOpacity(0.0),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

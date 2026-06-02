@@ -1,8 +1,9 @@
+import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
+
 import '../../../core/widgets/app_button.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/constants/pb_collections.dart';
@@ -20,6 +21,41 @@ import 'package:pms_app/core/theme/app_theme.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/responsive_wrapper.dart';
 
+// ════════════════════════════════════════════════════════════════════════════
+//  DESIGN TOKENS v2 — Premium Futuristic SaaS (Linear / Vercel / Stripe)
+// ════════════════════════════════════════════════════════════════════════════
+
+// Background
+const _kBg            = Color(0xFF04060F);     // deeper navy
+const _kBgSurface     = Color(0xFF080D1C);     // elevated surface
+
+// Card surfaces
+const _kCardBg        = Color(0xFF0A1022);     // default card
+const _kCardBgHover   = Color(0xFF0E1730);     // hover state
+const _kCardBgElevated = Color(0xFF0C1428);    // elevated card
+
+// Glass borders
+const _kGlassBorder   = Color(0x0AFFFFFF);     // white ~4%
+const _kGlassBorderH  = Color(0x18FFFFFF);     // white ~9%
+const _kGlassBorderL  = Color(0x06FFFFFF);     // white ~2% — subtle
+
+// Typography
+const _kTx            = Color(0xFFE8ECF4);     // primary text — slightly brighter
+const _kTxDim         = Color(0xFF8B9AB8);     // secondary text — softer blue
+const _kTxMute        = Color(0xFF576580);     // hint text
+
+// Accent palette
+const _kAccent        = Color(0xFF3B82F6);     // blue
+const _kAccentSoft    = Color(0xFF60A5FA);     // softer blue for highlights
+const _kSuccess       = Color(0xFF10B981);
+const _kWarning       = Color(0xFFF59E0B);
+const _kError         = Color(0xFFEF4444);
+
+// Radii
+const _kR             = 24.0;                  // card radius
+const _kHR            = 28.0;                  // hero radius
+const _kTileR         = 20.0;                  // tile radius
+
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -29,6 +65,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  bool get _isDesktop => MediaQuery.of(context).size.width >= 900;
 
   @override
   void initState() {
@@ -39,8 +76,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void dispose() {
     super.dispose();
   }
-
-
 
   // _showError is intentionally removed — validation errors are now shown
   // directly via ScaffoldMessenger.of(ctx) inside the bottom sheet to avoid
@@ -112,29 +147,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return completed / fields.length;
   }
 
+  // ════════════════════════════════════════════════════════════════════════
+  //  RIGHT COLUMN BUILDER
+  // ════════════════════════════════════════════════════════════════════════
+
   Widget _buildSettingsRightColumn(BuildContext context, AuthState auth, bool isClinic) {
+    final d = _isDesktop;
+    final secGap  = d ? 48.0 : 24.0;   // ↑ from 40
+    final itemGap = d ? 16.0 : 10.0;   // ↑ from 14
+    final smGap   = d ? 12.0 : 8.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (isClinic) ...[
           // CLINIC ACCOUNT SECTIONS
-
           _sectionHeader('Clinic Details', Icons.business_rounded),
-          const SizedBox(height: 10),
+          SizedBox(height: itemGap),
           _buildClinicDetailsCard(),
-          const SizedBox(height: 10),
+          SizedBox(height: itemGap),
 
           // ── Manage Photos tile ──
           _buildManagePhotosTile(),
-          const SizedBox(height: 24),
+          SizedBox(height: secGap),
 
           _sectionHeader('Staff Management', Icons.manage_accounts_rounded),
-          const SizedBox(height: 10),
+          SizedBox(height: itemGap),
 
           // ── Manage Doctors button ──
           _staffManagementTile(
             icon: Icons.medical_services_rounded,
-            iconColor: context.colors.primary,
+            iconColor: d ? _kAccent : context.colors.primary,
             title: 'Manage Doctors',
             subtitle: 'View schedules, set restrictions, reset passwords',
             onTap: () => Navigator.push(
@@ -142,12 +185,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               MaterialPageRoute(builder: (_) => const ManageDoctorsScreen()),
             ),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: itemGap),
 
           // ── Manage Receptionist button ──
           _staffManagementTile(
             icon: Icons.support_agent_rounded,
-            iconColor: context.colors.info,
+            iconColor: d ? const Color(0xFF38BDF8) : context.colors.info,
             title: 'Manage Receptionist',
             subtitle: 'Edit details, toggle access, reset passwords',
             onTap: () => Navigator.push(
@@ -155,33 +198,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               MaterialPageRoute(builder: (_) => const ManageReceptionistScreen()),
             ),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: secGap),
 
         ] else if (auth.role == UserRole.doctor) ...[
           // DOCTOR ACCOUNT SECTIONS
-
           _sectionHeader('Personal Details', Icons.person_outline_rounded),
-          const SizedBox(height: 10),
+          SizedBox(height: itemGap),
           _buildDoctorDetailsCard(),
-          const SizedBox(height: 24),
+          SizedBox(height: secGap),
 
           // Read-only clinic info
           _sectionHeader('My Clinic', Icons.business_rounded),
-          const SizedBox(height: 10),
+          SizedBox(height: itemGap),
           _buildDoctorClinicInfo(),
-          const SizedBox(height: 24),
+          SizedBox(height: secGap),
         ] else if (auth.role == UserRole.receptionist) ...[
           // RECEPTIONIST ACCOUNT SECTIONS
-
           _sectionHeader('Staff Details', Icons.support_agent_rounded),
-          const SizedBox(height: 10),
+          SizedBox(height: itemGap),
           _buildReceptionistDetailsCard(),
-          const SizedBox(height: 24),
+          SizedBox(height: secGap),
         ],
 
         // ── General Settings ──
         _sectionHeader('Settings', Icons.tune_rounded),
-        const SizedBox(height: 10),
+        SizedBox(height: itemGap),
         _settingsTile(
           icon: Icons.notifications_outlined,
           title: 'Notifications',
@@ -191,14 +232,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             MaterialPageRoute(builder: (_) => const NotificationsScreen()),
           ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: smGap),
         _settingsTile(
           icon: Icons.palette_outlined,
           title: 'Theme',
           subtitle: 'Choose system default, light or dark mode',
           onTap: () => _showThemePicker(context),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: smGap),
         _settingsTile(
           icon: Icons.lock_outline_rounded,
           title: 'Privacy & Security',
@@ -208,7 +249,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             MaterialPageRoute(builder: (_) => const PrivacySecurityScreen()),
           ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: smGap),
         _settingsTile(
           icon: Icons.info_outline_rounded,
           title: 'About',
@@ -218,21 +259,47 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             MaterialPageRoute(builder: (_) => const AboutScreen()),
           ),
         ),
-        const SizedBox(height: 24),
+        SizedBox(height: secGap),
 
         // ── Account / Sign Out ──
         _sectionHeader('Account', Icons.shield_rounded),
-        const SizedBox(height: 10),
-        AppButton(
-          label: 'Sign Out',
-          isOutlined: true,
-          icon: Icons.logout_rounded,
-          onPressed: _confirmSignOut,
-        ),
-        const SizedBox(height: 40),
+        SizedBox(height: itemGap),
+        if (d)
+          _WebHoverGlassCard(
+            onTap: _confirmSignOut,
+            accentColor: _kError,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.logout_rounded, color: _kError.withValues(alpha: 0.8), size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  'Sign Out',
+                  style: TextStyle(
+                    color: _kError.withValues(alpha: 0.8),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    letterSpacing: -0.1,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          AppButton(
+            label: 'Sign Out',
+            isOutlined: true,
+            icon: Icons.logout_rounded,
+            onPressed: _confirmSignOut,
+          ),
+        SizedBox(height: d ? 80 : 40),   // ↑ from 60 — more bottom breathing room
       ],
     );
   }
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  BUILD
+  // ════════════════════════════════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
@@ -240,67 +307,247 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final isClinic = auth.role == UserRole.clinic;
     final isDesktop = MediaQuery.of(context).size.width >= 900;
 
-    return Scaffold(
-      backgroundColor: context.colors.background,
-      body: SafeArea(
-        child: ResponsiveWrapper(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Header ──
-                Row(
-                  children: [
-                    const SizedBox(width: 14),
-                    Text('Profile', style: context.textStyles.h2),
-                  ],
-                ),
-                const SizedBox(height: 24),
-
-                if (isDesktop)
+    // ── Mobile: unchanged original layout ──
+    if (!isDesktop) {
+      return Scaffold(
+        backgroundColor: context.colors.background,
+        body: SafeArea(
+          child: ResponsiveWrapper(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Left Column: Profile Card + Completion
-                      Expanded(
-                        flex: 2,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildProfileHero(isClinic),
-                            const SizedBox(height: 24),
-                            _buildProfileCompletion(isClinic),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 24),
-                      // Right Column: Settings Sections
-                      Expanded(
-                        flex: 3,
-                        child: _buildSettingsRightColumn(context, auth, isClinic),
-                      ),
+                      const SizedBox(width: 14),
+                      Text('Profile', style: context.textStyles.h2),
                     ],
-                  )
-                else ...[
-                  // Mobile: Stacks Vertically
+                  ),
+                  const SizedBox(height: 24),
                   _buildProfileHero(isClinic),
                   const SizedBox(height: 24),
                   _buildProfileCompletion(isClinic),
                   const SizedBox(height: 24),
                   _buildSettingsRightColumn(context, auth, isClinic),
                 ],
-              ],
+              ),
             ),
           ),
         ),
+      );
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    //  DESKTOP: Premium futuristic ambient background
+    // ════════════════════════════════════════════════════════════════════
+    final screenW = MediaQuery.of(context).size.width;
+    final screenH = MediaQuery.of(context).size.height;
+
+    return Scaffold(
+      backgroundColor: _kBg,
+      body: Stack(
+        children: [
+          // ── Ambient orb: top-right — large soft blue ──
+          Positioned(
+            top: -240,
+            right: -160,
+            child: Container(
+              width: 700,
+              height: 700,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF1E40AF).withValues(alpha: 0.06),
+                    const Color(0xFF1E3A8A).withValues(alpha: 0.02),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.5, 1.0],
+                ),
+              ),
+            ),
+          ),
+          // ── Ambient orb: bottom-left — deep indigo ──
+          Positioned(
+            bottom: -280,
+            left: -180,
+            child: Container(
+              width: 800,
+              height: 800,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF0D47A1).withValues(alpha: 0.04),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // ── Ambient orb: center — very subtle accent ──
+          Positioned(
+            top: screenH * 0.35,
+            left: screenW * 0.38,
+            child: Container(
+              width: 500,
+              height: 500,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF3B82F6).withValues(alpha: 0.025),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // ── Vertical glow streak 1 ──
+          Positioned(
+            top: 0,
+            left: screenW * 0.16,
+            child: Container(
+              width: 1,
+              height: screenH,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    const Color(0xFF1E40AF).withValues(alpha: 0.05),
+                    const Color(0xFF3B82F6).withValues(alpha: 0.025),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 0.25, 0.65, 1.0],
+                ),
+              ),
+            ),
+          ),
+          // ── Vertical glow streak 2 ──
+          Positioned(
+            top: 100,
+            right: screenW * 0.22,
+            child: Container(
+              width: 1,
+              height: screenH * 0.45,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    const Color(0xFF3B82F6).withValues(alpha: 0.035),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // ── Vertical glow streak 3 — very faint ──
+          Positioned(
+            top: 200,
+            left: screenW * 0.52,
+            child: Container(
+              width: 1,
+              height: screenH * 0.35,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    const Color(0xFF60A5FA).withValues(alpha: 0.02),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Content ──
+          Positioned.fill(
+            child: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 56, vertical: 48),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1240),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // ── Page header ──
+                        Padding(
+                          padding: const EdgeInsets.only(left: 6),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Profile',
+                                style: TextStyle(
+                                  color: _kTx,
+                                  fontSize: 36,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.8,
+                                  height: 1.1,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Manage your account and clinic settings',
+                                style: TextStyle(
+                                  color: _kTxDim,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: -0.1,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 48),
+
+                        // ── Two-column layout ──
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Left column: Profile Card + Completion
+                            Expanded(
+                              flex: 5,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildProfileHero(isClinic),
+                                  const SizedBox(height: 32),
+                                  _buildProfileCompletion(isClinic),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 40),
+                            // Right column: Settings Sections
+                            Expanded(
+                              flex: 7,
+                              child: _buildSettingsRightColumn(context, auth, isClinic),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
   //  HERO PROFILE CARD
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
 
   Widget _buildProfileHero(bool isClinic) {
     final auth = ref.read(authProvider);
@@ -321,7 +568,219 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         : isReceptionist
             ? 'Staff Account'
             : 'Doctor Account';
+    final isVerified = isClinic
+        ? (auth.clinic?.verified ?? false)
+        : (auth.doctor?.verified ?? false);
+    final hasImage = (isClinic ? auth.clinic?.logoUrl : auth.doctor?.photoUrl) != null;
 
+    // ═══════════════════════════════════════════════════════
+    //  Desktop: premium glassmorphism hero with inner glow
+    // ═══════════════════════════════════════════════════════
+    if (_isDesktop) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(_kHR),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 32, sigmaY: 32),
+          child: Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF0D1F3C).withValues(alpha: 0.82),
+                  const Color(0xFF081428).withValues(alpha: 0.65),
+                  const Color(0xFF060E1F).withValues(alpha: 0.55),
+                ],
+                stops: const [0.0, 0.5, 1.0],
+              ),
+              borderRadius: BorderRadius.circular(_kHR),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.07),
+              ),
+              boxShadow: [
+                // Outer glow — brand accent
+                BoxShadow(
+                  color: const Color(0xFF1E40AF).withValues(alpha: 0.08),
+                  blurRadius: 64,
+                  spreadRadius: -8,
+                  offset: const Offset(0, 20),
+                ),
+                // Depth shadow
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 32,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                // ── Inner top-left highlight (frosted glass feel) ──
+                Positioned(
+                  top: -40,
+                  left: -40,
+                  child: Container(
+                    width: 200,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          Colors.white.withValues(alpha: 0.03),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                // ── Content ──
+                Column(
+                  children: [
+                    Row(
+                      children: [
+                        // ── Avatar with animated glow ring ──
+                        _AvatarGlowRing(
+                          size: 88,
+                          borderRadius: 26,
+                          glowColor: _kAccent,
+                          child: Container(
+                            width: 88,
+                            height: 88,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(26),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.12),
+                                width: 2,
+                              ),
+                              image: hasImage
+                                  ? DecorationImage(
+                                      image: NetworkImage(isClinic
+                                          ? auth.clinic!.logoUrl!
+                                          : auth.doctor!.photoUrl!),
+                                      fit: BoxFit.cover,
+                                    )
+                                  : null,
+                            ),
+                            child: !hasImage
+                                ? Icon(
+                                    isClinic
+                                        ? Icons.business_rounded
+                                        : Icons.medical_services_rounded,
+                                    color: Colors.white.withValues(alpha: 0.5),
+                                    size: 38,
+                                  )
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(width: 28),
+                        // ── Name / username / email / badges ──
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                name,
+                                style: const TextStyle(
+                                  color: _kTx,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.5,
+                                  height: 1.2,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                '@$username',
+                                style: TextStyle(
+                                  color: Colors.white.withValues(alpha: 0.38),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w400,
+                                  letterSpacing: -0.1,
+                                ),
+                              ),
+                              if (email.isNotEmpty) ...[
+                                const SizedBox(height: 14),
+                                Row(
+                                  children: [
+                                    Icon(Icons.email_outlined,
+                                        size: 14,
+                                        color: Colors.white.withValues(alpha: 0.28)),
+                                    const SizedBox(width: 7),
+                                    Flexible(
+                                      child: Text(
+                                        email,
+                                        style: TextStyle(
+                                          color: Colors.white.withValues(alpha: 0.48),
+                                          fontSize: 13,
+                                          letterSpacing: -0.1,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+                                    // ── Glass verified / verify badge ──
+                                    _GlassPillBadge(
+                                      color: isVerified ? _kSuccess : _kWarning,
+                                      icon: isVerified
+                                          ? Icons.check_circle_rounded
+                                          : Icons.warning_amber_rounded,
+                                      label: isVerified ? 'Verified' : 'Verify Email',
+                                      onTap: isVerified ? null : _requestVerification,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 16),
+                              // ── Glass role pill ──
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.04),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.06),
+                                  ),
+                                ),
+                                child: Text(
+                                  role.toUpperCase(),
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.55),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 1.2,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        // ── Glass edit button ──
+                        _WebHoverGlassButton(
+                          onTap: () async {
+                            await Navigator.push(context,
+                                MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+                            if (mounted) setState(() {});
+                          },
+                          child: Icon(Icons.edit_rounded,
+                              color: Colors.white.withValues(alpha: 0.55),
+                              size: 18),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ── Mobile: original unchanged ──
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -397,18 +856,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       // VERIFICATION BADGE/BUTTON
                       GestureDetector(
                         onTap: () {
-                          final isVerified = isClinic ? (auth.clinic?.verified ?? false) : (auth.doctor?.verified ?? false);
                           if (!isVerified) _requestVerification();
                         },
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
-                            color: (isClinic ? (auth.clinic?.verified ?? false) : (auth.doctor?.verified ?? false))
+                            color: isVerified
                                 ? context.colors.success.withValues(alpha: 0.2)
                                 : context.colors.warning.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(
-                              color: (isClinic ? (auth.clinic?.verified ?? false) : (auth.doctor?.verified ?? false))
+                              color: isVerified
                                   ? context.colors.success.withValues(alpha: 0.5)
                                   : context.colors.warning.withValues(alpha: 0.5),
                             ),
@@ -417,20 +875,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                (isClinic ? (auth.clinic?.verified ?? false) : (auth.doctor?.verified ?? false))
+                                isVerified
                                     ? Icons.check_circle_rounded
                                     : Icons.warning_amber_rounded,
                                 size: 10,
-                                color: (isClinic ? (auth.clinic?.verified ?? false) : (auth.doctor?.verified ?? false))
+                                color: isVerified
                                     ? context.colors.success : context.colors.warning,
                               ),
                               const SizedBox(width: 3),
                               Text(
-                                (isClinic ? (auth.clinic?.verified ?? false) : (auth.doctor?.verified ?? false))
-                                    ? 'Verified' : 'Verify Email',
+                                isVerified ? 'Verified' : 'Verify Email',
                                 style: context.textStyles.caption.copyWith(
                                   fontSize: 9,
-                                  color: (isClinic ? (auth.clinic?.verified ?? false) : (auth.doctor?.verified ?? false))
+                                  color: isVerified
                                       ? context.colors.success : context.colors.warning,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -481,9 +938,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
   //  CLINIC ACCOUNT: Clinic Details Card
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
 
   Widget _buildClinicDetailsCard() {
     final clinic = ref.read(authProvider).clinic;
@@ -497,9 +954,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ]);
   }
 
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
   //  CLINIC ACCOUNT: Manage Photos Tile
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
 
   Widget _buildManagePhotosTile() {
     final clinic = ref.read(authProvider).clinic;
@@ -507,19 +964,84 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final limit = clinic?.photoLimit ?? 2000;
     final progress = limit > 0 ? (used / limit).clamp(0.0, 1.0) : 0.0;
     final progressColor = progress > 0.9
-        ? context.colors.error
+        ? (_isDesktop ? _kError : context.colors.error)
         : progress > 0.75
-            ? context.colors.warning
-            : context.colors.success;
+            ? (_isDesktop ? _kWarning : context.colors.warning)
+            : (_isDesktop ? _kSuccess : context.colors.success);
 
+    final onTap = () async {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ManagePhotosScreen()),
+      );
+      if (mounted) setState(() {}); // Refresh quota display
+    };
+
+    // ── Desktop: glass hover card ──
+    if (_isDesktop) {
+      return _WebHoverGlassCard(
+        onTap: onTap,
+        child: Row(
+          children: [
+            Container(
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                color: progressColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: progressColor.withValues(alpha: 0.12)),
+              ),
+              child: Icon(Icons.photo_library_rounded, color: progressColor, size: 22),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Manage Photos',
+                      style: TextStyle(
+                        color: _kTx,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.1,
+                      )),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: progress,
+                            backgroundColor: Colors.white.withValues(alpha: 0.05),
+                            valueColor: AlwaysStoppedAnimation(progressColor),
+                            minHeight: 4,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '$used / $limit',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: progressColor,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Icon(Icons.arrow_forward_ios_rounded, size: 13, color: _kTxMute),
+          ],
+        ),
+      );
+    }
+
+    // ── Mobile: unchanged ──
     return GestureDetector(
-      onTap: () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const ManagePhotosScreen()),
-        );
-        if (mounted) setState(() {}); // Refresh quota display
-      },
+      onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -580,9 +1102,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
 
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
   //  CLINIC ACCOUNT: Staff Management Nav Tile
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
 
   Widget _staffManagementTile({
     required IconData icon,
@@ -591,6 +1113,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     required String subtitle,
     required VoidCallback onTap,
   }) {
+    // ── Desktop: glass hover card ──
+    if (_isDesktop) {
+      return _WebHoverGlassCard(
+        onTap: onTap,
+        child: Row(
+          children: [
+            Container(
+              width: 46, height: 46,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: iconColor.withValues(alpha: 0.12)),
+              ),
+              child: Icon(icon, color: iconColor, size: 22),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                        color: _kTx,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.1,
+                      )),
+                  const SizedBox(height: 4),
+                  Text(subtitle,
+                      style: const TextStyle(
+                        color: _kTxDim,
+                        fontSize: 12,
+                        letterSpacing: -0.1,
+                      )),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Icon(Icons.arrow_forward_ios_rounded, size: 13, color: _kTxMute),
+          ],
+        ),
+      );
+    }
+
+    // ── Mobile: unchanged ──
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -629,12 +1196,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
   //  DOCTOR ACCOUNT: Personal Details Card
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
 
   Widget _buildDoctorDetailsCard() {
     final doctor = ref.read(authProvider).doctor;
+    final d = _isDesktop;
     return Column(
       children: [
         _infoCard([
@@ -644,84 +1212,139 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _infoRow('Email', doctor.email!),
           _infoRow('Age', '${doctor?.age ?? '—'}'),
         ]),
-        const SizedBox(height: 10),
+        SizedBox(height: d ? 16 : 10),
         // Full details edit — schedule, treatments
-        GestureDetector(
-          onTap: () async {
-            final doctorId = ref.read(authProvider).userId;
-            if (doctorId == null) return;
-            await Navigator.push<bool>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => EditDoctorDetailsScreen(doctorId: doctorId),
-              ),
-            );
-            if (mounted) setState(() {});
-          },
-          child: Container(
-            padding: EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: context.colors.primary.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: context.colors.primary.withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: context.colors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(Icons.schedule_rounded, size: 20, color: context.colors.primary),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Edit Schedule & Treatments', style: context.textStyles.label.copyWith(fontSize: 14)),
-                      Text(
-                        'Availability, session timings, fees',
-                        style: context.textStyles.caption.copyWith(fontSize: 11),
+        d
+            ? _WebHoverGlassCard(
+                onTap: () async {
+                  final doctorId = ref.read(authProvider).userId;
+                  if (doctorId == null) return;
+                  await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditDoctorDetailsScreen(doctorId: doctorId),
+                    ),
+                  );
+                  if (mounted) setState(() {});
+                },
+                accentColor: _kAccent,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 42, height: 42,
+                      decoration: BoxDecoration(
+                        color: _kAccent.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(13),
+                        border: Border.all(color: _kAccent.withValues(alpha: 0.12)),
                       ),
+                      child: const Icon(Icons.schedule_rounded, size: 20, color: _kAccent),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Edit Schedule & Treatments',
+                              style: TextStyle(color: _kTx, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: -0.1)),
+                          const SizedBox(height: 3),
+                          const Text('Availability, session timings, fees',
+                              style: TextStyle(color: _kTxDim, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_right_rounded, size: 20, color: _kAccent.withValues(alpha: 0.7)),
+                  ],
+                ),
+              )
+            : GestureDetector(
+                onTap: () async {
+                  final doctorId = ref.read(authProvider).userId;
+                  if (doctorId == null) return;
+                  await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EditDoctorDetailsScreen(doctorId: doctorId),
+                    ),
+                  );
+                  if (mounted) setState(() {});
+                },
+                child: Container(
+                  padding: EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: context.colors.primary.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: context.colors.primary.withValues(alpha: 0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: context.colors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(Icons.schedule_rounded, size: 20, color: context.colors.primary),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Edit Schedule & Treatments', style: context.textStyles.label.copyWith(fontSize: 14)),
+                            Text(
+                              'Availability, session timings, fees',
+                              style: context.textStyles.caption.copyWith(fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right_rounded, size: 20, color: context.colors.primary),
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded, size: 20, color: context.colors.primary),
-              ],
-            ),
-          ),
-        ),
+              ),
       ],
     );
   }
 
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
   //  DOCTOR ACCOUNT: My Clinic (read-only)
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
 
   Widget _buildDoctorClinicInfo() {
     final doctor = ref.read(authProvider).doctor;
     final isInClinic = doctor?.clinicId != null && doctor!.clinicId!.isNotEmpty;
+    final d = _isDesktop;
 
     if (!isInClinic) {
       return Container(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(d ? 22 : 16),
         decoration: BoxDecoration(
-          color: context.colors.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: context.colors.border),
+          color: d ? _kCardBg : context.colors.surface,
+          borderRadius: BorderRadius.circular(d ? _kR : 14),
+          border: Border.all(color: d ? _kGlassBorder : context.colors.border),
+          boxShadow: d
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.2),
+                    blurRadius: 20,
+                    offset: const Offset(0, 4),
+                  )
+                ]
+              : null,
         ),
         child: Row(
           children: [
-            Icon(Icons.info_outline_rounded, color: context.colors.textHint, size: 22),
-            const SizedBox(width: 10),
+            Icon(Icons.info_outline_rounded,
+                color: d ? _kTxMute : context.colors.textHint, size: 22),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 'Your account is managed by a clinic. Contact your clinic administrator for details.',
-                style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
+                style: d
+                    ? const TextStyle(color: _kTxDim, fontSize: 13, letterSpacing: -0.1)
+                    : context.textStyles.caption.copyWith(color: context.colors.textSecondary),
               ),
             ),
           ],
@@ -729,34 +1352,52 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
     }
 
+    final clr = d ? _kSuccess : context.colors.success;
     return Container(
-      padding: EdgeInsets.all(14),
+      padding: EdgeInsets.all(d ? 22 : 14),
       decoration: BoxDecoration(
-        color: context.colors.success.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.colors.success.withValues(alpha: 0.2)),
+        color: clr.withValues(alpha: d ? 0.05 : 0.06),
+        borderRadius: BorderRadius.circular(d ? _kR : 14),
+        border: Border.all(color: clr.withValues(alpha: 0.12)),
+        boxShadow: d
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 20,
+                  offset: const Offset(0, 4),
+                )
+              ]
+            : null,
       ),
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 42,
+            height: 42,
             decoration: BoxDecoration(
-              color: context.colors.success.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
+              color: clr.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(d ? 14 : 10),
+              border: d ? Border.all(color: clr.withValues(alpha: 0.12)) : null,
             ),
-            child: Icon(Icons.check_circle_rounded, color: context.colors.success, size: 22),
+            child: Icon(Icons.check_circle_rounded, color: clr, size: 22),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Associated with a clinic', style: context.textStyles.label.copyWith(color: context.colors.success)),
-                const SizedBox(height: 2),
+                Text(
+                  'Associated with a clinic',
+                  style: d
+                      ? TextStyle(color: _kSuccess, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: -0.1)
+                      : context.textStyles.label.copyWith(color: context.colors.success),
+                ),
+                const SizedBox(height: 3),
                 Text(
                   'Your account is managed by the clinic owner.',
-                  style: context.textStyles.caption.copyWith(fontSize: 11),
+                  style: d
+                      ? const TextStyle(color: _kTxDim, fontSize: 12, letterSpacing: -0.1)
+                      : context.textStyles.caption.copyWith(fontSize: 11),
                 ),
               ],
             ),
@@ -766,9 +1407,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
   //  RECEPTIONIST ACCOUNT: Details Card
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
 
   Widget _buildReceptionistDetailsCard() {
     final receptionist = ref.read(authProvider).receptionist;
@@ -780,9 +1421,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ]);
   }
 
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
   //  VERIFY EMAIL
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
 
   Future<void> _requestVerification() async {
     final auth = ref.read(authProvider);
@@ -837,11 +1478,142 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
   //  SIGN OUT
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
 
   Future<void> _confirmSignOut() async {
+    // Desktop: use a premium glassmorphic dialog
+    if (_isDesktop) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        barrierColor: Colors.black.withValues(alpha: 0.6),
+        builder: (ctx) => Center(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+              child: Container(
+                width: 420,
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      const Color(0xFF0F1729).withValues(alpha: 0.95),
+                      const Color(0xFF0A1020).withValues(alpha: 0.9),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.08),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.4),
+                      blurRadius: 48,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Icon
+                      Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: _kError.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: _kError.withValues(alpha: 0.12)),
+                        ),
+                        child: Icon(Icons.logout_rounded, color: _kError.withValues(alpha: 0.8), size: 26),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Sign Out',
+                        style: TextStyle(
+                          color: _kTx,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.3,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Are you sure you want to sign out?\nYou will need to log in again.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: _kTxDim,
+                          fontSize: 14,
+                          height: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _WebHoverGlassButton(
+                              height: 44,
+                              borderRadius: 14,
+                              onTap: () => Navigator.pop(ctx, false),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(
+                                  color: _kTxDim,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: GestureDetector(
+                                onTap: () => Navigator.pop(ctx, true),
+                                child: Container(
+                                  height: 44,
+                                  decoration: BoxDecoration(
+                                    color: _kError.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: _kError.withValues(alpha: 0.2)),
+                                  ),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    'Sign Out',
+                                    style: TextStyle(
+                                      color: _kError.withValues(alpha: 0.9),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      if (confirm == true && mounted) {
+        ref.read(authProvider.notifier).logout();
+      }
+      return;
+    }
+
+    // Mobile: unchanged
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -877,9 +1649,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
   //  PROFILE COMPLETION BADGE
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
 
   Widget _buildProfileCompletion(bool isClinic) {
     final fields = isClinic ? _clinicProfileFields() : _doctorProfileFields();
@@ -887,11 +1659,163 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final pctInt = (pct * 100).round();
     final missing = fields.entries.where((e) => !e.value).toList();
 
+    final onTap = () async {
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+      if (mounted) setState(() {});
+    };
+
+    // ── Desktop: glassmorphism completion card ──
+    if (_isDesktop) {
+      final accentClr = pct >= 1.0 ? _kSuccess : _kAccent;
+      return GestureDetector(
+        onTap: onTap,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(_kR),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+              child: Container(
+                padding: const EdgeInsets.all(28),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      accentClr.withValues(alpha: 0.05),
+                      _kCardBg.withValues(alpha: 0.75),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(_kR),
+                  border: Border.all(
+                    color: accentClr.withValues(alpha: 0.08),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        // Progress ring with glow
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: accentClr.withValues(alpha: 0.15),
+                                blurRadius: 20,
+                                spreadRadius: -4,
+                              ),
+                            ],
+                          ),
+                          child: SizedBox(
+                            width: 60,
+                            height: 60,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                CircularProgressIndicator(
+                                  value: pct,
+                                  strokeWidth: 5,
+                                  backgroundColor: Colors.white.withValues(alpha: 0.05),
+                                  color: accentClr,
+                                  strokeCap: StrokeCap.round,
+                                ),
+                                Text(
+                                  '$pctInt%',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: accentClr,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 22),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                pct >= 1.0 ? 'Profile Complete! 🎉' : 'Complete Your Profile',
+                                style: TextStyle(
+                                  color: _kTx,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.2,
+                                ),
+                              ),
+                              const SizedBox(height: 5),
+                              Text(
+                                pct >= 1.0
+                                    ? 'All required information is filled in.'
+                                    : '${missing.length} field${missing.length > 1 ? "s" : ""} remaining',
+                                style: const TextStyle(color: _kTxDim, fontSize: 13, letterSpacing: -0.1),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (missing.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: LinearProgressIndicator(
+                          value: pct,
+                          minHeight: 4,
+                          backgroundColor: Colors.white.withValues(alpha: 0.05),
+                          color: _kAccent,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: missing
+                            .map((e) => Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: _kWarning.withValues(alpha: 0.06),
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: _kWarning.withValues(alpha: 0.12),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    e.key,
+                                    style: TextStyle(
+                                      color: _kWarning.withValues(alpha: 0.85),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ))
+                            .toList(),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // ── Mobile: unchanged ──
     return GestureDetector(
-      onTap: () async {
-        await Navigator.push(context, MaterialPageRoute(builder: (_) => const EditProfileScreen()));
-        if (mounted) setState(() {});
-      },
+      onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
@@ -995,9 +1919,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ));
   }
 
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
   //  THEME PICKER
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
 
   void _showThemePicker(BuildContext context) {
     showModalBottomSheet(
@@ -1047,11 +1971,70 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
   //  SHARED WIDGETS
-  // ════════════════════════════════════════════════════════════
+  // ════════════════════════════════════════════════════════════════════════
 
   Widget _sectionHeader(String title, IconData icon) {
+    // ── Desktop: premium header with accent line & glowing icon ──
+    if (_isDesktop) {
+      return Padding(
+        padding: const EdgeInsets.only(left: 2),
+        child: Row(
+          children: [
+            // Glowing icon container
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: _kAccent.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(9),
+                border: Border.all(color: _kAccent.withValues(alpha: 0.08)),
+              ),
+              child: Icon(
+                icon,
+                size: 16,
+                color: _kAccentSoft,
+                shadows: [
+                  Shadow(
+                    color: _kAccent.withValues(alpha: 0.5),
+                    blurRadius: 14,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              title,
+              style: TextStyle(
+                color: _kTx,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+              ),
+            ),
+            const SizedBox(width: 16),
+            // Accent divider line
+            Expanded(
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      _kAccent.withValues(alpha: 0.12),
+                      _kAccent.withValues(alpha: 0.02),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ── Mobile: unchanged ──
     return Row(
       children: [
         Icon(icon, size: 18, color: context.colors.primary),
@@ -1062,6 +2045,33 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _infoCard(List<Widget> children) {
+    // ── Desktop: glassmorphism info card with backdrop blur ──
+    if (_isDesktop) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(_kR),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 22),
+            decoration: BoxDecoration(
+              color: _kCardBg.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(_kR),
+              border: Border.all(color: _kGlassBorder),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.2),
+                  blurRadius: 24,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Column(children: children),
+          ),
+        ),
+      );
+    }
+
+    // ── Mobile: unchanged ──
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1074,17 +2084,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Widget _infoRow(String label, String value, {bool copyable = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+    final d = _isDesktop;
+    return Container(
+      padding: EdgeInsets.symmetric(vertical: d ? 10 : 4, horizontal: d ? 4 : 0),
+      decoration: d
+          ? BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: Colors.white.withValues(alpha: 0.03)),
+              ),
+            )
+          : null,
       child: Row(
         children: [
           SizedBox(
-            width: 90,
-            child: Text(label, style: context.textStyles.caption),
+            width: d ? 130 : 90,
+            child: Text(
+              label,
+              style: d
+                  ? const TextStyle(color: _kTxMute, fontSize: 13, fontWeight: FontWeight.w400, letterSpacing: -0.1)
+                  : context.textStyles.caption,
+            ),
           ),
           Expanded(
-            child: Text(value,
-                style: context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+            child: Text(
+              value,
+              style: d
+                  ? const TextStyle(color: _kTx, fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: -0.1)
+                  : context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600),
+            ),
           ),
           if (copyable)
             GestureDetector(
@@ -1092,7 +2119,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 Clipboard.setData(ClipboardData(text: value));
                 _showSuccess('Copied: $value');
               },
-              child: Icon(Icons.copy_rounded, size: 16, color: context.colors.textHint),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: d
+                      ? BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                        )
+                      : null,
+                  child: Icon(Icons.copy_rounded, size: 14,
+                      color: d ? _kTxMute : context.colors.textHint),
+                ),
+              ),
             ),
         ],
       ),
@@ -1105,6 +2147,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     required String subtitle,
     required VoidCallback onTap,
   }) {
+    // ── Desktop: glass hover card ──
+    if (_isDesktop) {
+      return _WebHoverGlassCard(
+        onTap: onTap,
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: _kAccent.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(color: _kAccent.withValues(alpha: 0.1)),
+              ),
+              child: Icon(icon, color: _kAccentSoft, size: 20),
+            ),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                        color: _kTx,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.1,
+                      )),
+                  const SizedBox(height: 3),
+                  Text(subtitle,
+                      style: const TextStyle(
+                        color: _kTxDim,
+                        fontSize: 12,
+                        letterSpacing: -0.1,
+                      )),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 20, color: _kTxMute.withValues(alpha: 0.6)),
+          ],
+        ),
+      );
+    }
+
+    // ── Mobile: unchanged ──
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1137,6 +2224,299 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             Icon(Icons.chevron_right_rounded, size: 20, color: context.colors.textHint),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  GLASS PILL BADGE — translucent status pill with icon
+// ════════════════════════════════════════════════════════════════════════════
+
+class _GlassPillBadge extends StatelessWidget {
+  final Color color;
+  final IconData icon;
+  final String label;
+  final VoidCallback? onTap;
+
+  const _GlassPillBadge({
+    required this.color,
+    required this.icon,
+    required this.label,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: color.withValues(alpha: 0.15),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 12, color: color.withValues(alpha: 0.85)),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: color.withValues(alpha: 0.85),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.1,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  AVATAR GLOW RING — soft animated glow ring around avatar
+// ════════════════════════════════════════════════════════════════════════════
+
+class _AvatarGlowRing extends StatefulWidget {
+  final double size;
+  final double borderRadius;
+  final Color glowColor;
+  final Widget child;
+
+  const _AvatarGlowRing({
+    required this.size,
+    required this.borderRadius,
+    required this.glowColor,
+    required this.child,
+  });
+
+  @override
+  State<_AvatarGlowRing> createState() => _AvatarGlowRingState();
+}
+
+class _AvatarGlowRingState extends State<_AvatarGlowRing>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, child) {
+        final pulse = 0.18 + (_ctrl.value * 0.12); // 0.18 → 0.30
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(widget.borderRadius + 4),
+            boxShadow: [
+              BoxShadow(
+                color: widget.glowColor.withValues(alpha: pulse),
+                blurRadius: 24 + (_ctrl.value * 8),
+                spreadRadius: -2,
+              ),
+            ],
+          ),
+          child: child,
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  WEB HOVER GLASS BUTTON — smaller interactive glass element
+// ════════════════════════════════════════════════════════════════════════════
+
+class _WebHoverGlassButton extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final double? height;
+  final double borderRadius;
+
+  const _WebHoverGlassButton({
+    required this.child,
+    this.onTap,
+    this.height,
+    this.borderRadius = 14,
+  });
+
+  @override
+  State<_WebHoverGlassButton> createState() => _WebHoverGlassButtonState();
+}
+
+class _WebHoverGlassButtonState extends State<_WebHoverGlassButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: widget.onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutCubic,
+          height: widget.height,
+          width: widget.height,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: _hovered
+                ? Colors.white.withValues(alpha: 0.08)
+                : Colors.white.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(widget.borderRadius),
+            border: Border.all(
+              color: _hovered
+                  ? Colors.white.withValues(alpha: 0.12)
+                  : Colors.white.withValues(alpha: 0.06),
+            ),
+          ),
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  WEB HOVER GLASS CARD v2 — premium interactive card with micro-animations
+//  Features: hover lift, glow transition, subtle scale, smooth animation
+// ════════════════════════════════════════════════════════════════════════════
+
+class _WebHoverGlassCard extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final double borderRadius;
+  final EdgeInsets padding;
+  final Color? accentColor;
+
+  const _WebHoverGlassCard({
+    required this.child,
+    this.onTap,
+    this.borderRadius = _kTileR,
+    this.padding = const EdgeInsets.all(22),
+    this.accentColor,
+  });
+
+  @override
+  State<_WebHoverGlassCard> createState() => _WebHoverGlassCardState();
+}
+
+class _WebHoverGlassCardState extends State<_WebHoverGlassCard>
+    with SingleTickerProviderStateMixin {
+  bool _hovered = false;
+  late final AnimationController _animCtrl;
+  late final Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _animCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+    );
+    _anim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOutCubic);
+  }
+
+  @override
+  void dispose() {
+    _animCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onEnter() {
+    setState(() => _hovered = true);
+    _animCtrl.forward();
+  }
+
+  void _onExit() {
+    setState(() => _hovered = false);
+    _animCtrl.reverse();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = widget.accentColor ?? _kAccent;
+    return MouseRegion(
+      onEnter: (_) => _onEnter(),
+      onExit: (_) => _onExit(),
+      cursor: widget.onTap != null
+          ? SystemMouseCursors.click
+          : MouseCursor.defer,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedBuilder(
+          animation: _anim,
+          builder: (_, child) {
+            final t = _anim.value;
+            return Transform.translate(
+              offset: Offset(0, -2.0 * t),
+              child: Transform.scale(
+                scale: 1.0 + (0.005 * t), // very subtle scale
+                child: Container(
+                  padding: widget.padding,
+                  decoration: BoxDecoration(
+                    color: Color.lerp(_kCardBg, _kCardBgHover, t),
+                    borderRadius: BorderRadius.circular(widget.borderRadius),
+                    border: Border.all(
+                      color: Color.lerp(_kGlassBorder, _kGlassBorderH, t)!,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Color.lerp(
+                          Colors.black.withValues(alpha: 0.18),
+                          accent.withValues(alpha: 0.1),
+                          t,
+                        )!,
+                        blurRadius: lerpDouble(16, 32, t) ?? 16,
+                        offset: Offset(0, lerpDouble(4, 10, t) ?? 4),
+                      ),
+                      // Subtle accent glow on hover
+                      if (t > 0)
+                        BoxShadow(
+                          color: accent.withValues(alpha: 0.04 * t),
+                          blurRadius: 48,
+                          spreadRadius: -4,
+                        ),
+                    ],
+                  ),
+                  child: child,
+                ),
+              ),
+            );
+          },
+          child: widget.child,
         ),
       ),
     );
