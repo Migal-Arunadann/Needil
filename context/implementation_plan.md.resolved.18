@@ -1,0 +1,84 @@
+# Appointment Workflow Overhaul — Implementation Plan
+
+## Bug Fix 1: Double-Booking False Positives
+
+**Root cause:** [findExistingAppointment()](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#207-222) in [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart) queries by `patient_phone` + [doctor](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#112-131) + `status=scheduled`, but it matches **any** scheduled appointment for that phone — even when a different patient has a cancelled slot at that time and a new patient is being booked. The check is phone-based, not patient-identity-based.
+
+**Scenario 1:** Patient A at 5:00 PM is cancelled → Patient B is booked at 5:00 PM → Warning says "existing appointment" because Patient A's `patient_phone` may match if the same phone was used. Actually, the real issue is the filter doesn't account for cancelled appointments properly, AND it runs the check without a date filter, so it matches ANY future scheduled appointment for that phone across all dates.
+
+### Fix
+
+#### [MODIFY] [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart)
+- Update [findExistingAppointment()](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#207-222) to also filter by `status != "cancelled"` explicitly, and only match status `"scheduled"` or `"in_progress"` (skip completed/cancelled)
+- This is already done (`status = "scheduled"`), but the real fix is to pass the **date** from [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart) so it only checks the same date
+
+#### [MODIFY] [create_appointment_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/create_appointment_screen.dart)
+- Pass the selected date when calling [findExistingAppointment(phone, doctorId, date: selectedDate)](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#207-222) so it only flags true same-date conflicts
+
+---
+
+## Bug Fix 2: Appointment Ending Prematurely
+
+**Root cause:** In [patient_info_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/patient_info_screen.dart), [_submit()](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#201-286) calls [linkPatient()](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#95-108) which sets status to `in_progress`. When the card refreshes, it sees `isInProgress && hasPatientLinked` → shows **"Appointment Ended"** button. The user is seeing the button label and reading it as if the appointment ended.
+
+The actual problem: after filling patient details, the card immediately shows an "Appointment Ended" button. Per user's request, this should be **"Start Consultation"** instead.
+
+### New Appointment Lifecycle
+
+```
+Scheduled → Patient Arrived (in_progress) → Fill Details → Start Consultation → [Consultation Form] → Appointment Ended
+```
+
+---
+
+## Feature: Start Consultation Flow
+
+### [MODIFY] [appointment_list_screen.dart](file:///c:/App%20Development/PMS/lib/features/appointments/screens/appointment_list_screen.dart)
+
+Replace the current **"Appointment Ended"** button (shown when `isInProgress && hasPatientLinked`) with **"Start Consultation"**:
+
+- **"Start Consultation"** button: Checks for existing ongoing consultation for that patient → if none, creates one and navigates to [ConsultationScreen](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#16-35) → if one exists, navigates directly to it
+- Record `consultation_start_time` on the appointment when starting
+- **"Appointment Ended"** button: Only shows after consultation is completed (status check)
+- Record `check_out_time` when ended
+
+Add a new `_startConsultation(AppointmentModel apt)` method that:
+1. Checks if patient has an ongoing consultation via PocketBase
+2. If yes → navigate to it
+3. If no → create a new consultation record, navigate to [ConsultationScreen](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#16-35)
+
+### [MODIFY] [appointment_service.dart](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart)
+
+- Add `findOngoingConsultation(String patientId, String doctorId)` method
+- Add [createConsultation(String patientId, String doctorId)](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart#15-77) method (creates with `ongoing` status)
+
+### [MODIFY] [appointment_model.dart](file:///c:/App%20Development/PMS/lib/features/appointments/models/appointment_model.dart)
+
+- Add optional `consultationStartTime` field (to track when consultation was started)
+
+> [!IMPORTANT]
+> This requires a `consultation_start_time` field in the PocketBase [appointments](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#149-164) collection. The user will need to add this field manually in the PocketBase admin, OR we can handle it gracefully by storing the time in the consultation record's `created` timestamp instead.
+
+### Consultation Time Tracking
+
+The consultation start time = when "Start Consultation" is clicked (stored in `ConsultationModel.created`)
+The consultation end time = when the consultation form is saved/completed (the `updated` timestamp or a new `completed_at` field)
+
+### Session Start/End in Schedule
+
+> [!NOTE]
+> Session cards already appear in the schedule. The requested "Start Session" button + time tracking is a future enhancement that builds on this workflow. For now, focusing on the consultation flow integration.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- `flutter analyze` — zero errors across all modified files
+
+### Manual Verification (User Testing)
+1. Cancel appointment at time X → book different patient at time X → should NOT show warning
+2. Book call-by for unique patient on future date → should NOT show warning
+3. Fill patient details → card should show "Start Consultation" (not "Appointment Ended")
+4. Click "Start Consultation" → should create consultation and navigate to form
+5. Complete consultation → card should show "Appointment Ended"

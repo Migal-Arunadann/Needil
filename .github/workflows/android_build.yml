@@ -1,0 +1,48 @@
+name: Android Build & Release
+
+on:
+  push:
+    branches:
+      - main # Change this if your main branch is called 'master'
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17' # Flutter typically requires Java 17 nowadays
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Get Flutter dependencies
+        run: flutter pub get
+
+      - name: Build APK (Release)
+        run: flutter build apk --release
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          retention-days: 7
+
+      # NOTE: For Firebase App Distribution, you would add a step here:
+      # - name: Upload to Firebase App Distribution
+      #   uses: wzieba/Firebase-Distribution-Github-Action@v1
+      #   with:
+      #     appId: ${{ secrets.FIREBASE_APP_ID }}
+      #     token: ${{ secrets.FIREBASE_TOKEN }}
+      #     groups: testers
+      #     file: build/app/outputs/flutter-apk/app-release.apk

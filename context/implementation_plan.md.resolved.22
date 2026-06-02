@@ -1,0 +1,76 @@
+# Consultation Form & Session Updates — Implementation Plan
+
+## 1. Consultation Form Enhancements
+
+**Goal:** Convert several text fields in [ConsultationScreen](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#18-37) into specific dropdowns or radio selections, format BP automatically, fix photo thumbnails, and apply conditional logic.
+
+### UI Field Changes in [ConsultationScreen](file:///c:/App%20Development/PMS/lib/features/consultations/screens/consultation_screen.dart#18-37):
+1. **Diet Pattern:** Convert to Dropdown with options:
+   - Standard Indian Non-Veg, Lacto-Vegetarian, Ovo-Vegetarian, Lacto-Ovo-Vegetarian, Diabetic Diet, Ketogenic Diet
+2. **Sleep Duration:** Convert to Dropdown with options:
+   - Very Short - Less than 4 hours, Short - 4 to 5 hours, Adequate - 6 to 7 hours, Optimal - 7 to 9 hours (general adult recommendation), Long - 9 to 10 hours, Excessive - More than 10 hours
+3. **Sleep Quality:** Convert to Dropdown with options:
+   - Excellent, Good, Fair, Poor, Very Poor
+4. **Exercise / Physical Activity:** Convert to Dropdown with options:
+   - Sedentary, Lightly Active, Moderately Active, Active, Very Active, Extremely Active / Athlete
+5. **Stress / Mental Health Notes:** Convert to Dropdown with options:
+   - None / Minimal Stress, Mild Stress, Moderate Stress, Severe Stress, Extreme / Overwhelming Stress, Variable
+6. **Smoking / Alcohol / Tobacco Chewing / Drugs:**
+   - Instead of a single text field, create 4 separate Radio Button groups (Yes / No) for:
+     - Smoking
+     - Alcohol
+     - Tobacco Chewing
+     - Recreational Drugs
+   - Note: The current PocketBase schema has a single `addictions` text field. To preserve compatibility without requiring a schema change, I will serialize these 4 Yes/No answers into a single comma-separated string (e.g., `Smoking: Yes, Alcohol: No...`) when saving, and parse it back when loading.
+7. **Pregnancy Status:**
+   - Fetch patient details locally on init to check gender.
+   - Hide the field completely if `patientGender == 'Male'`.
+   - Change field to a Radio group (Yes / No).
+8. **BP Level (Vitals):**
+   - Implement an [InputFormatter](file:///c:/App%20Development/PMS/lib/features/appointments/screens/patient_info_screen.dart#325-350) for the BP field that automatically inserts the `/` character after 2 or 3 digits (e.g., typing `12080` becomes `120/80`).
+9. **Consultation Fee:**
+   - The default value for the "Charge for consultation?" toggle (`_charged`) should be set to `true` (Open by default).
+10. **Report Files Thumbnails:**
+    - The issue is `Image.network` is used for newly picked `XFile` media. For local `XFile` paths, we should be using `Image.file(File(path))` instead of `Image.network(path)`.
+
+## 2. Session Planning Enhancements
+
+### Skipping Non-Working Days & Overlaps in [TreatmentService](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart#9-390)
+- **Goal:** When "Generate Treatment Plan" schedules `intervalDays` apart, it should skip days that the clinic/doctor does not operate. It should also query the `appointments` collection to ensure it skips slots that are fully booked by either existing sessions or consultations.
+- **Implementation:** 
+  - Pass the Doctor's `workingDays` array (from [DoctorModel](file:///c:/App%20Development/PMS/lib/features/auth/models/doctor_model.dart#68-173)) to `TreatmentService.createSmartTreatmentPlan`.
+  - While incrementing `sessionDate` by `intervalDays`, if the resulting date's `weekday` is NOT in `workingDays`, increment day-by-day until a valid working day is found.
+  - When searching for a valid time slot, query the `appointments` collection for `date = checkDate && time = checkTime && doctor = doctorId && status != "cancelled"`. If `totalItems >= maxBeds`, increment by 30 mins and try again. This naturally accounts for both sessions and consultations occupying the doctor's capacity.
+
+### The "NA" Error Message
+- The user reported: `NA - A default horizontal error message is appearing`.
+- This likely refers to a missing validation message or default text in the Create Treatment Plan screen. I will review all text fields and form inputs in [create_treatment_plan_screen.dart](file:///c:/App%20Development/PMS/lib/features/treatments/screens/create_treatment_plan_screen.dart) to make sure there are no unintended labels, hints, or validation errors showing up improperly.
+
+---
+## 3. Session Interval Bug Fix & "First Session Today" Feature
+
+**Goal:** Fix the interval generation bug where all sessions were scheduled on the exact same date and add a scheduling preference to mark Session 1 as completed immediately during the consultation.
+
+### Implementation steps:
+1. **Fix Interval Logic in `TreatmentService.createSmartTreatmentPlan`:**
+   - I missed `currentSessionDate = currentSessionDate.add(Duration(days: intervalDays))` at the end of the loop in the previous turn. Add it back.
+
+2. **UI Update in [CreateTreatmentPlanScreen](file:///c:/App%20Development/PMS/lib/features/treatments/screens/create_treatment_plan_screen.dart#13-30):**
+   - Add a Switch/Checkbox in the "Sessions & Interval" section: `First Session Done Today?`.
+   - Send a new boolean `firstSessionCompletedToday` to [createSmartTreatmentPlan](file:///c:/App%20Development/PMS/lib/core/services/treatment_service.dart#154-290).
+   
+3. **Logic Update in `TreatmentService.createSmartTreatmentPlan`:**
+   - If `firstSessionCompletedToday == true`:
+     - Create Session 1 immediately with `status: 'completed'`, `scheduled_date: DateTime.now()`, `scheduled_time: current_time`.
+     - Link this session to the Consultation by ensuring the Consultation ID is referenced (already done by passing it to sessions).
+     - Then loop from `i = 1` to `totalSessions` (instead of 0). The `currentSessionDate` for Session 2 should start at `DateTime.now() + intervalDays`.
+     - Auto-schedule the remaining sessions (Session 2 onwards) using the normal smart scheduling constraints (working days, available slots).
+
+4. **Consultation UI Enforcement:**
+   - User requested to "make sure first the consultation form is filled first and only after that the session planing form is accesseble."
+   - I will double-check the `floatingActionButton` flow in [PatientProfileScreen](file:///c:/App%20Development/PMS/lib/features/patients/screens/patient_profile_screen.dart#11-19) to ensure users cannot skip consultation steps. (Currently, [create_treatment_plan_screen.dart](file:///c:/App%20Development/PMS/lib/features/treatments/screens/create_treatment_plan_screen.dart) is only pushed when `consultation != null`).
+
+---
+
+## Review Required
+None for this phase, proceeding to implementation.

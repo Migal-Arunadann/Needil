@@ -1,0 +1,152 @@
+# Email OTP Authentication Plan
+
+## Overview
+
+Two features:
+1. **Registration OTP gate** — clinic enters a real email during Step 1; after all 5 steps are filled in, before the actual PocketBase record is created, an OTP is sent to the email. The clinic verifies it, then registration completes.
+2. **Forgot Password** — on the login screen, "Forgot Password?" link → enter registered email → OTP sent → verify OTP → set new password. Clinic accounts only (doctors and receptionists reset via their clinic admin).
+
+---
+
+## ⚠️ User Review Required
+
+> [!IMPORTANT]
+> **PocketBase SMTP must be configured** for emails to send. In your PocketBase admin go to **Settings → Mail Settings** and enter your SMTP credentials (e.g. Gmail App Password, SendGrid, Brevo, etc.). Without this, OTP requests will fail silently.
+
+> [!IMPORTANT]
+> **OTP auth must be enabled** on the `clinics` collection. In PocketBase admin: `clinics` → gear icon → Edit collection → **Options** tab → expand **"One-time password (OTP)"** → toggle **Enable** ON → Save. The default OTP duration is 5 minutes (configurable).
+
+> [!WARNING]
+> The current `clinics` collection uses a **dummy email** (`username@pms.local`). This plan changes that — Step 1 will now collect a **real email** from the clinic owner. The real email will be stored as the PocketBase auth email field, replacing the dummy pattern. Existing records won't be affected (they'll keep their dummy email and keep working for login).
+
+---
+
+## Proposed Changes
+
+### PocketBase (Manual admin steps — no code)
+
+1. **Settings → Mail Settings** → configure SMTP
+2. **clinics collection → Options → One-time password (OTP)** → Enable
+3. **clinics collection → Options → Identity/Password → Unique identity fields** → add `email` (alongside `username`)
+
+---
+
+### Step 1: Add real email to registration
+
+#### [MODIFY] [clinic_step1_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/clinic_registration/clinic_step1_screen.dart)
+- Add an `Email` field (mandatory, validated as valid email format)
+- Pass `email` forward in the navigation arguments to step 2 → 5
+
+---
+
+### Step 2: Cache the email through registration steps
+
+#### [MODIFY] [registration_cache_provider.dart](file:///c:/App%20Development/PMS/lib/features/auth/providers/registration_cache_provider.dart)
+- Add `clinicEmail` field to `RegistrationCacheState`
+- Update `savePrimaryDoctor` (or add a `saveClinicDetails` method) to persist the email
+
+---
+
+### Step 3: OTP request + verification in auth service
+
+#### [MODIFY] [auth_service.dart](file:///c:/App%20Development/PMS/lib/core/services/auth_service.dart)
+- Add `requestOtp(String email)` — calls `pb.collection('clinics').requestOTP(email)` → returns `otpId`
+- Add `verifyOtpAndRegister(...)` — first verifies OTP via `pb.collection('clinics').authWithOTP(otpId, otpCode)`, then calls the existing `registerClinic` logic (but now with the real email, not a dummy)
+- Add `requestPasswordResetOtp(String email)` — calls `pb.collection('clinics').requestOTP(email)` for the forgot-password flow
+- Add `verifyOtpAndResetPassword(String otpId, String otpCode, String newPassword)` — authenticates with OTP, then calls `pb.collection('clinics').update(id, body: {'password': newPassword, 'passwordConfirm': newPassword})`
+- Update `registerClinic` to use the real email instead of `_fakeEmail(username)` for the clinics record
+
+#### [MODIFY] [auth_provider.dart](file:///c:/App%20Development/PMS/lib/features/auth/providers/auth_provider.dart)
+- Add state fields: `pendingOtpId`, `pendingEmail`, `pendingClinicData` (to carry registration data across the OTP step)
+- Add `requestRegistrationOtp(email, clinicData)` action
+- Add `verifyRegistrationOtp(otpCode)` action — verifies OTP then calls registerClinic
+- Add `requestForgotPasswordOtp(email)` action
+- Add `verifyForgotPasswordOtp(otpId, otpCode, newPassword)` action
+
+---
+
+### Step 4: New screens
+
+#### [NEW] `lib/features/auth/screens/otp_verification_screen.dart`
+- A single reusable screen that handles both registration OTP and forgot-password OTP flows
+- Shows: email hint (masked), 6-digit OTP input (individual boxes, auto-advance), countdown timer (5 min), Resend button (enabled after 60s)
+- Mode parameter (`RegistrationOtp` | `ForgotPasswordOtp`)
+- On confirm: calls the appropriate provider action
+
+#### [NEW] `lib/features/auth/screens/reset_password_screen.dart`
+- Shown after OTP verified for forgot password
+- Two fields: New Password + Confirm Password
+- Calls `verifyForgotPasswordOtp` with the new password
+
+---
+
+### Step 5: Login screen — Forgot Password link
+
+#### [MODIFY] [login_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/login_screen.dart)
+- Add small **"Forgot Password?"** text link below the password field
+- Taps → navigate to a `ForgotPasswordScreen` (email entry)
+
+#### [NEW] `lib/features/auth/screens/forgot_password_screen.dart`
+- Single email input field
+- "Send OTP" button → calls `requestForgotPasswordOtp`
+- On success → navigates to `OtpVerificationScreen` in `ForgotPasswordOtp` mode
+
+---
+
+### Step 6: Registration flow change (Step 5 → OTP gate)
+
+#### [MODIFY] [clinic_step5_screen.dart](file:///c:/App%20Development/PMS/lib/features/auth/screens/clinic_registration/clinic_step5_screen.dart)
+- On "Create Clinic" tap → instead of directly calling `registerClinic`, call `requestRegistrationOtp(email)` first
+- On success → navigate to `OtpVerificationScreen` in `RegistrationOtp` mode
+- The actual clinic creation happens inside `verifyRegistrationOtp` after OTP is confirmed
+
+---
+
+### Step 7: Router
+
+#### [MODIFY] [app_router.dart](file:///c:/App%20Development/PMS/lib/core/router/app_router.dart)
+- Add routes: `/auth/otp-verify`, `/auth/forgot-password`, `/auth/reset-password`
+
+---
+
+## User flow diagrams
+
+### Registration
+```
+Step 1 (+ email) → Step 2 → Step 3 → Step 4 → Step 5 
+  → [Create Clinic tap] → OTP sent to email 
+  → OTP Verification Screen 
+  → [OTP correct] → Clinic created → Auto-login → MainLayout
+```
+
+### Forgot Password
+```
+Login Screen → [Forgot Password?] → Forgot Password Screen (enter email)
+  → [Send OTP] → OTP Verification Screen
+  → [OTP correct] → Reset Password Screen (new password)
+  → [Save] → Success → Back to Login
+```
+
+---
+
+## Verification Plan
+
+### Automated
+- `dart analyze` on all modified files
+
+### Manual
+1. Register a new clinic with a real email → verify OTP email arrives → confirm it creates the clinic
+2. Login with username+password → works as before
+3. Tap "Forgot Password?" → enter registered email → OTP email arrives → verify → set new password → login with new password
+4. Enter wrong OTP → see error, try again
+5. Resend OTP after 60s cooldown
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Have you configured SMTP in your PocketBase admin yet?** Without it, no OTP emails will send. Let me know what email provider you want to use (Gmail, SendGrid, Brevo, etc.) — I can help you set up the exact SMTP settings.
+
+> [!NOTE]
+> **PocketBase OTP duration**: Default is 5 minutes. That's generally fine — do you want it shorter or longer?

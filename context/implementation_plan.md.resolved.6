@@ -1,0 +1,40 @@
+# Tracking Appointment Timestamps & Patient History
+
+The goal is to track exact patient arrival and departure times from the Appointments tab, and to display a comprehensive history of appointments, consultations, and sessions inside the Patient Profile view.
+
+## User Action Required (PocketBase Changes)
+
+Please open your PocketBase Admin panel and make the following changes to the **[appointments](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#149-164)** collection:
+1. Add a new field of type **Date/Time** named EXACTLY: `check_in_time`
+2. Add another new field of type **Date/Time** named EXACTLY: `check_out_time`
+3. Click "Save changes".
+
+## Proposed Changes
+
+### Appointment Models & Data Layer
+- **[MODIFY] [AppointmentModel](file:///c:/App%20Development/PMS/lib/features/appointments/models/appointment_model.dart#7-127)**
+  - Add `final DateTime? checkInTime` and `final DateTime? checkOutTime`.
+  - Parse from `record.getStringValue('check_in_time')` and map to [toJson()](file:///c:/App%20Development/PMS/lib/features/auth/models/doctor_model.dart#29-38).
+
+### Appointment Logic (Arrival & Departure)
+- **[MODIFY] `AppointmentProvider` / [AppointmentService](file:///c:/App%20Development/PMS/lib/core/services/appointment_service.dart#6-176)**
+  - Update the "Arrive" / "Fill Details" logic for Call-By appointments to capture `check_in_time = DateTime.now().toUtc().toIso8601String()` and set status to `inProgress`.
+  - Update the Walk-In creation logic to automatically capture `check_in_time`.
+  - Update the "Done / Tick" logic to capture `check_out_time = DateTime.now().toUtc().toIso8601String()` and set status to `completed`.
+
+### Patient History UI
+- **[MODIFY] `PatientProfileScreen` (or similar)**
+  - Add a "History" section or tab.
+  - Query the [appointments](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#149-164), [consultations](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#165-179), and [sessions](file:///c:/App%20Development/PMS/scripts/setup_pocketbase.dart#196-214) collections filtering by `patient = {current_patient_id}`.
+  - Build a timeline or list view showing past appointments (with their check-in/out times), past consultations, and completed treatment sessions.
+
+## Verification Plan
+
+### Automated Tests
+- Run `dart analyze lib` to ensure no syntax errors are introduced.
+
+### Manual Verification
+1. Create a Call-By appointment. Click "Fill Details" to arrive them -> Verify `check_in_time` is saved in PocketBase.
+2. Create a Walk-in appointment -> Verify `check_in_time` is saved.
+3. Click the "Done" tick on an In-Progress appointment -> Verify `check_out_time` is saved.
+4. Go to the Patients tab, click the patient to open their profile -> Verify their full history (Appointments, Consultations, Sessions) loads and displays the recorded times.

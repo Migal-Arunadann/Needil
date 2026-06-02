@@ -1,0 +1,10 @@
+# Appointment Page Logic Fixes
+
+## Phase 35: Appointment Logic Debugging
+- [x] Fix double-booking warning text → "reschedule" instead of "replace"
+- [x] Future day cards show "Reschedule" button instead of "Patient Arrived"
+- [x] "Arrived at X:XX" should be non-clickable info, not a tap target
+- [x] Add "Undo Arrived" option for accidental clicks
+- [x] Missed appointment indicator for past-day no-shows
+- [x] DoB format → DD/MM/YYYY in patient info form
+- [x] Auto-insert `/` separator in manual DoB entry
