@@ -7,6 +7,7 @@ import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/services/photo_quota_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/utils/image_helper.dart';
 
 /// Data model for a photo entry shown in the management screen.
 class _PhotoEntry {
@@ -711,8 +712,8 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
                 // Thumbnail
                 ClipRRect(
                   borderRadius: BorderRadius.circular(photo.selected ? 7 : 9),
-                  child: Image.network(
-                    photo.getUrl(baseUrl),
+                  child: Image.network(ImageHelper.getSecureUrl(
+                    photo.getUrl(baseUrl), ref.read(pocketbaseProvider).authStore.token),
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       color: context.colors.divider,
@@ -801,8 +802,8 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: InteractiveViewer(
-                child: Image.network(
-                  photo.getFullUrl(baseUrl),
+                child: Image.network(ImageHelper.getSecureUrl(
+                  photo.getFullUrl(baseUrl), ref.read(pocketbaseProvider).authStore.token),
                   fit: BoxFit.contain,
                   loadingBuilder: (_, child, progress) {
                     if (progress == null) return child;

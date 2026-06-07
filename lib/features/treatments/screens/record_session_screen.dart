@@ -489,8 +489,8 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                               onTap: () => _showFullPhoto(photoUrl),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(10),
-                                child: Image.network(
-                                  photoUrl,
+                                child: Image.network(ImageHelper.getSecureUrl(
+                                  photoUrl, ref.read(pocketbaseProvider).authStore.token),
                                   width: 100, height: 100, fit: BoxFit.cover,
                                   errorBuilder: (_, __, ___) => Container(
                                     width: 100, height: 100,
@@ -598,7 +598,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                             decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: context.colors.border)),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(9),
-                              child: Image.network(photoUrl, fit: BoxFit.cover,
+                              child: Image.network(ImageHelper.getSecureUrl(photoUrl, ref.read(pocketbaseProvider).authStore.token), fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Icon(Icons.broken_image_rounded, color: context.colors.textHint)),
                             ),
                           ),
@@ -737,7 +737,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         child: Stack(children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(14),
-            child: Image.network(url, fit: BoxFit.contain,
+            child: Image.network(ImageHelper.getSecureUrl(url, ref.read(pocketbaseProvider).authStore.token), fit: BoxFit.contain,
               errorBuilder: (_, __, ___) => Container(
                 height: 200,
                 decoration: BoxDecoration(color: context.colors.surface, borderRadius: BorderRadius.circular(14)),

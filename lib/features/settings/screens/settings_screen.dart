@@ -20,6 +20,7 @@ import 'manage_photos_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/responsive_wrapper.dart';
+import 'package:pms_app/core/utils/image_helper.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 //  DESIGN TOKENS v2 — Premium Futuristic SaaS (Linear / Vercel / Stripe)
@@ -656,9 +657,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ),
                               image: hasImage
                                   ? DecorationImage(
-                                      image: NetworkImage(isClinic
+                                      image: NetworkImage(ImageHelper.getSecureUrl(isClinic
                                           ? auth.clinic!.logoUrl!
-                                          : auth.doctor!.photoUrl!),
+                                          : auth.doctor!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
                                       fit: BoxFit.cover,
                                     )
                                   : null,
@@ -805,7 +806,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               borderRadius: BorderRadius.circular(18),
               image: (isClinic ? auth.clinic?.logoUrl : auth.doctor?.photoUrl) != null
                   ? DecorationImage(
-                      image: NetworkImage(isClinic ? auth.clinic!.logoUrl! : auth.doctor!.photoUrl!),
+                      image: NetworkImage(ImageHelper.getSecureUrl(isClinic ? auth.clinic!.logoUrl! : auth.doctor!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
                       fit: BoxFit.cover,
                     )
                   : null,

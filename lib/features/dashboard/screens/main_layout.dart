@@ -13,6 +13,8 @@ import '../../patients/screens/patient_list_screen.dart';
 import '../../analytics/screens/analytics_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import '../../appointments/providers/appointment_provider.dart';
+import 'package:pms_app/core/utils/image_helper.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
 
 /// Global key to access MainLayout state from dashboard screens.
 final mainLayoutKey = GlobalKey<MainLayoutState>();
@@ -340,7 +342,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                             shape: BoxShape.circle,
                             image: photoUrl != null
                                 ? DecorationImage(
-                                    image: NetworkImage(photoUrl),
+                                    image: NetworkImage(ImageHelper.getSecureUrl(photoUrl, ref.read(pocketbaseProvider).authStore.token)),
                                     fit: BoxFit.cover,
                                   )
                                 : null,

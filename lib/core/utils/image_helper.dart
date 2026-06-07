@@ -43,4 +43,16 @@ class ImageHelper {
       return file; // Fallback to original if compression encounters an error
     }
   }
+
+  /// Appends the PocketBase auth token to a file URL to access protected files securely.
+  static String getSecureUrl(String url, String token) {
+    if (url.isEmpty || token.isEmpty) return url;
+    // Only append to actual pocketbase file urls
+    if (!url.contains('/api/files/')) return url;
+    // Don't append if it already has a token
+    if (url.contains('token=')) return url;
+    
+    final separator = url.contains('?') ? '&' : '?';
+    return '$url${separator}token=$token';
+  }
 }

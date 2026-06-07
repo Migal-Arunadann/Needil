@@ -1808,7 +1808,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
             borderRadius: BorderRadius.circular(9),
             child: kIsWeb 
                 ? Image.network(
-                    _photos[index].path,
+                    ImageHelper.getSecureUrl(_photos[index].path, ref.read(pocketbaseProvider).authStore.token),
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Icon(Icons.image_rounded, color: context.colors.textHint),
                   )
@@ -1862,7 +1862,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                   panEnabled: true,
                   minScale: 0.5,
                   maxScale: 4.0,
-                  child: Image.network(url, fit: BoxFit.contain),
+                  child: Image.network(ImageHelper.getSecureUrl(url, ref.read(pocketbaseProvider).authStore.token), fit: BoxFit.contain),
                 ),
                 Positioned(
                   top: -16,
@@ -1890,8 +1890,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(9),
-          child: Image.network(
-            url,
+          child: Image.network(ImageHelper.getSecureUrl(
+            url, ref.read(pocketbaseProvider).authStore.token),
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => Icon(Icons.image_rounded, color: context.colors.textHint),
           ),

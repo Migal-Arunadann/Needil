@@ -268,8 +268,8 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                               radius: 52,
                               backgroundColor: context.colors.surface,
                               backgroundImage: isClinic
-                                  ? (!kIsWeb && _logoFile != null ? FileImage(_logoFile!) : (_existingLogoUrl != null ? NetworkImage(_existingLogoUrl!) as ImageProvider : null))
-                                  : (!kIsWeb && _photoFile != null ? FileImage(_photoFile!) : (_existingPhotoUrl != null ? NetworkImage(_existingPhotoUrl!) as ImageProvider : null)),
+                                  ? (!kIsWeb && _logoFile != null ? FileImage(_logoFile!) : (_existingLogoUrl != null ? NetworkImage(ImageHelper.getSecureUrl(_existingLogoUrl!, ref.read(pocketbaseProvider).authStore.token)) as ImageProvider : null))
+                                  : (!kIsWeb && _photoFile != null ? FileImage(_photoFile!) : (_existingPhotoUrl != null ? NetworkImage(ImageHelper.getSecureUrl(_existingPhotoUrl!, ref.read(pocketbaseProvider).authStore.token)) as ImageProvider : null)),
                               child: (isClinic ? (_logoFile == null && _existingLogoUrl == null) : (_photoFile == null && _existingPhotoUrl == null))
                                   ? Icon(isClinic ? Icons.business_rounded : Icons.person_rounded, size: 40, color: context.colors.textHint)
                                   : null,

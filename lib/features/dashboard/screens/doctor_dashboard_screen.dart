@@ -8,6 +8,8 @@ import '../widgets/dashboard_widgets.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import '../../../core/widgets/responsive_wrapper.dart';
 import 'main_layout.dart';
+import 'package:pms_app/core/utils/image_helper.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
 
 class DoctorDashboardScreen extends ConsumerWidget {
   const DoctorDashboardScreen({super.key});
@@ -189,7 +191,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                             shape: BoxShape.circle,
                             image: doctor?.photoUrl != null
                                 ? DecorationImage(
-                                    image: NetworkImage(doctor!.photoUrl!),
+                                    image: NetworkImage(ImageHelper.getSecureUrl(doctor!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
                                     fit: BoxFit.cover,
                                   )
                                 : null,
@@ -250,7 +252,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                             shape: BoxShape.circle,
                             image: doctor?.photoUrl != null
                                 ? DecorationImage(
-                                    image: NetworkImage(doctor!.photoUrl!),
+                                    image: NetworkImage(ImageHelper.getSecureUrl(doctor!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
                                     fit: BoxFit.cover,
                                   )
                                 : null,
