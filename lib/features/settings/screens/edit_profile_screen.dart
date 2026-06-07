@@ -249,163 +249,178 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
           centerTitle: true,
         ),
         body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Photo / Logo Picker ──
-                  Center(
-                    child: GestureDetector(
-                      onTap: kIsWeb ? null : () => _pickImage(isClinic),
-                      child: Stack(
-                        children: [
-                          CircleAvatar(
-                            radius: 52,
-                            backgroundColor: context.colors.surface,
-                            backgroundImage: isClinic
-                                ? (!kIsWeb && _logoFile != null ? FileImage(_logoFile!) : (_existingLogoUrl != null ? NetworkImage(_existingLogoUrl!) as ImageProvider : null))
-                                : (!kIsWeb && _photoFile != null ? FileImage(_photoFile!) : (_existingPhotoUrl != null ? NetworkImage(_existingPhotoUrl!) as ImageProvider : null)),
-                            child: (isClinic ? (_logoFile == null && _existingLogoUrl == null) : (_photoFile == null && _existingPhotoUrl == null))
-                                ? Icon(isClinic ? Icons.business_rounded : Icons.person_rounded, size: 40, color: context.colors.textHint)
-                                : null,
-                          ),
-                          if (!kIsWeb)
-                            Positioned(
-                              right: 0, bottom: 0,
-                              child: Container(
-                                width: 30, height: 30,
-                                decoration: BoxDecoration(
-                                  color: context.colors.primary,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: context.colors.background, width: 2),
-                                ),
-                                child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
-                              ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isDesktop = constraints.maxWidth >= 900;
+
+              final mainBody = Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ── Photo / Logo Picker ──
+                    Center(
+                      child: GestureDetector(
+                        onTap: kIsWeb ? null : () => _pickImage(isClinic),
+                        child: Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 52,
+                              backgroundColor: context.colors.surface,
+                              backgroundImage: isClinic
+                                  ? (!kIsWeb && _logoFile != null ? FileImage(_logoFile!) : (_existingLogoUrl != null ? NetworkImage(_existingLogoUrl!) as ImageProvider : null))
+                                  : (!kIsWeb && _photoFile != null ? FileImage(_photoFile!) : (_existingPhotoUrl != null ? NetworkImage(_existingPhotoUrl!) as ImageProvider : null)),
+                              child: (isClinic ? (_logoFile == null && _existingLogoUrl == null) : (_photoFile == null && _existingPhotoUrl == null))
+                                  ? Icon(isClinic ? Icons.business_rounded : Icons.person_rounded, size: 40, color: context.colors.textHint)
+                                  : null,
                             ),
-                        ],
+                            if (!kIsWeb)
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: context.colors.primary,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: context.colors.background, width: 2),
+                                  ),
+                                  child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Center(
-                    child: Text(
-                      kIsWeb 
-                          ? 'Logo/photo uploads are available on the mobile app.'
-                          : (isClinic ? 'Tap to upload clinic logo' : 'Tap to upload profile photo'),
-                      style: context.textStyles.caption,
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                  SizedBox(height: 24),
+                    const SizedBox(height: 32),
 
-                  // ── Core Fields ──
-                  _sectionLabel('Basic Information'),
-                  SizedBox(height: 12),
-                  AppTextField(
-                    controller: _nameCtrl,
-                    label: isClinic ? 'Clinic Name' : 'Full Name',
-                    prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
-                    validator: (v) => v == null || v.trim().isEmpty ? 'Required field' : null,
-                  ),
-                  SizedBox(height: 14),
-                  AppTextField(
-                    controller: _emailCtrl,
-                    label: 'Email Address',
-                    prefixIcon: Icon(Icons.email_outlined, color: context.colors.textHint),
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  SizedBox(height: 14),
+                    _sectionLabel(isClinic ? 'Clinic Information' : 'Doctor Information'),
+                    const SizedBox(height: 16),
+                    AppTextField(
+                      controller: _nameCtrl,
+                      label: isClinic ? 'Clinic Name' : 'Doctor Name',
+                      prefixIcon: Icon(isClinic ? Icons.business_rounded : Icons.person_rounded, color: context.colors.textHint),
+                      validator: (v) => v!.isEmpty ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 14),
+                    AppTextField(
+                      controller: _emailCtrl,
+                      label: 'Email Address',
+                      prefixIcon: Icon(Icons.email_outlined, color: context.colors.textHint),
+                      validator: (v) => v!.isEmpty ? 'Required' : null,
+                    ),
+                    const SizedBox(height: 14),
 
-                  if (isClinic) ...[ 
-                    // ── Clinic-specific ──
-                    AppTextField(
-                      controller: _bedCountCtrl,
-                      label: 'Bed Count',
-                      keyboardType: TextInputType.number,
-                      prefixIcon: Icon(Icons.bed_outlined, color: context.colors.textHint),
-                    ),
-                    SizedBox(height: 14),
-                    AppTextField(
-                      controller: _patientIdPrefixCtrl,
-                      label: 'Patient ID Prefix (e.g. HSK)',
-                      hint: 'Auto-generates HSK-001, HSK-002...',
-                      prefixIcon: Icon(Icons.badge_outlined, color: context.colors.textHint),
-                    ),
-                    SizedBox(height: 24),
-                    _sectionLabel('Contact & Location'),
-                    SizedBox(height: 12),
-                    AppTextField(
-                      controller: _phoneCtrl,
-                      label: 'Clinic Phone Number',
-                      keyboardType: TextInputType.phone,
-                      prefixIcon: Icon(Icons.phone_outlined, color: context.colors.textHint),
-                    ),
-                    SizedBox(height: 14),
-                    AppTextField(
-                      controller: _addressCtrl,
-                      label: 'Street Address',
-                      prefixIcon: Icon(Icons.home_outlined, color: context.colors.textHint),
-                    ),
-                    SizedBox(height: 14),
-                    // Pincode-first auto-fill location
-                    LocationFields(
-                      pincodeCtrl: _pinCtrl,
-                      countryCtrl: _countryCtrl,
-                      stateCtrl: _stateCtrl,
-                      cityCtrl: _cityCtrl,
-                      areaCtrl: _areaCtrl,
-                      allRequired: false,
-                    ),
-                    SizedBox(height: 14),
-                    AppTextField(
-                      controller: _locationCtrl,
-                      label: 'Clinic GMap Link',
-                      prefixIcon: Icon(Icons.place_outlined, color: context.colors.textHint),
-                    ),
-                  ] else ...[ 
-                    // ── Doctor-specific ──
-                    AppTextField(
-                      controller: _ageCtrl,
-                      label: 'Age',
-                      keyboardType: TextInputType.number,
-                      prefixIcon: Icon(Icons.cake_outlined, color: context.colors.textHint),
-                    ),
-                    SizedBox(height: 24),
-                    _sectionLabel('Personal Details'),
-                    SizedBox(height: 12),
-                    AppTextField(
-                      controller: _doctorPhoneCtrl,
-                      label: 'Phone Number',
-                      keyboardType: TextInputType.phone,
-                      prefixIcon: Icon(Icons.phone_outlined, color: context.colors.textHint),
-                    ),
-                    SizedBox(height: 14),
-                    AppTextField(
-                      controller: _dobCtrl,
-                      label: 'Date of Birth (DD/MM/YYYY)',
-                      prefixIcon: Icon(Icons.calendar_today_rounded, color: context.colors.textHint, size: 18),
-                      readOnly: true,
-                      onTap: _pickDob,
-                      suffixIcon: GestureDetector(
+                    if (isClinic) ...[
+                      // ── Clinic-specific ──
+                      AppTextField(
+                        controller: _bedCountCtrl,
+                        label: 'Bed Count',
+                        keyboardType: TextInputType.number,
+                        prefixIcon: Icon(Icons.bed_outlined, color: context.colors.textHint),
+                      ),
+                      const SizedBox(height: 14),
+                      AppTextField(
+                        controller: _patientIdPrefixCtrl,
+                        label: 'Patient ID Prefix (e.g. HSK)',
+                        hint: 'Auto-generates HSK-001, HSK-002...',
+                        prefixIcon: Icon(Icons.badge_outlined, color: context.colors.textHint),
+                      ),
+                      const SizedBox(height: 14),
+                      LocationFields(
+                        countryCtrl: _countryCtrl,
+                        stateCtrl: _stateCtrl,
+                        cityCtrl: _cityCtrl,
+                        areaCtrl: _areaCtrl,
+                        pincodeCtrl: _pinCtrl,
+                        allRequired: false,
+                      ),
+                      const SizedBox(height: 14),
+                      AppTextField(
+                        controller: _locationCtrl,
+                        label: 'Clinic GMap Link',
+                        prefixIcon: Icon(Icons.place_outlined, color: context.colors.textHint),
+                      ),
+                    ] else ...[ 
+                      // ── Doctor-specific ──
+                      AppTextField(
+                        controller: _ageCtrl,
+                        label: 'Age',
+                        keyboardType: TextInputType.number,
+                        prefixIcon: Icon(Icons.cake_outlined, color: context.colors.textHint),
+                      ),
+                      const SizedBox(height: 24),
+                      _sectionLabel('Personal Details'),
+                      const SizedBox(height: 12),
+                      AppTextField(
+                        controller: _doctorPhoneCtrl,
+                        label: 'Phone Number',
+                        keyboardType: TextInputType.phone,
+                        prefixIcon: Icon(Icons.phone_outlined, color: context.colors.textHint),
+                      ),
+                      const SizedBox(height: 14),
+                      AppTextField(
+                        controller: _dobCtrl,
+                        label: 'Date of Birth (DD/MM/YYYY)',
+                        prefixIcon: Icon(Icons.calendar_today_rounded, color: context.colors.textHint, size: 18),
+                        readOnly: true,
                         onTap: _pickDob,
-                        child: Icon(Icons.calendar_month_rounded, color: context.colors.primary),
+                        suffixIcon: GestureDetector(
+                          onTap: _pickDob,
+                          child: Icon(Icons.calendar_month_rounded, color: context.colors.primary),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 32),
+                    Center(
+                      child: SizedBox(
+                        width: isDesktop ? 320 : double.infinity,
+                        child: AppButton(
+                          label: 'Save Changes',
+                          isLoading: _isLoading,
+                          icon: Icons.save_rounded,
+                          onPressed: _save,
+                        ),
                       ),
                     ),
                   ],
+                ),
+              );
 
-                  const SizedBox(height: 32),
-                  AppButton(
-                    label: 'Save Changes',
-                    isLoading: _isLoading,
-                    icon: Icons.save_rounded,
-                    onPressed: _save,
+              if (isDesktop) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 800),
+                      child: Container(
+                        padding: const EdgeInsets.all(40),
+                        decoration: BoxDecoration(
+                          color: context.colors.surface,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 32,
+                              spreadRadius: 4,
+                              offset: const Offset(0, 16),
+                            ),
+                          ],
+                        ),
+                        child: mainBody,
+                      ),
+                    ),
                   ),
-                ],
-              ),
-            ),
+                );
+              } else {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: mainBody,
+                );
+              }
+            },
           ),
         ),
       ),

@@ -369,6 +369,70 @@ class _EditDoctorDetailsScreenState
     }
   }
 
+  Widget _responsiveRow(Widget left, Widget right, bool isDesktop) {
+    if (isDesktop) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: left),
+          const SizedBox(width: 16),
+          Expanded(child: right),
+        ],
+      );
+    } else {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          left,
+          const SizedBox(height: 14),
+          right,
+        ],
+      );
+    }
+  }
+
+  Widget _buildResponsiveTab(Widget Function(bool isDesktop) tabContentBuilder) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 900;
+        final content = tabContentBuilder(isDesktop);
+        
+        if (isDesktop) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 800),
+                child: Container(
+                  padding: const EdgeInsets.all(40),
+                  decoration: BoxDecoration(
+                    color: context.colors.surface,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 32,
+                        spreadRadius: 4,
+                        offset: const Offset(0, 16),
+                      ),
+                    ],
+                  ),
+                  child: content,
+                ),
+              ),
+            ),
+          );
+        } else {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: content,
+          );
+        }
+      },
+    );
+  }
+
   // ════════════════════════════════════════════════════════════
   //  BUILD
   // ════════════════════════════════════════════════════════════
@@ -401,7 +465,7 @@ class _EditDoctorDetailsScreenState
           centerTitle: true,
           actions: [
             Padding(
-              padding: EdgeInsets.only(right: 12),
+              padding: const EdgeInsets.only(right: 12),
               child: TextButton.icon(
                 onPressed: _isSaving ? null : _save,
                 icon: _isSaving
@@ -426,7 +490,7 @@ class _EditDoctorDetailsScreenState
             labelColor: context.colors.primary,
             unselectedLabelColor: context.colors.textHint,
             labelStyle: context.textStyles.caption.copyWith(fontWeight: FontWeight.w700, fontSize: 12),
-            tabs: [
+            tabs: const [
               Tab(icon: Icon(Icons.person_outline_rounded, size: 18), text: 'Basic Info'),
               Tab(icon: Icon(Icons.schedule_rounded, size: 18), text: 'Availability'),
               Tab(icon: Icon(Icons.medical_services_outlined, size: 18), text: 'Treatments'),
@@ -438,9 +502,9 @@ class _EditDoctorDetailsScreenState
             : TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildBasicInfoTab(),
-                  _buildAvailabilityTab(),
-                  _buildTreatmentsTab(),
+                  _buildResponsiveTab((isDesktop) => _buildBasicInfoTab(isDesktop)),
+                  _buildResponsiveTab((isDesktop) => _buildAvailabilityTab(isDesktop)),
+                  _buildResponsiveTab((isDesktop) => _buildTreatmentsTab(isDesktop)),
                 ],
               ),
       ),
@@ -451,34 +515,34 @@ class _EditDoctorDetailsScreenState
   //  TAB 1: Basic Info
   // ════════════════════════════════════════════════════════════
 
-  Widget _buildBasicInfoTab() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader('Personal Information', Icons.badge_outlined),
-          SizedBox(height: 16),
+  Widget _buildBasicInfoTab(bool isDesktop) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader('Personal Information', Icons.badge_outlined),
+        const SizedBox(height: 16),
+        _responsiveRow(
           AppTextField(
             controller: _nameCtrl,
             label: 'Full Name',
             prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
           ),
-          SizedBox(height: 14),
           AppTextField(
             controller: _emailCtrl,
             label: 'Email Address',
             keyboardType: TextInputType.emailAddress,
             prefixIcon: Icon(Icons.email_outlined, color: context.colors.textHint),
           ),
-          SizedBox(height: 14),
+          isDesktop,
+        ),
+        const SizedBox(height: 14),
+        _responsiveRow(
           AppTextField(
             controller: _ageCtrl,
             label: 'Age',
             keyboardType: TextInputType.number,
             prefixIcon: Icon(Icons.cake_outlined, color: context.colors.textHint),
           ),
-          const SizedBox(height: 14),
           // DOB picker
           GestureDetector(
             onTap: () async {
@@ -500,7 +564,7 @@ class _EditDoctorDetailsScreenState
               child: Row(
                 children: [
                   Icon(Icons.calendar_today_outlined, size: 18, color: _dateOfBirth != null ? context.colors.primary : context.colors.textHint),
-                  SizedBox(width: 12),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       _dateOfBirth != null
@@ -516,15 +580,21 @@ class _EditDoctorDetailsScreenState
               ),
             ),
           ),
-          const SizedBox(height: 32),
-          AppButton(
-            label: 'Save All Changes',
-            isLoading: _isSaving,
-            icon: Icons.save_rounded,
-            onPressed: _save,
+          isDesktop,
+        ),
+        const SizedBox(height: 32),
+        Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: isDesktop ? 320 : double.infinity),
+            child: AppButton(
+              label: 'Save All Changes',
+              isLoading: _isSaving,
+              icon: Icons.save_rounded,
+              onPressed: _save,
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -532,71 +602,73 @@ class _EditDoctorDetailsScreenState
   //  TAB 2: Availability / Working Schedule
   // ════════════════════════════════════════════════════════════
 
-  Widget _buildAvailabilityTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader('Working Days & Hours', Icons.event_available_rounded),
-          const SizedBox(height: 6),
-          Text(
-            'Select working days and configure start, end, and optional break times for each.',
-            style: context.textStyles.caption,
-          ),
-          const SizedBox(height: 16),
+  Widget _buildAvailabilityTab(bool isDesktop) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader('Working Days & Hours', Icons.event_available_rounded),
+        const SizedBox(height: 6),
+        Text(
+          'Select working days and configure start, end, and optional break times for each.',
+          style: context.textStyles.caption,
+        ),
+        const SizedBox(height: 16),
 
-          // Day chips
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _allDays.map((day) {
-              final selected = _selectedDays[day]!;
-              return GestureDetector(
-                onTap: () => setState(() {
-                  _selectedDays[day] = !selected;
-                  if (!_selectedDays[day]!) {
-                    _startTimes.remove(day);
-                    _endTimes.remove(day);
-                    _dayBreaks.remove(day);
-                  }
-                }),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    gradient: selected ? context.colors.heroGradient : null,
-                    color: selected ? null : context.colors.surface,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: selected ? context.colors.primary : context.colors.border,
-                    ),
-                  ),
-                  child: Text(
-                    day.substring(0, 3),
-                    style: context.textStyles.label.copyWith(
-                      color: selected ? Colors.white : context.colors.textSecondary,
-                      fontSize: 13,
-                    ),
+        // Day chips
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _allDays.map((day) {
+            final selected = _selectedDays[day]!;
+            return GestureDetector(
+              onTap: () => setState(() {
+                _selectedDays[day] = !selected;
+                if (!_selectedDays[day]!) {
+                  _startTimes.remove(day);
+                  _endTimes.remove(day);
+                  _dayBreaks.remove(day);
+                }
+              }),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: selected ? context.colors.heroGradient : null,
+                  color: selected ? null : context.colors.surface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: selected ? context.colors.primary : context.colors.border,
                   ),
                 ),
-              );
-            }).toList(),
-          ),
-          const SizedBox(height: 24),
+                child: Text(
+                  day.substring(0, 3),
+                  style: context.textStyles.label.copyWith(
+                    color: selected ? Colors.white : context.colors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 24),
 
-          // Per-day config
-          ..._allDays.where((d) => _selectedDays[d]!).map((day) => _dayScheduleCard(day)),
+        // Per-day config
+        ..._allDays.where((d) => _selectedDays[d]!).map((day) => _dayScheduleCard(day)),
 
-          const SizedBox(height: 24),
-          AppButton(
-            label: 'Save All Changes',
-            isLoading: _isSaving,
-            icon: Icons.save_rounded,
-            onPressed: _save,
+        const SizedBox(height: 24),
+        Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: isDesktop ? 320 : double.infinity),
+            child: AppButton(
+              label: 'Save All Changes',
+              isLoading: _isSaving,
+              icon: Icons.save_rounded,
+              onPressed: _save,
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -671,9 +743,9 @@ class _EditDoctorDetailsScreenState
                   Text('Break ${i + 1}:', style: context.textStyles.caption.copyWith(color: context.colors.warning, fontWeight: FontWeight.w600)),
                   const SizedBox(width: 8),
                   Expanded(child: _timePickerTile('From', b.from, () => _pickBreakTime(day, i, 'from'), context.colors.warning)),
-                  SizedBox(width: 6),
+                  const SizedBox(width: 6),
                   Expanded(child: _timePickerTile('To', b.to, () => _pickBreakTime(day, i, 'to'), context.colors.warning)),
-                  SizedBox(width: 6),
+                  const SizedBox(width: 6),
                   GestureDetector(
                     onTap: () => setState(() {
                       breaks.removeAt(i);
@@ -754,31 +826,33 @@ class _EditDoctorDetailsScreenState
   //  TAB 3: Treatments
   // ════════════════════════════════════════════════════════════
 
-  Widget _buildTreatmentsTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _sectionHeader('Treatment Types & Fees', Icons.medical_services_outlined),
-          const SizedBox(height: 6),
-          Text(
-            'Enable each treatment you offer and set session duration and consultation fee.',
-            style: context.textStyles.caption,
-          ),
-          const SizedBox(height: 16),
+  Widget _buildTreatmentsTab(bool isDesktop) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader('Treatment Types & Fees', Icons.medical_services_outlined),
+        const SizedBox(height: 6),
+        Text(
+          'Enable each treatment you offer and set session duration and consultation fee.',
+          style: context.textStyles.caption,
+        ),
+        const SizedBox(height: 16),
 
-          ..._treatmentTypes.map((t) => _treatmentCard(t)),
+        ..._treatmentTypes.map((t) => _treatmentCard(t)),
 
-          const SizedBox(height: 24),
-          AppButton(
-            label: 'Save All Changes',
-            isLoading: _isSaving,
-            icon: Icons.save_rounded,
-            onPressed: _save,
+        const SizedBox(height: 24),
+        Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: isDesktop ? 320 : double.infinity),
+            child: AppButton(
+              label: 'Save All Changes',
+              isLoading: _isSaving,
+              icon: Icons.save_rounded,
+              onPressed: _save,
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

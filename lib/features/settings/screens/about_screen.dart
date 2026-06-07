@@ -25,148 +25,188 @@ class AboutScreen extends StatelessWidget {
         title: Text('About', style: context.textStyles.h4),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          // App logo + version hero
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
-            decoration: BoxDecoration(
-              gradient: context.colors.heroGradient,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: context.colors.primary.withValues(alpha: 0.3),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Column(
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth >= 900;
+            
+            final mainBody = ListView(
+              shrinkWrap: isDesktop,
+              physics: isDesktop ? const NeverScrollableScrollPhysics() : null,
+              padding: isDesktop ? EdgeInsets.zero : const EdgeInsets.all(20),
               children: [
+                // App logo + version hero
                 Container(
-                  width: 72,
-                  height: 72,
+                  padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    gradient: context.colors.heroGradient,
                     borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: context.colors.primary.withValues(alpha: 0.3),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                  child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 38),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Needil',
-                  style: context.textStyles.h1.copyWith(color: Colors.white, fontSize: 28),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Advanced Clinic Management System',
-                  style: context.textStyles.caption.copyWith(
-                    color: Colors.white.withValues(alpha: 0.85),
-                    fontSize: 13,
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 72,
+                        height: 72,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 38),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Needil',
+                        style: context.textStyles.h1.copyWith(color: Colors.white, fontSize: 28),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Advanced Clinic Management System',
+                        style: context.textStyles.caption.copyWith(
+                          color: Colors.white.withValues(alpha: 0.85),
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Version $_appVersion (Build $_buildNumber) • OTA Active',
+                          style: context.textStyles.caption.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
+
+                // What is PMS
+                _sectionHeader(context, 'About Needil', Icons.info_outline_rounded),
+                const SizedBox(height: 10),
+                _textCard(context, 
+                  'Needil is a comprehensive clinical management system designed for clinics offering session-based treatments such as physiotherapy, acupuncture, and reflexology.\n\nIt streamlines patient registration, appointment booking, consultation management, and treatment session planning — all in one place.',
+                ),
+                const SizedBox(height: 20),
+
+                // Features
+                _sectionHeader(context, 'Key Features', Icons.star_outline_rounded),
+                const SizedBox(height: 10),
+                ..._getFeatures(context).map((f) => _featureTile(context, f.$1, f.$2, f.$3)),
+                const SizedBox(height: 20),
+
+                // Build info
+                _sectionHeader(context, 'Technical Information', Icons.build_outlined),
+                const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(20),
+                    color: context.colors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: context.colors.border),
                   ),
-                  child: Text(
-                    'Version $_appVersion (Build $_buildNumber) • OTA Active',
-                    style: context.textStyles.caption.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
+                  child: Column(
+                    children: [
+                      _techRow(context, 'App Version', _appVersion),
+                      _divider(context),
+                      _techRow(context, 'Build Number', _buildNumber),
+                      _divider(context),
+                      _techRow(context, 'Compatibility', 'Android 6.0+ / iOS 12+'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // Legal
+                _sectionHeader(context, 'Legal', Icons.gavel_rounded),
+                const SizedBox(height: 10),
+                _legalTile(
+                  context,
+                  icon: Icons.description_rounded,
+                  title: 'Terms of Use',
+                  subtitle: 'Usage terms for clinic and doctor accounts',
+                  content:
+                      'By using Needil, you agree to use this software solely for legitimate medical practice management. Patient data must be handled in accordance with applicable data protection laws. Unauthorised access, data misuse, or sharing of credentials is strictly prohibited.',
+                ),
+                const SizedBox(height: 8),
+                _legalTile(
+                  context,
+                  icon: Icons.privacy_tip_rounded,
+                  title: 'Privacy Policy',
+                  subtitle: 'How patient and clinic data is handled',
+                  content:
+                      'Needil stores all data on your self-hosted PocketBase server. No data is transmitted to third-party servers. Patient records, appointment history, and consultation data are encrypted at rest. You are responsible for maintaining the security of your server.',
+                ),
+                const SizedBox(height: 8),
+
+                // Copy build info
+                GestureDetector(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: 'Needil v$_appVersion (Build $_buildNumber)'));
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: const Text('Build info copied'),
+                      backgroundColor: context.colors.primary,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      duration: const Duration(seconds: 1),
+                    ));
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    alignment: Alignment.center,
+                    child: Text(
+                      'Tap to copy build information',
+                      style: context.textStyles.caption.copyWith(color: context.colors.textHint),
                     ),
                   ),
                 ),
+                const SizedBox(height: 32),
               ],
-            ),
-          ),
-          const SizedBox(height: 24),
+            );
 
-          // What is PMS
-          _sectionHeader(context, 'About Needil', Icons.info_outline_rounded),
-          const SizedBox(height: 10),
-          _textCard(context, 
-            'Needil is a comprehensive clinical management system designed for clinics offering session-based treatments such as physiotherapy, acupuncture, and reflexology.\n\nIt streamlines patient registration, appointment booking, consultation management, and treatment session planning — all in one place.',
-          ),
-          const SizedBox(height: 20),
-
-          // Features
-          _sectionHeader(context, 'Key Features', Icons.star_outline_rounded),
-          const SizedBox(height: 10),
-          ..._getFeatures(context).map((f) => _featureTile(context, f.$1, f.$2, f.$3)),
-          const SizedBox(height: 20),
-
-          // Build info
-          _sectionHeader(context, 'Technical Information', Icons.build_outlined),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: context.colors.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: context.colors.border),
-            ),
-            child: Column(
-              children: [
-                _techRow(context, 'App Version', _appVersion),
-                _divider(context),
-                _techRow(context, 'Build Number', _buildNumber),
-                _divider(context),
-                _techRow(context, 'Compatibility', 'Android 6.0+ / iOS 12+'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          // Legal
-          _sectionHeader(context, 'Legal', Icons.gavel_rounded),
-          const SizedBox(height: 10),
-          _legalTile(
-            context,
-            icon: Icons.description_rounded,
-            title: 'Terms of Use',
-            subtitle: 'Usage terms for clinic and doctor accounts',
-            content:
-                'By using Needil, you agree to use this software solely for legitimate medical practice management. Patient data must be handled in accordance with applicable data protection laws. Unauthorised access, data misuse, or sharing of credentials is strictly prohibited.',
-          ),
-          SizedBox(height: 8),
-          _legalTile(
-            context,
-            icon: Icons.privacy_tip_rounded,
-            title: 'Privacy Policy',
-            subtitle: 'How patient and clinic data is handled',
-            content:
-                'Needil stores all data on your self-hosted PocketBase server. No data is transmitted to third-party servers. Patient records, appointment history, and consultation data are encrypted at rest. You are responsible for maintaining the security of your server.',
-          ),
-          SizedBox(height: 8),
-
-          // Copy build info
-          GestureDetector(
-            onTap: () {
-              Clipboard.setData(ClipboardData(text: 'Needil v$_appVersion (Build $_buildNumber)'));
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: const Text('Build info copied'),
-                backgroundColor: context.colors.primary,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                duration: const Duration(seconds: 1),
-              ));
-            },
-            child: Container(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              alignment: Alignment.center,
-              child: Text(
-                'Tap to copy build information',
-                style: context.textStyles.caption.copyWith(color: context.colors.textHint),
-              ),
-            ),
-          ),
-          SizedBox(height: 32),
-        ],
+            if (isDesktop) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: Container(
+                      padding: const EdgeInsets.all(40),
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 32,
+                            spreadRadius: 4,
+                            offset: const Offset(0, 16),
+                          ),
+                        ],
+                      ),
+                      child: mainBody,
+                    ),
+                  ),
+                ),
+              );
+            } else {
+              return mainBody;
+            }
+          },
+        ),
       ),
     );
   }

@@ -348,270 +348,322 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                // ── Quota Header ──
-                Container(
-                  margin: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: context.colors.surface,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: context.colors.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: context.colors.primary.withValues(alpha: 0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final isDesktop = constraints.maxWidth >= 900;
+
+                final mainBody = Column(
+                  children: [
+                    // ── Quota Header ──
+                    Container(
+                      margin: isDesktop ? const EdgeInsets.only(bottom: 20) : const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: context.colors.border),
+                        boxShadow: [
+                          BoxShadow(
+                            color: context.colors.primary.withValues(alpha: 0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      child: Column(
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Photo Storage', style: context.textStyles.label),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Base Plan',
-                                style: context.textStyles.caption.copyWith(
-                                  color: context.colors.primary,
-                                  fontWeight: FontWeight.w600,
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Photo Storage', style: context.textStyles.label),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Base Plan',
+                                    style: context.textStyles.caption.copyWith(
+                                      color: context.colors.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: progressColor.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '$_photosUsed / $_photoLimit',
+                                  style: context.textStyles.label.copyWith(
+                                    color: progressColor,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: progressColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '$_photosUsed / $_photoLimit',
-                              style: context.textStyles.label.copyWith(
-                                color: progressColor,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                              ),
+                          const SizedBox(height: 14),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              backgroundColor: context.colors.border,
+                              valueColor: AlwaysStoppedAnimation(progressColor),
+                              minHeight: 8,
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          backgroundColor: context.colors.border,
-                          valueColor: AlwaysStoppedAnimation(progressColor),
-                          minHeight: 8,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '${(_photoLimit - _photosUsed).clamp(0, _photoLimit)} remaining',
-                            style: context.textStyles.caption,
-                          ),
-                          Text(
-                            '${(progress * 100).toStringAsFixed(1)}% used',
-                            style: context.textStyles.caption,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                // ── Photo List ──
-                Expanded(
-                  child: _groupedPhotos.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Icon(Icons.photo_library_outlined, size: 64,
-                                  color: context.colors.textHint.withValues(alpha: 0.4)),
-                              const SizedBox(height: 12),
-                              Text('No photos found', style: context.textStyles.bodyMedium.copyWith(
-                                color: context.colors.textSecondary)),
-                              const SizedBox(height: 4),
-                              Text('Clinical photos will appear here',
-                                  style: context.textStyles.caption),
+                              Text(
+                                '${(_photoLimit - _photosUsed).clamp(0, _photoLimit)} remaining',
+                                style: context.textStyles.caption,
+                              ),
+                              Text(
+                                '${(progress * 100).toStringAsFixed(1)}% used',
+                                style: context.textStyles.caption,
+                              ),
                             ],
                           ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                          itemCount: _groupedPhotos.length,
-                          itemBuilder: (ctx, index) {
-                            final patientName = _groupedPhotos.keys.elementAt(index);
-                            final photos = _groupedPhotos[patientName]!;
-                            final isExpanded = _expandedGroups.contains(patientName);
-                            final selectedInGroup = photos.where((e) => e.selected).length;
+                        ],
+                      ),
+                    ),
 
-                            return Container(
-                              margin: const EdgeInsets.only(bottom: 10),
-                              decoration: BoxDecoration(
-                                color: context.colors.surface,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: context.colors.border),
-                              ),
+                    // ── Photo List ──
+                    Expanded(
+                      child: _groupedPhotos.isEmpty
+                          ? Center(
                               child: Column(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  // Patient header
-                                  InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        if (isExpanded) {
-                                          _expandedGroups.remove(patientName);
-                                        } else {
-                                          _expandedGroups.add(patientName);
-                                        }
-                                      });
-                                    },
-                                    borderRadius: BorderRadius.circular(14),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(14),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 38,
-                                            height: 38,
-                                            decoration: BoxDecoration(
-                                              color: context.colors.primary.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(10),
-                                            ),
-                                            child: Icon(Icons.person_rounded,
-                                                color: context.colors.primary, size: 20),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(patientName, style: context.textStyles.label),
-                                                Text(
-                                                  '${photos.length} photo${photos.length != 1 ? 's' : ''}'
-                                                  '${selectedInGroup > 0 ? ' · $selectedInGroup selected' : ''}',
-                                                  style: context.textStyles.caption.copyWith(
-                                                    color: selectedInGroup > 0
-                                                        ? context.colors.error
-                                                        : null,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          if (isExpanded)
-                                            TextButton(
-                                              onPressed: () {
-                                                final allSelected = photos.every((e) => e.selected);
-                                                setState(() {
-                                                  for (final p in photos) {
-                                                    p.selected = !allSelected;
-                                                  }
-                                                });
-                                              },
-                                              child: Text(
-                                                photos.every((e) => e.selected) ? 'Deselect' : 'Select All',
-                                                style: TextStyle(fontSize: 12, color: context.colors.primary),
-                                              ),
-                                            ),
-                                          Icon(
-                                            isExpanded
-                                                ? Icons.keyboard_arrow_up_rounded
-                                                : Icons.keyboard_arrow_down_rounded,
-                                            color: context.colors.textHint,
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-
-                                  // Expanded photo grid
-                                  if (isExpanded)
-                                    Padding(
-                                      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                                      child: Column(
-                                        children: [
-                                          Divider(height: 1, color: context.colors.divider),
-                                          const SizedBox(height: 10),
-                                          _buildPhotoGrid(photos),
-                                        ],
-                                      ),
-                                    ),
+                                  Icon(Icons.photo_library_outlined, size: 64,
+                                      color: context.colors.textHint.withValues(alpha: 0.4)),
+                                  const SizedBox(height: 12),
+                                  Text('No photos found', style: context.textStyles.bodyMedium.copyWith(
+                                    color: context.colors.textSecondary)),
+                                  const SizedBox(height: 4),
+                                  Text('Clinical photos will appear here',
+                                      style: context.textStyles.caption),
                                 ],
                               ),
-                            );
-                          },
+                            )
+                          : ListView.builder(
+                              padding: isDesktop ? const EdgeInsets.only(bottom: 100) : const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                              itemCount: _groupedPhotos.length,
+                              itemBuilder: (ctx, index) {
+                                final patientName = _groupedPhotos.keys.elementAt(index);
+                                final photos = _groupedPhotos[patientName]!;
+                                final isExpanded = _expandedGroups.contains(patientName);
+                                final selectedInGroup = photos.where((e) => e.selected).length;
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 10),
+                                  decoration: BoxDecoration(
+                                    color: context.colors.surface,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: context.colors.border),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      // Patient header
+                                      InkWell(
+                                        onTap: () {
+                                          setState(() {
+                                            if (isExpanded) {
+                                              _expandedGroups.remove(patientName);
+                                            } else {
+                                              _expandedGroups.add(patientName);
+                                            }
+                                          });
+                                        },
+                                        borderRadius: BorderRadius.circular(14),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(14),
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 38,
+                                                height: 38,
+                                                decoration: BoxDecoration(
+                                                  color: context.colors.primary.withValues(alpha: 0.1),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                ),
+                                                child: Icon(Icons.person_rounded,
+                                                    color: context.colors.primary, size: 20),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(patientName, style: context.textStyles.label),
+                                                    Text(
+                                                      '${photos.length} photo${photos.length != 1 ? 's' : ''}'
+                                                      '${selectedInGroup > 0 ? ' · $selectedInGroup selected' : ''}',
+                                                      style: context.textStyles.caption.copyWith(
+                                                        color: selectedInGroup > 0
+                                                            ? context.colors.error
+                                                            : null,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              if (isExpanded)
+                                                TextButton(
+                                                  onPressed: () {
+                                                    final allSelected = photos.every((e) => e.selected);
+                                                    setState(() {
+                                                      for (final p in photos) {
+                                                        p.selected = !allSelected;
+                                                      }
+                                                    });
+                                                  },
+                                                  child: Text(
+                                                    photos.every((e) => e.selected) ? 'Deselect' : 'Select All',
+                                                    style: TextStyle(fontSize: 12, color: context.colors.primary),
+                                                  ),
+                                                ),
+                                              Icon(
+                                                isExpanded
+                                                    ? Icons.keyboard_arrow_up_rounded
+                                                    : Icons.keyboard_arrow_down_rounded,
+                                                color: context.colors.textHint,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+
+                                      // Expanded photo grid
+                                      if (isExpanded)
+                                        Padding(
+                                          padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+                                          child: Column(
+                                            children: [
+                                              Divider(height: 1, color: context.colors.divider),
+                                              const SizedBox(height: 10),
+                                              _buildPhotoGrid(photos),
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                );
+
+                if (isDesktop) {
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: 800,
+                        maxHeight: constraints.maxHeight - 80,
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.all(40),
+                        decoration: BoxDecoration(
+                          color: context.colors.surface,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 32,
+                              spreadRadius: 4,
+                              offset: const Offset(0, 16),
+                            ),
+                          ],
                         ),
-                ),
-              ],
+                        child: mainBody,
+                      ),
+                    ),
+                  );
+                } else {
+                  return mainBody;
+                }
+              },
             ),
 
       // ── Floating Delete Bar ──
       bottomSheet: _selectedCount > 0
-          ? Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-              decoration: BoxDecoration(
-                color: context.colors.surface,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 16,
-                    offset: const Offset(0, -4),
+          ? LayoutBuilder(
+              builder: (context, constraints) {
+                final isDesktop = constraints.maxWidth >= 900;
+                final deleteBar = Container(
+                  padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                  decoration: BoxDecoration(
+                    color: context.colors.surface,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 16,
+                        offset: const Offset(0, -4),
+                      ),
+                    ],
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                   ),
-                ],
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              child: SafeArea(
-                top: false,
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '$_selectedCount photo${_selectedCount != 1 ? 's' : ''} selected',
-                        style: context.textStyles.label.copyWith(color: context.colors.error),
-                      ),
+                  child: SafeArea(
+                    top: false,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '$_selectedCount photo${_selectedCount != 1 ? 's' : ''} selected',
+                            style: context.textStyles.label.copyWith(color: context.colors.error),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            setState(() {
+                              for (final list in _groupedPhotos.values) {
+                                for (final p in list) {
+                                  p.selected = false;
+                                }
+                              }
+                            });
+                          },
+                          child: Text('Clear', style: TextStyle(color: context.colors.textSecondary)),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          onPressed: _isDeleting ? null : _deleteSelected,
+                          icon: _isDeleting
+                              ? const SizedBox(width: 16, height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.delete_rounded, size: 18),
+                          label: Text(_isDeleting ? 'Deleting...' : 'Delete'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: context.colors.error,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          ),
+                        ),
+                      ],
                     ),
-                    TextButton(
-                      onPressed: () {
-                        setState(() {
-                          for (final list in _groupedPhotos.values) {
-                            for (final p in list) {
-                              p.selected = false;
-                            }
-                          }
-                        });
-                      },
-                      child: Text('Clear', style: TextStyle(color: context.colors.textSecondary)),
+                  ),
+                );
+
+                if (isDesktop) {
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 800),
+                      child: deleteBar,
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton.icon(
-                      onPressed: _isDeleting ? null : _deleteSelected,
-                      icon: _isDeleting
-                          ? const SizedBox(width: 16, height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.delete_rounded, size: 18),
-                      label: Text(_isDeleting ? 'Deleting...' : 'Delete'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: context.colors.error,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+                  );
+                } else {
+                  return deleteBar;
+                }
+              },
             )
           : null,
     );

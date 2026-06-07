@@ -3,8 +3,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/pb_collections.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/widgets/app_button.dart';
@@ -558,98 +556,56 @@ class _CreateAppointmentScreenState
     return Scaffold(
       backgroundColor: context.colors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth >= 900;
+
+            final header = Row(
               children: [
-                // Header
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: context.colors.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: context.colors.border),
-                        ),
-                        child: Icon(Icons.arrow_back_rounded,
-                            size: 20, color: context.colors.textPrimary),
-                      ),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: context.colors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: context.colors.border),
                     ),
-                    const SizedBox(width: 14),
-                    Text('New Appointment', style: context.textStyles.h2),
-                  ],
-                ),
-                const SizedBox(height: 28),
-
-                // Type toggle
-                Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: context.colors.surface,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: context.colors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      _typeTab('Call-by', Icons.phone_rounded, _isCallBy, () {
-                        setState(() {
-                          _isCallBy = true;
-                          _forceWalkIn = false;
-                        });
-                      }),
-                      _typeTab('Walk-in', Icons.directions_walk_rounded,
-                          !_isCallBy, () {
-                        setState(() => _isCallBy = false);
-                      }),
-                    ],
+                    child: Icon(Icons.arrow_back_rounded,
+                        size: 20, color: context.colors.textPrimary),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(width: 14),
+                Text('New Appointment', style: context.textStyles.h2),
+              ],
+            );
 
-                // Description
-                Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: (_isCallBy ? context.colors.info : context.colors.accent)
-                        .withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        _isCallBy
-                            ? Icons.info_outline_rounded
-                            : Icons.directions_walk_rounded,
-                        color: _isCallBy ? context.colors.info : context.colors.accent,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          _isCallBy
-                              ? 'Book a future slot — patient calls to schedule.'
-                              : 'Patient walked in — select a slot and enter details.',
-                          style: context.textStyles.caption.copyWith(
-                            color:
-                                _isCallBy ? context.colors.info : context.colors.accent,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
+            final typeToggle = Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: context.colors.surface,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: context.colors.border),
+              ),
+              child: Row(
+                children: [
+                  _typeTab('Call-by', Icons.phone_rounded, _isCallBy, () {
+                    setState(() {
+                      _isCallBy = true;
+                      _forceWalkIn = false;
+                    });
+                  }),
+                  _typeTab('Walk-in', Icons.directions_walk_rounded,
+                      !_isCallBy, () {
+                    setState(() => _isCallBy = false);
+                  }),
+                ],
+              ),
+            );
 
-                if (!_isCallBy) ...[
-                  Container(
+            final forceWalkInToggle = !_isCallBy
+                ? Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: context.colors.surface,
@@ -674,222 +630,368 @@ class _CreateAppointmentScreenState
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                  )
+                : const SizedBox.shrink();
 
-                // Doctor selector (clinic only)
-                if (isClinic && _doctors.isNotEmpty) ...[
-                  Text('Select Doctor', style: context.textStyles.label),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: context.colors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: context.colors.border),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _selectedDoctorId,
-                        isExpanded: true,
-                        hint: Text('Choose a doctor',
-                            style: context.textStyles.bodyMedium
-                                .copyWith(color: context.colors.textHint)),
-                        items: _doctors
-                            .map((d) => DropdownMenuItem(
-                                  value: d['id'],
-                                  child: Text(d['name'] ?? '',
-                                      style: context.textStyles.bodyMedium),
-                                ))
-                            .toList(),
-                        onChanged: (v) =>
-                            setState(() => _selectedDoctorId = v),
+            final descriptionBanner = Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: (_isCallBy ? context.colors.info : context.colors.accent)
+                    .withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _isCallBy
+                        ? Icons.info_outline_rounded
+                        : Icons.directions_walk_rounded,
+                    color: _isCallBy ? context.colors.info : context.colors.accent,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _isCallBy
+                          ? 'Book a future slot — patient calls to schedule.'
+                          : 'Patient walked in — select a slot and enter details.',
+                      style: context.textStyles.caption.copyWith(
+                        color: _isCallBy ? context.colors.info : context.colors.accent,
+                        fontSize: 13,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 20),
                 ],
+              ),
+            );
 
-                // Call-by: slot picker directly (no separate date field)
-                // Walk-in: slot picker (today only) or Force Walk-In
-                // Date & Time (Unified Slot Picker)
-                if (!_forceWalkIn) ...[
-                  Text('Appointment Slot', style: context.textStyles.label),
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: _pickSlot,
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: context.colors.surface,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: context.colors.border),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            _hasSlotSelected ? Icons.check_circle_rounded : Icons.access_time_filled_rounded,
-                            color: _hasSlotSelected ? context.colors.success : context.colors.primary,
-                            size: 20,
+            final showDoctor = isClinic && _doctors.isNotEmpty;
+
+            final doctorSelector = showDoctor
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Select Doctor', style: context.textStyles.label),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: context.colors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: context.colors.border),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedDoctorId,
+                            isExpanded: true,
+                            hint: Text('Choose a doctor',
+                                style: context.textStyles.bodyMedium
+                                    .copyWith(color: context.colors.textHint)),
+                            items: _doctors
+                                .map((d) => DropdownMenuItem(
+                                      value: d['id'],
+                                      child: Text(d['name'] ?? '',
+                                          style: context.textStyles.bodyMedium),
+                                    ))
+                                .toList(),
+                            onChanged: (v) => setState(() => _selectedDoctorId = v),
                           ),
-                          SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              _slotDisplayText,
+                        ),
+                      ),
+                    ],
+                  )
+                : const SizedBox.shrink();
+
+            final slotPickerOrImmediate = !_forceWalkIn
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Appointment Slot', style: context.textStyles.label),
+                      const SizedBox(height: 8),
+                      GestureDetector(
+                        onTap: _pickSlot,
+                        child: Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: context.colors.surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: context.colors.border),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _hasSlotSelected ? Icons.check_circle_rounded : Icons.access_time_filled_rounded,
+                                color: _hasSlotSelected ? context.colors.success : context.colors.primary,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  _slotDisplayText,
+                                  style: context.textStyles.bodyMedium.copyWith(
+                                    color: _hasSlotSelected ? context.colors.textPrimary : context.colors.textHint,
+                                  ),
+                                ),
+                              ),
+                              Icon(Icons.arrow_forward_ios_rounded, color: context.colors.textHint, size: 14),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Appointment Slot', style: context.textStyles.label),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: context.colors.success.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: context.colors.success.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(Icons.flash_on_rounded, color: context.colors.success, size: 24),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Booking Immediately',
                               style: context.textStyles.bodyMedium.copyWith(
-                                color: _hasSlotSelected ? context.colors.textPrimary : context.colors.textHint,
+                                color: context.colors.success,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                          ),
-                          Icon(Icons.arrow_forward_ios_rounded, color: context.colors.textHint, size: 14),
-                        ],
+                            Text(
+                              'Time: ${TimeUtils.formatStringTime(DateFormat("HH:mm").format(DateTime.now()))}',
+                              style: context.textStyles.caption.copyWith(color: context.colors.success),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+
+            final phoneField = Stack(
+              children: [
+                AppTextField(
+                  controller: _phoneCtrl,
+                  label: 'Phone Number',
+                  prefixIcon: Icon(Icons.phone_outlined, color: context.colors.textHint),
+                  keyboardType: TextInputType.phone,
+                  validator: Validators.phone,
+                ),
+                if (_isCheckingPhone)
+                  const Positioned(
+                    right: 14,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     ),
                   ),
-                  SizedBox(height: 24),
-                ] else ...[
+              ],
+            );
+
+            final phoneSection = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                phoneField,
+                if (_existingPatient != null) ...[
+                  const SizedBox(height: 10),
                   Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: context.colors.success.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(14),
+                      color: context.colors.success.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: context.colors.success.withValues(alpha: 0.3)),
                     ),
-                    child: Column(
+                    child: Row(
                       children: [
-                        Icon(Icons.flash_on_rounded, color: context.colors.success, size: 28),
-                        const SizedBox(height: 8),
-                        Text('Booking Immediately', style: context.textStyles.bodyMedium.copyWith(color: context.colors.success, fontWeight: FontWeight.bold)),
-                        Text('Time: ${TimeUtils.formatStringTime(DateFormat("HH:mm").format(DateTime.now()))}', style: context.textStyles.caption.copyWith(color: context.colors.success)),
+                        Icon(Icons.person_rounded, color: context.colors.success, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Returning patient — name auto-filled.',
+                            style: context.textStyles.caption.copyWith(color: context.colors.success),
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 24),
                 ],
+              ],
+            );
 
-                Text('Patient Info', style: context.textStyles.h3),
-                const SizedBox(height: 4),
-                Text(
-                  _isCallBy
-                      ? 'Quick placeholder — full details collected on arrival.'
-                      : 'Enter the walk-in patient\'s details.',
-                  style: context.textStyles.caption,
-                ),
-                SizedBox(height: 14),
+            final nameField = AppTextField(
+              controller: _nameCtrl,
+              label: 'Patient Name',
+              prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
+              validator: Validators.required,
+              readOnly: _existingPatient != null,
+            );
 
-                // ── Call-by: quick phone + name only ─────────────────────
-                if (_isCallBy) ...[
-                  Stack(
-                    children: [
-                      AppTextField(
-                        controller: _phoneCtrl,
-                        label: 'Phone Number',
-                        prefixIcon:
-                            Icon(Icons.phone_outlined, color: context.colors.textHint),
-                        keyboardType: TextInputType.phone,
-                        validator: Validators.phone,
-                      ),
-                      if (_isCheckingPhone)
-                        const Positioned(
-                          right: 14,
-                          top: 0,
-                          bottom: 0,
-                          child: Center(
-                            child: SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2)),
-                          ),
-                        ),
+            final formContent = Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  header,
+                  const SizedBox(height: 28),
+
+                  // Toggles row on desktop
+                  if (isDesktop && !_isCallBy) ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(flex: 3, child: typeToggle),
+                        const SizedBox(width: 16),
+                        Expanded(flex: 2, child: forceWalkInToggle),
+                      ],
+                    ),
+                  ] else ...[
+                    typeToggle,
+                    if (!_isCallBy) ...[
+                      const SizedBox(height: 24),
+                      forceWalkInToggle,
                     ],
-                  ),
-                  if (_existingPatient != null) ...[
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: context.colors.success.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                            color:
-                                context.colors.success.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
+                  ],
+                  const SizedBox(height: 24),
+
+                  descriptionBanner,
+                  const SizedBox(height: 24),
+
+                  // Doctor Selector & Slot Picker Grid on desktop
+                  if (isDesktop) ...[
+                    if (showDoctor) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.person_rounded,
-                              color: context.colors.success, size: 18),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Returning patient — name auto-filled.',
-                              style: context.textStyles.caption
-                                  .copyWith(color: context.colors.success),
-                            ),
+                          Expanded(child: doctorSelector),
+                          const SizedBox(width: 16),
+                          Expanded(child: slotPickerOrImmediate),
+                        ],
+                      ),
+                    ] else ...[
+                      slotPickerOrImmediate,
+                    ],
+                  ] else ...[
+                    if (showDoctor) ...[
+                      doctorSelector,
+                      const SizedBox(height: 20),
+                    ],
+                    slotPickerOrImmediate,
+                  ],
+                  const SizedBox(height: 24),
+
+                  Text('Patient Info', style: context.textStyles.h3),
+                  const SizedBox(height: 4),
+                  Text(
+                    _isCallBy
+                        ? 'Quick placeholder — full details collected on arrival.'
+                        : 'Enter the walk-in patient\'s details.',
+                    style: context.textStyles.caption,
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Call-by vs Walk-in Form content
+                  if (_isCallBy) ...[
+                    if (isDesktop) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: phoneSection),
+                          const SizedBox(width: 16),
+                          Expanded(child: nameField),
+                        ],
+                      ),
+                    ] else ...[
+                      phoneSection,
+                      const SizedBox(height: 14),
+                      nameField,
+                    ],
+                  ] else ...[
+                    PatientDetailsForm(
+                      nameCtrl: _nameCtrl,
+                      phoneCtrl: _phoneCtrl,
+                      dobCtrl: _dobCtrl,
+                      pincodeCtrl: _pincodeCtrl,
+                      countryCtrl: _countryCtrl,
+                      stateCtrl: _stateCtrl,
+                      cityCtrl: _cityCtrl,
+                      areaCtrl: _areaCtrl,
+                      occupationCtrl: _occupationCtrl,
+                      emailCtrl: _emailCtrl,
+                      referenceCtrl: _referenceCtrl,
+                      selectedGender: _selectedGender,
+                      onGenderChanged: (v) => setState(() => _selectedGender = v),
+                      consentGiven: _consentGiven,
+                      onConsentChanged: (v) => setState(() => _consentGiven = v),
+                      photoFile: _patientPhoto,
+                      onPhotoChanged: (f) => setState(() => _patientPhoto = f),
+                      familyMembers: _familyMembers,
+                      onFamilyMembersChanged: (fm) => setState(() => _familyMembers = fm),
+                      howDidYouHear: _howDidYouHear,
+                      onHowDidYouHearChanged: (v) => setState(() => _howDidYouHear = v),
+                      isReturningPatient: _isRegisteredPatient,
+                      isCheckingPhone: _isCheckingPhone,
+                      nameLocked: _isRegisteredPatient,
+                    ),
+                  ],
+                  const SizedBox(height: 28),
+
+                  AppButton(
+                    label: _isCallBy ? 'Book Appointment' : 'Register',
+                    isLoading: _isSubmitting,
+                    icon: _isCallBy
+                        ? Icons.event_available_rounded
+                        : Icons.how_to_reg_rounded,
+                    onPressed: _submit,
+                  ),
+                ],
+              ),
+            );
+
+            if (isDesktop) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: Container(
+                      padding: const EdgeInsets.all(40),
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 32,
+                            spreadRadius: 4,
+                            offset: const Offset(0, 16),
                           ),
                         ],
                       ),
+                      child: formContent,
                     ),
-                  ],
-                  SizedBox(height: 14),
-                  AppTextField(
-                    controller: _nameCtrl,
-                    label: 'Patient Name',
-                    prefixIcon: Icon(Icons.person_outline_rounded,
-                        color: context.colors.textHint),
-                    validator: Validators.required,
-                    readOnly: _existingPatient != null,
                   ),
-                ],
-
-               
-                if (!_isCallBy) ...[
-                  const SizedBox(height: 14),
-                  // ── Shared Common Patient Details Form ───────────────────
-                  PatientDetailsForm(
-                    nameCtrl: _nameCtrl,
-                    phoneCtrl: _phoneCtrl,
-                    dobCtrl: _dobCtrl,
-                    pincodeCtrl: _pincodeCtrl,
-                    countryCtrl: _countryCtrl,
-                    stateCtrl: _stateCtrl,
-                    cityCtrl: _cityCtrl,
-                    areaCtrl: _areaCtrl,
-                    occupationCtrl: _occupationCtrl,
-                    emailCtrl: _emailCtrl,
-                    referenceCtrl: _referenceCtrl,
-                    selectedGender: _selectedGender,
-                    onGenderChanged: (v) => setState(() => _selectedGender = v),
-                    consentGiven: _consentGiven,
-                    onConsentChanged: (v) => setState(() => _consentGiven = v),
-                    photoFile: _patientPhoto,
-                    onPhotoChanged: (f) => setState(() => _patientPhoto = f),
-                    familyMembers: _familyMembers,
-                    onFamilyMembersChanged: (fm) => setState(() => _familyMembers = fm),
-                    howDidYouHear: _howDidYouHear,
-                    onHowDidYouHearChanged: (v) => setState(() => _howDidYouHear = v),
-                    isReturningPatient: _isRegisteredPatient,
-                    isCheckingPhone: _isCheckingPhone,
-                    nameLocked: _isRegisteredPatient,
-                  ),
-                ],
-                const SizedBox(height: 28),
-
-                // Submit
-                AppButton(
-                  label: _isCallBy ? 'Book Appointment' : 'Register',
-                  isLoading: _isSubmitting,
-                  icon: _isCallBy
-                      ? Icons.event_available_rounded
-                      : Icons.how_to_reg_rounded,
-                  onPressed: _submit,
                 ),
-              ],
-            ),
-          ),
+              );
+            } else {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: formContent,
+              );
+            }
+          },
         ),
       ),
     );

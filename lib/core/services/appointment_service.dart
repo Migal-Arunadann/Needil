@@ -178,7 +178,9 @@ class AppointmentService {
     return AppointmentModel.fromRecord(record);
   }
 
-  /// Create a walk-in appointment (auto assigns current time).
+  /// Create a walk-in appointment.
+  /// Status starts as 'waiting' — patient is present but consultation
+  /// has not started yet. startConsultationRecord() moves it to in_progress.
   Future<AppointmentModel> createWalkInAppointment({
     required String doctorId,
     String? clinicId,
@@ -194,7 +196,7 @@ class AppointmentService {
       'type': 'walk_in',
       'date': date,
       'time': time,
-      'status': 'in_progress',
+      'status': 'waiting',
       'check_in_time': DateTime.now().toUtc().toIso8601String(),
       // Walk-in details are collected upfront in the creation form, so mark as saved immediately
       'patient_details_saved': true,
@@ -213,16 +215,19 @@ class AppointmentService {
   }
 
 
-  /// Link a patient record to an appointment (for call-by after patient arrives).
+  /// Link a patient record to an appointment.
+  /// [setArrived] — when true (default), also sets status=waiting + check_in_time.
+  ///   Pass false when auto-linking at creation time (patient hasn't arrived yet).
   Future<AppointmentModel> linkPatient(
-      String appointmentId, String patientId) async {
+      String appointmentId, String patientId, {bool setArrived = true}) async {
+    final body = <String, dynamic>{'patient': patientId};
+    if (setArrived) {
+      body['status'] = 'waiting';
+      body['check_in_time'] = DateTime.now().toUtc().toIso8601String();
+    }
     final record = await pb.collection(PBCollections.appointments).update(
       appointmentId,
-      body: {
-        'patient': patientId, 
-        'status': 'in_progress',
-        'check_in_time': DateTime.now().toUtc().toIso8601String(),
-      },
+      body: body,
     );
     return AppointmentModel.fromRecord(record);
   }
@@ -447,13 +452,27 @@ class AppointmentService {
     return null;
   }
 
-  /// Mark a patient as arrived (set check_in_time + status to in_progress).
+  /// Mark a consultation patient as arrived: sets status = waiting.
+  /// The consultation does NOT start until startConsultationRecord() is called.
   Future<AppointmentModel> markArrived(String appointmentId) async {
     final record = await pb.collection(PBCollections.appointments).update(
       appointmentId,
       body: {
-        'status': 'in_progress',
+        'status': 'waiting',
         'check_in_time': DateTime.now().toUtc().toIso8601String(),
+      },
+    );
+    return AppointmentModel.fromRecord(record);
+  }
+
+  /// Move a consultation appointment from waiting → in_progress
+  /// when the doctor clicks Start Consultation.
+  Future<AppointmentModel> startConsultationRecord(String appointmentId) async {
+    final record = await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {
+        'status': 'in_progress',
+        'consultation_start_time': DateTime.now().toUtc().toIso8601String(),
       },
     );
     return AppointmentModel.fromRecord(record);
@@ -685,15 +704,15 @@ class AppointmentService {
             .collection(PBCollections.consultations)
             .getOne(apt.linkedConsultationId!);
         final c = ConsultationModel.fromRecord(record);
-        if (c.status == ConsultationStatus.ongoing) {
-          return (c.id, false); // resume existing
-        }
+        // Return regardless of status — ongoing = resume, completed = view only.
+        // Never create a second consultation for the same appointment.
+        return (c.id, false);
       } catch (_) {
-        // Record deleted or error — fall through to create
+        // Record deleted or unreachable — fall through to create
       }
     }
 
-    // 2. No existing stub → create one and persist its ID back to the appointment
+    // 2. No linked stub → create one and persist its ID back to the appointment
     final consultation = await createConsultation(apt.patientId!, apt.doctorId);
     await saveConsultationToAppointment(apt.id, consultation.id);
     return (consultation.id, true);

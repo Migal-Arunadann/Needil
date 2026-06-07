@@ -126,7 +126,8 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
           clinicId: clinicId,
         );
         if (existing != null) {
-          await _service.linkPatient(appointment.id, existing.id);
+          // setArrived:false — this is at creation time, patient hasn't arrived yet
+          await _service.linkPatient(appointment.id, existing.id, setArrived: false);
           await _service.markPatientDetailsSaved(appointment.id);
         }
       } catch (_) {
@@ -216,7 +217,8 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
       
       // Auto-link patient to appointment if one was created
       if (patientId != null) {
-        await _service.linkPatient(appointment.id, patientId);
+        // setArrived:false — walk-in already sets status=waiting at creation
+        await _service.linkPatient(appointment.id, patientId, setArrived: false);
       }
 
       await loadAppointments();

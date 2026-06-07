@@ -988,152 +988,193 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     return Scaffold(
       backgroundColor: context.colors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: context.colors.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: context.colors.border),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth >= 900;
+
+            final mainBody = Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: context.colors.surface,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: context.colors.border),
+                          ),
+                          child: Icon(Icons.arrow_back_rounded,
+                              size: 20, color: context.colors.textPrimary),
                         ),
-                        child: Icon(Icons.arrow_back_rounded,
-                            size: 20, color: context.colors.textPrimary),
                       ),
-                    ),
-                    SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(_isViewing ? 'Consultation Details' : (widget.isViewMode ? 'Edit Consultation' : 'New Consultation'), style: context.textStyles.h2),
-                          Text(widget.patientName,
-                              style: context.textStyles.caption),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(_isViewing ? 'Consultation Details' : (widget.isViewMode ? 'Edit Consultation' : 'New Consultation'), style: context.textStyles.h2),
+                            Text(widget.patientName,
+                                style: context.textStyles.caption),
+                          ],
+                        ),
+                      ),
+                      if (_isViewing && _existingConsultation?.status != ConsultationStatus.completed) ...[ 
+                        IconButton(
+                          icon: Icon(Icons.edit_rounded, color: context.colors.primary),
+                          onPressed: () => setState(() {
+                            _isViewing = false;
+                            _isExpanded = true;
+                          }),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.stop_circle_rounded, color: context.colors.warning),
+                          tooltip: 'End Treatment',
+                          onPressed: _confirmEndConsultation,
+                        ),
+                      ] else if (_isViewing) ...[
+                        IconButton(
+                          icon: Icon(Icons.edit_rounded, color: context.colors.primary),
+                          onPressed: () => setState(() {
+                            _isViewing = false;
+                            _isExpanded = true;
+                          }),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  if (_isViewing)
+                    Container(
+                      margin: isDesktop ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 24),
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: context.colors.border),
+                        boxShadow: [
+                          BoxShadow(
+                            color: context.colors.textHint.withValues(alpha: 0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          )
                         ],
                       ),
-                    ),
-                    if (_isViewing && _existingConsultation?.status != ConsultationStatus.completed) ...[ 
-                      IconButton(
-                        icon: Icon(Icons.edit_rounded, color: context.colors.primary),
-                        onPressed: () => setState(() {
-                          _isViewing = false;
-                          _isExpanded = true;
-                        }),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.stop_circle_rounded, color: context.colors.warning),
-                        tooltip: 'End Treatment',
-                        onPressed: _confirmEndConsultation,
-                      ),
-                    ] else if (_isViewing) ...[
-                      IconButton(
-                        icon: Icon(Icons.edit_rounded, color: context.colors.primary),
-                        onPressed: () => setState(() {
-                          _isViewing = false;
-                          _isExpanded = true;
-                        }),
-                      ),
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 24),
-
-                if (_isViewing)
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 24),
-                    decoration: BoxDecoration(
-                      color: context.colors.surface,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: context.colors.border),
-                      boxShadow: [
-                        BoxShadow(
-                          color: context.colors.textHint.withValues(alpha: 0.05),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        )
-                      ],
-                    ),
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      children: [
-                        InkWell(
-                          onTap: () => setState(() => _isExpanded = !_isExpanded),
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: context.colors.primary.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(10),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        children: [
+                          InkWell(
+                            onTap: () => setState(() => _isExpanded = !_isExpanded),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: context.colors.primary.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(Icons.assignment_ind_rounded, color: context.colors.primary, size: 20),
                                   ),
-                                  child: Icon(Icons.assignment_ind_rounded, color: context.colors.primary, size: 20),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('Consultation Details', style: context.textStyles.h4),
-                                      SizedBox(height: 2),
-                                      Text('View full patient form & attached files', style: context.textStyles.caption),
-                                    ],
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Consultation Details', style: context.textStyles.h4),
+                                        const SizedBox(height: 2),
+                                        Text('View full patient form & attached files', style: context.textStyles.caption),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                                AnimatedRotation(
-                                  turns: _isExpanded ? 0.5 : 0,
-                                  duration: Duration(milliseconds: 300),
-                                  child: Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textHint),
-                                ),
-                              ],
+                                  AnimatedRotation(
+                                    turns: _isExpanded ? 0.5 : 0,
+                                    duration: const Duration(milliseconds: 300),
+                                    child: Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textHint),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        AnimatedSize(
-                          duration: const Duration(milliseconds: 350),
-                          curve: Curves.fastOutSlowIn,
-                          alignment: Alignment.topCenter,
-                          child: !_isExpanded
-                              ? SizedBox(width: double.infinity, height: 0)
-                              : Container(
-                                  decoration: BoxDecoration(
-                                    border: Border(top: BorderSide(color: context.colors.border)),
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 350),
+                            curve: Curves.fastOutSlowIn,
+                            alignment: Alignment.topCenter,
+                            child: !_isExpanded
+                                ? const SizedBox(width: double.infinity, height: 0)
+                                : Container(
+                                    decoration: BoxDecoration(
+                                      border: Border(top: BorderSide(color: context.colors.border)),
+                                    ),
+                                    padding: const EdgeInsets.all(20),
+                                    child: _buildFormContent(),
                                   ),
-                                  padding: const EdgeInsets.all(20),
-                                  child: _buildFormContent(),
-                                ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    _buildFormContent(),
+
+                  const SizedBox(height: 28),
+
+                  if (!_isViewing)
+                    Center(
+                      child: SizedBox(
+                        width: isDesktop ? 320 : double.infinity,
+                        child: AppButton(
+                          label: widget.isViewMode ? 'Update Consultation' : 'Save Consultation',
+                          isLoading: _isSubmitting,
+                          icon: Icons.check_circle_outline_rounded,
+                          onPressed: _submit,
                         ),
-                      ],
+                      ),
                     ),
-                  )
-                else
-                  _buildFormContent(),
 
-                const SizedBox(height: 28),
+                ],
+              ),
+            );
 
-                if (!_isViewing)
-                  AppButton(
-                    label: widget.isViewMode ? 'Update Consultation' : 'Save Consultation',
-                    isLoading: _isSubmitting,
-                    icon: Icons.check_circle_outline_rounded,
-                    onPressed: _submit,
+            if (isDesktop) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 900),
+                    child: Container(
+                      padding: const EdgeInsets.all(40),
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 32,
+                            spreadRadius: 4,
+                            offset: const Offset(0, 16),
+                          ),
+                        ],
+                      ),
+                      child: mainBody,
+                    ),
                   ),
-
-              ],
-            ),
-          ),
+                ),
+              );
+            } else {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: mainBody,
+              );
+            }
+          },
         ),
       ),
     );
@@ -1205,6 +1246,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   }
 
   Widget _buildFormContent() {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1335,10 +1377,17 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         const SizedBox(height: 24),
         Text('Known Allergies', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        _buildAllergyCheckbox('Drug / Medication Allergies', _hasDrugAllergy, (v) => setState(() => _hasDrugAllergy = v), _drugAllergyCtrl, 'Which drugs?'),
-        _buildAllergyCheckbox('Environmental Allergies', _hasEnvAllergy, (v) => setState(() => _hasEnvAllergy = v), _envAllergyCtrl, 'Dust, pollen, etc.'),
-        _buildAllergyCheckbox('Food Allergies', _hasFoodAllergy, (v) => setState(() => _hasFoodAllergy = v), _foodAllergyCtrl, 'Dairy, nuts, etc.'),
-        _buildAllergyCheckbox('Other Allergies', _hasOtherAllergy, (v) => setState(() => _hasOtherAllergy = v), _otherAllergyCtrl, 'Please specify...'),
+        _responsiveRow(
+          _buildAllergyCheckbox('Drug / Medication Allergies', _hasDrugAllergy, (v) => setState(() => _hasDrugAllergy = v), _drugAllergyCtrl, 'Which drugs?'),
+          _buildAllergyCheckbox('Environmental Allergies', _hasEnvAllergy, (v) => setState(() => _hasEnvAllergy = v), _envAllergyCtrl, 'Dust, pollen, etc.'),
+          isDesktop,
+        ),
+        if (isDesktop) const SizedBox(height: 12),
+        _responsiveRow(
+          _buildAllergyCheckbox('Food Allergies', _hasFoodAllergy, (v) => setState(() => _hasFoodAllergy = v), _foodAllergyCtrl, 'Dairy, nuts, etc.'),
+          _buildAllergyCheckbox('Other Allergies', _hasOtherAllergy, (v) => setState(() => _hasOtherAllergy = v), _otherAllergyCtrl, 'Please specify...'),
+          isDesktop,
+        ),
 
         const SizedBox(height: 24),
         Text('Chronic Diseases', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
@@ -1373,23 +1422,34 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         // ─── Lifestyle & Habits ───
         _buildSectionHeader('Lifestyle & Habits', Icons.accessibility_new_rounded),
         
-        _buildDropdown('Diet Pattern', 'Select your usual diet', _selectedDiet, _dietOptions, (v) => setState(() => _selectedDiet = v)),
+        _responsiveRow(
+          _buildDropdown('Diet Pattern', 'Select your usual diet', _selectedDiet, _dietOptions, (v) => setState(() => _selectedDiet = v)),
+          _buildDropdown('Sleep Duration', 'Hours of sleep per night', _selectedSleepDuration, _sleepDurationOptions, (v) => setState(() => _selectedSleepDuration = v)),
+          isDesktop,
+        ),
         const SizedBox(height: 16),
-        _buildDropdown('Sleep Duration', 'Hours of sleep per night', _selectedSleepDuration, _sleepDurationOptions, (v) => setState(() => _selectedSleepDuration = v)),
-        const SizedBox(height: 16),
-        _buildDropdown('Sleep Quality', 'How well do you sleep?', _selectedSleepQuality, _sleepQualityOptions, (v) => setState(() => _selectedSleepQuality = v)),
-        const SizedBox(height: 16),
-        _buildDropdown('Exercise / Physical Activity', 'Level of activity', _selectedExercise, _exerciseOptions, (v) => setState(() => _selectedExercise = v)),
+        _responsiveRow(
+          _buildDropdown('Sleep Quality', 'How well do you sleep?', _selectedSleepQuality, _sleepQualityOptions, (v) => setState(() => _selectedSleepQuality = v)),
+          _buildDropdown('Exercise / Physical Activity', 'Level of activity', _selectedExercise, _exerciseOptions, (v) => setState(() => _selectedExercise = v)),
+          isDesktop,
+        ),
         const SizedBox(height: 16),
         _buildDropdown('Stress / Mental Health', 'Current stress level', _selectedStress, _stressOptions, (v) => setState(() => _selectedStress = v)),
         const SizedBox(height: 32),
 
         Text('Substance Use', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        _buildRadioGroup('Smoking', _smoking, (v) => setState(() => _smoking = v!)),
-        _buildRadioGroup('Alcohol', _alcohol, (v) => setState(() => _alcohol = v!)),
-        _buildRadioGroup('Tobacco Chewing', _tobacco, (v) => setState(() => _tobacco = v!)),
-        _buildRadioGroup('Recreational Drugs', _drugs, (v) => setState(() => _drugs = v!)),
+        _responsiveRow(
+          _buildRadioGroup('Smoking', _smoking, (v) => setState(() => _smoking = v!)),
+          _buildRadioGroup('Alcohol', _alcohol, (v) => setState(() => _alcohol = v!)),
+          isDesktop,
+        ),
+        const SizedBox(height: 16),
+        _responsiveRow(
+          _buildRadioGroup('Tobacco Chewing', _tobacco, (v) => setState(() => _tobacco = v!)),
+          _buildRadioGroup('Recreational Drugs', _drugs, (v) => setState(() => _drugs = v!)),
+          isDesktop,
+        ),
         const SizedBox(height: 32),
 
         // ─── Vitals ───
@@ -1498,20 +1558,22 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
 
         // ─── Diagnosis ───
         _buildSectionHeader('Diagnosis', Icons.medical_information_outlined),
-        AppTextField(
-          controller: _acupunctureDiagnosisCtrl,
-          label: 'Acupuncture Diagnosis',
-          hint: 'Meridian findings, point sensitivity...',
-          maxLines: 3,
-          readOnly: _isViewing,
-        ),
-        const SizedBox(height: 16),
-        AppTextField(
-          controller: _eyeDiagnosisCtrl,
-          label: 'Eye Diagnosis',
-          hint: 'Iridology, sclera findings...',
-          maxLines: 3,
-          readOnly: _isViewing,
+        _responsiveRow(
+          AppTextField(
+            controller: _acupunctureDiagnosisCtrl,
+            label: 'Acupuncture Diagnosis',
+            hint: 'Meridian findings, point sensitivity...',
+            maxLines: 3,
+            readOnly: _isViewing,
+          ),
+          AppTextField(
+            controller: _eyeDiagnosisCtrl,
+            label: 'Eye Diagnosis',
+            hint: 'Iridology, sclera findings...',
+            maxLines: 3,
+            readOnly: _isViewing,
+          ),
+          isDesktop,
         ),
         const SizedBox(height: 16),
         AppTextField(
@@ -1694,6 +1756,28 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         ),
       ],
     );
+  }
+
+  Widget _responsiveRow(Widget left, Widget right, bool isDesktop) {
+    if (isDesktop) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: left),
+          const SizedBox(width: 16),
+          Expanded(child: right),
+        ],
+      );
+    } else {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          left,
+          const SizedBox(height: 16),
+          right,
+        ],
+      );
+    }
   }
 
   Widget _buildSectionHeader(String title, IconData icon) {

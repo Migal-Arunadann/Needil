@@ -257,37 +257,41 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final phoneField = Stack(
       children: [
-        // ── Phone ──────────────────────────────────────────────────────────
-        Stack(
-          children: [
-            AppTextField(
-              controller: widget.phoneCtrl,
-              label: 'Phone Number',
-              prefixIcon: Icon(Icons.phone_outlined, color: context.colors.textHint),
-              keyboardType: TextInputType.phone,
-              validator: Validators.phone,
-              readOnly: widget.phoneLocked,
-            ),
-            if (widget.isCheckingPhone)
-              const Positioned(
-                right: 14, top: 0, bottom: 0,
-                child: Center(
-                  child: SizedBox(
-                    width: 18, height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
-              ),
-          ],
+        AppTextField(
+          controller: widget.phoneCtrl,
+          label: 'Phone Number',
+          prefixIcon: Icon(Icons.phone_outlined, color: context.colors.textHint),
+          keyboardType: TextInputType.phone,
+          validator: Validators.phone,
+          readOnly: widget.phoneLocked,
         ),
+        if (widget.isCheckingPhone)
+          const Positioned(
+            right: 14,
+            top: 0,
+            bottom: 0,
+            child: Center(
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          ),
+      ],
+    );
 
+    final phoneSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        phoneField,
         if (widget.isReturningPatient) ...[
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           Container(
-            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: context.colors.info.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
@@ -307,334 +311,419 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
             ),
           ),
         ],
+      ],
+    );
 
-        SizedBox(height: 14),
+    final nameSection = AppTextField(
+      controller: widget.nameCtrl,
+      label: 'Full Name',
+      prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
+      validator: Validators.required,
+      readOnly: widget.nameLocked,
+    );
 
-        // ── Full Name ──────────────────────────────────────────────────────
-        AppTextField(
-          controller: widget.nameCtrl,
-          label: 'Full Name',
-          prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
-          validator: Validators.required,
-          readOnly: widget.nameLocked,
-        ),
-        const SizedBox(height: 14),
-
-        // ── Patient Photo ──────────────────────────────────────────────────
-        if (kIsWeb) ...[
-          Center(
-            child: Column(
-              children: [
-                Icon(Icons.person_outline_rounded, color: context.colors.textHint, size: 48),
-                const SizedBox(height: 6),
-                Text(
-                  'Patient photo upload is available on the mobile app.',
-                  style: context.textStyles.caption.copyWith(color: context.colors.textHint),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-        ] else ...[
-          Center(child: GestureDetector(
-            onTap: _pickPhoto,
-            child: Stack(children: [
-              Container(
-                width: 80, height: 80,
-                decoration: BoxDecoration(
-                  color: context.colors.surface,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: context.colors.border),
-                  image: widget.photoFile != null
-                      ? DecorationImage(image: FileImage(widget.photoFile!), fit: BoxFit.cover)
-                      : null,
-                ),
-                child: widget.photoFile == null
-                    ? Icon(Icons.person_add_alt_1_rounded, color: context.colors.textHint, size: 32) : null,
-              ),
-              Positioned(bottom: 0, right: 0,
-                child: Container(
-                  width: 26, height: 26,
-                  decoration: BoxDecoration(
-                    color: context.colors.primary,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.white, width: 2),
-                  ),
-                  child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
-                ),
-              ),
-            ]),
-          )),
-          const SizedBox(height: 4),
-          Center(child: Text('Patient Photo (Optional)',
-            style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))),
-          const SizedBox(height: 14),
-        ],
-
-        // ── Gender (required) ──────────────────────────────────────────────
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    // Patient photo
+    Widget photoSection;
+    if (kIsWeb) {
+      photoSection = Center(
+        child: Column(
           children: [
-            RichText(
-              text: TextSpan(children: [
-                TextSpan(text: 'Gender ', style: context.textStyles.label),
-                const TextSpan(
-                    text: '*',
-                    style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-              ]),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              decoration: BoxDecoration(
-                color: context.colors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: widget.selectedGender == null ? context.colors.border : context.colors.primary,
-                ),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: widget.selectedGender,
-                  isExpanded: true,
-                  hint: Text('Select Gender *',
-                      style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint)),
-                  items: ['Male', 'Female', 'Other']
-                      .map((g) => DropdownMenuItem(
-                            value: g,
-                            child: Text(g, style: context.textStyles.bodyMedium),
-                          ))
-                      .toList(),
-                  onChanged: widget.onGenderChanged,
-                ),
-              ),
+            Icon(Icons.person_outline_rounded, color: context.colors.textHint, size: 48),
+            const SizedBox(height: 6),
+            Text(
+              'Patient photo upload is available on the mobile app.',
+              style: context.textStyles.caption.copyWith(color: context.colors.textHint),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
-        SizedBox(height: 14),
-
-        // ── Date of Birth (required) + auto Age ───────────────────────────
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: 3,
-              child: AppTextField(
-                controller: TextEditingController(text: _displayDob()),
-                label: 'Date of Birth *',
-                prefixIcon: Icon(Icons.cake_outlined, color: context.colors.textHint),
-                hint: 'DD/MM/YYYY',
-                readOnly: true,
-                onTap: _pickDob,
-                validator: (_) => widget.dobCtrl.text.isEmpty ? 'Date of birth is required' : null,
-                suffixIcon: GestureDetector(
-                  onTap: _pickDob,
-                  child: Icon(Icons.calendar_month_rounded, color: context.colors.primary),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      );
+    } else {
+      photoSection = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: GestureDetector(
+              onTap: _pickPhoto,
+              child: Stack(
                 children: [
-                  Text('Age', style: context.textStyles.label),
-                  const SizedBox(height: 8),
                   Container(
-                    height: 52,
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    width: 80,
+                    height: 80,
                     decoration: BoxDecoration(
-                      color: context.colors.surface.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(12),
+                      color: context.colors.surface,
+                      borderRadius: BorderRadius.circular(22),
                       border: Border.all(color: context.colors.border),
+                      image: widget.photoFile != null
+                          ? DecorationImage(image: FileImage(widget.photoFile!), fit: BoxFit.cover)
+                          : null,
                     ),
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      _calculatedAge != null ? '$_calculatedAge yrs' : '—',
-                      style: context.textStyles.bodyMedium.copyWith(
-                        color: _calculatedAge != null ? context.colors.textPrimary : context.colors.textHint,
+                    child: widget.photoFile == null
+                        ? Icon(Icons.person_add_alt_1_rounded, color: context.colors.textHint, size: 32)
+                        : null,
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    right: 0,
+                    child: Container(
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        color: context.colors.primary,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white, width: 2),
                       ),
+                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 14),
-
-        // ── Location ──────────────────────────────────────────────────────
-        LocationFields(
-          pincodeCtrl: widget.pincodeCtrl,
-          countryCtrl: widget.countryCtrl,
-          stateCtrl: widget.stateCtrl,
-          cityCtrl: widget.cityCtrl,
-          areaCtrl: widget.areaCtrl,
-          allRequired: true,
-        ),
-        SizedBox(height: 14),
-
-        // ── Occupation (optional) ──────────────────────────────────────────
-        AppTextField(
-          controller: widget.occupationCtrl,
-          label: 'Occupation (Optional)',
-          prefixIcon: Icon(Icons.work_outline_rounded, color: context.colors.textHint),
-        ),
-        SizedBox(height: 14),
-
-        // ── Email (optional) ───────────────────────────────────────────────
-        AppTextField(
-          controller: widget.emailCtrl,
-          label: 'Email (Optional)',
-          prefixIcon: Icon(Icons.email_outlined, color: context.colors.textHint),
-          keyboardType: TextInputType.emailAddress,
-        ),
-        const SizedBox(height: 14),
-
-        // ── Reference (optional dropdown) ──────────────────────────────────
-        _ReferredByDropdown(referenceCtrl: widget.referenceCtrl),
-        const SizedBox(height: 14),
-
-        // ── How Did You Know Us ────────────────────────────────────────────
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('How Did You Know Us? (Optional)', style: context.textStyles.label),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-              decoration: BoxDecoration(
-                color: context.colors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: context.colors.border),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  value: widget.howDidYouHear,
-                  isExpanded: true,
-                  hint: Text('Select an option',
-                      style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint)),
-                  items: _howDidYouHearOptions
-                      .map((o) => DropdownMenuItem(value: o, child: Text(o, style: context.textStyles.bodyMedium)))
-                      .toList(),
-                  onChanged: widget.onHowDidYouHearChanged,
-                ),
-              ),
+          ),
+          const SizedBox(height: 4),
+          Center(
+            child: Text(
+              'Patient Photo (Optional)',
+              style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
             ),
-          ],
-        ),
-        const SizedBox(height: 14),
+          ),
+        ],
+      );
+    }
 
-        // ── Family Members ─────────────────────────────────────────────────
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.family_restroom_rounded, color: context.colors.textHint, size: 18),
-                const SizedBox(width: 8),
-                Text('Family Members (Optional)', style: context.textStyles.label),
-                const Spacer(),
-                GestureDetector(
-                  onTap: _addFamilyMember,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: context.colors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.add_rounded, color: context.colors.primary, size: 14),
-                      const SizedBox(width: 3),
-                      Text('Add', style: context.textStyles.caption.copyWith(
-                        color: context.colors.primary, fontWeight: FontWeight.w600)),
-                    ]),
-                  ),
-                ),
-              ],
+    final genderSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        RichText(
+          text: TextSpan(children: [
+            TextSpan(text: 'Gender ', style: context.textStyles.label),
+            const TextSpan(
+              text: '*',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
             ),
-            const SizedBox(height: 8),
-            if (widget.familyMembers.isEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-                decoration: BoxDecoration(
-                  color: context.colors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: context.colors.border),
-                ),
-                child: Text('No family members added.',
-                  style: context.textStyles.caption.copyWith(color: context.colors.textHint)),
-              ),
-            ...widget.familyMembers.asMap().entries.map((entry) {
-              final i = entry.key;
-              final fm = entry.value;
-              return Container(
-                margin: const EdgeInsets.only(bottom: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: context.colors.surface,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: context.colors.border),
-                ),
-                child: Row(children: [
-                  Icon(Icons.person_outline_rounded, size: 16, color: context.colors.textSecondary),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text('${fm['name']} (${fm['relation']})',
-                    style: context.textStyles.bodyMedium)),
-                  GestureDetector(
-                    onTap: () {
-                      final updated = List<Map<String, String>>.from(widget.familyMembers);
-                      updated.removeAt(i);
-                      widget.onFamilyMembersChanged(updated);
-                    },
-                    child: Icon(Icons.close_rounded, size: 16, color: context.colors.error),
-                  ),
-                ]),
-              );
-            }),
-          ],
+          ]),
         ),
-        const SizedBox(height: 24),
-
-        // ── Consent ────────────────────────────────────────────────────────
-        GestureDetector(
-          onTap: () => widget.onConsentChanged(!widget.consentGiven),
-          behavior: HitTestBehavior.opaque,
-          child: Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: context.colors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: widget.consentGiven ? context.colors.success : context.colors.border,
-              ),
+        const SizedBox(height: 8),
+        Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: widget.selectedGender == null ? context.colors.border : context.colors.primary,
             ),
-            child: Row(
-              children: [
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(
-                    widget.consentGiven ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
-                    key: ValueKey(widget.consentGiven),
-                    color: widget.consentGiven ? context.colors.success : context.colors.textHint,
-                    size: 24,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'Patient consents to collection and processing of their health data as per DPDP Act.',
-                    style: context.textStyles.caption.copyWith(fontSize: 12),
-                  ),
-                ),
-              ],
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: widget.selectedGender,
+              isExpanded: true,
+              hint: Text('Select Gender *',
+                  style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint)),
+              items: ['Male', 'Female', 'Other']
+                  .map((g) => DropdownMenuItem(
+                        value: g,
+                        child: Text(g, style: context.textStyles.bodyMedium),
+                      ))
+                  .toList(),
+              onChanged: widget.onGenderChanged,
             ),
           ),
         ),
       ],
+    );
+
+    final dobAgeSection = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          flex: 3,
+          child: AppTextField(
+            controller: TextEditingController(text: _displayDob()),
+            label: 'Date of Birth *',
+            prefixIcon: Icon(Icons.cake_outlined, color: context.colors.textHint),
+            hint: 'DD/MM/YYYY',
+            readOnly: true,
+            onTap: _pickDob,
+            validator: (_) => widget.dobCtrl.text.isEmpty ? 'Date of birth is required' : null,
+            suffixIcon: GestureDetector(
+              onTap: _pickDob,
+              child: Icon(Icons.calendar_month_rounded, color: context.colors.primary),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 2,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Age', style: context.textStyles.label),
+              const SizedBox(height: 8),
+              Container(
+                height: 52,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: context.colors.surface.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.colors.border),
+                ),
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _calculatedAge != null ? '$_calculatedAge yrs' : '—',
+                  style: context.textStyles.bodyMedium.copyWith(
+                    color: _calculatedAge != null ? context.colors.textPrimary : context.colors.textHint,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    final occupationSection = AppTextField(
+      controller: widget.occupationCtrl,
+      label: 'Occupation (Optional)',
+      prefixIcon: Icon(Icons.work_outline_rounded, color: context.colors.textHint),
+    );
+
+    final emailSection = AppTextField(
+      controller: widget.emailCtrl,
+      label: 'Email (Optional)',
+      prefixIcon: Icon(Icons.email_outlined, color: context.colors.textHint),
+      keyboardType: TextInputType.emailAddress,
+    );
+
+    final referredBySection = _ReferredByDropdown(referenceCtrl: widget.referenceCtrl);
+
+    final howDidYouHearSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('How Did You Know Us? (Optional)', style: context.textStyles.label),
+        const SizedBox(height: 8),
+        Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: context.colors.border),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: widget.howDidYouHear,
+              isExpanded: true,
+              hint: Text('Select an option',
+                  style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint)),
+              items: _howDidYouHearOptions
+                  .map((o) => DropdownMenuItem(value: o, child: Text(o, style: context.textStyles.bodyMedium)))
+                  .toList(),
+              onChanged: widget.onHowDidYouHearChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+
+    final familyMembersSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.family_restroom_rounded, color: context.colors.textHint, size: 18),
+            const SizedBox(width: 8),
+            Text('Family Members (Optional)', style: context.textStyles.label),
+            const Spacer(),
+            GestureDetector(
+              onTap: _addFamilyMember,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: context.colors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_rounded, color: context.colors.primary, size: 14),
+                    const SizedBox(width: 3),
+                    Text(
+                      'Add',
+                      style: context.textStyles.caption.copyWith(
+                        color: context.colors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (widget.familyMembers.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+            decoration: BoxDecoration(
+              color: context.colors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: context.colors.border),
+            ),
+            child: Text(
+              'No family members added.',
+              style: context.textStyles.caption.copyWith(color: context.colors.textHint),
+            ),
+          ),
+        ...widget.familyMembers.asMap().entries.map((entry) {
+          final i = entry.key;
+          final fm = entry.value;
+          return Container(
+            margin: const EdgeInsets.only(bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: context.colors.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: context.colors.border),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.person_outline_rounded, size: 16, color: context.colors.textSecondary),
+                const SizedBox(width: 8),
+                Expanded(child: Text('${fm['name']} (${fm['relation']})', style: context.textStyles.bodyMedium)),
+                GestureDetector(
+                  onTap: () {
+                    final updated = List<Map<String, String>>.from(widget.familyMembers);
+                    updated.removeAt(i);
+                    widget.onFamilyMembersChanged(updated);
+                  },
+                  child: Icon(Icons.close_rounded, size: 16, color: context.colors.error),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+
+    final consentSection = GestureDetector(
+      onTap: () => widget.onConsentChanged(!widget.consentGiven),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: widget.consentGiven ? context.colors.success : context.colors.border,
+          ),
+        ),
+        child: Row(
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                widget.consentGiven ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+                key: ValueKey(widget.consentGiven),
+                color: widget.consentGiven ? context.colors.success : context.colors.textHint,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Patient consents to collection and processing of their health data as per DPDP Act.',
+                style: context.textStyles.caption.copyWith(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 700;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (isDesktop) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: phoneSection),
+                  const SizedBox(width: 16),
+                  Expanded(child: nameSection),
+                ],
+              ),
+              const SizedBox(height: 16),
+              photoSection,
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: genderSection),
+                  const SizedBox(width: 16),
+                  Expanded(child: dobAgeSection),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: occupationSection),
+                  const SizedBox(width: 16),
+                  Expanded(child: emailSection),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: referredBySection),
+                  const SizedBox(width: 16),
+                  Expanded(child: howDidYouHearSection),
+                ],
+              ),
+            ] else ...[
+              phoneSection,
+              const SizedBox(height: 14),
+              nameSection,
+              const SizedBox(height: 14),
+              photoSection,
+              const SizedBox(height: 14),
+              genderSection,
+              const SizedBox(height: 14),
+              dobAgeSection,
+              const SizedBox(height: 14),
+              occupationSection,
+              const SizedBox(height: 14),
+              emailSection,
+              const SizedBox(height: 14),
+              referredBySection,
+              const SizedBox(height: 14),
+              howDidYouHearSection,
+            ],
+            const SizedBox(height: 16),
+            LocationFields(
+              pincodeCtrl: widget.pincodeCtrl,
+              countryCtrl: widget.countryCtrl,
+              stateCtrl: widget.stateCtrl,
+              cityCtrl: widget.cityCtrl,
+              areaCtrl: widget.areaCtrl,
+              allRequired: true,
+            ),
+            const SizedBox(height: 24),
+            familyMembersSection,
+            const SizedBox(height: 24),
+            consentSection,
+          ],
+        );
+      },
     );
   }
 }

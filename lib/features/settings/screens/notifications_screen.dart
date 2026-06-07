@@ -93,100 +93,141 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           ),
         ],
       ),
-      body: _isLoading
-          ? Center(
-              child: CircularProgressIndicator(color: context.colors.primary))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Patient Alerts ──
-                  _sectionHeader(
-                      'Patient Alerts', Icons.notification_important_outlined),
-                  const SizedBox(height: 12),
-                  _buildToggleTile(
-                    title: 'Patient Late Reminder',
-                    subtitle:
-                        'Alert when a scheduled patient hasn\'t arrived within $_lateMins min of appointment time',
-                    icon: Icons.timer_off_outlined,
-                    value: _patientLateReminder,
-                    color: context.colors.warning,
-                    onChanged: (v) =>
-                        setState(() => _patientLateReminder = v),
-                  ),
-                  if (_patientLateReminder) ...[
-                    const SizedBox(height: 8),
-                    _buildLateMinutesPicker(),
-                  ],
-                  const SizedBox(height: 12),
-                  _buildToggleTile(
-                    title: 'Missed Consultation',
-                    subtitle:
-                        'Alert when a consultation appointment passes with no patient check-in',
-                    icon: Icons.medical_information_outlined,
-                    value: _missedConsultation,
-                    color: context.colors.error,
-                    onChanged: (v) =>
-                        setState(() => _missedConsultation = v),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildToggleTile(
-                    title: 'Missed Session',
-                    subtitle:
-                        'Alert when a treatment session passes with no patient check-in',
-                    icon: Icons.event_busy_outlined,
-                    value: _missedSession,
-                    color: context.colors.error,
-                    onChanged: (v) =>
-                        setState(() => _missedSession = v),
-                  ),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth >= 900;
 
-                  const SizedBox(height: 28),
+            if (_isLoading) {
+              return Center(
+                child: CircularProgressIndicator(color: context.colors.primary),
+              );
+            }
 
-                  // ── Clinic Alerts ──
-                  _sectionHeader('Clinic Alerts', Icons.business_outlined),
-                  const SizedBox(height: 12),
-                  _buildToggleTile(
-                    title: 'Clinic Alerts',
-                    subtitle:
-                        'Capacity warnings, scheduling conflicts, and clinic-specific notifications',
-                    icon: Icons.warning_amber_outlined,
-                    value: _clinicAlerts,
-                    color: const Color(0xFF6366F1),
-                    onChanged: (v) => setState(() => _clinicAlerts = v),
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // ── Appointment Notifications ──
-                  _sectionHeader(
-                      'Appointment Notifications', Icons.event_outlined),
-                  const SizedBox(height: 12),
-                  _buildToggleTile(
-                    title: 'Appointment Reminders',
-                    subtitle: 'Remind you before upcoming appointments',
-                    icon: Icons.notifications_active_outlined,
-                    value: _appointmentReminders,
-                    color: context.colors.primary,
-                    onChanged: (v) =>
-                        setState(() => _appointmentReminders = v),
-                  ),
-
-                  const SizedBox(height: 12),
-                  _buildToggleTile(
-                    title: 'Appointment Cancelled',
-                    subtitle:
-                        'Notify when an appointment is cancelled',
-                    icon: Icons.cancel_outlined,
-                    value: _appointmentCancelled,
-                    color: context.colors.error,
-                    onChanged: (v) =>
-                        setState(() => _appointmentCancelled = v),
-                  ),
+            final mainBody = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Patient Alerts ──
+                _sectionHeader(
+                    'Patient Alerts', Icons.notification_important_outlined),
+                const SizedBox(height: 12),
+                _buildToggleTile(
+                  title: 'Patient Late Reminder',
+                  subtitle:
+                      'Alert when a scheduled patient hasn\'t arrived within $_lateMins min of appointment time',
+                  icon: Icons.timer_off_outlined,
+                  value: _patientLateReminder,
+                  color: context.colors.warning,
+                  onChanged: (v) =>
+                      setState(() => _patientLateReminder = v),
+                ),
+                if (_patientLateReminder) ...[
+                  const SizedBox(height: 8),
+                  _buildLateMinutesPicker(),
                 ],
-              ),
-            ),
+                const SizedBox(height: 12),
+                _buildToggleTile(
+                  title: 'Missed Consultation',
+                  subtitle:
+                      'Alert when a consultation appointment passes with no patient check-in',
+                  icon: Icons.medical_information_outlined,
+                  value: _missedConsultation,
+                  color: context.colors.error,
+                  onChanged: (v) =>
+                      setState(() => _missedConsultation = v),
+                ),
+                const SizedBox(height: 12),
+                _buildToggleTile(
+                  title: 'Missed Session',
+                  subtitle:
+                      'Alert when a treatment session passes with no patient check-in',
+                  icon: Icons.event_busy_outlined,
+                  value: _missedSession,
+                  color: context.colors.error,
+                  onChanged: (v) =>
+                      setState(() => _missedSession = v),
+                ),
+
+                const SizedBox(height: 28),
+
+                // ── Clinic Alerts ──
+                _sectionHeader('Clinic Alerts', Icons.business_outlined),
+                const SizedBox(height: 12),
+                _buildToggleTile(
+                  title: 'Clinic Alerts',
+                  subtitle:
+                      'Capacity warnings, scheduling conflicts, and clinic-specific notifications',
+                  icon: Icons.warning_amber_outlined,
+                  value: _clinicAlerts,
+                  color: const Color(0xFF6366F1),
+                  onChanged: (v) => setState(() => _clinicAlerts = v),
+                ),
+
+                const SizedBox(height: 28),
+
+                // ── Appointment Notifications ──
+                _sectionHeader(
+                    'Appointment Notifications', Icons.event_outlined),
+                const SizedBox(height: 12),
+                _buildToggleTile(
+                  title: 'Appointment Reminders',
+                  subtitle: 'Remind you before upcoming appointments',
+                  icon: Icons.notifications_active_outlined,
+                  value: _appointmentReminders,
+                  color: context.colors.primary,
+                  onChanged: (v) =>
+                      setState(() => _appointmentReminders = v),
+                ),
+
+                const SizedBox(height: 12),
+                _buildToggleTile(
+                  title: 'Appointment Cancelled',
+                  subtitle:
+                      'Notify when an appointment is cancelled',
+                  icon: Icons.cancel_outlined,
+                  value: _appointmentCancelled,
+                  color: context.colors.error,
+                  onChanged: (v) =>
+                      setState(() => _appointmentCancelled = v),
+                ),
+              ],
+            );
+
+            if (isDesktop) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: Container(
+                      padding: const EdgeInsets.all(40),
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 32,
+                            spreadRadius: 4,
+                            offset: const Offset(0, 16),
+                          ),
+                        ],
+                      ),
+                      child: mainBody,
+                    ),
+                  ),
+                ),
+              );
+            } else {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+                child: mainBody,
+              );
+            }
+          },
+        ),
+      ),
     );
   }
 

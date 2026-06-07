@@ -38,11 +38,12 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
     return Scaffold(
       backgroundColor: context.colors.background,
       body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth >= 900;
+
+            final header = Padding(
+              padding: isDesktop ? EdgeInsets.zero : const EdgeInsets.fromLTRB(24, 20, 24, 0),
               child: Row(
                 children: [
                   GestureDetector(
@@ -83,12 +84,10 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
                     _buildPauseResumeButton(),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
+            );
 
-            // Progress bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+            final progressBar = Padding(
+              padding: isDesktop ? EdgeInsets.zero : const EdgeInsets.symmetric(horizontal: 24),
               child: Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
@@ -114,7 +113,7 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
                         ),
                       ],
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(6),
                       child: LinearProgressIndicator(
@@ -149,40 +148,89 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
                   ],
                 ),
               ),
-            ),
-            SizedBox(height: 16),
+            );
 
-            // Session list
-            Expanded(
-              child: state.isLoading
-                  ? Center(
+            final listContent = state.isLoading
+                ? Center(
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
                       child: CircularProgressIndicator(
-                        color: context.colors.primary,
                         strokeWidth: 3,
                       ),
-                    )
-                  : state.sessions.isEmpty
-                  ? Center(
+                    ),
+                  )
+                : state.sessions.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
                       child: Text(
                         'No sessions found',
                         style: context.textStyles.bodyMedium.copyWith(
                           color: context.colors.textSecondary,
                         ),
                       ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 4,
-                      ),
-                      itemCount: state.sessions.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        return _sessionCard(state.sessions[index]);
-                      },
                     ),
-            ),
-          ],
+                  )
+                : ListView.separated(
+                    shrinkWrap: isDesktop,
+                    physics: isDesktop ? const NeverScrollableScrollPhysics() : const ClampingScrollPhysics(),
+                    padding: isDesktop
+                        ? const EdgeInsets.symmetric(vertical: 16)
+                        : const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+                    itemCount: state.sessions.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      return _sessionCard(state.sessions[index]);
+                    },
+                  );
+
+            if (isDesktop) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: Container(
+                      padding: const EdgeInsets.all(40),
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 32,
+                            spreadRadius: 4,
+                            offset: const Offset(0, 16),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          header,
+                          const SizedBox(height: 24),
+                          progressBar,
+                          const SizedBox(height: 24),
+                          listContent,
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            } else {
+              return Column(
+                children: [
+                  header,
+                  const SizedBox(height: 16),
+                  progressBar,
+                  const SizedBox(height: 16),
+                  Expanded(child: listContent),
+                ],
+              );
+            }
+          },
         ),
       ),
     );

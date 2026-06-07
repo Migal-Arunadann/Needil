@@ -192,17 +192,55 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
           ? Center(child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 2))
           : _error != null
               ? _buildError()
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  color: context.colors.primary,
-                  child: _receptionists.isEmpty
-                      ? _buildEmpty()
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(20),
-                          itemCount: _receptionists.length,
-                          separatorBuilder: (_, __) => SizedBox(height: 14),
-                          itemBuilder: (_, i) => _receptionistCard(_receptionists[i]),
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isDesktop = constraints.maxWidth >= 900;
+
+                    final mainBody = RefreshIndicator(
+                      onRefresh: _load,
+                      color: context.colors.primary,
+                      child: _receptionists.isEmpty
+                          ? _buildEmpty()
+                          : ListView.separated(
+                              shrinkWrap: isDesktop,
+                              physics: isDesktop ? const NeverScrollableScrollPhysics() : null,
+                              padding: isDesktop ? EdgeInsets.zero : const EdgeInsets.all(20),
+                              itemCount: _receptionists.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 14),
+                              itemBuilder: (_, i) => _receptionistCard(_receptionists[i]),
+                            ),
+                    );
+
+                    if (isDesktop) {
+                      return SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 800),
+                            child: Container(
+                              padding: const EdgeInsets.all(40),
+                              decoration: BoxDecoration(
+                                color: context.colors.surface,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    blurRadius: 32,
+                                    spreadRadius: 4,
+                                    offset: const Offset(0, 16),
+                                  ),
+                                ],
+                              ),
+                              child: mainBody,
+                            ),
+                          ),
                         ),
+                      );
+                    } else {
+                      return mainBody;
+                    }
+                  },
                 ),
     );
   }

@@ -473,303 +473,237 @@ class _CreateTreatmentPlanScreenState
       body: Stack(
         children: [
           SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Header ──
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 40, height: 40,
-                        decoration: BoxDecoration(
-                          color: context.colors.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: context.colors.border),
-                        ),
-                        child: Icon(Icons.arrow_back_rounded, size: 20, color: context.colors.textPrimary),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isMaintenance ? 'Maintenance Planning' : 'Session Planning',
-                            style: context.textStyles.h2,
-                          ),
-                          Text('For ${widget.patientName}', style: context.textStyles.caption),
-                        ],
-                      ),
-                    ),
-                    if (isMaintenance)
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: context.colors.success.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.autorenew_rounded, size: 14, color: context.colors.success),
-                            const SizedBox(width: 4),
-                            Text('Maintenance',
-                                style: context.textStyles.caption.copyWith(
-                                    color: context.colors.success, fontWeight: FontWeight.bold)),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 32),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isDesktop = constraints.maxWidth >= 900;
 
-                // ── Doctor Selector (Clinic accounts only) ──
-                if (_isClinicAccount) ...[
-                  Text('Assign Doctor', style: context.textStyles.label),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: context.colors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: context.colors.border),
-                    ),
-                    child: _isLoadingDoctors
-                        ? Padding(
-                            padding: EdgeInsets.symmetric(vertical: 14),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 16, height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
-                                ),
-                                SizedBox(width: 10),
-                                Text('Loading doctors...'),
-                              ],
-                            ),
-                          )
-                        : DropdownButtonHideUnderline(
-                            child: DropdownButton<DoctorModel>(
-                              isExpanded: true,
-                              value: _selectedDoctor,
-                              hint: Text(
-                                'Select Doctor',
-                                style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint),
+                final doctorField = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Assign Doctor', style: context.textStyles.label),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: context.colors.border),
+                      ),
+                      child: _isLoadingDoctors
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 16, height: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  const Text('Loading doctors...'),
+                                ],
                               ),
-                              items: _clinicDoctors.map((doc) {
-                                return DropdownMenuItem(
-                                  value: doc,
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        doc.isPrimary ? Icons.star_rounded : Icons.person_rounded,
-                                        size: 16,
-                                        color: doc.isPrimary ? context.colors.warning : context.colors.textHint,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text('Dr. ${doc.name}', style: context.textStyles.bodyMedium),
-                                      if (doc.isPrimary) ...[
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                          decoration: BoxDecoration(
-                                            color: context.colors.warning.withValues(alpha: 0.12),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text('Primary',
-                                              style: context.textStyles.caption.copyWith(
-                                                  fontSize: 9, color: context.colors.warning, fontWeight: FontWeight.bold)),
+                            )
+                          : DropdownButtonHideUnderline(
+                              child: DropdownButton<DoctorModel>(
+                                isExpanded: true,
+                                value: _selectedDoctor,
+                                hint: Text(
+                                  'Select Doctor',
+                                  style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint),
+                                ),
+                                items: _clinicDoctors.map((doc) {
+                                  return DropdownMenuItem(
+                                    value: doc,
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          doc.isPrimary ? Icons.star_rounded : Icons.person_rounded,
+                                          size: 16,
+                                          color: doc.isPrimary ? context.colors.warning : context.colors.textHint,
                                         ),
-                                      ],
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (val) {
-                                if (val != null) {
-                                  setState(() => _selectedDoctor = val);
-                                  _loadTreatmentsForDoctor(val);
-                                }
-                              },
-                            ),
-                          ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-
-                // ── Treatment Type ──
-                Text('Treatment Type', style: context.textStyles.label),
-                const SizedBox(height: 8),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: context.colors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: context.colors.border),
-                  ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<TreatmentConfig>(
-                      isExpanded: true,
-                      value: _selectedTreatment,
-                      hint: Text(
-                        _isLoadingTreatments ? 'Loading treatments...' : 'Select Treatment',
-                        style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint),
-                      ),
-                      items: _doctorTreatments.map((t) {
-                        return DropdownMenuItem(
-                          value: t,
-                          child: Text(t.type, style: context.textStyles.bodyMedium),
-                        );
-                      }).toList(),
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedTreatment = val;
-                          if (val != null) {
-                            _feeCtrl.text = val.fee.toStringAsFixed(
-                                val.fee % 1 == 0 ? 0 : 2);
-                          }
-                        });
-                      },
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-
-                // ── Sessions & Interval ──
-                Row(
-                  children: [
-                    Expanded(
-                      child: AppTextField(
-                        controller: _sessionsCtrl,
-                        label: isMaintenance ? 'Total Maintenance Sessions' : 'Total Sessions',
-                        hint: '10',
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(2),
-                        ],
-                        validator: (v) {
-                          if (v == null || v.isEmpty) return 'Required';
-                          final n = int.tryParse(v);
-                          if (n == null || n < 1) return 'Min 1';
-                          if (n > 99) return 'Max 99';
-                          return null;
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    // Interval field + unit selector
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Interval', style: context.textStyles.label),
-                          const SizedBox(height: 8),
-                          Row(
-                            children: [
-                              Expanded(
-                                flex: 2,
-                                child: TextFormField(
-                                  controller: _intervalCtrl,
-                                  keyboardType: TextInputType.number,
-                                  maxLength: 2,
-                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                  style: context.textStyles.bodyMedium,
-                                  decoration: InputDecoration(
-                                    hintText: '1',
-                                    hintStyle: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint),
-                                    filled: true,
-                                    fillColor: context.colors.surface,
-                                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                                    counterText: '',
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(color: context.colors.border),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(color: context.colors.border),
-                                    ),
-                                  ),
-                                  validator: (v) {
-                                    if (v == null || v.isEmpty) return 'Required';
-                                    final n = int.tryParse(v);
-                                    if (n == null || n < 1) return 'Min 1';
-                                    if (n > 99) return 'Max 99';
-                                    return null;
-                                  },
-                                ),
-                              ),
-                              if (isMaintenance) ...[
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  flex: 3,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                                    decoration: BoxDecoration(
-                                      color: context.colors.surface,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: context.colors.border),
-                                    ),
-                                    child: DropdownButtonHideUnderline(
-                                      child: DropdownButton<String>(
-                                        value: _intervalUnit,
-                                        isExpanded: true,
-                                        style: context.textStyles.bodyMedium,
-                                        items: const [
-                                          DropdownMenuItem(value: 'days',   child: Text('Days')),
-                                          DropdownMenuItem(value: 'months', child: Text('Months')),
-                                          DropdownMenuItem(value: 'years',  child: Text('Years')),
+                                        const SizedBox(width: 8),
+                                        Text('Dr. ${doc.name}', style: context.textStyles.bodyMedium),
+                                        if (doc.isPrimary) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                            decoration: BoxDecoration(
+                                              color: context.colors.warning.withValues(alpha: 0.12),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text('Primary',
+                                                style: context.textStyles.caption.copyWith(
+                                                    fontSize: 9, color: context.colors.warning, fontWeight: FontWeight.bold)),
+                                          ),
                                         ],
-                                        onChanged: (v) => setState(() => _intervalUnit = v!),
-                                      ),
+                                      ],
                                     ),
-                                  ),
-                                ),
-                              ] else ...[
-                                const SizedBox(width: 6),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
-                                  decoration: BoxDecoration(
-                                    color: context.colors.surface,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: context.colors.border),
-                                  ),
-                                  child: Text('Days', style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
-                                ),
-                              ],
-                            ],
+                                  );
+                                }).toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() => _selectedDoctor = val);
+                                    _loadTreatmentsForDoctor(val);
+                                  }
+                                },
+                              ),
+                            ),
+                    ),
+                  ],
+                );
+
+                final treatmentField = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Treatment Type', style: context.textStyles.label),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: context.colors.border),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<TreatmentConfig>(
+                          isExpanded: true,
+                          value: _selectedTreatment,
+                          hint: Text(
+                            _isLoadingTreatments ? 'Loading treatments...' : 'Select Treatment',
+                            style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint),
                           ),
-                        ],
+                          items: _doctorTreatments.map((t) {
+                            return DropdownMenuItem(
+                              value: t,
+                              child: Text(t.type, style: context.textStyles.bodyMedium),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedTreatment = val;
+                              if (val != null) {
+                                _feeCtrl.text = val.fee.toStringAsFixed(
+                                    val.fee % 1 == 0 ? 0 : 2);
+                              }
+                            });
+                          },
+                        ),
                       ),
                     ),
                   ],
-                ),
-                SizedBox(height: 24),
+                );
 
-                // ── Fee ──
-                AppTextField(
+                final sessionsField = AppTextField(
+                  controller: _sessionsCtrl,
+                  label: isMaintenance ? 'Total Maintenance Sessions' : 'Total Sessions',
+                  hint: '10',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(2),
+                  ],
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Required';
+                    final n = int.tryParse(v);
+                    if (n == null || n < 1) return 'Min 1';
+                    if (n > 99) return 'Max 99';
+                    return null;
+                  },
+                );
+
+                final intervalField = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Interval', style: context.textStyles.label),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: TextFormField(
+                            controller: _intervalCtrl,
+                            keyboardType: TextInputType.number,
+                            maxLength: 2,
+                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            style: context.textStyles.bodyMedium,
+                            decoration: InputDecoration(
+                              hintText: '1',
+                              hintStyle: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint),
+                              filled: true,
+                              fillColor: context.colors.surface,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                              counterText: '',
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: context.colors.border),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: context.colors.border),
+                              ),
+                            ),
+                            validator: (v) {
+                              if (v == null || v.isEmpty) return 'Required';
+                              final n = int.tryParse(v);
+                              if (n == null || n < 1) return 'Min 1';
+                              if (n > 99) return 'Max 99';
+                              return null;
+                            },
+                          ),
+                        ),
+                        if (isMaintenance) ...[
+                          const SizedBox(width: 6),
+                          Expanded(
+                            flex: 3,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              decoration: BoxDecoration(
+                                color: context.colors.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: context.colors.border),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _intervalUnit,
+                                  isExpanded: true,
+                                  style: context.textStyles.bodyMedium,
+                                  items: const [
+                                    DropdownMenuItem(value: 'days',   child: Text('Days')),
+                                    DropdownMenuItem(value: 'months', child: Text('Months')),
+                                    DropdownMenuItem(value: 'years',  child: Text('Years')),
+                                  ],
+                                  onChanged: (v) => setState(() => _intervalUnit = v!),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ] else ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: context.colors.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: context.colors.border),
+                            ),
+                            child: Text('Days', style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                );
+
+                final feeField = AppTextField(
                   controller: _feeCtrl,
                   label: isMaintenance ? 'Maintenance Session Fee (₹)' : 'Session Fee (₹)',
                   hint: '500',
                   keyboardType: TextInputType.number,
                   prefixIcon: Icon(Icons.currency_rupee_rounded, size: 18, color: context.colors.success),
                   validator: (v) => v!.isEmpty ? 'Required' : null,
-                ),
-                const SizedBox(height: 32),
+                );
 
-                // ── Scheduling Preferences ──
-                Text('Scheduling Preferences', style: context.textStyles.label),
-                const SizedBox(height: 8),
-
-                Row(
+                final schedulingPreferencesWidget = Row(
                   children: [
                     Expanded(
                       child: GestureDetector(
@@ -873,77 +807,220 @@ class _CreateTreatmentPlanScreenState
                       ),
                     ),
                   ],
-                ),
-                if (!isMaintenance) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: context.colors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: context.colors.border),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.check_circle_outline_rounded, color: context.colors.primary),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Start the 1st session today itself?',
-                                  style: context.textStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600)),
-                              const SizedBox(height: 4),
-                              Text(
-                                  'Creates Session 1 today and schedules the remaining sessions',
-                                  style: context.textStyles.caption),
-                            ],
+                );
+
+                final firstSessionTodayWidget = Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: context.colors.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: context.colors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle_outline_rounded, color: context.colors.primary),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Start the 1st session today itself?',
+                                style: context.textStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 4),
+                            Text(
+                                'Creates Session 1 today and schedules the remaining sessions',
+                                style: context.textStyles.caption),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: _firstSessionCompletedToday,
+                        activeColor: context.colors.primary,
+                        onChanged: (val) => setState(() => _firstSessionCompletedToday = val),
+                      ),
+                    ],
+                  ),
+                );
+
+                final mainBody = Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.pop(context),
+                            child: Container(
+                              width: 40, height: 40,
+                              decoration: BoxDecoration(
+                                color: context.colors.surface,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: context.colors.border),
+                              ),
+                              child: Icon(Icons.arrow_back_rounded, size: 20, color: context.colors.textPrimary),
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isMaintenance ? 'Maintenance Planning' : 'Session Planning',
+                                  style: context.textStyles.h2,
+                                ),
+                                Text('For ${widget.patientName}', style: context.textStyles.caption),
+                              ],
+                            ),
+                          ),
+                          if (isMaintenance)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: context.colors.success.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.autorenew_rounded, size: 14, color: context.colors.success),
+                                  const SizedBox(width: 4),
+                                  Text('Maintenance',
+                                      style: context.textStyles.caption.copyWith(
+                                          color: context.colors.success, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 32),
+
+                      if (isDesktop && _isClinicAccount) ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: doctorField),
+                            const SizedBox(width: 16),
+                            Expanded(child: treatmentField),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                      ] else ...[
+                        if (_isClinicAccount) ...[
+                          doctorField,
+                          const SizedBox(height: 24),
+                        ],
+                        treatmentField,
+                        const SizedBox(height: 24),
+                      ],
+
+                      if (isDesktop) ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: sessionsField),
+                            const SizedBox(width: 16),
+                            Expanded(child: intervalField),
+                            const SizedBox(width: 16),
+                            Expanded(child: feeField),
+                          ],
+                        ),
+                        const SizedBox(height: 32),
+                      ] else ...[
+                        Row(
+                          children: [
+                            Expanded(child: sessionsField),
+                            const SizedBox(width: 16),
+                            Expanded(child: intervalField),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        feeField,
+                        const SizedBox(height: 32),
+                      ],
+
+                      Text('Scheduling Preferences', style: context.textStyles.label),
+                      const SizedBox(height: 8),
+                      schedulingPreferencesWidget,
+                      const SizedBox(height: 16),
+
+                      if (!isMaintenance) ...[
+                        firstSessionTodayWidget,
+                        const SizedBox(height: 16),
+                      ],
+
+                      Padding(
+                        padding: const EdgeInsets.only(top: 16),
+                        child: Text(
+                          '💡 Note: The smart scheduling engine will book sessions sequentially. '
+                          'If a time slot is fully occupied (all beds taken), it will find the closest next available slot.',
+                          style: TextStyle(color: context.colors.textHint, fontSize: 13, height: 1.4),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      _SessionDatePreview(
+                        startDate: _startDate,
+                        numSessions: int.tryParse(_sessionsCtrl.text.trim()) ?? 0,
+                        interval: int.tryParse(_intervalCtrl.text.trim()) ?? 0,
+                        intervalUnit: isMaintenance ? _intervalUnit : 'days',
+                        firstSessionToday: !isMaintenance && _firstSessionCompletedToday,
+                        doctorWorkingDays: _doctorWorkingDays,
+                      ),
+                      const SizedBox(height: 36),
+
+                      Center(
+                        child: SizedBox(
+                          width: isDesktop ? 320 : double.infinity,
+                          child: AppButton(
+                            label: isMaintenance ? 'Generate Maintenance Plan' : 'Generate Treatment Plan',
+                            isLoading: _isSubmitting,
+                            icon: isMaintenance ? Icons.autorenew_rounded : Icons.auto_awesome_mosaic_rounded,
+                            onPressed: _submit,
                           ),
                         ),
-                        Switch(
-                          value: _firstSessionCompletedToday,
-                          activeColor: context.colors.primary,
-                          onChanged: (val) => setState(() => _firstSessionCompletedToday = val),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (isDesktop) {
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 800),
+                        child: Container(
+                          padding: const EdgeInsets.all(40),
+                          decoration: BoxDecoration(
+                            color: context.colors.surface,
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 32,
+                                spreadRadius: 4,
+                                offset: const Offset(0, 16),
+                              ),
+                            ],
+                          ),
+                          child: mainBody,
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ],
-
-
-                Padding(
-                  padding: EdgeInsets.only(top: 16),
-                  child: Text(
-                    '💡 Note: The smart scheduling engine will book sessions sequentially. '
-                    'If a time slot is fully occupied (all beds taken), it will find the closest next available slot.',
-                    style: TextStyle(color: context.colors.textHint, fontSize: 13, height: 1.4),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // ── Session Date Preview ──
-                _SessionDatePreview(
-                  startDate: _startDate,
-                  numSessions: int.tryParse(_sessionsCtrl.text.trim()) ?? 0,
-                  interval: int.tryParse(_intervalCtrl.text.trim()) ?? 0,
-                  intervalUnit: isMaintenance ? _intervalUnit : 'days',
-                  firstSessionToday: !isMaintenance && _firstSessionCompletedToday,
-                  doctorWorkingDays: _doctorWorkingDays,
-                ),
-                const SizedBox(height: 36),
-
-                AppButton(
-                  label: isMaintenance ? 'Generate Maintenance Plan' : 'Generate Treatment Plan',
-                  isLoading: _isSubmitting,
-                  icon: isMaintenance ? Icons.autorenew_rounded : Icons.auto_awesome_mosaic_rounded,
-                  onPressed: _submit,
-                ),
-              ],
+                  );
+                } else {
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: mainBody,
+                  );
+                }
+              },
             ),
           ),
-        ),
-          ),
-          // ── Full-screen scheduling overlay ────────────────────────────
           if (_isSubmitting)
             Container(
               color: Colors.black.withValues(alpha: 0.6),

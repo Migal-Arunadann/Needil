@@ -2360,12 +2360,14 @@ class _WebHoverGlassButton extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
   final double? height;
+  final double? width;
   final double borderRadius;
 
   const _WebHoverGlassButton({
     required this.child,
     this.onTap,
     this.height,
+    this.width,
     this.borderRadius = 14,
   });
 
@@ -2388,7 +2390,7 @@ class _WebHoverGlassButtonState extends State<_WebHoverGlassButton> {
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOutCubic,
           height: widget.height,
-          width: widget.height,
+          width: widget.width ?? widget.height,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: _hovered

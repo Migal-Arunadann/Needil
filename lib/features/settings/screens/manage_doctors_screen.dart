@@ -157,36 +157,74 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
           ? Center(child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 2))
           : _error != null
               ? _buildError()
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  color: context.colors.primary,
-                  child: ListView(
-                    padding: const EdgeInsets.all(20),
-                    children: [
-                      // ── Primary Doctor ──
-                      _sectionLabel('Primary Doctor (Clinic Owner)', Icons.admin_panel_settings_rounded, context.colors.primary),
-                      const SizedBox(height: 10),
-                      ..._doctors
-                          .where((d) => d['is_primary'] == true)
-                          .map((d) => _primaryDoctorCard(d)),
-                      if (_doctors.where((d) => d['is_primary'] == true).isEmpty)
-                        _emptyState('No primary doctor found.', Icons.warning_amber_rounded),
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isDesktop = constraints.maxWidth >= 900;
 
-                      const SizedBox(height: 28),
+                    final mainBody = RefreshIndicator(
+                      onRefresh: _load,
+                      color: context.colors.primary,
+                      child: ListView(
+                        shrinkWrap: isDesktop,
+                        physics: isDesktop ? const NeverScrollableScrollPhysics() : null,
+                        padding: isDesktop ? EdgeInsets.zero : const EdgeInsets.all(20),
+                        children: [
+                          // ── Primary Doctor ──
+                          _sectionLabel('Primary Doctor (Clinic Owner)', Icons.admin_panel_settings_rounded, context.colors.primary),
+                          const SizedBox(height: 10),
+                          ..._doctors
+                              .where((d) => d['is_primary'] == true)
+                              .map((d) => _primaryDoctorCard(d)),
+                          if (_doctors.where((d) => d['is_primary'] == true).isEmpty)
+                            _emptyState('No primary doctor found.', Icons.warning_amber_rounded),
 
-                      // ── Working Doctors ──
-                      _sectionLabel('Working Doctors', Icons.group_rounded, context.colors.accent),
-                      const SizedBox(height: 10),
-                      ..._doctors
-                          .where((d) => d['is_primary'] != true)
-                          .map((d) => Padding(
-                                padding: const EdgeInsets.only(bottom: 14),
-                                child: _workingDoctorCard(d),
-                              )),
-                      if (_doctors.where((d) => d['is_primary'] != true).isEmpty)
-                        _emptyState('No working doctors added yet.', Icons.group_add_rounded),
-                    ],
-                  ),
+                          const SizedBox(height: 28),
+
+                          // ── Working Doctors ──
+                          _sectionLabel('Working Doctors', Icons.group_rounded, context.colors.accent),
+                          const SizedBox(height: 10),
+                          ..._doctors
+                              .where((d) => d['is_primary'] != true)
+                              .map((d) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 14),
+                                    child: _workingDoctorCard(d),
+                                  )),
+                          if (_doctors.where((d) => d['is_primary'] != true).isEmpty)
+                            _emptyState('No working doctors added yet.', Icons.group_add_rounded),
+                        ],
+                      ),
+                    );
+
+                    if (isDesktop) {
+                      return SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 800),
+                            child: Container(
+                              padding: const EdgeInsets.all(40),
+                              decoration: BoxDecoration(
+                                color: context.colors.surface,
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    blurRadius: 32,
+                                    spreadRadius: 4,
+                                    offset: const Offset(0, 16),
+                                  ),
+                                ],
+                              ),
+                              child: mainBody,
+                            ),
+                          ),
+                        ),
+                      );
+                    } else {
+                      return mainBody;
+                    }
+                  },
                 ),
     );
   }

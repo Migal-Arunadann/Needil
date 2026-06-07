@@ -120,151 +120,196 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
         title: Text('Privacy & Security', style: context.textStyles.h4),
         centerTitle: true,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          // Account info read-only
-          _sectionHeader('Account', Icons.shield_rounded),
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: context.colors.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.colors.border),
-            ),
-            child: Column(
-              children: [
-                _infoRow(
-                  Icons.person_rounded,
-                  'Account type',
-                  isClinic ? 'Clinic Account' : 'Doctor Account',
-                ),
-                Divider(height: 16, color: context.colors.border),
-                _infoRow(
-                  Icons.alternate_email_rounded,
-                  'Username',
-                  isClinic
-                      ? (auth.clinic?.username ?? '—')
-                      : (auth.doctor?.username ?? '—'),
-                ),
-                if (!isClinic) ...[
-                  Divider(height: 16, color: context.colors.border),
-                  _infoRow(
-                    Icons.business_rounded,
-                    'Clinic',
-                    auth.doctor?.clinicId?.isNotEmpty == true
-                        ? 'Associated with a clinic'
-                        : 'Independent doctor',
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth >= 900;
 
-          // Change password
-          _sectionHeader('Change Password', Icons.lock_reset_rounded),
-          SizedBox(height: 10),
-          Container(
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: context.colors.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.colors.border),
-            ),
-            child: Column(
-              children: [
-                AppTextField(
-                  controller: _currentPassCtrl,
-                  label: 'Current Password',
-                  hint: 'Enter your current password',
-                  obscureText: _obscureCurrent,
-                  prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureCurrent
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                      color: context.colors.textHint,
+            final children = [
+              // Account info read-only
+              _sectionHeader('Account', Icons.shield_rounded),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: context.colors.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: context.colors.border),
+                ),
+                child: Column(
+                  children: [
+                    _infoRow(
+                      Icons.person_rounded,
+                      'Account type',
+                      isClinic ? 'Clinic Account' : 'Doctor Account',
                     ),
-                    onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
-                  ),
-                ),
-                SizedBox(height: 14),
-                AppTextField(
-                  controller: _newPassCtrl,
-                  label: 'New Password',
-                  hint: 'Min. 8 characters',
-                  obscureText: _obscureNew,
-                  prefixIcon: Icon(Icons.lock_rounded, color: context.colors.textHint),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureNew
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                      color: context.colors.textHint,
+                    Divider(height: 16, color: context.colors.border),
+                    _infoRow(
+                      Icons.alternate_email_rounded,
+                      'Username',
+                      isClinic
+                          ? (auth.clinic?.username ?? '—')
+                          : (auth.doctor?.username ?? '—'),
                     ),
-                    onPressed: () => setState(() => _obscureNew = !_obscureNew),
-                  ),
+                    if (!isClinic) ...[
+                      Divider(height: 16, color: context.colors.border),
+                      _infoRow(
+                        Icons.business_rounded,
+                        'Clinic',
+                        auth.doctor?.clinicId?.isNotEmpty == true
+                            ? 'Associated with a clinic'
+                            : 'Independent doctor',
+                      ),
+                    ],
+                  ],
                 ),
-                SizedBox(height: 14),
-                AppTextField(
-                  controller: _confirmPassCtrl,
-                  label: 'Confirm New Password',
-                  hint: 'Re-enter your new password',
-                  obscureText: _obscureConfirm,
-                  prefixIcon: Icon(Icons.lock_rounded, color: context.colors.textHint),
-                  suffixIcon: IconButton(
-                    icon: Icon(
-                      _obscureConfirm
-                          ? Icons.visibility_off_outlined
-                          : Icons.visibility_outlined,
-                      color: context.colors.textHint,
-                    ),
-                    onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                AppButton(
-                  label: 'Change Password',
-                  isLoading: _isChanging,
-                  icon: Icons.lock_reset_rounded,
-                  onPressed: _changePassword,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
+              ),
+              const SizedBox(height: 24),
 
-          // Data & Privacy
-          _sectionHeader('Data & Privacy', Icons.privacy_tip_rounded),
-          const SizedBox(height: 10),
-          _infoCard(
-            icon: Icons.storage_rounded,
-            iconColor: context.colors.info,
-            title: 'Data Encryption & Storage',
-            body:
-                'Your clinical data, patient medical records, and treatment sessions are protected using industry-standard AES-256 encryption at rest and TLS 1.3 in transit. All records are hosted on isolated, secure backend instances.',
-          ),
-          const SizedBox(height: 10),
-          _infoCard(
-            icon: Icons.person_off_rounded,
-            iconColor: context.colors.warning,
-            title: 'Access Control & HIPAA Alignment',
-            body:
-                'Strict role-based access control (RBAC) ensures patient charts are visible only to authorized medical practitioners. Detailed audit logs track all access to medical histories, aligning with HIPAA compliance guidelines.',
-          ),
-          const SizedBox(height: 10),
-          _infoCard(
-            icon: Icons.delete_forever_rounded,
-            iconColor: context.colors.error,
-            title: 'Data Portability & Deletion',
-            body:
-                'Export your complete clinical directory or request permanent account deletion at any time. Data requests are processed in compliance with GDPR guidelines. Contact support@needil.com for administrative actions.',
-          ),
-          const SizedBox(height: 32),
-        ],
+              // Change password
+              _sectionHeader('Change Password', Icons.lock_reset_rounded),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: context.colors.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: context.colors.border),
+                ),
+                child: Column(
+                  children: [
+                    AppTextField(
+                      controller: _currentPassCtrl,
+                      label: 'Current Password',
+                      hint: 'Enter your current password',
+                      obscureText: _obscureCurrent,
+                      prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureCurrent
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: context.colors.textHint,
+                        ),
+                        onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    AppTextField(
+                      controller: _newPassCtrl,
+                      label: 'New Password',
+                      hint: 'Min. 8 characters',
+                      obscureText: _obscureNew,
+                      prefixIcon: Icon(Icons.lock_rounded, color: context.colors.textHint),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureNew
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: context.colors.textHint,
+                        ),
+                        onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    AppTextField(
+                      controller: _confirmPassCtrl,
+                      label: 'Confirm New Password',
+                      hint: 'Re-enter your new password',
+                      obscureText: _obscureConfirm,
+                      prefixIcon: Icon(Icons.lock_rounded, color: context.colors.textHint),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirm
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: context.colors.textHint,
+                        ),
+                        onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Center(
+                      child: SizedBox(
+                        width: isDesktop ? 320 : double.infinity,
+                        child: AppButton(
+                          label: 'Change Password',
+                          isLoading: _isChanging,
+                          icon: Icons.lock_reset_rounded,
+                          onPressed: _changePassword,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Data & Privacy
+              _sectionHeader('Data & Privacy', Icons.privacy_tip_rounded),
+              const SizedBox(height: 10),
+              _infoCard(
+                icon: Icons.storage_rounded,
+                iconColor: context.colors.info,
+                title: 'Data Encryption & Storage',
+                body:
+                    'Your clinical data, patient medical records, and treatment sessions are protected using industry-standard AES-256 encryption at rest and TLS 1.3 in transit. All records are hosted on isolated, secure backend instances.',
+              ),
+              const SizedBox(height: 10),
+              _infoCard(
+                icon: Icons.person_off_rounded,
+                iconColor: context.colors.warning,
+                title: 'Access Control & HIPAA Alignment',
+                body:
+                    'Strict role-based access control (RBAC) ensures patient charts are visible only to authorized medical practitioners. Detailed audit logs track all access to medical histories, aligning with HIPAA compliance guidelines.',
+              ),
+              const SizedBox(height: 10),
+              _infoCard(
+                icon: Icons.delete_forever_rounded,
+                iconColor: context.colors.error,
+                title: 'Data Portability & Deletion',
+                body:
+                    'Export your complete clinical directory or request permanent account deletion at any time. Data requests are processed in compliance with GDPR guidelines. Contact support@needil.com for administrative actions.',
+              ),
+            ];
+
+            if (isDesktop) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: Container(
+                      padding: const EdgeInsets.all(40),
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 32,
+                            spreadRadius: 4,
+                            offset: const Offset(0, 16),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: children,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            } else {
+              return ListView(
+                padding: const EdgeInsets.all(20),
+                children: children,
+              );
+            }
+          },
+        ),
       ),
     );
   }

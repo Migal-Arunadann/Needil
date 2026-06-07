@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../constants/app_colors.dart';
-import '../constants/app_text_styles.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
-
-/// A styled text field with consistent theming.
+/// A styled text field with consistent theming and high-performance native interactions.
 class AppTextField extends StatelessWidget {
   final String label;
   final String? hint;
@@ -24,7 +21,6 @@ class AppTextField extends StatelessWidget {
   final bool readOnly;
   final VoidCallback? onTap;
   final List<TextInputFormatter>? inputFormatters;
-
   final String? errorText;
 
   const AppTextField({
@@ -54,8 +50,10 @@ class AppTextField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: context.textStyles.label),
-        const SizedBox(height: 8),
+        if (label.isNotEmpty) ...[
+          Text(label, style: context.textStyles.label),
+          const SizedBox(height: 8),
+        ],
         TextFormField(
           controller: controller,
           validator: validator,
@@ -70,7 +68,7 @@ class AppTextField extends StatelessWidget {
           focusNode: focusNode,
           textInputAction: textInputAction,
           inputFormatters: inputFormatters,
-          style: context.textStyles.bodyLarge,
+          style: context.textStyles.bodyLarge.copyWith(color: Colors.white),
           decoration: InputDecoration(
             errorText: errorText,
             hintText: hint,
@@ -80,35 +78,57 @@ class AppTextField extends StatelessWidget {
             prefixIcon: prefixIcon,
             suffixIcon: suffixIcon,
             filled: true,
-            fillColor: enabled ? context.colors.surface : context.colors.divider,
-            contentPadding: EdgeInsets.symmetric(
+            fillColor: WidgetStateColor.resolveWith((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return context.colors.divider;
+              }
+              if (states.contains(WidgetState.focused)) {
+                return const Color(0xFF1E293B).withValues(alpha: 0.2);
+              }
+              if (states.contains(WidgetState.hovered)) {
+                return Colors.white.withValues(alpha: 0.04);
+              }
+              return Colors.white.withValues(alpha: 0.02);
+            }),
+            contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
-              vertical: 14,
+              vertical: 13,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: context.colors.border),
+              borderSide: BorderSide(
+                color: context.colors.border.withValues(alpha: 0.5),
+                width: 0.8,
+              ),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: context.colors.border),
+              borderSide: BorderSide(
+                color: WidgetStateColor.resolveWith((states) {
+                  if (states.contains(WidgetState.hovered)) {
+                    return Colors.white.withValues(alpha: 0.12);
+                  }
+                  return context.colors.border.withValues(alpha: 0.5);
+                }),
+                width: 0.8,
+              ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
                 color: context.colors.primary,
-                width: 1.5,
+                width: 1.0,
               ),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: context.colors.error),
+              borderSide: BorderSide(color: context.colors.error, width: 0.8),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: BorderSide(
                 color: context.colors.error,
-                width: 1.5,
+                width: 1.0,
               ),
             ),
             errorStyle: context.textStyles.caption.copyWith(color: context.colors.error),

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../core/services/scheduling_service.dart';
 import '../providers/scheduling_provider.dart';
 import '../../auth/providers/auth_provider.dart';
@@ -132,17 +130,17 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
     final daySchedule =
         service.getScheduleForDay(activeSchedules, _selectedDate.weekday);
     final isWorkingDay = daySchedule != null;
-    final isToday =
-        DateUtils.isSameDay(_selectedDate, DateTime.now());
+    final isToday = DateUtils.isSameDay(_selectedDate, DateTime.now());
 
     return Scaffold(
       backgroundColor: context.colors.background,
       body: SafeArea(
-        child: Column(
-          children: [
-            // ── Header ──────────────────────────────────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth >= 900;
+
+            final headerSection = Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               child: Row(
                 children: [
                   GestureDetector(
@@ -158,7 +156,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.04),
                             blurRadius: 8,
-                            offset: Offset(0, 2),
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
@@ -182,8 +180,6 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                       ],
                     ),
                   ),
-
-                  // ── Today button ──
                   if (widget.allowFutureDates && !isToday)
                     GestureDetector(
                       onTap: _goToToday,
@@ -203,124 +199,250 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                         ),
                       ),
                     ),
-
                   const SizedBox(width: 8),
-
-                  // ── Calendar toggle ──
-                  GestureDetector(
-                    onTap: () => setState(
-                        () => _calendarExpanded = !_calendarExpanded),
-                    child: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: _calendarExpanded
-                            ? context.colors.primary
-                            : context.colors.surface,
-                        borderRadius: BorderRadius.circular(11),
-                        border: Border.all(
+                  if (!isDesktop)
+                    GestureDetector(
+                      onTap: () => setState(
+                          () => _calendarExpanded = !_calendarExpanded),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
                           color: _calendarExpanded
                               ? context.colors.primary
-                              : context.colors.border,
+                              : context.colors.surface,
+                          borderRadius: BorderRadius.circular(11),
+                          border: Border.all(
+                            color: _calendarExpanded
+                                ? context.colors.primary
+                                : context.colors.border,
+                          ),
+                        ),
+                        child: Icon(
+                          _calendarExpanded
+                              ? Icons.calendar_month_rounded
+                              : Icons.calendar_month_outlined,
+                          size: 18,
+                          color: _calendarExpanded
+                              ? Colors.white
+                              : context.colors.textSecondary,
                         ),
                       ),
-                      child: Icon(
-                        _calendarExpanded
-                            ? Icons.calendar_month_rounded
-                            : Icons.calendar_month_outlined,
-                        size: 18,
-                        color: _calendarExpanded
-                            ? Colors.white
-                            : context.colors.textSecondary,
-                      ),
+                    ),
+                ],
+              ),
+            );
+
+            final calendarWidget = _InlineCalendar(
+              selectedDate: _selectedDate,
+              month: _calendarMonth,
+              allowFutureDates: widget.allowFutureDates,
+              schedules: activeSchedules,
+              schedulingService: service,
+              onDateSelected: _selectDate,
+              onMonthChanged: (m) => setState(() => _calendarMonth = m),
+            );
+
+            final confirmPanel = _selectedSlot != null
+                ? _ConfirmPanel(
+                    selectedDate: _selectedDate,
+                    selectedSlot: _selectedSlot!,
+                    onConfirm: _confirmSlot,
+                  )
+                : const SizedBox.shrink();
+
+            if (isDesktop) {
+              Widget desktopSlotsWidget;
+              if (state.isLoading) {
+                desktopSlotsWidget = SizedBox(
+                  height: 300,
+                  child: Center(
+                    child: CircularProgressIndicator(
+                        color: context.colors.primary, strokeWidth: 3),
+                  ),
+                );
+              } else if (!isWorkingDay) {
+                desktopSlotsWidget = SizedBox(
+                  height: 300,
+                  child: _DayOffState(dayName: DateFormat('EEEE').format(_selectedDate)),
+                );
+              } else if (state.slots.isEmpty) {
+                desktopSlotsWidget = const SizedBox(
+                  height: 300,
+                  child: _NoSlotsState(),
+                );
+              } else {
+                desktopSlotsWidget = GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    childAspectRatio: 2.2,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                  ),
+                  itemCount: state.slots.length,
+                  itemBuilder: (context, index) => _SlotChip(
+                    slot: state.slots[index],
+                    isSelected: _selectedSlot == state.slots[index].time,
+                    onTap: state.slots[index].isAvailable && !state.slots[index].isPast
+                        ? () => _selectSlot(state.slots[index].time)
+                        : null,
+                  ),
+                );
+              }
+
+              final desktopBody = Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 4,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Select Date', style: context.textStyles.h3),
+                        const SizedBox(height: 12),
+                        calendarWidget,
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  Expanded(
+                    flex: 5,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Available Slots', style: context.textStyles.h3),
+                        const SizedBox(height: 12),
+                        if (state.isLoading || !isWorkingDay || state.slots.isEmpty)
+                          desktopSlotsWidget
+                        else
+                          SizedBox(
+                            height: 380,
+                            child: SingleChildScrollView(child: desktopSlotsWidget),
+                          ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 14),
+              );
 
-            // ── Inline Calendar ─────────────────────────────────
-            AnimatedCrossFade(
-              duration: const Duration(milliseconds: 280),
-              crossFadeState: _calendarExpanded
-                  ? CrossFadeState.showFirst
-                  : CrossFadeState.showSecond,
-              firstChild: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: _InlineCalendar(
-                  selectedDate: _selectedDate,
-                  month: _calendarMonth,
-                  allowFutureDates: widget.allowFutureDates,
-                  schedules: activeSchedules,
-                  schedulingService: service,
-                  onDateSelected: _selectDate,
-                  onMonthChanged: (m) =>
-                      setState(() => _calendarMonth = m),
-                ),
-              ),
-              secondChild: const SizedBox(height: 0),
-            ),
-
-            if (_calendarExpanded) SizedBox(height: 14),
-
-            // ── Slot Grid / States ───────────────────────────────
-            if (state.isLoading)
-              Expanded(
-                child: Center(
-                  child: CircularProgressIndicator(
-                      color: context.colors.primary, strokeWidth: 3),
-                ),
-              )
-            else if (!isWorkingDay)
-              Expanded(
-                child: _DayOffState(
-                    dayName: DateFormat('EEEE').format(_selectedDate)),
-              )
-            else if (state.slots.isEmpty)
-              const Expanded(child: _NoSlotsState())
-            else
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: GridView.builder(
-                    padding: const EdgeInsets.only(bottom: 120),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      childAspectRatio: 2.1,
-                      crossAxisSpacing: 10,
-                      mainAxisSpacing: 10,
-                    ),
-                    itemCount: state.slots.length,
-                    itemBuilder: (context, index) => _SlotChip(
-                      slot: state.slots[index],
-                      isSelected:
-                          _selectedSlot == state.slots[index].time,
-                      onTap: state.slots[index].isAvailable &&
-                              !state.slots[index].isPast
-                          ? () => _selectSlot(state.slots[index].time)
-                          : null,
+              return Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 900),
+                    child: Container(
+                      padding: const EdgeInsets.all(40),
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 32,
+                            spreadRadius: 4,
+                            offset: const Offset(0, 16),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          headerSection,
+                          const SizedBox(height: 24),
+                          desktopBody,
+                          if (_selectedSlot != null) ...[
+                            const SizedBox(height: 24),
+                            confirmPanel,
+                          ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
+              );
+            } else {
+              Widget mobileSlotsWidget;
+              if (state.isLoading) {
+                mobileSlotsWidget = Expanded(
+                  child: Center(
+                    child: CircularProgressIndicator(
+                        color: context.colors.primary, strokeWidth: 3),
+                  ),
+                );
+              } else if (!isWorkingDay) {
+                mobileSlotsWidget = Expanded(
+                  child: _DayOffState(dayName: DateFormat('EEEE').format(_selectedDate)),
+                );
+              } else if (state.slots.isEmpty) {
+                mobileSlotsWidget = const Expanded(child: _NoSlotsState());
+              } else {
+                mobileSlotsWidget = Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: GridView.builder(
+                      padding: const EdgeInsets.only(bottom: 120),
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        childAspectRatio: 2.1,
+                        crossAxisSpacing: 10,
+                        mainAxisSpacing: 10,
+                      ),
+                      itemCount: state.slots.length,
+                      itemBuilder: (context, index) => _SlotChip(
+                        slot: state.slots[index],
+                        isSelected: _selectedSlot == state.slots[index].time,
+                        onTap: state.slots[index].isAvailable && !state.slots[index].isPast
+                            ? () => _selectSlot(state.slots[index].time)
+                            : null,
+                      ),
+                    ),
+                  ),
+                );
+              }
 
-            // ── Confirm Panel ───────────────────────────────────
-            if (_selectedSlot != null)
-              AnimatedBuilder(
-                animation: _confirmCtrl,
-                builder: (context, child) => Transform.translate(
-                  offset: Offset(0, _confirmSlide.value),
-                  child: FadeTransition(opacity: _confirmFade, child: child),
-                ),
-                child: _ConfirmPanel(
-                  selectedDate: _selectedDate,
-                  selectedSlot: _selectedSlot!,
-                  onConfirm: _confirmSlot,
-                ),
-              ),
-          ],
+              return Stack(
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      headerSection,
+                      const SizedBox(height: 14),
+                      AnimatedCrossFade(
+                        duration: const Duration(milliseconds: 280),
+                        crossFadeState: _calendarExpanded
+                            ? CrossFadeState.showFirst
+                            : CrossFadeState.showSecond,
+                        firstChild: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: calendarWidget,
+                        ),
+                        secondChild: const SizedBox(height: 0),
+                      ),
+                      if (_calendarExpanded) const SizedBox(height: 14),
+                      mobileSlotsWidget,
+                    ],
+                  ),
+                  if (_selectedSlot != null)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: AnimatedBuilder(
+                        animation: _confirmCtrl,
+                        builder: (context, child) => Transform.translate(
+                          offset: Offset(0, _confirmSlide.value),
+                          child: FadeTransition(opacity: _confirmFade, child: child),
+                        ),
+                        child: confirmPanel,
+                      ),
+                    ),
+                ],
+              );
+            }
+          },
         ),
       ),
     );

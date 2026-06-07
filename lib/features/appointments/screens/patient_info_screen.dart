@@ -1,8 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/pb_collections.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/widgets/app_button.dart';
@@ -31,7 +29,6 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
   bool _isSubmitting = false;
   bool _consentGiven = false;
   String? _selectedGender;
-  Set<String> _selectedChronicDiseases = {};
 
   final _nameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
@@ -234,99 +231,133 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     return Scaffold(
       backgroundColor: context.colors.background,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isDesktop = constraints.maxWidth >= 900;
+
+            final header = Row(
               children: [
-                // Header
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: context.colors.surface,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: context.colors.border),
-                        ),
-                        child: Icon(Icons.arrow_back_rounded,
-                            size: 20, color: context.colors.textPrimary),
-                      ),
+                GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: context.colors.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: context.colors.border),
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                        child: Text('Patient Details', style: context.textStyles.h2)),
-                  ],
-                ),
-                const SizedBox(height: 24),
-
-                // Info banner
-                Container(
-                  padding: EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: context.colors.info.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline_rounded,
-                          color: context.colors.info, size: 20),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'Collect patient information as they arrive for their appointment.',
-                          style: context.textStyles.caption
-                              .copyWith(color: context.colors.info, fontSize: 13),
-                        ),
-                      ),
-                    ],
+                    child: Icon(Icons.arrow_back_rounded,
+                        size: 20, color: context.colors.textPrimary),
                   ),
                 ),
-                const SizedBox(height: 24),
-
-                // ── Shared form ──────────────────────────────────────────
-                PatientDetailsForm(
-                  nameCtrl: _nameCtrl,
-                  phoneCtrl: _phoneCtrl,
-                  dobCtrl: _dobCtrl,
-                  pincodeCtrl: _pincodeCtrl,
-                  countryCtrl: _countryCtrl,
-                  stateCtrl: _stateCtrl,
-                  cityCtrl: _cityCtrl,
-                  areaCtrl: _areaCtrl,
-                  occupationCtrl: _occupationCtrl,
-                  emailCtrl: _emailCtrl,
-                  referenceCtrl: _referenceCtrl,
-                  selectedGender: _selectedGender,
-                  onGenderChanged: (v) => setState(() => _selectedGender = v),
-                  consentGiven: _consentGiven,
-                  onConsentChanged: (v) => setState(() => _consentGiven = v),
-                  photoFile: _patientPhoto,
-                  onPhotoChanged: (f) => setState(() => _patientPhoto = f),
-                  familyMembers: _familyMembers,
-                  onFamilyMembersChanged: (fm) => setState(() => _familyMembers = fm),
-                  howDidYouHear: _howDidYouHear,
-                  onHowDidYouHearChanged: (v) => setState(() => _howDidYouHear = v),
-                  nameLocked: (widget.appointment.patientName ?? '').isNotEmpty,
-                  phoneLocked: (widget.appointment.patientPhone ?? '').isNotEmpty,
-                ),
-
-                const SizedBox(height: 28),
-
-                AppButton(
-                  label: 'Register',
-                  isLoading: _isSubmitting,
-                  icon: Icons.how_to_reg_rounded,
-                  onPressed: _submit,
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Text('Patient Details', style: context.textStyles.h2),
                 ),
               ],
-            ),
-          ),
+            );
+
+            final infoBanner = Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: context.colors.info.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded,
+                      color: context.colors.info, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Collect patient information as they arrive for their appointment.',
+                      style: context.textStyles.caption
+                          .copyWith(color: context.colors.info, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+            final formContent = Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  header,
+                  const SizedBox(height: 24),
+                  infoBanner,
+                  const SizedBox(height: 24),
+                  PatientDetailsForm(
+                    nameCtrl: _nameCtrl,
+                    phoneCtrl: _phoneCtrl,
+                    dobCtrl: _dobCtrl,
+                    pincodeCtrl: _pincodeCtrl,
+                    countryCtrl: _countryCtrl,
+                    stateCtrl: _stateCtrl,
+                    cityCtrl: _cityCtrl,
+                    areaCtrl: _areaCtrl,
+                    occupationCtrl: _occupationCtrl,
+                    emailCtrl: _emailCtrl,
+                    referenceCtrl: _referenceCtrl,
+                    selectedGender: _selectedGender,
+                    onGenderChanged: (v) => setState(() => _selectedGender = v),
+                    consentGiven: _consentGiven,
+                    onConsentChanged: (v) => setState(() => _consentGiven = v),
+                    photoFile: _patientPhoto,
+                    onPhotoChanged: (f) => setState(() => _patientPhoto = f),
+                    familyMembers: _familyMembers,
+                    onFamilyMembersChanged: (fm) => setState(() => _familyMembers = fm),
+                    howDidYouHear: _howDidYouHear,
+                    onHowDidYouHearChanged: (v) => setState(() => _howDidYouHear = v),
+                    nameLocked: (widget.appointment.patientName ?? '').isNotEmpty,
+                    phoneLocked: (widget.appointment.patientPhone ?? '').isNotEmpty,
+                  ),
+                  const SizedBox(height: 28),
+                  AppButton(
+                    label: 'Register',
+                    isLoading: _isSubmitting,
+                    icon: Icons.how_to_reg_rounded,
+                    onPressed: _submit,
+                  ),
+                ],
+              ),
+            );
+
+            if (isDesktop) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 800),
+                    child: Container(
+                      padding: const EdgeInsets.all(40),
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 32,
+                            spreadRadius: 4,
+                            offset: const Offset(0, 16),
+                          ),
+                        ],
+                      ),
+                      child: formContent,
+                    ),
+                  ),
+                ),
+              );
+            } else {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: formContent,
+              );
+            }
+          },
         ),
       ),
     );

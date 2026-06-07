@@ -216,6 +216,28 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
     }
   }
 
+  Widget _responsiveRow(Widget left, Widget right, bool isDesktop) {
+    if (isDesktop) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: left),
+          const SizedBox(width: 16),
+          Expanded(child: right),
+        ],
+      );
+    } else {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          left,
+          const SizedBox(height: 12),
+          right,
+        ],
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -233,150 +255,191 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
           centerTitle: true,
         ),
         body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Avatar
-                if (kIsWeb) ...[
-                  Center(
-                    child: Column(
-                      children: [
-                        Icon(Icons.person_outline_rounded, color: context.colors.textHint, size: 48),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Doctor photo upload is available on the mobile app.',
-                          style: context.textStyles.caption.copyWith(color: context.colors.textHint),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ] else ...[
-                  Center(child: GestureDetector(
-                    onTap: _pickPhoto,
-                    child: Stack(children: [
-                      Container(
-                        width: 80, height: 80,
-                        decoration: BoxDecoration(
-                          gradient: photoFile == null ? context.colors.heroGradient : null,
-                          borderRadius: BorderRadius.circular(22),
-                          image: photoFile != null
-                              ? DecorationImage(image: FileImage(photoFile!), fit: BoxFit.cover)
-                              : null,
-                        ),
-                        child: photoFile == null
-                            ? const Icon(Icons.person_rounded, color: Colors.white, size: 36) : null,
-                      ),
-                      Positioned(bottom: 0, right: 0,
-                        child: Container(
-                          width: 26, height: 26,
-                          decoration: BoxDecoration(color: context.colors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white, width: 2)),
-                          child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
-                        )),
-                    ]),
-                  )),
-                  const SizedBox(height: 24),
-                ],
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final isDesktop = constraints.maxWidth >= 900;
 
-                // Name
-                _field('Full Name', 'e.g. Dr. John Doe', Icons.person_outline_rounded, controller: nameCtrl),
-                SizedBox(height: 12),
-
-                // Username
-                _field('Username', 'Login username', Icons.alternate_email_rounded,
-                  controller: usernameCtrl,
-                  errorText: usernameError,
-                  suffixIcon: isCheckingUsername
-                      ? Padding(
-                          padding: EdgeInsets.all(12),
-                          child: SizedBox(
-                            width: 16, height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
+              final mainBody = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Avatar
+                  if (kIsWeb) ...[
+                    Center(
+                      child: Column(
+                        children: [
+                          Icon(Icons.person_outline_rounded, color: context.colors.textHint, size: 48),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Doctor photo upload is available on the mobile app.',
+                            style: context.textStyles.caption.copyWith(color: context.colors.textHint),
+                            textAlign: TextAlign.center,
                           ),
-                        )
-                      : null,
-                  onChanged: (val) {
-                    if (debounce?.isActive ?? false) debounce!.cancel();
-                    if (val.length < 3) {
-                      setState(() => usernameError = null);
-                      return;
-                    }
-                    setState(() => isCheckingUsername = true);
-                    debounce = Timer(const Duration(milliseconds: 600), () async {
-                      final authService = ref.read(authProvider.notifier).authService;
-                      final exists = await authService.checkUsernameExists(val);
-                      if (mounted) {
-                        setState(() {
-                          isCheckingUsername = false;
-                          usernameError = exists ? 'Username is already taken' : null;
-                        });
-                      }
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-
-                // Password
-                _field('Password', 'Min 8 characters', Icons.lock_outline_rounded,
-                  controller: passwordCtrl,
-                  obscure: _obscurePassword,
-                  suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: context.colors.textHint, size: 20),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                  ),
-                ),
-                SizedBox(height: 12),
-
-                // DOB
-                GestureDetector(
-                  onTap: _pickDate,
-                  child: Container(
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: context.colors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: context.colors.border),
+                        ],
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.cake_outlined, color: context.colors.textHint, size: 20),
-                        const SizedBox(width: 12),
-                        Text(
-                          dateOfBirth == null ? 'Date of Birth' : '${dateOfBirth!.day}/${dateOfBirth!.month}/${dateOfBirth!.year}',
-                          style: context.textStyles.bodyMedium.copyWith(color: dateOfBirth == null ? context.colors.textHint : context.colors.textPrimary),
+                    const SizedBox(height: 24),
+                  ] else ...[
+                    Center(child: GestureDetector(
+                      onTap: _pickPhoto,
+                      child: Stack(children: [
+                        Container(
+                          width: 80, height: 80,
+                          decoration: BoxDecoration(
+                            gradient: photoFile == null ? context.colors.heroGradient : null,
+                            borderRadius: BorderRadius.circular(22),
+                            image: photoFile != null
+                                ? DecorationImage(image: FileImage(photoFile!), fit: BoxFit.cover)
+                                : null,
+                          ),
+                          child: photoFile == null
+                              ? const Icon(Icons.person_rounded, color: Colors.white, size: 36) : null,
                         ),
-                      ],
+                        Positioned(bottom: 0, right: 0,
+                          child: Container(
+                            width: 26, height: 26,
+                            decoration: BoxDecoration(color: context.colors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white, width: 2)),
+                            child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
+                          )),
+                      ]),
+                    )),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Name & Username
+                  _responsiveRow(
+                    _field('Full Name', 'e.g. Dr. John Doe', Icons.person_outline_rounded, controller: nameCtrl),
+                    _field('Username', 'Login username', Icons.alternate_email_rounded,
+                      controller: usernameCtrl,
+                      errorText: usernameError,
+                      suffixIcon: isCheckingUsername
+                          ? Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 16, height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
+                              ),
+                            )
+                          : null,
+                      onChanged: (val) {
+                        if (debounce?.isActive ?? false) debounce!.cancel();
+                        if (val.length < 3) {
+                          setState(() => usernameError = null);
+                          return;
+                        }
+                        setState(() => isCheckingUsername = true);
+                        debounce = Timer(const Duration(milliseconds: 600), () async {
+                          final authService = ref.read(authProvider.notifier).authService;
+                          final exists = await authService.checkUsernameExists(val);
+                          if (mounted) {
+                            setState(() {
+                              isCheckingUsername = false;
+                              usernameError = exists ? 'Username is already taken' : null;
+                            });
+                          }
+                        });
+                      },
+                    ),
+                    isDesktop,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Password & DOB
+                  _responsiveRow(
+                    _field('Password', 'Min 8 characters', Icons.lock_outline_rounded,
+                      controller: passwordCtrl,
+                      obscure: _obscurePassword,
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: context.colors.textHint, size: 20),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: _pickDate,
+                      child: Container(
+                        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: context.colors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: context.colors.border),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.cake_outlined, color: context.colors.textHint, size: 20),
+                            const SizedBox(width: 12),
+                            Text(
+                              dateOfBirth == null ? 'Date of Birth' : '${dateOfBirth!.day}/${dateOfBirth!.month}/${dateOfBirth!.year}',
+                              style: context.textStyles.bodyMedium.copyWith(color: dateOfBirth == null ? context.colors.textHint : context.colors.textPrimary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    isDesktop,
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Schedule
+                  Text('Working Schedule', style: context.textStyles.h3.copyWith(fontSize: 16)),
+                  const SizedBox(height: 10),
+                  _buildDoctorHoursCard(),
+                  const SizedBox(height: 12),
+                  _buildDoctorBreaksCard(),
+                  const SizedBox(height: 24),
+
+                  // Treatments
+                  Text('Treatments Offered', style: context.textStyles.h3.copyWith(fontSize: 16)),
+                  const SizedBox(height: 10),
+                  ..._availableTreatments.map((t) => _buildTreatmentTile(t)),
+                  
+                  const SizedBox(height: 40),
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxWidth: isDesktop ? 320 : double.infinity),
+                      child: AppButton(
+                        label: 'Add Doctor',
+                        onPressed: _submit,
+                        isLoading: _loading,
+                        icon: Icons.add_circle_outline_rounded,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
+                  const SizedBox(height: 20),
+                ],
+              );
 
-                // Schedule
-                Text('Working Schedule', style: context.textStyles.h3.copyWith(fontSize: 16)),
-                const SizedBox(height: 10),
-                _buildDoctorHoursCard(),
-                const SizedBox(height: 12),
-                _buildDoctorBreaksCard(),
-                const SizedBox(height: 24),
-
-                // Treatments
-                Text('Treatments Offered', style: context.textStyles.h3.copyWith(fontSize: 16)),
-                const SizedBox(height: 10),
-                ..._availableTreatments.map((t) => _buildTreatmentTile(t)),
-                
-                const SizedBox(height: 40),
-                AppButton(
-                  label: 'Add Doctor',
-                  onPressed: _submit,
-                  isLoading: _loading,
-                  icon: Icons.add_circle_outline_rounded,
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
+              if (isDesktop) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 800),
+                      child: Container(
+                        padding: const EdgeInsets.all(40),
+                        decoration: BoxDecoration(
+                          color: context.colors.surface,
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 32,
+                              spreadRadius: 4,
+                              offset: const Offset(0, 16),
+                            ),
+                          ],
+                        ),
+                        child: mainBody,
+                      ),
+                    ),
+                  ),
+                );
+              } else {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  child: mainBody,
+                );
+              }
+            },
           ),
         ),
       ),

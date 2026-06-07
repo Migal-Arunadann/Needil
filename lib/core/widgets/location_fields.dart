@@ -6,8 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
-import '../constants/app_colors.dart';
-import '../constants/app_text_styles.dart';
 import 'app_text_field.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
@@ -224,11 +222,11 @@ class _LocationFieldsState extends State<LocationFields> {
     final isIndian = widget.countryCtrl.text.trim().isEmpty ||
         widget.countryCtrl.text.trim() == 'India';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ── Pincode ─────────────────────────────────────────────────
-        Stack(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isDesktop = constraints.maxWidth >= 600;
+
+        final pincodeField = Stack(
           alignment: Alignment.centerRight,
           children: [
             AppTextField(
@@ -251,7 +249,7 @@ class _LocationFieldsState extends State<LocationFields> {
             ),
             if (_isLookingUp)
               Padding(
-                padding: EdgeInsets.only(right: 16),
+                padding: const EdgeInsets.only(right: 16),
                 child: SizedBox(
                   width: 18, height: 18,
                   child: CircularProgressIndicator(
@@ -259,23 +257,28 @@ class _LocationFieldsState extends State<LocationFields> {
                 ),
               ),
           ],
-        ),
+        );
 
-        if (_lookupError != null) ...[
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.only(left: 4),
-            child: Text(
-              _lookupError!,
-              style: context.textStyles.caption
-                  .copyWith(color: context.colors.warning, fontSize: 11),
-            ),
-          ),
-        ],
-        const SizedBox(height: 14),
+        final pincodeSection = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            pincodeField,
+            if (_lookupError != null) ...[
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Text(
+                  _lookupError!,
+                  style: context.textStyles.caption
+                      .copyWith(color: context.colors.warning, fontSize: 11),
+                ),
+              ),
+            ],
+          ],
+        );
 
-        // ── Country dropdown ─────────────────────────────────────────
-        _DropdownField(
+        final countryField = _DropdownField(
           label: widget.allRequired ? 'Country *' : 'Country',
           value: widget.countryCtrl.text.isNotEmpty
               ? widget.countryCtrl.text
@@ -289,38 +292,33 @@ class _LocationFieldsState extends State<LocationFields> {
               setState(() {});
             }
           },
-        ),
-        const SizedBox(height: 14),
+        );
 
-        // ── State dropdown (India) or free text ───────────────────────
-        if (isIndian)
-          _DropdownField(
-            label: widget.allRequired ? 'State *' : 'State',
-            value: kIndianStates.contains(widget.stateCtrl.text)
-                ? widget.stateCtrl.text
-                : null,
-            items: kIndianStates,
-            icon: Icons.flag_rounded,
-            required: widget.allRequired,
-            onChanged: (v) {
-              if (v != null) widget.stateCtrl.text = v;
-              setState(() {});
-            },
-          )
-        else
-          AppTextField(
-            controller: widget.stateCtrl,
-            label: widget.allRequired ? 'State / Province *' : 'State / Province',
-            prefixIcon: Icon(Icons.flag_rounded, color: context.colors.textHint),
-            validator: widget.allRequired
-                ? (v) => (v == null || v.trim().isEmpty) ? 'State is required' : null
-                : null,
-            textInputAction: TextInputAction.next,
-          ),
-        SizedBox(height: 14),
+        final stateField = isIndian
+            ? _DropdownField(
+                label: widget.allRequired ? 'State *' : 'State',
+                value: kIndianStates.contains(widget.stateCtrl.text)
+                    ? widget.stateCtrl.text
+                    : null,
+                items: kIndianStates,
+                icon: Icons.flag_rounded,
+                required: widget.allRequired,
+                onChanged: (v) {
+                  if (v != null) widget.stateCtrl.text = v;
+                  setState(() {});
+                },
+              )
+            : AppTextField(
+                controller: widget.stateCtrl,
+                label: widget.allRequired ? 'State / Province *' : 'State / Province',
+                prefixIcon: Icon(Icons.flag_rounded, color: context.colors.textHint),
+                validator: widget.allRequired
+                    ? (v) => (v == null || v.trim().isEmpty) ? 'State is required' : null
+                    : null,
+                textInputAction: TextInputAction.next,
+              );
 
-        // ── City ─────────────────────────────────────────────────────
-        AppTextField(
+        final cityField = AppTextField(
           controller: widget.cityCtrl,
           label: widget.allRequired ? 'City / District *' : 'City / District',
           prefixIcon: Icon(Icons.location_city_rounded,
@@ -329,34 +327,73 @@ class _LocationFieldsState extends State<LocationFields> {
               ? (v) => (v == null || v.trim().isEmpty) ? 'City is required' : null
               : null,
           textInputAction: TextInputAction.next,
-        ),
-        const SizedBox(height: 14),
+        );
 
-        // ── Area dropdown if options exist, else free text ────────────
-        if (_areaOptions.isNotEmpty)
-          _DropdownField(
-            label: widget.allRequired ? 'Area / Locality *' : 'Area / Locality',
-            value: _areaOptions.contains(widget.areaCtrl.text)
-                ? widget.areaCtrl.text
-                : (_areaOptions.isNotEmpty ? _areaOptions.first : null),
-            items: _areaOptions,
-            icon: Icons.map_rounded,
-            required: widget.allRequired,
-            onChanged: (v) {
-              if (v != null) widget.areaCtrl.text = v;
-            },
-          )
-        else
-          AppTextField(
-            controller: widget.areaCtrl,
-            label: widget.allRequired ? 'Area / Locality *' : 'Area / Locality',
-            prefixIcon: Icon(Icons.map_rounded, color: context.colors.textHint),
-            validator: widget.allRequired
-                ? (v) => (v == null || v.trim().isEmpty) ? 'Area is required' : null
-                : null,
-            textInputAction: TextInputAction.next,
-          ),
-      ],
+        final areaField = _areaOptions.isNotEmpty
+            ? _DropdownField(
+                label: widget.allRequired ? 'Area / Locality *' : 'Area / Locality',
+                value: _areaOptions.contains(widget.areaCtrl.text)
+                    ? widget.areaCtrl.text
+                    : (_areaOptions.isNotEmpty ? _areaOptions.first : null),
+                items: _areaOptions,
+                icon: Icons.map_rounded,
+                required: widget.allRequired,
+                onChanged: (v) {
+                  if (v != null) widget.areaCtrl.text = v;
+                },
+              )
+            : AppTextField(
+                controller: widget.areaCtrl,
+                label: widget.allRequired ? 'Area / Locality *' : 'Area / Locality',
+                prefixIcon: Icon(Icons.map_rounded, color: context.colors.textHint),
+                validator: widget.allRequired
+                    ? (v) => (v == null || v.trim().isEmpty) ? 'Area is required' : null
+                    : null,
+                textInputAction: TextInputAction.next,
+              );
+
+        if (isDesktop) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: pincodeSection),
+                  const SizedBox(width: 16),
+                  Expanded(child: countryField),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: stateField),
+                  const SizedBox(width: 16),
+                  Expanded(child: cityField),
+                  const SizedBox(width: 16),
+                  Expanded(child: areaField),
+                ],
+              ),
+            ],
+          );
+        } else {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              pincodeSection,
+              const SizedBox(height: 14),
+              countryField,
+              const SizedBox(height: 14),
+              stateField,
+              const SizedBox(height: 14),
+              cityField,
+              const SizedBox(height: 14),
+              areaField,
+            ],
+          );
+        }
+      },
     );
   }
 }
