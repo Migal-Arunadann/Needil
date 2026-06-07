@@ -13,6 +13,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../auth/screens/clinic_registration/clinic_step3_screen.dart' show BreakTime;
 import '../../../core/services/auth_service.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 
 /// Full edit screen for a doctor's registration details —

@@ -6,6 +6,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 
 class ConsentScreen extends ConsumerStatefulWidget {

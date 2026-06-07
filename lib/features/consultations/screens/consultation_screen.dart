@@ -26,6 +26,7 @@ import '../../../core/services/photo_quota_service.dart';
 import '../../../core/widgets/photo_limit_dialog.dart';
 import '../../auth/providers/auth_provider.dart' show authProvider;
 import '../../../core/services/auth_service.dart' show UserRole;
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 
 

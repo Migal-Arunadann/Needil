@@ -4,6 +4,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../../core/services/auth_service.dart';
 import '../models/patient_model.dart';
 import '../services/patient_service.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 final patientServiceProvider = Provider<PatientService>((ref) {
   final pb = ref.watch(pocketbaseProvider);

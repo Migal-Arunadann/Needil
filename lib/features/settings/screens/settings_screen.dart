@@ -21,6 +21,7 @@ import 'package:pms_app/core/theme/app_theme.dart';
 import '../../../core/theme/theme_provider.dart';
 import '../../../core/widgets/responsive_wrapper.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 // ════════════════════════════════════════════════════════════════════════════
 //  DESIGN TOKENS v2 — Premium Futuristic SaaS (Linear / Vercel / Stripe)

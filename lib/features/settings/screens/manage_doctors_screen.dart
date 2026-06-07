@@ -10,6 +10,7 @@ import 'edit_doctor_details_screen.dart';
 import 'add_staff_doctor_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 
 class ManageDoctorsScreen extends ConsumerStatefulWidget {

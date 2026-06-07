@@ -10,6 +10,7 @@ import '../../../../../core/providers/pocketbase_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../otp_verification_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 
 class ClinicStep0OtpScreen extends ConsumerStatefulWidget {

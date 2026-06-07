@@ -31,6 +31,7 @@ import '../../../core/services/session_timer_service.dart';
 import '../../../core/utils/whatsapp_helper.dart';
 import '../../../core/services/audit_service.dart';
 import '../../../core/widgets/responsive_wrapper.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 class AppointmentListScreen extends ConsumerStatefulWidget {
   const AppointmentListScreen({super.key});

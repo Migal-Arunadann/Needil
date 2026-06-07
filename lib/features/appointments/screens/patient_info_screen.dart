@@ -10,6 +10,7 @@ import '../models/appointment_model.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../patients/models/patient_model.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 
 /// Screen shown when a call-by patient arrives — uses the shared

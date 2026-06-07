@@ -9,6 +9,7 @@ import '../../../core/constants/pb_collections.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/services/auth_service.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 
 class PrivacySecurityScreen extends ConsumerStatefulWidget {

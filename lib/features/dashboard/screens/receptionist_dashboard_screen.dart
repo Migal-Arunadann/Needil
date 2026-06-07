@@ -10,6 +10,7 @@ import '../../../core/widgets/responsive_wrapper.dart';
 import 'main_layout.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 class ReceptionistDashboardScreen extends ConsumerWidget {
   const ReceptionistDashboardScreen({super.key});

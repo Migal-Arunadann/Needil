@@ -3,6 +3,7 @@ import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/services/treatment_service.dart';
 import '../models/treatment_plan_model.dart';
 import '../models/session_model.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 /// Provides the [TreatmentService] singleton.
 final treatmentServiceProvider = Provider<TreatmentService>((ref) {

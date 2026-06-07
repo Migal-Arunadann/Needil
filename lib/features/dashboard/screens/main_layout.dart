@@ -15,6 +15,7 @@ import 'package:pms_app/core/theme/app_theme.dart';
 import '../../appointments/providers/appointment_provider.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 /// Global key to access MainLayout state from dashboard screens.
 final mainLayoutKey = GlobalKey<MainLayoutState>();

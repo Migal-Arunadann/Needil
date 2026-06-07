@@ -6,6 +6,7 @@ import '../../auth/providers/auth_provider.dart';
 import '../../../core/services/auth_service.dart';
 import '../../appointments/models/appointment_model.dart';
 import 'package:pocketbase/pocketbase.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 class DashboardStats {
   // Today's counts by type (keep compatibility)

@@ -7,6 +7,7 @@ import '../../../core/services/superadmin_service.dart';
 import 'superadmin_shell.dart';
 import 'superadmin_clinics_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 
 final _dashStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) {

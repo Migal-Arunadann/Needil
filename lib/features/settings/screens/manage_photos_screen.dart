@@ -8,6 +8,7 @@ import '../../../core/services/photo_quota_service.dart';
 import '../../auth/providers/auth_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 /// Data model for a photo entry shown in the management screen.
 class _PhotoEntry {

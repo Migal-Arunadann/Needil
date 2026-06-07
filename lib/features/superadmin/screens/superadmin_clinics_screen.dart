@@ -7,6 +7,7 @@ import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/services/superadmin_service.dart';
 import 'superadmin_shell.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 
 // Provider for the full clinics list with optional search

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketbase/pocketbase.dart';
 import '../providers/pocketbase_provider.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 /// Actions that can be audited.
 enum AuditAction {

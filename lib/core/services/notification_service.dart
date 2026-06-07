@@ -9,6 +9,7 @@ import 'package:timezone/timezone.dart' as tz;
 import '../providers/pocketbase_provider.dart';
 import '../../features/auth/providers/auth_provider.dart';
 import '../../core/services/auth_service.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 /// Service to handle real-time push alerts via PocketBase WebSockets
 /// and time-based local scheduled reminders (late alert, appointment reminder).

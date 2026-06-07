@@ -15,6 +15,7 @@ import '../../treatments/screens/create_treatment_plan_screen.dart';
 import '../../treatments/providers/treatment_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import '../../dashboard/widgets/dashboard_widgets.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 
 class PatientProfileScreen extends ConsumerStatefulWidget {

@@ -19,6 +19,7 @@ import '../../../core/services/auth_service.dart';
 import '../../patients/models/patient_model.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import '../../../core/services/audit_service.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 
 class CreateAppointmentScreen extends ConsumerStatefulWidget {

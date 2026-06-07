@@ -5,6 +5,7 @@ import '../../../core/services/auth_service.dart';
 import '../models/clinic_model.dart';
 import '../models/doctor_model.dart';
 import '../models/receptionist_model.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 /// Provides the [AuthService] instance.
 final authServiceProvider = Provider<AuthService>((ref) {
