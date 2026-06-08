@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketbase/pocketbase.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/services/superadmin_service.dart';
+import '../../../core/services/data_export_service.dart';
 import 'superadmin_shell.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
@@ -104,15 +106,63 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
     }
   }
 
-  Future<void> _deleteClinic(String name) async {
+  Future<void> _deactivateClinic(String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _darkDialog(
+        title: 'Deactivate Clinic?',
+        subtitle: 'This will block all logins for "$name". The clinic has 30 days to reactivate before permanent deletion.',
+        child: const SizedBox.shrink(),
+        confirmLabel: 'Deactivate',
+        confirmColor: SAColors.warning,
+        onConfirm: () => Navigator.pop(context, true),
+        onCancel: () => Navigator.pop(context, false),
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      await SuperadminService(pb).deactivateClinic(widget.clinicId);
+      _snack('Clinic deactivated. Scheduled for deletion in 30 days.');
+      ref.invalidate(_clinicDetailProvider(widget.clinicId));
+    } catch (e) {
+      _snack('Failed: $e', error: true);
+    }
+  }
+
+  Future<void> _reactivateClinic(String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _darkDialog(
+        title: 'Reactivate Clinic?',
+        subtitle: 'This will restore full login access for "$name" and cancel the pending deletion.',
+        child: const SizedBox.shrink(),
+        confirmLabel: 'Reactivate',
+        confirmColor: SAColors.success,
+        onConfirm: () => Navigator.pop(context, true),
+        onCancel: () => Navigator.pop(context, false),
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      await SuperadminService(pb).reactivateClinic(widget.clinicId);
+      _snack('Clinic reactivated successfully.');
+      ref.invalidate(_clinicDetailProvider(widget.clinicId));
+    } catch (e) {
+      _snack('Failed: $e', error: true);
+    }
+  }
+
+  Future<void> _permanentlyDeleteClinic(String name) async {
     final ctrl = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => _darkDialog(
-        title: 'Delete Clinic',
-        subtitle: 'Type the clinic name to confirm permanent deletion.',
+        title: 'Permanently Delete Clinic',
+        subtitle: 'This CANNOT be undone. All data across all 10 collections will be wiped. Type the clinic name to confirm.',
         child: _darkTextField(ctrl, 'Type "$name"', Icons.business_outlined),
-        confirmLabel: 'Permanently Delete',
+        confirmLabel: 'Delete Forever',
         confirmColor: SAColors.error,
         onConfirm: () {
           if (ctrl.text.trim() == name) {
@@ -130,8 +180,8 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
     if (confirmed != true) return;
     try {
       final pb = ref.read(pocketbaseProvider);
-      await SuperadminService(pb).deleteClinic(widget.clinicId);
-      _snack('Clinic deleted');
+      await SuperadminService(pb).permanentlyDeleteClinic(widget.clinicId);
+      _snack('Clinic permanently deleted.');
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       _snack('Failed: $e', error: true);
@@ -186,8 +236,11 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
                 onDelete: _deleteStaff,
               ),
               _DangerTab(
-                clinicName: clinic.getStringValue('name'),
-                onDelete: () => _deleteClinic(clinic.getStringValue('name')),
+                clinicRecord: clinic,
+                clinicId: widget.clinicId,
+                onDeactivate: () => _deactivateClinic(clinic.getStringValue('name')),
+                onReactivate: () => _reactivateClinic(clinic.getStringValue('name')),
+                onPermanentDelete: () => _permanentlyDeleteClinic(clinic.getStringValue('name')),
                 onResetClinicPass: () => _resetPassword('clinic', widget.clinicId, clinic.getStringValue('name')),
               ),
             ],
@@ -523,27 +576,206 @@ class _StaffTab extends StatelessWidget {
 
 // ── Danger Tab ────────────────────────────────────────────────────────────────
 
-class _DangerTab extends StatelessWidget {
-  final String clinicName;
-  final VoidCallback onDelete;
+class _DangerTab extends ConsumerStatefulWidget {
+  final RecordModel clinicRecord;
+  final String clinicId;
+  final VoidCallback onDeactivate;
+  final VoidCallback onReactivate;
+  final VoidCallback onPermanentDelete;
   final VoidCallback onResetClinicPass;
 
-  const _DangerTab({required this.clinicName, required this.onDelete, required this.onResetClinicPass});
+  const _DangerTab({
+    required this.clinicRecord,
+    required this.clinicId,
+    required this.onDeactivate,
+    required this.onReactivate,
+    required this.onPermanentDelete,
+    required this.onResetClinicPass,
+  });
+
+  @override
+  ConsumerState<_DangerTab> createState() => _DangerTabState();
+}
+
+class _DangerTabState extends ConsumerState<_DangerTab> {
+  bool _isExporting = false;
+  String? _exportStatus;
+
+  bool get _isDeactivated =>
+      widget.clinicRecord.getBoolValue('is_deactivated');
+
+  DateTime? get _scheduledDeletion => DateTime.tryParse(
+      widget.clinicRecord.getStringValue('scheduled_deletion_date'));
+
+  int get _daysRemaining {
+    final del = _scheduledDeletion;
+    if (del == null) return 30;
+    return del.difference(DateTime.now()).inDays.clamp(0, 9999);
+  }
+
+  Future<void> _exportData() async {
+    setState(() {
+      _isExporting = true;
+      _exportStatus = 'Fetching data…';
+    });
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final svc = DataExportService(pb);
+      final clinicName = widget.clinicRecord.getStringValue('name');
+      setState(() => _exportStatus = 'Generating CSVs…');
+      final csvFiles = await svc.exportAllData(widget.clinicId, clinicName);
+
+      if (kIsWeb) {
+        // On web: trigger browser downloads one by one
+        for (final entry in csvFiles.entries) {
+          setState(() => _exportStatus = 'Downloading ${entry.key}…');
+          downloadCsvWeb(entry.value, entry.key);
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+        setState(() => _exportStatus = '✓ ${csvFiles.length} files exported successfully!');
+      } else {
+        // On mobile: show snack with file count (share logic can be added later)
+        final totalRows = csvFiles.values.fold<int>(
+            0, (sum, csv) => sum + csv.split('\n').length - 1);
+        setState(() => _exportStatus = '✓ Exported $totalRows records across ${csvFiles.length} CSV files.');
+      }
+    } catch (e) {
+      setState(() => _exportStatus = '✗ Export failed: $e');
+    } finally {
+      setState(() => _isExporting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final clinicName = widget.clinicRecord.getStringValue('name');
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _actionCard(context, 
+        // ── Status Banner ──────────────────────────────────────────────────
+        if (_isDeactivated)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: SAColors.warning.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: SAColors.warning.withValues(alpha: 0.4)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.lock_outline_rounded, color: SAColors.warning, size: 22),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Clinic Deactivated', style: const TextStyle(color: SAColors.warning, fontWeight: FontWeight.w700, fontSize: 14)),
+                Text(
+                  _scheduledDeletion != null
+                      ? 'Scheduled deletion in $_daysRemaining days (${_scheduledDeletion!.toLocal().toString().substring(0, 10)})'
+                      : 'Pending deletion.',
+                  style: const TextStyle(color: SAColors.textHint, fontSize: 12),
+                ),
+              ])),
+            ]),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: SAColors.success.withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: SAColors.success.withValues(alpha: 0.3)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.check_circle_outline_rounded, color: SAColors.success, size: 22),
+              const SizedBox(width: 12),
+              const Expanded(child: Text('Clinic Status: Active',
+                  style: TextStyle(color: SAColors.success, fontWeight: FontWeight.w700, fontSize: 14))),
+            ]),
+          ),
+
+        const SizedBox(height: 16),
+
+        // ── Reset Password ─────────────────────────────────────────────────
+        _actionCard(context,
           icon: Icons.lock_reset_rounded,
           color: SAColors.accent,
           title: 'Reset Clinic Password',
           subtitle: 'Set a new login password for the clinic admin account.',
           buttonLabel: 'Reset Password',
-          onTap: onResetClinicPass,
+          onTap: widget.onResetClinicPass,
+        ),
+        const SizedBox(height: 12),
+
+        // ── Data Export ────────────────────────────────────────────────────
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: SAColors.card,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: SAColors.border),
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: SAColors.accent.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.download_rounded, color: SAColors.accent, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text('Export All Clinic Data', style: TextStyle(color: SAColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+                Text('Download patients, appointments, consultations,\ntreatment plans, and sessions as CSV files.',
+                    style: TextStyle(color: SAColors.textHint, fontSize: 12, height: 1.4)),
+              ])),
+            ]),
+            if (_exportStatus != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _exportStatus!.startsWith('✓')
+                      ? SAColors.success.withValues(alpha: 0.08)
+                      : _exportStatus!.startsWith('✗')
+                          ? SAColors.error.withValues(alpha: 0.08)
+                          : SAColors.accent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(_exportStatus!,
+                    style: TextStyle(
+                      color: _exportStatus!.startsWith('✓')
+                          ? SAColors.success
+                          : _exportStatus!.startsWith('✗')
+                              ? SAColors.error
+                              : SAColors.accent,
+                      fontSize: 12,
+                    )),
+              ),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity, height: 40,
+              child: ElevatedButton.icon(
+                onPressed: _isExporting ? null : _exportData,
+                icon: _isExporting
+                    ? const SizedBox(width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.download_rounded, size: 18),
+                label: Text(_isExporting ? 'Exporting…' : 'Export Data'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SAColors.accent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
+          ]),
         ),
         const SizedBox(height: 16),
+
+        // ── Danger Zone ────────────────────────────────────────────────────
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -555,27 +787,66 @@ class _DangerTab extends StatelessWidget {
             Row(children: [
               const Icon(Icons.warning_amber_rounded, color: SAColors.error, size: 22),
               const SizedBox(width: 10),
-              Text('Danger Zone', style: context.textStyles.label.copyWith(color: SAColors.error, fontSize: 15)),
+              const Text('Danger Zone', style: TextStyle(color: SAColors.error, fontWeight: FontWeight.w700, fontSize: 15)),
             ]),
             const SizedBox(height: 10),
-            Text(
-              'Deleting "$clinicName" is permanent. All doctors, receptionists, and their accounts will be permanently removed. Patient records are not affected.',
-              style: context.textStyles.caption.copyWith(color: SAColors.textHint, height: 1.5),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity, height: 46,
-              child: ElevatedButton.icon(
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_forever_rounded, size: 20),
-                label: const Text('Delete This Clinic'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: SAColors.error,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+
+            if (!_isDeactivated) ...[
+              Text(
+                'Deactivating "$clinicName" will block all clinic, doctor, and receptionist logins immediately. '
+                'The clinic data is preserved for 30 days, after which it can be permanently deleted.',
+                style: const TextStyle(color: SAColors.textHint, fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity, height: 46,
+                child: ElevatedButton.icon(
+                  onPressed: widget.onDeactivate,
+                  icon: const Icon(Icons.lock_outline_rounded, size: 20),
+                  label: const Text('Deactivate Clinic'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SAColors.warning,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
                 ),
               ),
-            ),
+            ] else ...[
+              Text(
+                'This clinic is deactivated. You can reactivate it within the 30-day window, '
+                'or permanently delete all data now. Permanent deletion removes all records '
+                'across all 10 collections and cannot be undone.',
+                style: const TextStyle(color: SAColors.textHint, fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity, height: 46,
+                child: ElevatedButton.icon(
+                  onPressed: widget.onReactivate,
+                  icon: const Icon(Icons.check_circle_outline_rounded, size: 20),
+                  label: const Text('Reactivate Clinic'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SAColors.success,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity, height: 46,
+                child: ElevatedButton.icon(
+                  onPressed: widget.onPermanentDelete,
+                  icon: const Icon(Icons.delete_forever_rounded, size: 20),
+                  label: const Text('Permanently Delete All Data'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SAColors.error,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ],
           ]),
         ),
       ]),
@@ -605,16 +876,17 @@ class _DangerTab extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(title, style: context.textStyles.label.copyWith(color: SAColors.textPrimary)),
-          Text(subtitle, style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
+          Text(title, style: const TextStyle(color: SAColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 14)),
+          Text(subtitle, style: const TextStyle(color: SAColors.textHint, fontSize: 12)),
         ])),
         const SizedBox(width: 8),
         TextButton(
           onPressed: onTap,
           style: TextButton.styleFrom(foregroundColor: color),
-          child: Text(buttonLabel, style: context.textStyles.caption.copyWith(color: color, fontWeight: FontWeight.w700)),
+          child: Text(buttonLabel, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
         ),
       ]),
     );
   }
 }
+

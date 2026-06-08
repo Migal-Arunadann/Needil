@@ -136,25 +136,114 @@ class SuperadminService {
         {'verified': verified});
   }
 
-  /// Permanently deletes a clinic and ALL its doctors and receptionists.
-  Future<void> deleteClinic(String clinicId) async {
-    // Fetch and delete doctors
-    final docBody = await _get('collections/${PBCollections.doctors}/records',
-        query: {'filter': "clinic='$clinicId'", 'skipTotal': 'false'});
-    for (final d in _parseItems(docBody)) {
+  /// Soft-deactivates a clinic — blocks all logins and sets a 30-day deletion window.
+  /// The clinic record stays in PocketBase; staff accounts are NOT deleted yet.
+  Future<void> deactivateClinic(String clinicId) async {
+    final now = DateTime.now().toUtc();
+    final deletionDate = now.add(const Duration(days: 30));
+    await _patch('collections/${PBCollections.clinics}/records/$clinicId', {
+      'is_deactivated': true,
+      'deactivated_at': now.toIso8601String(),
+      'scheduled_deletion_date': deletionDate.toIso8601String(),
+    });
+  }
+
+  /// Reactivates a previously deactivated clinic, restoring full login access.
+  Future<void> reactivateClinic(String clinicId) async {
+    await _patch('collections/${PBCollections.clinics}/records/$clinicId', {
+      'is_deactivated': false,
+      'deactivated_at': '',
+      'scheduled_deletion_date': '',
+    });
+  }
+
+  /// Helper: fetch ALL records for a collection with a given filter, handling pagination.
+  Future<List<RecordModel>> _fetchAll(String collection, String filter) async {
+    const perPage = 200;
+    int page = 1;
+    final results = <RecordModel>[];
+    while (true) {
+      final body = await _get('collections/$collection/records', query: {
+        'filter': filter,
+        'page': '$page',
+        'perPage': '$perPage',
+        'skipTotal': 'false',
+      });
+      final items = _parseItems(body);
+      results.addAll(items);
+      final totalItems = (body['totalItems'] as num?)?.toInt() ?? 0;
+      if (results.length >= totalItems || items.isEmpty) break;
+      page++;
+    }
+    return results;
+  }
+
+  /// Permanently deletes a clinic and cascades through ALL 10 collections.
+  /// Fixes the previous gap where 7 collection types were left orphaned.
+  Future<void> permanentlyDeleteClinic(String clinicId) async {
+    // 1. Fetch all doctor IDs (needed for sessions/consultations filter)
+    final doctors = await _fetchAll(PBCollections.doctors, "clinic='$clinicId'");
+    final doctorIds = doctors.map((d) => d.id).toList();
+
+    // 2. Delete sessions (filter by doctor or clinic)
+    for (final docId in doctorIds) {
+      final sessions = await _fetchAll(PBCollections.sessions, "doctor='$docId'");
+      for (final s in sessions) {
+        await _delete('collections/${PBCollections.sessions}/records/${s.id}');
+      }
+    }
+
+    // 3. Delete treatment_plans
+    final plans = await _fetchAll(PBCollections.treatmentPlans, "clinic='$clinicId'");
+    for (final p in plans) {
+      await _delete('collections/${PBCollections.treatmentPlans}/records/${p.id}');
+    }
+
+    // 4. Delete consultations
+    final consultations = await _fetchAll(PBCollections.consultations, "clinic='$clinicId'");
+    for (final c in consultations) {
+      await _delete('collections/${PBCollections.consultations}/records/${c.id}');
+    }
+
+    // 5. Delete appointments
+    final appointments = await _fetchAll(PBCollections.appointments, "clinic='$clinicId'");
+    for (final a in appointments) {
+      await _delete('collections/${PBCollections.appointments}/records/${a.id}');
+    }
+
+    // 6. Delete patients
+    final patients = await _fetchAll(PBCollections.patients, "clinic='$clinicId'");
+    for (final p in patients) {
+      await _delete('collections/${PBCollections.patients}/records/${p.id}');
+    }
+
+    // 7. Delete consent_records
+    final consentRecords = await _fetchAll(PBCollections.consentRecords, "clinic_id='$clinicId'");
+    for (final cr in consentRecords) {
+      await _delete('collections/${PBCollections.consentRecords}/records/${cr.id}');
+    }
+
+    // 8. Delete audit_logs
+    final auditLogs = await _fetchAll(PBCollections.auditLogs, "clinic='$clinicId'");
+    for (final al in auditLogs) {
+      await _delete('collections/${PBCollections.auditLogs}/records/${al.id}');
+    }
+
+    // 9. Delete doctors
+    for (final d in doctors) {
       await _delete('collections/${PBCollections.doctors}/records/${d.id}');
     }
-    // Fetch and delete receptionists
-    final recBody = await _get(
-        'collections/${PBCollections.receptionists}/records',
-        query: {'filter': "clinic='$clinicId'", 'skipTotal': 'false'});
-    for (final r in _parseItems(recBody)) {
-      await _delete(
-          'collections/${PBCollections.receptionists}/records/${r.id}');
+
+    // 10. Delete receptionists
+    final recs = await _fetchAll(PBCollections.receptionists, "clinic='$clinicId'");
+    for (final r in recs) {
+      await _delete('collections/${PBCollections.receptionists}/records/${r.id}');
     }
-    // Delete clinic
+
+    // 11. Finally delete the clinic itself
     await _delete('collections/${PBCollections.clinics}/records/$clinicId');
   }
+
 
   Future<void> resetClinicPassword(String clinicId, String newPassword) async {
     await _patch('collections/${PBCollections.clinics}/records/$clinicId',

@@ -24,6 +24,10 @@ class ClinicModel {
   final String subscriptionTier;
   final int photosUsed;
   final int photoLimit;
+  // Soft-delete / deactivation
+  final bool isDeactivated;
+  final DateTime? deactivatedAt;
+  final DateTime? scheduledDeletionDate;
   final DateTime? created;
   final DateTime? updated;
 
@@ -47,6 +51,9 @@ class ClinicModel {
     this.subscriptionTier = 'base',
     this.photosUsed = 0,
     this.photoLimit = 2000,
+    this.isDeactivated = false,
+    this.deactivatedAt,
+    this.scheduledDeletionDate,
     this.created,
     this.updated,
   });
@@ -83,6 +90,9 @@ class ClinicModel {
       photoLimit: record.getIntValue('photo_limit') > 0
           ? record.getIntValue('photo_limit')
           : 2000,
+      isDeactivated: record.getBoolValue('is_deactivated'),
+      deactivatedAt: DateTime.tryParse(record.getStringValue('deactivated_at')),
+      scheduledDeletionDate: DateTime.tryParse(record.getStringValue('scheduled_deletion_date')),
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
     );
