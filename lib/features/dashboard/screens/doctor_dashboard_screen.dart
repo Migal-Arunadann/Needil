@@ -192,7 +192,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                             shape: BoxShape.circle,
                             image: doctor?.photoUrl != null
                                 ? DecorationImage(
-                                    image: NetworkImage(ImageHelper.getSecureUrl(doctor!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
+                                    image: NetworkImage(doctor!.photoUrl!, headers: ImageHelper.getAuthHeaders(doctor!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
                                     fit: BoxFit.cover,
                                   )
                                 : null,
@@ -253,7 +253,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                             shape: BoxShape.circle,
                             image: doctor?.photoUrl != null
                                 ? DecorationImage(
-                                    image: NetworkImage(ImageHelper.getSecureUrl(doctor!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
+                                    image: NetworkImage(doctor!.photoUrl!, headers: ImageHelper.getAuthHeaders(doctor!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
                                     fit: BoxFit.cover,
                                   )
                                 : null,

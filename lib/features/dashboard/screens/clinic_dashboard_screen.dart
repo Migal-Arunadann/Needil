@@ -192,7 +192,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                             shape: BoxShape.circle,
                             image: clinic?.logoUrl != null
                                 ? DecorationImage(
-                                    image: NetworkImage(ImageHelper.getSecureUrl(clinic!.logoUrl!, ref.read(pocketbaseProvider).authStore.token)),
+                                    image: NetworkImage(clinic!.logoUrl!, headers: ImageHelper.getAuthHeaders(clinic!.logoUrl!, ref.read(pocketbaseProvider).authStore.token)),
                                     fit: BoxFit.cover,
                                   )
                                 : null,
@@ -253,7 +253,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                             shape: BoxShape.circle,
                             image: clinic?.logoUrl != null
                                 ? DecorationImage(
-                                    image: NetworkImage(ImageHelper.getSecureUrl(clinic!.logoUrl!, ref.read(pocketbaseProvider).authStore.token)),
+                                    image: NetworkImage(clinic!.logoUrl!, headers: ImageHelper.getAuthHeaders(clinic!.logoUrl!, ref.read(pocketbaseProvider).authStore.token)),
                                     fit: BoxFit.cover,
                                   )
                                 : null,

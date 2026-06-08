@@ -807,7 +807,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               borderRadius: BorderRadius.circular(18),
               image: (isClinic ? auth.clinic?.logoUrl : auth.doctor?.photoUrl) != null
                   ? DecorationImage(
-                      image: NetworkImage(ImageHelper.getSecureUrl(isClinic ? auth.clinic!.logoUrl! : auth.doctor!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
+                      image: NetworkImage(isClinic ? auth.clinic!.logoUrl! : auth.doctor!.photoUrl!, headers: ImageHelper.getAuthHeaders(isClinic ? auth.clinic!.logoUrl! : auth.doctor!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
                       fit: BoxFit.cover,
                     )
                   : null,

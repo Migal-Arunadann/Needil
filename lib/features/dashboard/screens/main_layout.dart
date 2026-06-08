@@ -343,7 +343,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                             shape: BoxShape.circle,
                             image: photoUrl != null
                                 ? DecorationImage(
-                                    image: NetworkImage(ImageHelper.getSecureUrl(photoUrl, ref.read(pocketbaseProvider).authStore.token)),
+                                    image: NetworkImage(photoUrl, headers: ImageHelper.getAuthHeaders(photoUrl, ref.read(pocketbaseProvider).authStore.token)),
                                     fit: BoxFit.cover,
                                   )
                                 : null,

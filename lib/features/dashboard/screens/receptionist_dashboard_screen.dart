@@ -192,7 +192,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                             shape: BoxShape.circle,
                             image: receptionist?.photoUrl != null
                                 ? DecorationImage(
-                                    image: NetworkImage(ImageHelper.getSecureUrl(receptionist!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
+                                    image: NetworkImage(receptionist!.photoUrl!, headers: ImageHelper.getAuthHeaders(receptionist!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
                                     fit: BoxFit.cover,
                                   )
                                 : null,
@@ -253,7 +253,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                             shape: BoxShape.circle,
                             image: receptionist?.photoUrl != null
                                 ? DecorationImage(
-                                    image: NetworkImage(ImageHelper.getSecureUrl(receptionist!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
+                                    image: NetworkImage(receptionist!.photoUrl!, headers: ImageHelper.getAuthHeaders(receptionist!.photoUrl!, ref.read(pocketbaseProvider).authStore.token)),
                                     fit: BoxFit.cover,
                                   )
                                 : null,

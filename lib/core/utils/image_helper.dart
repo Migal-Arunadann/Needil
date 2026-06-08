@@ -44,15 +44,11 @@ class ImageHelper {
     }
   }
 
-  /// Appends the PocketBase auth token to a file URL to access protected files securely.
-  static String getSecureUrl(String url, String token) {
-    if (url.isEmpty || token.isEmpty) return url;
-    // Only append to actual pocketbase file urls
-    if (!url.contains('/api/files/')) return url;
-    // Don't append if it already has a token
-    if (url.contains('token=')) return url;
-    
-    final separator = url.contains('?') ? '&' : '?';
-    return '$url${separator}token=$token';
+  /// PocketBase 0.20+ requires File Tokens for `?token=`, or standard Auth Tokens via the `Authorization` header.
+  /// We provide the Authorization header for `Image.network` and `NetworkImage`.
+  static Map<String, String>? getAuthHeaders(String url, String token) {
+    if (url.isEmpty || token.isEmpty) return null;
+    if (!url.contains('/api/files/')) return null;
+    return {'Authorization': token};
   }
 }
