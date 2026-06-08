@@ -3,7 +3,9 @@ import 'dart:io';
 import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:async';
 import 'package:pocketbase/pocketbase.dart';
+import '../utils/image_helper.dart';
 import '../constants/pb_collections.dart';
 import '../../features/auth/models/clinic_model.dart';
 import '../../features/auth/models/doctor_model.dart';
@@ -37,7 +39,25 @@ class AuthService {
   static const String _tokenKey = 'auth_token';
   static const String _userIdKey = 'user_id';
 
+  Timer? _fileTokenTimer;
+
   AuthService(this.pb);
+
+  Future<void> _startFileTokenRefresh() async {
+    _fileTokenTimer?.cancel();
+    await _refreshFileToken(); // Wait for the first token to be fetched
+    _fileTokenTimer = Timer.periodic(const Duration(minutes: 3), (_) {
+      _refreshFileToken();
+    });
+  }
+
+  Future<void> _refreshFileToken() async {
+    if (!pb.authStore.isValid) return;
+    try {
+      final res = await pb.send('/api/files/token', method: 'POST');
+      ImageHelper.globalFileToken = res['token'];
+    } catch (_) {}
+  }
 
   /// Check if user is logged in and restore session.
   Future<AuthResult?> restoreSession() async {
@@ -566,6 +586,8 @@ class AuthService {
 
   /// Logout and clear session.
   Future<void> logout() async {
+    _fileTokenTimer?.cancel();
+    ImageHelper.globalFileToken = null;
     pb.authStore.clear();
     await _clearStorage();
   }
@@ -934,6 +956,7 @@ class AuthService {
     await _storage.write(key: _roleKey, value: role);
     await _storage.write(key: _tokenKey, value: token);
     await _storage.write(key: _userIdKey, value: userId);
+    await _startFileTokenRefresh();
   }
 
   Future<void> _clearStorage() async {

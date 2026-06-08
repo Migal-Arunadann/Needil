@@ -713,7 +713,7 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
                 // Thumbnail
                 ClipRRect(
                   borderRadius: BorderRadius.circular(photo.selected ? 7 : 9),
-                  child: Image.network(photo.getUrl(baseUrl), headers: ImageHelper.getAuthHeaders(photo.getUrl(baseUrl), ref.read(pocketbaseProvider).authStore.token),
+                  child: Image.network(ImageHelper.getSecureUrl(photo.getUrl(baseUrl)), ref.read(pocketbaseProvider).authStore.token),
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       color: context.colors.divider,
@@ -802,7 +802,7 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: InteractiveViewer(
-                child: Image.network(photo.getFullUrl(baseUrl), headers: ImageHelper.getAuthHeaders(photo.getFullUrl(baseUrl), ref.read(pocketbaseProvider).authStore.token),
+                child: Image.network(ImageHelper.getSecureUrl(photo.getFullUrl(baseUrl)), ref.read(pocketbaseProvider).authStore.token),
                   fit: BoxFit.contain,
                   loadingBuilder: (_, child, progress) {
                     if (progress == null) return child;
