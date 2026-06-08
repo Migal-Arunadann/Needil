@@ -24,15 +24,16 @@ class AuthState {
   final ReceptionistModel? receptionist;
   final String? error;
 
-  // ── OTP pending state ──────────────────────────────────────
-  /// The OTP ID returned by PocketBase after requestOTP.
+  // ── OTP pending state ──────────────────────────────────────────────
   final String? pendingOtpId;
-  /// The email the OTP was sent to.
   final String? pendingEmail;
-  /// The full clinic registration payload, held while waiting for OTP.
   final Map<String, dynamic>? pendingClinicData;
-  /// The MFA ID returned by auth-with-password if MFA is required.
   final String? pendingMfaId;
+
+  // ── Clinic deletion state ───────────────────────────────────────────
+  /// True when clinic has self-requested deletion and is in 30-day grace period.
+  final bool isPendingDeletion;
+  final DateTime? purgeAt;
 
   const AuthState({
     this.isInitializing = true,
@@ -47,6 +48,8 @@ class AuthState {
     this.pendingEmail,
     this.pendingClinicData,
     this.pendingMfaId,
+    this.isPendingDeletion = false,
+    this.purgeAt,
   });
 
   AuthState copyWith({
@@ -62,6 +65,8 @@ class AuthState {
     String? pendingEmail,
     Map<String, dynamic>? pendingClinicData,
     String? pendingMfaId,
+    bool? isPendingDeletion,
+    DateTime? purgeAt,
   }) {
     return AuthState(
       isInitializing: isInitializing ?? this.isInitializing,
@@ -76,6 +81,8 @@ class AuthState {
       pendingEmail: pendingEmail ?? this.pendingEmail,
       pendingClinicData: pendingClinicData ?? this.pendingClinicData,
       pendingMfaId: pendingMfaId ?? this.pendingMfaId,
+      isPendingDeletion: isPendingDeletion ?? this.isPendingDeletion,
+      purgeAt: purgeAt ?? this.purgeAt,
     );
   }
 
@@ -129,6 +136,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isAuthenticated: true,
         role: UserRole.clinic,
         clinic: result.user as ClinicModel,
+        isPendingDeletion: result.isPendingDeletion,
+        purgeAt: result.purgeAt,
       );
     } else {
       state = state.copyWith(isLoading: false, error: result.error);
@@ -182,6 +191,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         isAuthenticated: true,
         role: UserRole.clinic,
         clinic: clinicResult.user as ClinicModel,
+        isPendingDeletion: clinicResult.isPendingDeletion,
+        purgeAt: clinicResult.purgeAt,
       );
       return;
     }

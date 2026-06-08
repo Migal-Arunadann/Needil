@@ -23,6 +23,12 @@ enum AuditAction {
   markArrived,
   cancelAppointment,
   rescheduleAppointment,
+  // Clinic lifecycle
+  clinicDeletionRequested,
+  clinicReactivationRequested,
+  clinicReactivationApproved,
+  clinicReactivationRejected,
+  clinicPurged,
 }
 
 /// Audit logging service for compliance tracking.

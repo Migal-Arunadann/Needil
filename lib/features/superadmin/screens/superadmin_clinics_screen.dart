@@ -153,6 +153,13 @@ class _ClinicListCard extends StatelessWidget {
     final clinicCode = record.getStringValue('clinic_id');
     final verified = record.getBoolValue('verified');
     final isDeactivated = record.getBoolValue('is_deactivated');
+    final status = record.getStringValue('status');
+    final isPendingDeletion = status == 'pending_deletion';
+    final purgeAtStr = record.getStringValue('purge_at');
+    final purgeAt = DateTime.tryParse(purgeAtStr);
+    final daysLeft = purgeAt != null
+        ? purgeAt.difference(DateTime.now()).inDays.clamp(0, 9999)
+        : 30;
     final bedCount = record.getIntValue('bed_count');
     final created = DateTime.tryParse(record.getStringValue('created'));
 
@@ -163,12 +170,18 @@ class _ClinicListCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isDeactivated
-              ? SAColors.warning.withValues(alpha: 0.06)
-              : SAColors.card,
+          color: isPendingDeletion
+              ? const Color(0xFFEF4444).withValues(alpha: 0.06)
+              : isDeactivated
+                  ? SAColors.warning.withValues(alpha: 0.06)
+                  : SAColors.card,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isDeactivated ? SAColors.warning.withValues(alpha: 0.4) : SAColors.border,
+            color: isPendingDeletion
+                ? const Color(0xFFEF4444).withValues(alpha: 0.4)
+                : isDeactivated
+                    ? SAColors.warning.withValues(alpha: 0.4)
+                    : SAColors.border,
           ),
         ),
         child: Column(
@@ -201,19 +214,27 @@ class _ClinicListCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: isDeactivated
-                        ? SAColors.warning.withValues(alpha: 0.15)
-                        : verified
-                            ? SAColors.success.withValues(alpha: 0.15)
-                            : SAColors.warning.withValues(alpha: 0.15),
+                    color: isPendingDeletion
+                        ? const Color(0xFFEF4444).withValues(alpha: 0.15)
+                        : isDeactivated
+                            ? SAColors.warning.withValues(alpha: 0.15)
+                            : verified
+                                ? SAColors.success.withValues(alpha: 0.15)
+                                : SAColors.warning.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    isDeactivated ? '⊘ Deactivated' : (verified ? '✓ Verified' : '⚠ Pending'),
+                    isPendingDeletion
+                        ? '⏳ Deleting in ${daysLeft}d'
+                        : isDeactivated
+                            ? '⊘ Deactivated'
+                            : (verified ? '✓ Verified' : '⚠ Pending'),
                     style: context.textStyles.caption.copyWith(
-                      color: isDeactivated
-                          ? SAColors.warning
-                          : (verified ? SAColors.success : SAColors.warning),
+                      color: isPendingDeletion
+                          ? const Color(0xFFEF4444)
+                          : isDeactivated
+                              ? SAColors.warning
+                              : (verified ? SAColors.success : SAColors.warning),
                       fontWeight: FontWeight.w700,
                       fontSize: 11,
                     )),

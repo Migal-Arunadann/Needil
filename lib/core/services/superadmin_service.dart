@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
 import '../constants/pb_collections.dart';
+import 'audit_service.dart';
 
 /// All admin-level PocketBase operations for the superadmin panel.
 /// Uses raw HTTP calls with the superuser token in the Authorization header,
@@ -281,5 +282,106 @@ class SuperadminService {
   Future<void> toggleReceptionistActive(String recId, bool active) async {
     await _patch('collections/${PBCollections.receptionists}/records/$recId',
         {'is_active': active});
+  }
+
+  // ── Reactivation Requests ──────────────────────────────────────────────
+
+  /// Fetch all pending reactivation requests.
+  Future<List<RecordModel>> fetchReactivationRequests() async {
+    final body = await _get(
+        'collections/${PBCollections.clinicReactivationRequests}/records',
+        query: {
+          'filter': "status='pending'",
+          'sort': '-requested_at',
+          'perPage': '200',
+          'skipTotal': 'false',
+        });
+    return _parseItems(body);
+  }
+
+  /// Approve a reactivation request — restores the clinic to active status.
+  Future<void> approveReactivation(String requestId, String clinicId) async {
+    // Restore clinic to active
+    await _patch('collections/${PBCollections.clinics}/records/$clinicId', {
+      'status': 'active',
+      'deletion_requested_at': '',
+      'purge_at': '',
+      'deletion_requested_by': '',
+      'deletion_reason': '',
+      'reactivation_requested_at': '',
+      'reactivation_reason': '',
+    });
+    // Mark request as approved
+    await _patch(
+        'collections/${PBCollections.clinicReactivationRequests}/records/$requestId',
+        {
+          'status': 'approved',
+          'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+        });
+    // Audit log via SDK (superadmin token is set in pb.authStore)
+    try {
+      await pb.collection('audit_logs').create(body: {
+        'user_id': pb.authStore.record?.id ?? 'superadmin',
+        'user_role': 'superadmin',
+        'action': AuditAction.clinicReactivationApproved.name,
+        'target_id': clinicId,
+        'details': 'Reactivation approved. Clinic restored to active.',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (_) {}
+  }
+
+  /// Reject a reactivation request — clinic remains in pending_deletion state.
+  Future<void> rejectReactivation(String requestId, String clinicId) async {
+    await _patch(
+        'collections/${PBCollections.clinicReactivationRequests}/records/$requestId',
+        {
+          'status': 'rejected',
+          'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+        });
+    try {
+      await pb.collection('audit_logs').create(body: {
+        'user_id': pb.authStore.record?.id ?? 'superadmin',
+        'user_role': 'superadmin',
+        'action': AuditAction.clinicReactivationRejected.name,
+        'target_id': clinicId,
+        'details': 'Reactivation request rejected. Deletion countdown continues.',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (_) {}
+  }
+
+  // ── Purge Job ─────────────────────────────────────────────────────────────
+
+  /// Check for clinics past their purge_at date and permanently delete them.
+  /// Called on superadmin dashboard load as the app-side trigger.
+  /// The PocketBase cron hook (pb_hooks/purge_clinics.pb.js) is the primary trigger.
+  Future<int> runPurgeCheck() async {
+    final now = DateTime.now().toUtc().toIso8601String();
+    final body = await _get('collections/${PBCollections.clinics}/records',
+        query: {
+          'filter': "status='pending_deletion' && purge_at != '' && purge_at <= '$now'",
+          'perPage': '50',
+          'skipTotal': 'false',
+        });
+    final clinics = _parseItems(body);
+    int purged = 0;
+    for (final clinic in clinics) {
+      try {
+        await permanentlyDeleteClinic(clinic.id);
+        await pb.collection('audit_logs').create(body: {
+          'user_id': 'system',
+          'user_role': 'system',
+          'action': AuditAction.clinicPurged.name,
+          'target_id': clinic.id,
+          'details': 'Clinic automatically purged after 30-day retention period.',
+          'timestamp': DateTime.now().toUtc().toIso8601String(),
+        });
+        purged++;
+      } catch (_) {
+        // Don't let one failure block others
+      }
+    }
+    return purged;
   }
 }

@@ -9,6 +9,7 @@ import 'doctor_dashboard_screen.dart';
 import 'receptionist_dashboard_screen.dart';
 import '../../appointments/screens/appointment_list_screen.dart';
 import '../../settings/screens/settings_screen.dart';
+import '../../settings/widgets/pending_deletion_banner.dart';
 import '../../patients/screens/patient_list_screen.dart';
 import '../../analytics/screens/analytics_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
@@ -129,6 +130,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     final width = MediaQuery.of(context).size.width;
     final isDesktop = width >= 900.0;
 
+    // Desktop layout
     if (isDesktop) {
       return Scaffold(
         body: Stack(
@@ -141,12 +143,20 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   child: _buildSidebar(context, tabs),
                 ),
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 16, right: 24, top: 24, bottom: 24),
-                    child: IndexedStack(
-                      index: _currentIndex,
-                      children: pages,
-                    ),
+                  child: Column(
+                    children: [
+                      const PendingDeletionBanner(),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                              left: 16, right: 24, top: 24, bottom: 24),
+                          child: IndexedStack(
+                            index: _currentIndex,
+                            children: pages,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -156,10 +166,18 @@ class MainLayoutState extends ConsumerState<MainLayout> {
       );
     }
 
+    // Mobile layout
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: pages,
+      body: Column(
+        children: [
+          const PendingDeletionBanner(),
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: pages,
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(

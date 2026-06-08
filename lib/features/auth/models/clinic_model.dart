@@ -24,12 +24,27 @@ class ClinicModel {
   final String subscriptionTier;
   final int photosUsed;
   final int photoLimit;
-  // Soft-delete / deactivation
+  // Soft-delete / superadmin deactivation
   final bool isDeactivated;
   final DateTime? deactivatedAt;
   final DateTime? scheduledDeletionDate;
+  // Clinic self-deletion (30-day retention)
+  final String status; // 'active' | 'pending_deletion'
+  final DateTime? deletionRequestedAt;
+  final DateTime? purgeAt;
+  final String? deletionRequestedBy;
+  final String? deletionReason;
   final DateTime? created;
   final DateTime? updated;
+
+  /// True when clinic has self-requested deletion and is in 30-day grace period.
+  bool get isPendingDeletion => status == 'pending_deletion';
+
+  /// Days remaining until automatic purge (0 if already past).
+  int get daysUntilPurge {
+    if (purgeAt == null) return 30;
+    return purgeAt!.difference(DateTime.now()).inDays.clamp(0, 9999);
+  }
 
   ClinicModel({
     required this.id,
@@ -54,6 +69,11 @@ class ClinicModel {
     this.isDeactivated = false,
     this.deactivatedAt,
     this.scheduledDeletionDate,
+    this.status = 'active',
+    this.deletionRequestedAt,
+    this.purgeAt,
+    this.deletionRequestedBy,
+    this.deletionReason,
     this.created,
     this.updated,
   });
@@ -93,6 +113,13 @@ class ClinicModel {
       isDeactivated: record.getBoolValue('is_deactivated'),
       deactivatedAt: DateTime.tryParse(record.getStringValue('deactivated_at')),
       scheduledDeletionDate: DateTime.tryParse(record.getStringValue('scheduled_deletion_date')),
+      status: record.getStringValue('status').isNotEmpty
+          ? record.getStringValue('status')
+          : 'active',
+      deletionRequestedAt: DateTime.tryParse(record.getStringValue('deletion_requested_at')),
+      purgeAt: DateTime.tryParse(record.getStringValue('purge_at')),
+      deletionRequestedBy: record.getStringValue('deletion_requested_by'),
+      deletionReason: record.getStringValue('deletion_reason'),
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
     );

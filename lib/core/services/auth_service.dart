@@ -18,8 +18,18 @@ class AuthResult {
   final String? error;
   final UserRole? role;
   final dynamic user; // ClinicModel, DoctorModel, or ReceptionistModel
+  /// True when a clinic is in 'pending_deletion' state — login still succeeds.
+  final bool isPendingDeletion;
+  final DateTime? purgeAt;
 
-  AuthResult({required this.success, this.error, this.role, this.user});
+  AuthResult({
+    required this.success,
+    this.error,
+    this.role,
+    this.user,
+    this.isPendingDeletion = false,
+    this.purgeAt,
+  });
 }
 
 /// Result from an OTP request — carries the otpId needed for verification.
@@ -163,6 +173,12 @@ class AuthService {
               'Contact support to reactivate.',
         );
       }
+
+      // ── Check pending_deletion (self-requested) ────────────────────────────
+      // Allow login, but flag it so the UI can show the deletion banner.
+      final status = result.record.getStringValue('status');
+      final isPendingDeletion = status == 'pending_deletion';
+      final purgeAt = DateTime.tryParse(result.record.getStringValue('purge_at'));
       // ── End deactivation check ─────────────────────────────────────────────
 
       await _saveSession('clinic', result.token, result.record.id);
@@ -171,6 +187,8 @@ class AuthService {
         success: true,
         role: UserRole.clinic,
         user: ClinicModel.fromRecord(result.record),
+        isPendingDeletion: isPendingDeletion,
+        purgeAt: purgeAt,
       );
     } on ClientException catch (e) {
       return AuthResult(success: false, error: _parseError(e));

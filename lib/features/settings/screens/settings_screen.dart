@@ -9,6 +9,7 @@ import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/constants/pb_collections.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/clinic_deletion_service.dart';
 import 'edit_profile_screen.dart';
 import 'edit_doctor_details_screen.dart';
 import 'notifications_screen.dart';
@@ -263,7 +264,60 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         SizedBox(height: secGap),
 
-        // ── Account / Sign Out ──
+        // ── Account Management (Clinic only) ─────────────────────────────
+        if (auth.role == UserRole.clinic) ...[
+          SizedBox(height: secGap),
+          _sectionHeader('Account Management', Icons.manage_accounts_rounded),
+          SizedBox(height: itemGap),
+          // Delete clinic account tile
+          GestureDetector(
+            onTap: _showDeleteClinicDialog,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withOpacity(0.06),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.25)),
+              ),
+              child: Row(children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.delete_forever_rounded,
+                      color: Color(0xFFEF4444), size: 20),
+                ),
+                const SizedBox(width: 14),
+                Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Delete Clinic Account',
+                        style: TextStyle(
+                          color: Color(0xFFEF4444),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        )),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Begin the 30-day deletion process for this clinic account.',
+                      style: TextStyle(
+                        color: const Color(0xFFEF4444).withOpacity(0.7),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                )),
+                Icon(Icons.chevron_right_rounded,
+                    color: const Color(0xFFEF4444).withOpacity(0.5), size: 20),
+              ]),
+            ),
+          ),
+        ],
+
+        // ── Account / Sign Out ────────────────────────────────────────────────
+        SizedBox(height: secGap),
         _sectionHeader('Account', Icons.shield_rounded),
         SizedBox(height: itemGap),
         if (d)
@@ -1483,6 +1537,272 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // ════════════════════════════════════════════════════════════════════════
   //  SIGN OUT
   // ════════════════════════════════════════════════════════════════════════
+
+  // ────────────────────────────────────────────────────────────────────────
+  //  DELETE CLINIC DIALOG
+  // ────────────────────────────────────────────────────────────────────────
+
+  Future<void> _showDeleteClinicDialog() async {
+    final auth = ref.read(authProvider);
+    final clinic = auth.clinic;
+    if (clinic == null) return;
+
+    // Guard: if already pending deletion, show info instead
+    if (clinic.isPendingDeletion) {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          backgroundColor: const Color(0xFF1E1E2E),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('Already Scheduled For Deletion',
+              style: TextStyle(color: Colors.white, fontSize: 16)),
+          content: Text(
+            'Your clinic is already scheduled for deletion on '
+            '${clinic.purgeAt?.toLocal().toString().substring(0, 10) ?? 'soon'}. '
+            'Use "Request Reactivation" from the banner to cancel.',
+            style: const TextStyle(color: Colors.white70, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK', style: TextStyle(color: Colors.white70)),
+            )
+          ],
+        ),
+      );
+      return;
+    }
+
+    final passwordCtrl = TextEditingController();
+    final confirmTextCtrl = TextEditingController();
+    bool checkboxChecked = false;
+    bool isSubmitting = false;
+    String? errorMsg;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: const Color(0xFF1A0A0A),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(children: [
+            Icon(Icons.delete_forever_rounded, color: Color(0xFFEF4444),
+                size: 22),
+            SizedBox(width: 10),
+            Text('Delete Clinic Account',
+                style: TextStyle(color: Color(0xFFEF4444), fontSize: 16)),
+          ]),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Warning box ──────────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                        color: const Color(0xFFEF4444).withOpacity(0.3)),
+                  ),
+                  child: const Text(
+                    'Deleting your clinic account will disable all access to Needil '
+                    'and begin a 30-day deletion period.\n\n'
+                    'After 30 days, all patient records, consultations, sessions, '
+                    'treatment plans, staff accounts, and clinic data will be '
+                    'permanently deleted.\n\n'
+                    'This action cannot be reversed after the 30-day period ends.',
+                    style: TextStyle(
+                        color: Colors.white70, fontSize: 12, height: 1.6),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // ── Password confirmation ────────────────────────────
+                const Text('Confirm your password',
+                    style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: passwordCtrl,
+                  obscureText: true,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Current password',
+                    hintStyle: const TextStyle(color: Colors.white38),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.05),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.1)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.1)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                          color: Color(0xFFEF4444)),
+                    ),
+                    prefixIcon: const Icon(Icons.lock_outline_rounded,
+                        color: Colors.white38, size: 18),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // ── Type DELETE MY CLINIC ────────────────────────────
+                const Text('Type DELETE MY CLINIC to confirm',
+                    style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: confirmTextCtrl,
+                  style: const TextStyle(
+                      color: Colors.white, letterSpacing: 1.2),
+                  decoration: InputDecoration(
+                    hintText: 'DELETE MY CLINIC',
+                    hintStyle: const TextStyle(color: Colors.white24),
+                    filled: true,
+                    fillColor: Colors.white.withOpacity(0.05),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.1)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(
+                          color: Colors.white.withOpacity(0.1)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: const BorderSide(
+                          color: Color(0xFFEF4444)),
+                    ),
+                  ),
+                  onChanged: (_) => setDialogState(() {}),
+                ),
+                const SizedBox(height: 16),
+
+                // ── Checkbox ─────────────────────────────────────────
+                Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Checkbox(
+                    value: checkboxChecked,
+                    activeColor: const Color(0xFFEF4444),
+                    onChanged: (v) =>
+                        setDialogState(() => checkboxChecked = v ?? false),
+                  ),
+                  const Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: Text(
+                        'I understand my clinic data will be permanently deleted after 30 days.',
+                        style: TextStyle(
+                            color: Colors.white60, fontSize: 12, height: 1.4),
+                      ),
+                    ),
+                  ),
+                ]),
+
+                // ── Error message ────────────────────────────────────
+                if (errorMsg != null) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(errorMsg!,
+                        style: const TextStyle(
+                            color: Color(0xFFEF4444), fontSize: 12)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: isSubmitting ? null : () => Navigator.pop(ctx),
+              child: const Text('Cancel',
+                  style: TextStyle(color: Colors.white38)),
+            ),
+            ElevatedButton(
+              onPressed: (isSubmitting ||
+                      confirmTextCtrl.text != 'DELETE MY CLINIC' ||
+                      !checkboxChecked)
+                  ? null
+                  : () async {
+                      if (passwordCtrl.text.trim().isEmpty) {
+                        setDialogState(() =>
+                            errorMsg = 'Please enter your password.');
+                        return;
+                      }
+                      setDialogState(() {
+                        isSubmitting = true;
+                        errorMsg = null;
+                      });
+                      final pb = ref.read(pocketbaseProvider);
+                      final svc = ClinicDeletionService(pb);
+                      final err = await svc.requestDeletion(
+                        clinicId: clinic.id,
+                        username: clinic.username,
+                        password: passwordCtrl.text.trim(),
+                      );
+                      if (!mounted) return;
+                      if (err != null) {
+                        setDialogState(() {
+                          isSubmitting = false;
+                          errorMsg = err;
+                        });
+                      } else {
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                                '⚠ Clinic deletion scheduled. '
+                                'You have 30 days to request reactivation.'),
+                            backgroundColor: Color(0xFFF59E0B),
+                            behavior: SnackBarBehavior.floating,
+                            duration: Duration(seconds: 6),
+                          ),
+                        );
+                        // Refresh auth state so banner appears
+                        ref.read(authProvider.notifier).logout();
+                      }
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                foregroundColor: Colors.white,
+                disabledBackgroundColor:
+                    const Color(0xFFEF4444).withOpacity(0.3),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+              ),
+              child: isSubmitting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Text('Delete My Clinic'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Future<void> _confirmSignOut() async {
     // Desktop: use a premium glassmorphic dialog

@@ -11,4 +11,5 @@ class PBCollections {
   static const String receptionists = 'receptionists';
   static const String auditLogs = 'audit_logs';
   static const String consentRecords = 'consent_records';
+  static const String clinicReactivationRequests = 'clinic_reactivation_requests';
 }

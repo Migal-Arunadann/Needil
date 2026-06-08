@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:pocketbase/pocketbase.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/providers/pocketbase_provider.dart';
 import '../../../core/services/superadmin_service.dart';
@@ -20,13 +21,43 @@ final _recentClinicsProvider = FutureProvider.autoDispose<List<dynamic>>((ref) {
   return SuperadminService(pb).fetchRecentClinics(limit: 8);
 });
 
-class SuperadminDashboardScreen extends ConsumerWidget {
+final _reactivationRequestsProvider =
+    FutureProvider.autoDispose<List<RecordModel>>((ref) {
+  final pb = ref.read(pocketbaseProvider);
+  return SuperadminService(pb).fetchReactivationRequests();
+});
+
+class SuperadminDashboardScreen extends ConsumerStatefulWidget {
   const SuperadminDashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SuperadminDashboardScreen> createState() =>
+      _SuperadminDashboardScreenState();
+}
+
+class _SuperadminDashboardScreenState
+    extends ConsumerState<SuperadminDashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Run purge check silently on dashboard load.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        final pb = ref.read(pocketbaseProvider);
+        final purged = await SuperadminService(pb).runPurgeCheck();
+        if (purged > 0) {
+          ref.invalidate(_dashStatsProvider);
+          ref.invalidate(_recentClinicsProvider);
+        }
+      } catch (_) {}
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final statsAsync = ref.watch(_dashStatsProvider);
     final recentAsync = ref.watch(_recentClinicsProvider);
+    final reactivationAsync = ref.watch(_reactivationRequestsProvider);
     final now = DateTime.now();
 
     return Scaffold(
@@ -40,6 +71,7 @@ class SuperadminDashboardScreen extends ConsumerWidget {
             onRefresh: () async {
               ref.invalidate(_dashStatsProvider);
               ref.invalidate(_recentClinicsProvider);
+              ref.invalidate(_reactivationRequestsProvider);
             },
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
@@ -107,6 +139,47 @@ class SuperadminDashboardScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 28),
 
+                  // ── Reactivation Requests ───────────────────────────────
+                  reactivationAsync.when(
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
+                    data: (requests) => requests.isEmpty
+                        ? const SizedBox.shrink()
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: SAColors.warning.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text('${requests.length}',
+                                      style: const TextStyle(
+                                          color: SAColors.warning,
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 12)),
+                                ),
+                                const SizedBox(width: 8),
+                                Text('Reactivation Requests',
+                                    style: context.textStyles.label.copyWith(
+                                        color: SAColors.textSecondary,
+                                        fontSize: 12,
+                                        letterSpacing: 1)),
+                              ]),
+                              const SizedBox(height: 12),
+                              ...requests.map((r) => _reactivationCard(
+                                    context,
+                                    ref,
+                                    r,
+                                  )),
+                              const SizedBox(height: 24),
+                            ],
+                          ),
+                  ),
+
                   // Recent clinics
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -141,6 +214,134 @@ class SuperadminDashboardScreen extends ConsumerWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _reactivationCard(
+      BuildContext context, WidgetRef ref, RecordModel request) {
+    final clinicName = request.getStringValue('clinic_name');
+    final clinicId = request.getStringValue('clinic_id');
+    final reason = request.getStringValue('reason');
+    final requestedAt = request.getStringValue('requested_at');
+    final dateStr = requestedAt.isNotEmpty
+        ? requestedAt.substring(0, 10)
+        : '—';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: SAColors.warning.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: SAColors.warning.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.restore_rounded,
+                color: SAColors.warning, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                clinicName.isNotEmpty ? clinicName : clinicId,
+                style: context.textStyles.label.copyWith(
+                    color: SAColors.textPrimary, fontSize: 14),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text(dateStr,
+                style: context.textStyles.caption
+                    .copyWith(color: SAColors.textHint, fontSize: 11)),
+          ]),
+          if (reason.isNotEmpty) ...
+            [
+              const SizedBox(height: 6),
+              Text('Reason: $reason',
+                  style: context.textStyles.caption
+                      .copyWith(color: SAColors.textSecondary, fontSize: 12),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis),
+            ],
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () async {
+                  try {
+                    final pb = ref.read(pocketbaseProvider);
+                    await SuperadminService(pb).rejectReactivation(
+                        request.id, clinicId);
+                    ref.invalidate(_reactivationRequestsProvider);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Request rejected'),
+                          backgroundColor: Color(0xFFEF4444),
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error: $e')),
+                      );
+                    }
+                  }
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: SAColors.error,
+                  side: const BorderSide(color: SAColors.error, width: 0.8),
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Reject', style: TextStyle(fontSize: 12)),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () async {
+                  try {
+                    final pb = ref.read(pocketbaseProvider);
+                    await SuperadminService(pb).approveReactivation(
+                        request.id, clinicId);
+                    ref.invalidate(_reactivationRequestsProvider);
+                    ref.invalidate(_recentClinicsProvider);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('✓ Clinic reactivated successfully'),
+                          backgroundColor: SAColors.success,
+                          behavior: SnackBarBehavior.floating,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error: $e')),
+                      );
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: SAColors.success,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: const Text('Approve',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+              ),
+            ),
+          ]),
+        ],
       ),
     );
   }
