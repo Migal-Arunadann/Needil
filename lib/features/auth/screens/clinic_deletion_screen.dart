@@ -1,4 +1,4 @@
-import 'dart:io' show Directory, File;
+import 'dart:io' show Directory, File, FileSystemEntity, Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
@@ -9,6 +9,7 @@ import 'package:pms_app/core/providers/pocketbase_provider.dart';
 import 'package:pms_app/core/services/clinic_deletion_service.dart';
 import 'package:pms_app/core/services/data_export_service.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Full-page lockout shown when a clinic is in `status = pending_deletion`.
@@ -31,6 +32,10 @@ class _ClinicDeletionScreenState extends ConsumerState<ClinicDeletionScreen>
   String? _exportPath;
   bool _isRequesting = false;
   String? _reactivationStatus;
+
+  bool get _isMobile => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+  bool get _isDesktop =>
+      !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
 
   @override
   void initState() {
@@ -102,6 +107,35 @@ class _ClinicDeletionScreenState extends ConsumerState<ClinicDeletionScreen>
     if (_exportPath == null) return;
     await Clipboard.setData(ClipboardData(text: _exportPath!));
     _snack('Folder path copied to clipboard');
+  }
+
+  Future<void> _shareExportedFiles() async {
+    if (_exportPath == null) return;
+    try {
+      final dir = Directory(_exportPath!);
+      if (!await dir.exists()) {
+        _snack('Export directory does not exist.', error: true);
+        return;
+      }
+      final List<FileSystemEntity> entities = await dir.list().toList();
+      final List<XFile> xFiles = [];
+      for (final entity in entities) {
+        if (entity is File && entity.path.endsWith('.csv')) {
+          xFiles.add(XFile(entity.path));
+        }
+      }
+      if (xFiles.isEmpty) {
+        _snack('No CSV files found to share.', error: true);
+        return;
+      }
+      final params = ShareParams(
+        text: 'Needil Clinic Data Export',
+        files: xFiles,
+      );
+      await SharePlus.instance.share(params);
+    } catch (e) {
+      _snack('Failed to share files: $e', error: true);
+    }
   }
 
   Future<void> _downloadData() async {
@@ -363,21 +397,32 @@ class _ClinicDeletionScreenState extends ConsumerState<ClinicDeletionScreen>
                         const SizedBox(height: 8),
                         Row(
                           children: [
-                            Expanded(
-                              child: _outlineButton(
-                                icon: Icons.folder_open_rounded,
-                                label: 'Open Folder',
-                                onTap: _openExportFolder,
+                            if (_isDesktop)
+                              Expanded(
+                                child: _outlineButton(
+                                  icon: Icons.folder_open_rounded,
+                                  label: 'Open Folder',
+                                  onTap: _openExportFolder,
+                                ),
+                              )
+                            else if (_isMobile)
+                              Expanded(
+                                child: _outlineButton(
+                                  icon: Icons.share_rounded,
+                                  label: 'Share Files',
+                                  onTap: _shareExportedFiles,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: _outlineButton(
-                                icon: Icons.copy_all_rounded,
-                                label: 'Copy Path',
-                                onTap: _copyExportPath,
+                            if (_isDesktop || _isMobile) ...[
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _outlineButton(
+                                  icon: Icons.copy_all_rounded,
+                                  label: 'Copy Path',
+                                  onTap: _copyExportPath,
+                                ),
                               ),
-                            ),
+                            ],
                           ],
                         ),
                       ],
