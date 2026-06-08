@@ -5,11 +5,11 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:async';
 import 'package:pocketbase/pocketbase.dart';
-import '../utils/image_helper.dart';
-import '../constants/pb_collections.dart';
-import '../../features/auth/models/clinic_model.dart';
-import '../../features/auth/models/doctor_model.dart';
-import '../../features/auth/models/receptionist_model.dart';
+import 'package:pms_app/core/utils/image_helper.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
+import 'package:pms_app/features/auth/models/clinic_model.dart';
+import 'package:pms_app/features/auth/models/doctor_model.dart';
+import 'package:pms_app/features/auth/models/receptionist_model.dart';
 
 enum UserRole { clinic, doctor, receptionist, superadmin }
 
@@ -92,7 +92,9 @@ class AuthService {
               (body['record'] as Map<String, dynamic>?)?['id'] as String? ??
               userId;
           await _saveSession('superadmin', newToken, recordId);
-          pb.authStore.save(newToken, null);
+          final recordMap = body['record'] as Map<String, dynamic>?;
+          final recordModel = recordMap != null ? RecordModel(recordMap) : null;
+          pb.authStore.save(newToken, recordModel);
           return AuthResult(success: true, role: UserRole.superadmin);
         }
         // Token expired — clear storage
@@ -786,7 +788,9 @@ class AuthService {
       }
       // Persist session and inject token into pb.authStore for SuperadminService calls
       await _saveSession('superadmin', token, recordId);
-      pb.authStore.save(token, null);
+      final recordMap = body['record'] as Map<String, dynamic>?;
+      final recordModel = recordMap != null ? RecordModel(recordMap) : null;
+      pb.authStore.save(token, recordModel);
       return AuthResult(success: true, role: UserRole.superadmin);
     } catch (e) {
       return AuthResult(

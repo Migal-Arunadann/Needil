@@ -2,10 +2,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../widgets/app_text_field.dart';
-import '../widgets/location_fields.dart';
-import '../utils/validators.dart';
-import '../utils/image_helper.dart';
+import 'package:pms_app/core/widgets/app_text_field.dart';
+import 'package:pms_app/core/widgets/location_fields.dart';
+import 'package:pms_app/core/utils/validators.dart';
+import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
 

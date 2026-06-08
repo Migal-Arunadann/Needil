@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../auth/providers/auth_provider.dart';
-import '../../../core/services/clinic_deletion_service.dart';
-import '../../../core/providers/pocketbase_provider.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/core/services/clinic_deletion_service.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 /// Full-width warning banner shown at the top of the clinic dashboard
 /// when the clinic has requested deletion (status = 'pending_deletion').

@@ -1,8 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/providers/pocketbase_provider.dart';
-import '../../../core/services/treatment_service.dart';
-import '../models/treatment_plan_model.dart';
-import '../models/session_model.dart';
+import 'package:pms_app/core/services/treatment_service.dart';
+import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
+import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 /// Provides the [TreatmentService] singleton.

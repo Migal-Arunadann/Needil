@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/providers/pocketbase_provider.dart';
-import '../../../core/services/scheduling_service.dart';
-import '../../auth/models/doctor_model.dart';
+import 'package:pms_app/core/services/scheduling_service.dart';
+import 'package:pms_app/features/auth/models/doctor_model.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 /// Provides the [SchedulingService] singleton.

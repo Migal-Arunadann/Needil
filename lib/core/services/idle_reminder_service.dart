@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../app.dart';
-import '../constants/app_text_styles.dart';
+import 'package:pms_app/app.dart';
+import 'package:pms_app/core/constants/app_text_styles.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
-import 'session_timer_service.dart';
+import 'package:pms_app/core/services/session_timer_service.dart';
 
 /// Singleton service that tracks idle time for consultations and sessions.
 /// After 15 minutes of no interaction, fires an in-app dialog + notification.

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'app_colors_extension.dart';
-import 'app_text_styles_extension.dart';
+import 'package:pms_app/core/theme/app_colors_extension.dart';
+import 'package:pms_app/core/theme/app_text_styles_extension.dart';
 
 extension ThemeContextExtension on BuildContext {
   AppColorsExtension get colors => Theme.of(this).extension<AppColorsExtension>()!;

@@ -5,8 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/theme/app_colors_extension.dart';
 import 'package:pms_app/core/theme/app_text_styles_extension.dart';
-import '../providers/dashboard_provider.dart';
-import '../../appointments/models/appointment_model.dart';
+import 'package:pms_app/features/dashboard/providers/dashboard_provider.dart';
+import 'package:pms_app/features/appointments/models/appointment_model.dart';
 
 // Helper to format time (e.g., "10:00" -> "10:00 AM")
 String formatTimeString(String timeStr) {

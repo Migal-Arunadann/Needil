@@ -1,10 +1,10 @@
 import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
-import '../constants/pb_collections.dart';
-import '../utils/time_utils.dart';
-import '../../features/appointments/models/appointment_model.dart';
-import '../../features/patients/models/patient_model.dart';
-import '../../features/consultations/models/consultation_model.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
+import 'package:pms_app/core/utils/time_utils.dart';
+import 'package:pms_app/features/appointments/models/appointment_model.dart';
+import 'package:pms_app/features/patients/models/patient_model.dart';
+import 'package:pms_app/features/consultations/models/consultation_model.dart';
 
 class AppointmentService {
   final PocketBase pb;

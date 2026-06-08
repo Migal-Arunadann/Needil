@@ -1,5 +1,5 @@
-import '../../features/auth/models/doctor_model.dart';
-import '../constants/pb_collections.dart';
+import 'package:pms_app/features/auth/models/doctor_model.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
 import 'package:pocketbase/pocketbase.dart';
 
 /// Time slot representing a bookable appointment window.

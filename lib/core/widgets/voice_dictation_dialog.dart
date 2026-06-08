@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:pms_app/core/theme/app_theme.dart';
-import '../services/ollama_service.dart';
+import 'package:pms_app/core/services/ollama_service.dart';
 
 /// A voice dictation overlay dialog with optional AI cleanup via Ollama.
 ///

@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:pocketbase/pocketbase.dart';
-import '../../../core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 class WorkingSchedule {
   final String day;

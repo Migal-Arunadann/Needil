@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../models/session_model.dart';
-import '../models/treatment_plan_model.dart';
-import '../providers/treatment_provider.dart';
+import 'package:pms_app/features/treatments/models/session_model.dart';
+import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
+import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
 

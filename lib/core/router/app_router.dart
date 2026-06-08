@@ -1,37 +1,38 @@
 import 'package:flutter/material.dart';
-import '../../features/auth/screens/login_screen.dart';
-import '../../features/auth/screens/clinic_registration/clinic_step0_otp_screen.dart';
-import '../../features/auth/screens/clinic_registration/clinic_step1_screen.dart';
-import '../../features/auth/screens/clinic_registration/clinic_step2_screen.dart';
-import '../../features/auth/screens/clinic_registration/clinic_step3_screen.dart';
-import '../../features/auth/screens/clinic_registration/clinic_step4_screen.dart';
-import '../../features/auth/screens/clinic_registration/clinic_step5_screen.dart';
-import '../../features/auth/screens/otp_verification_screen.dart';
-import '../../features/auth/screens/forgot_password_screen.dart';
-import '../../features/auth/screens/reset_password_screen.dart';
-import '../../features/dashboard/screens/main_layout.dart';
-import '../../features/appointments/screens/appointment_list_screen.dart';
-import '../../features/appointments/screens/create_appointment_screen.dart';
-import '../../features/appointments/screens/patient_info_screen.dart';
-import '../../features/appointments/models/appointment_model.dart';
-import '../../features/consultations/screens/consultation_screen.dart';
-import '../../features/treatments/screens/create_treatment_plan_screen.dart';
-import '../../features/treatments/screens/session_list_screen.dart';
-import '../../features/treatments/screens/record_session_screen.dart';
-import '../../features/treatments/models/treatment_plan_model.dart';
-import '../../features/treatments/models/session_model.dart';
-import '../../features/scheduling/screens/available_slots_screen.dart';
-import '../../features/settings/screens/settings_screen.dart';
-import '../../features/settings/screens/consent_screen.dart';
-import '../../features/patients/screens/patient_profile_screen.dart';
-import '../../features/patients/models/patient_model.dart';
-import '../../features/superadmin/screens/superadmin_login_screen.dart';
-import '../../features/superadmin/screens/superadmin_clinic_detail_screen.dart';
+import 'package:pms_app/features/auth/screens/login_screen.dart';
+import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step0_otp_screen.dart';
+import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step1_screen.dart';
+import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step2_screen.dart';
+import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step3_screen.dart';
+import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step4_screen.dart';
+import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step5_screen.dart';
+import 'package:pms_app/features/auth/screens/otp_verification_screen.dart';
+import 'package:pms_app/features/auth/screens/forgot_password_screen.dart';
+import 'package:pms_app/features/auth/screens/reset_password_screen.dart';
+import 'package:pms_app/features/dashboard/screens/main_layout.dart';
+import 'package:pms_app/features/appointments/screens/appointment_list_screen.dart';
+import 'package:pms_app/features/appointments/screens/create_appointment_screen.dart';
+import 'package:pms_app/features/appointments/screens/patient_info_screen.dart';
+import 'package:pms_app/features/appointments/models/appointment_model.dart';
+import 'package:pms_app/features/consultations/screens/consultation_screen.dart';
+import 'package:pms_app/features/treatments/screens/create_treatment_plan_screen.dart';
+import 'package:pms_app/features/treatments/screens/session_list_screen.dart';
+import 'package:pms_app/features/treatments/screens/record_session_screen.dart';
+import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
+import 'package:pms_app/features/treatments/models/session_model.dart';
+import 'package:pms_app/features/scheduling/screens/available_slots_screen.dart';
+import 'package:pms_app/features/settings/screens/settings_screen.dart';
+import 'package:pms_app/features/settings/screens/consent_screen.dart';
+import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
+import 'package:pms_app/features/patients/models/patient_model.dart';
+import 'package:pms_app/features/superadmin/screens/superadmin_login_screen.dart';
+import 'package:pms_app/features/superadmin/screens/superadmin_clinic_detail_screen.dart';
 
 /// Named route generator for the app.
 Route<dynamic>? generateRoute(RouteSettings settings) {
   switch (settings.name) {
     case '/':
+      return null;
     case '/login':
       return _fade(const LoginScreen(), settings);
 

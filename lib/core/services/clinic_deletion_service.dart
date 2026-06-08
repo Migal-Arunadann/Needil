@@ -1,6 +1,6 @@
 import 'package:pocketbase/pocketbase.dart';
-import '../constants/pb_collections.dart';
-import 'audit_service.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
+import 'package:pms_app/core/services/audit_service.dart';
 
 /// Handles clinic self-initiated deletion and reactivation request flows.
 class ClinicDeletionService {

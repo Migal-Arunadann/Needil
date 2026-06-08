@@ -1,140 +1,83 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
-import '../constants/pb_collections.dart';
-import 'audit_service.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
+import 'package:pms_app/core/services/audit_service.dart';
 
 /// All admin-level PocketBase operations for the superadmin panel.
-/// Uses raw HTTP calls with the superuser token in the Authorization header,
-/// guaranteeing they bypass collection API rules regardless of SDK behaviour.
+/// Uses the official PocketBase SDK, automatically handling token injection
+/// and standardizing query construction/request execution.
 class SuperadminService {
   final PocketBase pb;
-  late final http.Client _client;
 
-  SuperadminService(this.pb) : _client = http.Client();
-
-  /// Derived from the PocketBase instance — always uses the correct base URL.
-  String get _base => pb.baseURL;
-
-  /// Authorization header value from the stored superadmin token.
-  Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        'Authorization': pb.authStore.token,
-      };
-
-  // ── Generic helpers ────────────────────────────────────────────
-
-  Future<Map<String, dynamic>> _get(String path,
-      {Map<String, String>? query}) async {
-    final uri = Uri.parse('$_base/api/$path').replace(
-        queryParameters: query ?? {});
-    final res = await _client.get(uri, headers: _headers);
-    if (res.statusCode != 200) {
-      throw 'GET $path failed (${res.statusCode}): ${res.body}';
-    }
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
-
-  Future<Map<String, dynamic>> _patch(String path,
-      Map<String, dynamic> body) async {
-    final uri = Uri.parse('$_base/api/$path');
-    final res = await _client.patch(uri,
-        headers: _headers, body: jsonEncode(body));
-    if (res.statusCode != 200) {
-      throw 'PATCH $path failed (${res.statusCode}): ${res.body}';
-    }
-    return jsonDecode(res.body) as Map<String, dynamic>;
-  }
-
-  Future<void> _delete(String path) async {
-    final uri = Uri.parse('$_base/api/$path');
-    final res = await _client.delete(uri, headers: _headers);
-    if (res.statusCode != 204 && res.statusCode != 200) {
-      throw 'DELETE $path failed (${res.statusCode}): ${res.body}';
-    }
-  }
-
-  /// Parse a PocketBase list response and return items as RecordModels.
-  List<RecordModel> _parseItems(Map<String, dynamic> body) {
-    final items = (body['items'] as List<dynamic>? ?? []);
-    return items
-        .map((e) => RecordModel.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
+  SuperadminService(this.pb);
 
   // ── Platform Stats ─────────────────────────────────────────────
 
   Future<Map<String, dynamic>> fetchPlatformStats() async {
     final results = await Future.wait([
-      _get('collections/${PBCollections.clinics}/records',
-          query: {'page': '1', 'perPage': '1', 'skipTotal': 'false'}),
-      _get('collections/${PBCollections.doctors}/records',
-          query: {'page': '1', 'perPage': '1', 'skipTotal': 'false'}),
-      _get('collections/${PBCollections.receptionists}/records',
-          query: {'page': '1', 'perPage': '1', 'skipTotal': 'false'}),
+      pb.collection(PBCollections.clinics).getList(page: 1, perPage: 1),
+      pb.collection(PBCollections.doctors).getList(page: 1, perPage: 1),
+      pb.collection(PBCollections.receptionists).getList(page: 1, perPage: 1),
     ]);
     return {
-      'total_clinics': results[0]['totalItems'] ?? 0,
-      'total_doctors': results[1]['totalItems'] ?? 0,
-      'total_receptionists': results[2]['totalItems'] ?? 0,
+      'total_clinics': results[0].totalItems,
+      'total_doctors': results[1].totalItems,
+      'total_receptionists': results[2].totalItems,
     };
   }
 
   Future<List<RecordModel>> fetchRecentClinics({int limit = 10}) async {
-    final body = await _get('collections/${PBCollections.clinics}/records',
-        query: {
-          'page': '1',
-          'perPage': '$limit',
-          'sort': '-created',
-          'skipTotal': 'false',
-        });
-    return _parseItems(body);
+    final list = await pb.collection(PBCollections.clinics).getList(
+          page: 1,
+          perPage: limit,
+          sort: '-id',
+        );
+    return list.items;
   }
 
   // ── Clinic Management ─────────────────────────────────────────
 
   Future<List<RecordModel>> fetchAllClinics({String? search}) async {
-    final query = <String, String>{
-      'page': '1',
-      'perPage': '500',
-      'sort': '-created',
-      'skipTotal': 'false',
-    };
+    String? filter;
     if (search != null && search.trim().isNotEmpty) {
       final q = search.trim();
-      query['filter'] = "(name ~ '$q' || city ~ '$q' || clinic_id ~ '$q')";
+      filter = "name ~ '$q' || city ~ '$q' || clinic_id ~ '$q'";
     }
-    final body = await _get(
-        'collections/${PBCollections.clinics}/records',
-        query: query);
-    return _parseItems(body);
+    final list = await pb.collection(PBCollections.clinics).getList(
+          page: 1,
+          perPage: 500,
+          sort: '-id',
+          filter: filter,
+        );
+    return list.items;
   }
 
   /// Returns the clinic record, plus its list of doctors and receptionists.
   Future<Map<String, dynamic>> getClinicWithStaff(String clinicId) async {
     final results = await Future.wait([
-      _get('collections/${PBCollections.clinics}/records/$clinicId'),
-      _get('collections/${PBCollections.doctors}/records',
-          query: {'filter': "clinic='$clinicId'", 'sort': 'name', 'skipTotal': 'false'}),
-      _get('collections/${PBCollections.receptionists}/records',
-          query: {'filter': "clinic='$clinicId'", 'sort': 'name', 'skipTotal': 'false'}),
+      pb.collection(PBCollections.clinics).getOne(clinicId),
+      pb.collection(PBCollections.doctors).getList(
+            filter: "clinic='$clinicId'",
+            sort: 'name',
+          ),
+      pb.collection(PBCollections.receptionists).getList(
+            filter: "clinic='$clinicId'",
+            sort: 'name',
+          ),
     ]);
 
     return {
-      'clinic': RecordModel.fromJson(results[0]),
-      'doctors': _parseItems(results[1]),
-      'receptionists': _parseItems(results[2]),
+      'clinic': results[0] as RecordModel,
+      'doctors': (results[1] as ResultList<RecordModel>).items,
+      'receptionists': (results[2] as ResultList<RecordModel>).items,
     };
   }
 
   Future<void> updateClinic(String clinicId, Map<String, dynamic> body) async {
-    await _patch(
-        'collections/${PBCollections.clinics}/records/$clinicId', body);
+    await pb.collection(PBCollections.clinics).update(clinicId, body: body);
   }
 
   Future<void> toggleClinicVerified(String clinicId, bool verified) async {
-    await _patch('collections/${PBCollections.clinics}/records/$clinicId',
-        {'verified': verified});
+    await pb.collection(PBCollections.clinics).update(clinicId, body: {'verified': verified});
   }
 
   /// Soft-deactivates a clinic — blocks all logins and sets a 30-day deletion window.
@@ -142,7 +85,7 @@ class SuperadminService {
   Future<void> deactivateClinic(String clinicId) async {
     final now = DateTime.now().toUtc();
     final deletionDate = now.add(const Duration(days: 30));
-    await _patch('collections/${PBCollections.clinics}/records/$clinicId', {
+    await pb.collection(PBCollections.clinics).update(clinicId, body: {
       'is_deactivated': true,
       'deactivated_at': now.toIso8601String(),
       'scheduled_deletion_date': deletionDate.toIso8601String(),
@@ -151,158 +94,139 @@ class SuperadminService {
 
   /// Reactivates a previously deactivated clinic, restoring full login access.
   Future<void> reactivateClinic(String clinicId) async {
-    await _patch('collections/${PBCollections.clinics}/records/$clinicId', {
+    await pb.collection(PBCollections.clinics).update(clinicId, body: {
       'is_deactivated': false,
       'deactivated_at': '',
       'scheduled_deletion_date': '',
     });
   }
 
-  /// Helper: fetch ALL records for a collection with a given filter, handling pagination.
-  Future<List<RecordModel>> _fetchAll(String collection, String filter) async {
-    const perPage = 200;
-    int page = 1;
-    final results = <RecordModel>[];
-    while (true) {
-      final body = await _get('collections/$collection/records', query: {
-        'filter': filter,
-        'page': '$page',
-        'perPage': '$perPage',
-        'skipTotal': 'false',
-      });
-      final items = _parseItems(body);
-      results.addAll(items);
-      final totalItems = (body['totalItems'] as num?)?.toInt() ?? 0;
-      if (results.length >= totalItems || items.isEmpty) break;
-      page++;
-    }
-    return results;
-  }
-
   /// Permanently deletes a clinic and cascades through ALL 10 collections.
-  /// Fixes the previous gap where 7 collection types were left orphaned.
   Future<void> permanentlyDeleteClinic(String clinicId) async {
     // 1. Fetch all doctor IDs (needed for sessions/consultations filter)
-    final doctors = await _fetchAll(PBCollections.doctors, "clinic='$clinicId'");
+    final doctors = await pb.collection(PBCollections.doctors).getFullList(filter: "clinic='$clinicId'");
     final doctorIds = doctors.map((d) => d.id).toList();
 
     // 2. Delete sessions (filter by doctor or clinic)
     for (final docId in doctorIds) {
-      final sessions = await _fetchAll(PBCollections.sessions, "doctor='$docId'");
+      final sessions = await pb.collection(PBCollections.sessions).getFullList(filter: "doctor='$docId'");
       for (final s in sessions) {
-        await _delete('collections/${PBCollections.sessions}/records/${s.id}');
+        await pb.collection(PBCollections.sessions).delete(s.id);
       }
     }
 
     // 3. Delete treatment_plans
-    final plans = await _fetchAll(PBCollections.treatmentPlans, "clinic='$clinicId'");
+    final plans = await pb.collection(PBCollections.treatmentPlans).getFullList(filter: "clinic='$clinicId'");
     for (final p in plans) {
-      await _delete('collections/${PBCollections.treatmentPlans}/records/${p.id}');
+      await pb.collection(PBCollections.treatmentPlans).delete(p.id);
     }
 
     // 4. Delete consultations
-    final consultations = await _fetchAll(PBCollections.consultations, "clinic='$clinicId'");
+    final consultations = await pb.collection(PBCollections.consultations).getFullList(filter: "clinic='$clinicId'");
     for (final c in consultations) {
-      await _delete('collections/${PBCollections.consultations}/records/${c.id}');
+      await pb.collection(PBCollections.consultations).delete(c.id);
     }
 
     // 5. Delete appointments
-    final appointments = await _fetchAll(PBCollections.appointments, "clinic='$clinicId'");
+    final appointments = await pb.collection(PBCollections.appointments).getFullList(filter: "clinic='$clinicId'");
     for (final a in appointments) {
-      await _delete('collections/${PBCollections.appointments}/records/${a.id}');
+      await pb.collection(PBCollections.appointments).delete(a.id);
     }
 
     // 6. Delete patients
-    final patients = await _fetchAll(PBCollections.patients, "clinic='$clinicId'");
+    final patients = await pb.collection(PBCollections.patients).getFullList(filter: "clinic='$clinicId'");
     for (final p in patients) {
-      await _delete('collections/${PBCollections.patients}/records/${p.id}');
+      await pb.collection(PBCollections.patients).delete(p.id);
     }
 
     // 7. Delete consent_records
-    final consentRecords = await _fetchAll(PBCollections.consentRecords, "clinic_id='$clinicId'");
+    final consentRecords = await pb.collection(PBCollections.consentRecords).getFullList(filter: "clinic_id='$clinicId'");
     for (final cr in consentRecords) {
-      await _delete('collections/${PBCollections.consentRecords}/records/${cr.id}');
+      await pb.collection(PBCollections.consentRecords).delete(cr.id);
     }
 
     // 8. Delete audit_logs
-    final auditLogs = await _fetchAll(PBCollections.auditLogs, "clinic='$clinicId'");
+    final auditLogs = await pb.collection(PBCollections.auditLogs).getFullList(filter: "clinic='$clinicId'");
     for (final al in auditLogs) {
-      await _delete('collections/${PBCollections.auditLogs}/records/${al.id}');
+      await pb.collection(PBCollections.auditLogs).delete(al.id);
     }
 
     // 9. Delete doctors
     for (final d in doctors) {
-      await _delete('collections/${PBCollections.doctors}/records/${d.id}');
+      await pb.collection(PBCollections.doctors).delete(d.id);
     }
 
     // 10. Delete receptionists
-    final recs = await _fetchAll(PBCollections.receptionists, "clinic='$clinicId'");
+    final recs = await pb.collection(PBCollections.receptionists).getFullList(filter: "clinic='$clinicId'");
     for (final r in recs) {
-      await _delete('collections/${PBCollections.receptionists}/records/${r.id}');
+      await pb.collection(PBCollections.receptionists).delete(r.id);
     }
 
     // 11. Finally delete the clinic itself
-    await _delete('collections/${PBCollections.clinics}/records/$clinicId');
+    await pb.collection(PBCollections.clinics).delete(clinicId);
   }
 
-
   Future<void> resetClinicPassword(String clinicId, String newPassword) async {
-    await _patch('collections/${PBCollections.clinics}/records/$clinicId',
-        {'password': newPassword, 'passwordConfirm': newPassword});
+    await pb.collection(PBCollections.clinics).update(clinicId, body: {
+      'password': newPassword,
+      'passwordConfirm': newPassword,
+    });
   }
 
   // ── Doctor Management ─────────────────────────────────────────
 
   Future<void> resetDoctorPassword(String doctorId, String newPassword) async {
-    await _patch('collections/${PBCollections.doctors}/records/$doctorId',
-        {'password': newPassword, 'passwordConfirm': newPassword});
+    await pb.collection(PBCollections.doctors).update(doctorId, body: {
+      'password': newPassword,
+      'passwordConfirm': newPassword,
+    });
   }
 
   Future<void> deleteDoctor(String doctorId) async {
-    await _delete('collections/${PBCollections.doctors}/records/$doctorId');
+    await pb.collection(PBCollections.doctors).delete(doctorId);
   }
 
   Future<void> toggleDoctorActive(String doctorId, bool active) async {
-    await _patch('collections/${PBCollections.doctors}/records/$doctorId',
-        {'is_active': active});
+    await pb.collection(PBCollections.doctors).update(doctorId, body: {
+      'is_active': active,
+    });
   }
 
   // ── Receptionist Management ───────────────────────────────────
 
   Future<void> resetReceptionistPassword(String recId, String newPassword) async {
-    await _patch('collections/${PBCollections.receptionists}/records/$recId',
-        {'password': newPassword, 'passwordConfirm': newPassword});
+    await pb.collection(PBCollections.receptionists).update(recId, body: {
+      'password': newPassword,
+      'passwordConfirm': newPassword,
+    });
   }
 
   Future<void> deleteReceptionist(String recId) async {
-    await _delete(
-        'collections/${PBCollections.receptionists}/records/$recId');
+    await pb.collection(PBCollections.receptionists).delete(recId);
   }
 
   Future<void> toggleReceptionistActive(String recId, bool active) async {
-    await _patch('collections/${PBCollections.receptionists}/records/$recId',
-        {'is_active': active});
+    await pb.collection(PBCollections.receptionists).update(recId, body: {
+      'is_active': active,
+    });
   }
 
   // ── Reactivation Requests ──────────────────────────────────────────────
 
   /// Fetch all pending reactivation requests.
   Future<List<RecordModel>> fetchReactivationRequests() async {
-    final body = await _get(
-        'collections/${PBCollections.clinicReactivationRequests}/records',
-        query: {
-          'filter': "status='pending'",
-          'sort': '-requested_at',
-          'perPage': '200',
-          'skipTotal': 'false',
-        });
-    return _parseItems(body);
+    final list = await pb.collection(PBCollections.clinicReactivationRequests).getList(
+          filter: "status='pending'",
+          sort: '-requested_at',
+          perPage: 200,
+        );
+    return list.items;
   }
 
   /// Approve a reactivation request — restores the clinic to active status.
   Future<void> approveReactivation(String requestId, String clinicId) async {
     // Restore clinic to active
-    await _patch('collections/${PBCollections.clinics}/records/$clinicId', {
+    await pb.collection(PBCollections.clinics).update(clinicId, body: {
       'status': 'active',
       'deletion_requested_at': '',
       'purge_at': '',
@@ -312,12 +236,10 @@ class SuperadminService {
       'reactivation_reason': '',
     });
     // Mark request as approved
-    await _patch(
-        'collections/${PBCollections.clinicReactivationRequests}/records/$requestId',
-        {
-          'status': 'approved',
-          'reviewed_at': DateTime.now().toUtc().toIso8601String(),
-        });
+    await pb.collection(PBCollections.clinicReactivationRequests).update(requestId, body: {
+      'status': 'approved',
+      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+    });
     // Audit log via SDK (superadmin token is set in pb.authStore)
     try {
       await pb.collection('audit_logs').create(body: {
@@ -333,12 +255,10 @@ class SuperadminService {
 
   /// Reject a reactivation request — clinic remains in pending_deletion state.
   Future<void> rejectReactivation(String requestId, String clinicId) async {
-    await _patch(
-        'collections/${PBCollections.clinicReactivationRequests}/records/$requestId',
-        {
-          'status': 'rejected',
-          'reviewed_at': DateTime.now().toUtc().toIso8601String(),
-        });
+    await pb.collection(PBCollections.clinicReactivationRequests).update(requestId, body: {
+      'status': 'rejected',
+      'reviewed_at': DateTime.now().toUtc().toIso8601String(),
+    });
     try {
       await pb.collection('audit_logs').create(body: {
         'user_id': pb.authStore.record?.id ?? 'superadmin',
@@ -354,17 +274,11 @@ class SuperadminService {
   // ── Purge Job ─────────────────────────────────────────────────────────────
 
   /// Check for clinics past their purge_at date and permanently delete them.
-  /// Called on superadmin dashboard load as the app-side trigger.
-  /// The PocketBase cron hook (pb_hooks/purge_clinics.pb.js) is the primary trigger.
   Future<int> runPurgeCheck() async {
     final now = DateTime.now().toUtc().toIso8601String();
-    final body = await _get('collections/${PBCollections.clinics}/records',
-        query: {
-          'filter': "status='pending_deletion' && purge_at != '' && purge_at <= '$now'",
-          'perPage': '50',
-          'skipTotal': 'false',
-        });
-    final clinics = _parseItems(body);
+    final clinics = await pb.collection(PBCollections.clinics).getFullList(
+          filter: "status='pending_deletion' && purge_at != '' && purge_at <= '$now'",
+        );
     int purged = 0;
     for (final clinic in clinics) {
       try {

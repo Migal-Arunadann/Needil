@@ -3,8 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz;
-import 'app.dart';
-import 'core/services/session_timer_service.dart';
+import 'package:pms_app/app.dart';
+import 'package:pms_app/core/services/session_timer_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();

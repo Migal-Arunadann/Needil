@@ -5,17 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
-import '../../../core/widgets/app_button.dart';
-import '../../../core/widgets/app_text_field.dart';
-import '../../../core/widgets/location_fields.dart';
-import '../../../core/providers/pocketbase_provider.dart';
-import '../../../core/constants/pb_collections.dart';
-import '../../auth/providers/auth_provider.dart';
-import '../../../core/services/auth_service.dart';
+import 'package:pms_app/core/constants/app_colors.dart';
+import 'package:pms_app/core/constants/app_text_styles.dart';
+import 'package:pms_app/core/widgets/app_button.dart';
+import 'package:pms_app/core/widgets/app_text_field.dart';
+import 'package:pms_app/core/widgets/location_fields.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/core/services/auth_service.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
-import '../../../core/utils/image_helper.dart';
+import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 

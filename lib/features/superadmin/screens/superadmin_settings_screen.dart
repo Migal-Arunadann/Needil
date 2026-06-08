@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/constants/app_text_styles.dart';
-import '../../../core/providers/pocketbase_provider.dart';
-import '../../auth/providers/auth_provider.dart';
-import 'superadmin_shell.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
 
@@ -19,92 +18,97 @@ class SuperadminSettingsScreen extends ConsumerWidget {
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Row(children: [
-                  Container(
-                    width: 56, height: 56,
-                    decoration: BoxDecoration(gradient: SAColors.accentGradient, borderRadius: BorderRadius.circular(16),
-                      boxShadow: [BoxShadow(color: SAColors.accent.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))]),
-                    child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 28),
-                  ),
-                  const SizedBox(width: 14),
-                  Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text('Superadmin', style: context.textStyles.h4.copyWith(color: SAColors.textPrimary)),
-                    Text('Developer Account', style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
-                  ]),
-                ]),
-                const SizedBox(height: 32),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 800),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Row(children: [
+                      Container(
+                        width: 56, height: 56,
+                        decoration: BoxDecoration(gradient: SAColors.accentGradient, borderRadius: BorderRadius.circular(16),
+                          boxShadow: [BoxShadow(color: SAColors.accent.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))]),
+                        child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 28),
+                      ),
+                      const SizedBox(width: 14),
+                      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        Text('Superadmin', style: context.textStyles.h4.copyWith(color: SAColors.textPrimary)),
+                        Text('Developer Account', style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
+                      ]),
+                    ]),
+                    const SizedBox(height: 32),
 
-                _sectionLabel(context, 'System Info'),
-                _infoTile(context, Icons.dns_rounded, 'PocketBase Server', pbBaseUrl),
-                _infoTile(context, Icons.security_rounded, 'Session', 'PocketBase _superusers'),
-                _infoTile(context, Icons.verified_user_rounded, 'Access Level', 'Full Admin (All Collections)'),
-                const SizedBox(height: 24),
+                    _sectionLabel(context, 'System Info'),
+                    _infoTile(context, Icons.dns_rounded, 'PocketBase Server', pbBaseUrl),
+                    _infoTile(context, Icons.security_rounded, 'Session', 'PocketBase _superusers'),
+                    _infoTile(context, Icons.verified_user_rounded, 'Access Level', 'Full Admin (All Collections)'),
+                    const SizedBox(height: 24),
 
-                _sectionLabel(context, 'Access Policy'),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: SAColors.card,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: SAColors.accent.withValues(alpha: 0.3)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _policyRow(context, Icons.check_circle_outline_rounded, SAColors.success, 'Manage all clinic accounts'),
-                      _policyRow(context, Icons.check_circle_outline_rounded, SAColors.success, 'Reset any user password'),
-                      _policyRow(context, Icons.check_circle_outline_rounded, SAColors.success, 'View doctors and receptionists'),
-                      _policyRow(context, Icons.check_circle_outline_rounded, SAColors.success, 'Verify / delete clinics'),
-                      _policyRow(context, Icons.cancel_outlined, SAColors.error, 'Patient records (excluded)'),
-                      _policyRow(context, Icons.cancel_outlined, SAColors.error, 'Consultation & treatment data'),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
-
-                // Logout
-                SizedBox(
-                  width: double.infinity, height: 52,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      final confirm = await showDialog<bool>(
-                        context: context,
-                        builder: (_) => AlertDialog(
-                          backgroundColor: SAColors.card,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          title: Text('Logout', style: context.textStyles.h4.copyWith(color: SAColors.textPrimary)),
-                          content: Text('End your superadmin session?',
-                            style: context.textStyles.bodyMedium.copyWith(color: SAColors.textSecondary)),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(context, false),
-                              child: Text('Cancel', style: TextStyle(color: SAColors.textHint))),
-                            ElevatedButton(
-                              onPressed: () => Navigator.pop(context, true),
-                              style: ElevatedButton.styleFrom(backgroundColor: SAColors.error, foregroundColor: Colors.white),
-                              child: const Text('Logout'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirm == true) {
-                        Navigator.of(context).pushNamedAndRemoveUntil('/superadmin/login', (_) => false);
-                        ref.read(authProvider.notifier).logout();
-                      }
-                    },
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Logout Superadmin'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: SAColors.error,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    _sectionLabel(context, 'Access Policy'),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: SAColors.card,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: SAColors.accent.withValues(alpha: 0.3)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _policyRow(context, Icons.check_circle_outline_rounded, SAColors.success, 'Manage all clinic accounts'),
+                          _policyRow(context, Icons.check_circle_outline_rounded, SAColors.success, 'Reset any user password'),
+                          _policyRow(context, Icons.check_circle_outline_rounded, SAColors.success, 'View doctors and receptionists'),
+                          _policyRow(context, Icons.check_circle_outline_rounded, SAColors.success, 'Verify / delete clinics'),
+                          _policyRow(context, Icons.cancel_outlined, SAColors.error, 'Patient records (excluded)'),
+                          _policyRow(context, Icons.cancel_outlined, SAColors.error, 'Consultation & treatment data'),
+                        ],
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 32),
+
+                    // Logout
+                    SizedBox(
+                      width: double.infinity, height: 52,
+                      child: ElevatedButton.icon(
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              backgroundColor: SAColors.card,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              title: Text('Logout', style: context.textStyles.h4.copyWith(color: SAColors.textPrimary)),
+                              content: Text('End your superadmin session?',
+                                style: context.textStyles.bodyMedium.copyWith(color: SAColors.textSecondary)),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context, false),
+                                  child: Text('Cancel', style: TextStyle(color: SAColors.textHint))),
+                                ElevatedButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  style: ElevatedButton.styleFrom(backgroundColor: SAColors.error, foregroundColor: Colors.white),
+                                  child: const Text('Logout'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true) {
+                            Navigator.of(context).pushNamedAndRemoveUntil('/superadmin/login', (_) => false);
+                            ref.read(authProvider.notifier).logout();
+                          }
+                        },
+                        icon: const Icon(Icons.logout_rounded),
+                        label: const Text('Logout Superadmin'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: SAColors.error,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),

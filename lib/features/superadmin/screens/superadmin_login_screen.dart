@@ -2,8 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/constants/app_text_styles.dart';
-import '../../auth/providers/auth_provider.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
 
@@ -169,6 +168,9 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
 
     // OTP verified — update global auth state so app.dart routes to SuperadminShell
     ref.read(authProvider.notifier).setSuperadminAuthenticated();
+    if (mounted) {
+      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+    }
   }
 
   Future<void> _resendOtp() async {
@@ -204,63 +206,68 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
         child: SafeArea(
           child: GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: FadeTransition(
-                opacity: _fadeAnim,
-                child: SlideTransition(
-                  position: _slideAnim,
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 60),
-                      Container(
-                        width: 80, height: 80,
-                        decoration: BoxDecoration(
-                          gradient: _SA.accentGradient,
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: [BoxShadow(color: _SA.accent.withValues(alpha: 0.4), blurRadius: 28, offset: const Offset(0, 10))],
-                        ),
-                        child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 42),
-                      ),
-                      const SizedBox(height: 28),
-                      Text('Superadmin Access', style: context.textStyles.h2.copyWith(color: _SA.textPrimary)),
-                      const SizedBox(height: 8),
-                      Text(
-                        _otpPhase
-                            ? 'OTP sent to ${_pendingEmail ?? ''}\nEnter the 6-digit code below.'
-                            : 'Restricted access. Enter your\nadmin credentials to continue.',
-                        textAlign: TextAlign.center,
-                        style: context.textStyles.bodyMedium.copyWith(color: _SA.textSecondary, height: 1.6),
-                      ),
-                      const SizedBox(height: 48),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 450),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  child: FadeTransition(
+                    opacity: _fadeAnim,
+                    child: SlideTransition(
+                      position: _slideAnim,
+                      child: Column(
+                        children: [
+                          const SizedBox(height: 60),
+                          Container(
+                            width: 80, height: 80,
+                            decoration: BoxDecoration(
+                              gradient: _SA.accentGradient,
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [BoxShadow(color: _SA.accent.withValues(alpha: 0.4), blurRadius: 28, offset: const Offset(0, 10))],
+                            ),
+                            child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 42),
+                          ),
+                          const SizedBox(height: 28),
+                          Text('Superadmin Access', style: context.textStyles.h2.copyWith(color: _SA.textPrimary)),
+                          const SizedBox(height: 8),
+                          Text(
+                            _otpPhase
+                                ? 'OTP sent to ${_pendingEmail ?? ''}\nEnter the 6-digit code below.'
+                                : 'Restricted access. Enter your\nadmin credentials to continue.',
+                            textAlign: TextAlign.center,
+                            style: context.textStyles.bodyMedium.copyWith(color: _SA.textSecondary, height: 1.6),
+                          ),
+                          const SizedBox(height: 48),
 
-                      if (!_otpPhase) ...[
-                        _buildCredentialsForm(),
-                        const SizedBox(height: 28),
-                        _buildPrimaryButton('Continue', _submitCredentials),
-                      ] else ...[
-                        _buildOtpGrid(),
-                        const SizedBox(height: 24),
-                        _buildPrimaryButton('Verify & Enter', _submitOtp),
-                        const SizedBox(height: 20),
-                        _buildResendRow(),
-                      ],
+                          if (!_otpPhase) ...[
+                            _buildCredentialsForm(),
+                            const SizedBox(height: 28),
+                            _buildPrimaryButton('Continue', _submitCredentials),
+                          ] else ...[
+                            _buildOtpGrid(),
+                            const SizedBox(height: 24),
+                            _buildPrimaryButton('Verify & Enter', _submitOtp),
+                            const SizedBox(height: 20),
+                            _buildResendRow(),
+                          ],
 
-                      const SizedBox(height: 28),
-                      TextButton.icon(
-                        onPressed: () {
-                          if (_otpPhase) {
-                            setState(() { _otpPhase = false; _otpTimer?.cancel(); });
-                          } else {
-                            Navigator.of(context).pop();
-                          }
-                        },
-                        icon: Icon(Icons.arrow_back_rounded, size: 16, color: _SA.textHint),
-                        label: Text(_otpPhase ? 'Back to credentials' : 'Back to login',
-                          style: context.textStyles.caption.copyWith(color: _SA.textHint)),
+                          const SizedBox(height: 28),
+                          TextButton.icon(
+                            onPressed: () {
+                              if (_otpPhase) {
+                                setState(() { _otpPhase = false; _otpTimer?.cancel(); });
+                              } else {
+                                Navigator.of(context).pop();
+                              }
+                            },
+                            icon: Icon(Icons.arrow_back_rounded, size: 16, color: _SA.textHint),
+                            label: Text(_otpPhase ? 'Back to credentials' : 'Back to login',
+                              style: context.textStyles.caption.copyWith(color: _SA.textHint)),
+                          ),
+                          const SizedBox(height: 40),
+                        ],
                       ),
-                      const SizedBox(height: 40),
-                    ],
+                    ),
                   ),
                 ),
               ),

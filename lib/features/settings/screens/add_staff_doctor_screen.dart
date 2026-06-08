@@ -9,7 +9,7 @@ import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/time_slot_picker.dart';
 import '../../../../core/utils/time_utils.dart';
-import '../../auth/providers/auth_provider.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import '../../auth/screens/clinic_registration/clinic_step3_screen.dart' show BreakTime, DayOverride;
 import 'package:pms_app/core/theme/app_theme.dart';
 import '../../../../core/utils/image_helper.dart';

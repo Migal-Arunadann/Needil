@@ -1,10 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/providers/pocketbase_provider.dart';
-import '../../../core/constants/pb_collections.dart';
-import '../../auth/providers/auth_provider.dart';
-import '../../../core/services/auth_service.dart';
-import '../../appointments/models/appointment_model.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/core/services/auth_service.dart';
+import 'package:pms_app/features/appointments/models/appointment_model.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 

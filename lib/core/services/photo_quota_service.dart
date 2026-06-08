@@ -1,8 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketbase/pocketbase.dart';
-import '../constants/pb_collections.dart';
-import '../providers/pocketbase_provider.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 /// Manages per-clinic photo upload quotas.

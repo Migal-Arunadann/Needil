@@ -3,16 +3,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_text_styles.dart';
-import '../../../../core/widgets/app_button.dart';
-import '../../../../core/widgets/app_text_field.dart';
-import '../../../../core/widgets/time_slot_picker.dart';
-import '../../../../core/utils/validators.dart';
-import '../../../../core/utils/time_utils.dart';
-import '../../providers/registration_cache_provider.dart';
+import 'package:pms_app/core/constants/app_colors.dart';
+import 'package:pms_app/core/constants/app_text_styles.dart';
+import 'package:pms_app/core/widgets/app_button.dart';
+import 'package:pms_app/core/widgets/app_text_field.dart';
+import 'package:pms_app/core/widgets/time_slot_picker.dart';
+import 'package:pms_app/core/utils/validators.dart';
+import 'package:pms_app/core/utils/time_utils.dart';
+import 'package:pms_app/features/auth/providers/registration_cache_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
-import '../../../../core/utils/image_helper.dart';
+import 'package:pms_app/core/utils/image_helper.dart';
 
 
 // A break time range

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import '../../../core/services/scheduling_service.dart';
-import '../providers/scheduling_provider.dart';
-import '../../auth/providers/auth_provider.dart';
-import '../../auth/models/doctor_model.dart';
-import '../../../core/utils/time_utils.dart';
+import 'package:pms_app/core/services/scheduling_service.dart';
+import 'package:pms_app/features/scheduling/providers/scheduling_provider.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/features/auth/models/doctor_model.dart';
+import 'package:pms_app/core/utils/time_utils.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
 

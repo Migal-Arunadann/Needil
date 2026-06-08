@@ -2,13 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pocketbase/pocketbase.dart';
-import '../../../core/constants/app_text_styles.dart';
-import '../../../core/providers/pocketbase_provider.dart';
-import '../../../core/services/superadmin_service.dart';
-import 'superadmin_shell.dart';
-import 'superadmin_clinics_screen.dart';
-import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/services/superadmin_service.dart';
+import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
 
 
 final _dashStatsProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) {
@@ -76,140 +73,145 @@ class _SuperadminDashboardScreenState
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header
-                  Row(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1100),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 42, height: 42,
-                        decoration: BoxDecoration(
-                          gradient: SAColors.accentGradient,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 22),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      // Header
+                      Row(
                         children: [
-                          Text('Superadmin', style: context.textStyles.h4.copyWith(color: SAColors.textPrimary)),
-                          Text(DateFormat('EEEE, d MMM y').format(now),
-                            style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 28),
-
-                  // Stats row
-                  Text('Platform Overview',
-                    style: context.textStyles.label.copyWith(color: SAColors.textSecondary, fontSize: 12, letterSpacing: 1)),
-                  const SizedBox(height: 12),
-                  statsAsync.when(
-                    loading: () => _statsPlaceholder(),
-                    error: (e, _) => _errorCard(context, 'Failed to load stats: $e'),
-                    data: (stats) => Column(
-                      children: [
-                        Row(children: [
-                          Expanded(child: _statCard(context,
-                            Icons.business_rounded,
-                            '${stats['total_clinics']}',
-                            'Clinics',
-                            SAColors.accent,
-                          )),
+                          Container(
+                            width: 42, height: 42,
+                            decoration: BoxDecoration(
+                              gradient: SAColors.accentGradient,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 22),
+                          ),
                           const SizedBox(width: 12),
-                          Expanded(child: _statCard(context,
-                            Icons.medical_services_rounded,
-                            '${stats['total_doctors']}',
-                            'Doctors',
-                            const Color(0xFF06B6D4),
-                          )),
-                          const SizedBox(width: 12),
-                          Expanded(child: _statCard(context,
-                            Icons.person_rounded,
-                            '${stats['total_receptionists']}',
-                            'Staff',
-                            SAColors.success,
-                          )),
-                        ]),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-
-                  // ── Reactivation Requests ───────────────────────────────
-                  reactivationAsync.when(
-                    loading: () => const SizedBox.shrink(),
-                    error: (_, __) => const SizedBox.shrink(),
-                    data: (requests) => requests.isEmpty
-                        ? const SizedBox.shrink()
-                        : Column(
+                          Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: SAColors.warning.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text('${requests.length}',
-                                      style: const TextStyle(
-                                          color: SAColors.warning,
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 12)),
-                                ),
-                                const SizedBox(width: 8),
-                                Text('Reactivation Requests',
-                                    style: context.textStyles.label.copyWith(
-                                        color: SAColors.textSecondary,
-                                        fontSize: 12,
-                                        letterSpacing: 1)),
-                              ]),
-                              const SizedBox(height: 12),
-                              ...requests.map((r) => _reactivationCard(
-                                    context,
-                                    ref,
-                                    r,
-                                  )),
-                              const SizedBox(height: 24),
+                              Text('Superadmin', style: context.textStyles.h4.copyWith(color: SAColors.textPrimary)),
+                              Text(DateFormat('EEEE, d MMM y').format(now),
+                                style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
                             ],
                           ),
-                  ),
-
-                  // Recent clinics
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Recent Registrations',
-                        style: context.textStyles.label.copyWith(color: SAColors.textSecondary, fontSize: 12, letterSpacing: 1)),
-                      GestureDetector(
-                        onTap: () {},
-                        child: Text('View All',
-                          style: context.textStyles.caption.copyWith(color: SAColors.accent, fontWeight: FontWeight.w700)),
+                        ],
                       ),
+                      const SizedBox(height: 28),
+
+                      // Stats row
+                      Text('Platform Overview',
+                        style: context.textStyles.label.copyWith(color: SAColors.textSecondary, fontSize: 12, letterSpacing: 1)),
+                      const SizedBox(height: 12),
+                      statsAsync.when(
+                        loading: () => _statsPlaceholder(),
+                        error: (e, _) => _errorCard(context, 'Failed to load stats: $e'),
+                        data: (stats) => Column(
+                          children: [
+                            Row(children: [
+                              Expanded(child: _statCard(context,
+                                Icons.business_rounded,
+                                '${stats['total_clinics']}',
+                                'Clinics',
+                                SAColors.accent,
+                              )),
+                              const SizedBox(width: 12),
+                              Expanded(child: _statCard(context,
+                                Icons.medical_services_rounded,
+                                '${stats['total_doctors']}',
+                                'Doctors',
+                                const Color(0xFF06B6D4),
+                              )),
+                              const SizedBox(width: 12),
+                              Expanded(child: _statCard(context,
+                                Icons.person_rounded,
+                                '${stats['total_receptionists']}',
+                                'Staff',
+                                SAColors.success,
+                              )),
+                            ]),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+
+                      // ── Reactivation Requests ───────────────────────────────
+                      reactivationAsync.when(
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
+                        data: (requests) => requests.isEmpty
+                            ? const SizedBox.shrink()
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: SAColors.warning.withValues(alpha: 0.2),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text('${requests.length}',
+                                          style: const TextStyle(
+                                              color: SAColors.warning,
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 12)),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text('Reactivation Requests',
+                                        style: context.textStyles.label.copyWith(
+                                            color: SAColors.textSecondary,
+                                            fontSize: 12,
+                                            letterSpacing: 1)),
+                                  ]),
+                                  const SizedBox(height: 12),
+                                  ...requests.map((r) => _reactivationCard(
+                                        context,
+                                        ref,
+                                        r,
+                                      )),
+                                  const SizedBox(height: 24),
+                                ],
+                              ),
+                      ),
+
+                      // Recent clinics
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Recent Registrations',
+                            style: context.textStyles.label.copyWith(color: SAColors.textSecondary, fontSize: 12, letterSpacing: 1)),
+                          GestureDetector(
+                            onTap: () {},
+                            child: Text('View All',
+                              style: context.textStyles.caption.copyWith(color: SAColors.accent, fontWeight: FontWeight.w700)),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      recentAsync.when(
+                        loading: () => const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(40),
+                            child: CircularProgressIndicator(color: SAColors.accent),
+                          ),
+                        ),
+                        error: (e, _) => _errorCard(context, 'Failed to load clinics: $e'),
+                        data: (clinics) => clinics.isEmpty
+                            ? _emptyCard(context, 'No clinics registered yet')
+                            : Column(
+                                children: clinics.map((c) => _clinicTile(context, c)).toList(),
+                              ),
+                      ),
+                      const SizedBox(height: 20),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  recentAsync.when(
-                    loading: () => const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(40),
-                        child: CircularProgressIndicator(color: SAColors.accent),
-                      ),
-                    ),
-                    error: (e, _) => _errorCard(context, 'Failed to load clinics: $e'),
-                    data: (clinics) => clinics.isEmpty
-                        ? _emptyCard(context, 'No clinics registered yet')
-                        : Column(
-                            children: clinics.map((c) => _clinicTile(context, c)).toList(),
-                          ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
+                ),
               ),
             ),
           ),

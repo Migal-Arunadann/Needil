@@ -1,14 +1,13 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/constants/pb_collections.dart';
-import '../../../core/providers/pocketbase_provider.dart';
-import '../../../core/widgets/app_button.dart';
-import '../../../core/widgets/patient_details_form.dart';
-import '../providers/appointment_provider.dart';
-import '../models/appointment_model.dart';
-import '../../auth/providers/auth_provider.dart';
-import '../../patients/models/patient_model.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
+import 'package:pms_app/core/widgets/app_button.dart';
+import 'package:pms_app/core/widgets/patient_details_form.dart';
+import 'package:pms_app/features/appointments/providers/appointment_provider.dart';
+import 'package:pms_app/features/appointments/models/appointment_model.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/features/patients/models/patient_model.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 

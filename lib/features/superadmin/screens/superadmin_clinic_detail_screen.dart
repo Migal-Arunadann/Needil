@@ -2,13 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketbase/pocketbase.dart';
-import '../../../core/constants/app_text_styles.dart';
-import '../../../core/providers/pocketbase_provider.dart';
-import '../../../core/services/superadmin_service.dart';
-import '../../../core/services/data_export_service.dart';
-import 'superadmin_shell.dart';
-import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/services/superadmin_service.dart';
+import 'package:pms_app/core/services/data_export_service.dart';
+import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
 
 
 final _clinicDetailProvider = FutureProvider.family.autoDispose<Map<String, dynamic>, String>((ref, id) {
@@ -218,34 +216,44 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
           ],
         ),
       ),
-      body: dataAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator(color: SAColors.accent)),
-        error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: SAColors.error))),
-        data: (data) {
-          final clinic = data['clinic'] as RecordModel;
-          final doctors = data['doctors'] as List<RecordModel>;
-          final receptionists = data['receptionists'] as List<RecordModel>;
-          return TabBarView(
-            controller: _tabCtrl,
-            children: [
-              _InfoTab(clinic: clinic, clinicId: widget.clinicId),
-              _StaffTab(
-                doctors: doctors,
-                receptionists: receptionists,
-                onResetPassword: _resetPassword,
-                onDelete: _deleteStaff,
+      body: Container(
+        decoration: const BoxDecoration(gradient: SAColors.gradient),
+        child: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 900),
+              child: dataAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator(color: SAColors.accent)),
+                error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: SAColors.error))),
+                data: (data) {
+                  final clinic = data['clinic'] as RecordModel;
+                  final doctors = data['doctors'] as List<RecordModel>;
+                  final receptionists = data['receptionists'] as List<RecordModel>;
+                  return TabBarView(
+                    controller: _tabCtrl,
+                    children: [
+                      _InfoTab(clinic: clinic, clinicId: widget.clinicId),
+                      _StaffTab(
+                        doctors: doctors,
+                        receptionists: receptionists,
+                        onResetPassword: _resetPassword,
+                        onDelete: _deleteStaff,
+                      ),
+                      _DangerTab(
+                        clinicRecord: clinic,
+                        clinicId: widget.clinicId,
+                        onDeactivate: () => _deactivateClinic(clinic.getStringValue('name')),
+                        onReactivate: () => _reactivateClinic(clinic.getStringValue('name')),
+                        onPermanentDelete: () => _permanentlyDeleteClinic(clinic.getStringValue('name')),
+                        onResetClinicPass: () => _resetPassword('clinic', widget.clinicId, clinic.getStringValue('name')),
+                      ),
+                    ],
+                  );
+                },
               ),
-              _DangerTab(
-                clinicRecord: clinic,
-                clinicId: widget.clinicId,
-                onDeactivate: () => _deactivateClinic(clinic.getStringValue('name')),
-                onReactivate: () => _reactivateClinic(clinic.getStringValue('name')),
-                onPermanentDelete: () => _permanentlyDeleteClinic(clinic.getStringValue('name')),
-                onResetClinicPass: () => _resetPassword('clinic', widget.clinicId, clinic.getStringValue('name')),
-              ),
-            ],
-          );
-        },
+            ),
+          ),
+        ),
       ),
     );
   }

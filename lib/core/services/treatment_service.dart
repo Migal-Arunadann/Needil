@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:http/http.dart' as http;
-import '../constants/pb_collections.dart';
-import '../utils/time_utils.dart';
-import '../../features/consultations/models/consultation_model.dart';
-import '../../features/treatments/models/treatment_plan_model.dart';
-import '../../features/treatments/models/session_model.dart';
-import '../../features/auth/models/doctor_model.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
+import 'package:pms_app/core/utils/time_utils.dart';
+import 'package:pms_app/features/consultations/models/consultation_model.dart';
+import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
+import 'package:pms_app/features/treatments/models/session_model.dart';
+import 'package:pms_app/features/auth/models/doctor_model.dart';
 
 class TreatmentService {
   final PocketBase pb;

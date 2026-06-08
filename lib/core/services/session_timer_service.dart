@@ -8,9 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
-import '../../app.dart';
-import '../constants/app_colors.dart';
-import '../constants/app_text_styles.dart';
+import 'package:pms_app/app.dart';
+import 'package:pms_app/core/constants/app_colors.dart';
+import 'package:pms_app/core/constants/app_text_styles.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
 // ── Public snapshot for external consumers ────────────────────────────────────

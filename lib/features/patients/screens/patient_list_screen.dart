@@ -4,14 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/utils/whatsapp_helper.dart';
-import '../models/patient_model.dart';
-import '../providers/patient_provider.dart';
-import 'patient_profile_screen.dart';
+import 'package:pms_app/core/utils/whatsapp_helper.dart';
+import 'package:pms_app/features/patients/models/patient_model.dart';
+import 'package:pms_app/features/patients/providers/patient_provider.dart';
+import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
-import '../../../core/widgets/responsive_wrapper.dart';
-import '../../appointments/providers/appointment_provider.dart';
-import '../../dashboard/widgets/dashboard_widgets.dart';
+import 'package:pms_app/core/widgets/responsive_wrapper.dart';
+import 'package:pms_app/features/appointments/providers/appointment_provider.dart';
+import 'package:pms_app/features/dashboard/widgets/dashboard_widgets.dart';
 
 class PatientListScreen extends ConsumerStatefulWidget {
   const PatientListScreen({super.key});

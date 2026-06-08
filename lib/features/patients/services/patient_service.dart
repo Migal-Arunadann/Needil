@@ -1,6 +1,6 @@
 import 'package:pocketbase/pocketbase.dart';
-import '../models/patient_model.dart';
-import '../../../core/constants/pb_collections.dart';
+import 'package:pms_app/features/patients/models/patient_model.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
 
 class PatientService {
   final PocketBase pb;

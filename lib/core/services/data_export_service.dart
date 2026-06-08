@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
-import '../constants/pb_collections.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
 
 /// Exports all clinic data as CSV strings.
 /// Supports web (blob download) and mobile (returns CSV string for sharing).

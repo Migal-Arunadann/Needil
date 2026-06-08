@@ -7,10 +7,10 @@ import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../providers/analytics_provider.dart';
+import 'package:pms_app/features/analytics/providers/analytics_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
-import '../../../core/widgets/responsive_wrapper.dart';
-import '../../dashboard/widgets/dashboard_widgets.dart';
+import 'package:pms_app/core/widgets/responsive_wrapper.dart';
+import 'package:pms_app/features/dashboard/widgets/dashboard_widgets.dart';
 
 // --- Color palette for charts ------------------------------------------------
 const _kCompleted = Color(0xFF10B981);

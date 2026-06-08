@@ -3,14 +3,14 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_text_styles.dart';
-import '../../../../core/widgets/app_button.dart';
-import '../../../../core/widgets/app_text_field.dart';
-import '../../../../core/widgets/loading_overlay.dart';
-import '../../providers/auth_provider.dart';
-import '../../providers/registration_cache_provider.dart';
-import '../../screens/otp_verification_screen.dart';
+import 'package:pms_app/core/constants/app_colors.dart';
+import 'package:pms_app/core/constants/app_text_styles.dart';
+import 'package:pms_app/core/widgets/app_button.dart';
+import 'package:pms_app/core/widgets/app_text_field.dart';
+import 'package:pms_app/core/widgets/loading_overlay.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/features/auth/providers/registration_cache_provider.dart';
+import 'package:pms_app/features/auth/screens/otp_verification_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
 

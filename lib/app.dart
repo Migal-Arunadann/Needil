@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'core/theme/theme_provider.dart';
-import 'core/router/app_router.dart';
-import 'features/auth/providers/auth_provider.dart';
-import 'core/services/auth_service.dart';
-import 'features/dashboard/screens/main_layout.dart';
-import 'features/auth/screens/login_screen.dart';
-import 'features/auth/screens/clinic_registration/clinic_step1_screen.dart';
-import 'features/superadmin/screens/superadmin_shell.dart';
+import 'package:pms_app/core/theme/theme_provider.dart';
+import 'package:pms_app/core/router/app_router.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/core/services/auth_service.dart';
+import 'package:pms_app/features/dashboard/screens/main_layout.dart';
+import 'package:pms_app/features/auth/screens/login_screen.dart';
+import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step1_screen.dart';
+import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
-import 'core/services/notification_service.dart';
+import 'package:pms_app/core/services/notification_service.dart';
 
 
 /// Global navigator key so the timer service can push dialogs from anywhere.

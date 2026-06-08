@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pocketbase/pocketbase.dart';
-import '../../../core/constants/app_text_styles.dart';
-import '../../../core/providers/pocketbase_provider.dart';
-import '../../../core/services/superadmin_service.dart';
-import 'superadmin_shell.dart';
-import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/services/superadmin_service.dart';
+import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
 
 
 // Provider for the full clinics list with optional search
@@ -44,94 +42,99 @@ class _SuperadminClinicsScreenState extends ConsumerState<SuperadminClinicsScree
       body: Container(
         decoration: const BoxDecoration(gradient: SAColors.gradient),
         child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Clinics', style: context.textStyles.h3.copyWith(color: SAColors.textPrimary)),
-                    Text('Manage all registered clinics',
-                      style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
-                    const SizedBox(height: 16),
-                    // Search bar
-                    Container(
-                      height: 46,
-                      decoration: BoxDecoration(
-                        color: SAColors.card,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: SAColors.border),
-                      ),
-                      child: TextField(
-                        controller: _searchCtrl,
-                        style: context.textStyles.bodyMedium.copyWith(color: SAColors.textPrimary),
-                        decoration: InputDecoration(
-                          hintText: 'Search by name, city or clinic ID…',
-                          hintStyle: context.textStyles.caption.copyWith(color: SAColors.textHint),
-                          prefixIcon: const Icon(Icons.search_rounded, color: SAColors.textHint, size: 20),
-                          suffixIcon: _searchCtrl.text.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.close_rounded, color: SAColors.textHint, size: 18),
-                                  onPressed: () {
-                                    _searchCtrl.clear();
-                                    ref.read(_clinicsSearchProvider.notifier).state = '';
-                                  },
-                                )
-                              : null,
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        onChanged: (v) => ref.read(_clinicsSearchProvider.notifier).state = v,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              // Clinics list
-              Expanded(
-                child: RefreshIndicator(
-                  color: SAColors.accent,
-                  backgroundColor: SAColors.card,
-                  onRefresh: () async => ref.invalidate(_allClinicsProvider),
-                  child: clinicsAsync.when(
-                    loading: () => const Center(
-                      child: CircularProgressIndicator(color: SAColors.accent),
-                    ),
-                    error: (e, _) => Center(
-                      child: Text('Error: $e', style: context.textStyles.bodyMedium.copyWith(color: SAColors.error)),
-                    ),
-                    data: (clinics) => clinics.isEmpty
-                        ? ListView(
-                            children: [
-                              const SizedBox(height: 80),
-                              Center(
-                                child: Column(children: [
-                                  const Icon(Icons.business_outlined, color: SAColors.textHint, size: 48),
-                                  const SizedBox(height: 12),
-                                  Text('No clinics found', style: context.textStyles.bodyMedium.copyWith(color: SAColors.textHint)),
-                                ]),
-                              ),
-                            ],
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
-                            itemCount: clinics.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 10),
-                            itemBuilder: (ctx, i) => _ClinicListCard(
-                              record: clinics[i],
-                              onTap: () => Navigator.of(context)
-                                  .pushNamed('/superadmin/clinic', arguments: clinics[i].id)
-                                  .then((_) => ref.invalidate(_allClinicsProvider)),
-                            ),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1100),
+              child: Column(
+                children: [
+                  // Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Clinics', style: context.textStyles.h3.copyWith(color: SAColors.textPrimary)),
+                        Text('Manage all registered clinics',
+                          style: context.textStyles.caption.copyWith(color: SAColors.textHint)),
+                        const SizedBox(height: 16),
+                        // Search bar
+                        Container(
+                          height: 46,
+                          decoration: BoxDecoration(
+                            color: SAColors.card,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: SAColors.border),
                           ),
+                          child: TextField(
+                            controller: _searchCtrl,
+                            style: context.textStyles.bodyMedium.copyWith(color: SAColors.textPrimary),
+                            decoration: InputDecoration(
+                              hintText: 'Search by name, city or clinic ID…',
+                              hintStyle: context.textStyles.caption.copyWith(color: SAColors.textHint),
+                              prefixIcon: const Icon(Icons.search_rounded, color: SAColors.textHint, size: 20),
+                              suffixIcon: _searchCtrl.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.close_rounded, color: SAColors.textHint, size: 18),
+                                      onPressed: () {
+                                        _searchCtrl.clear();
+                                        ref.read(_clinicsSearchProvider.notifier).state = '';
+                                      },
+                                    )
+                                  : null,
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onChanged: (v) => ref.read(_clinicsSearchProvider.notifier).state = v,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 12),
+
+                  // Clinics list
+                  Expanded(
+                    child: RefreshIndicator(
+                      color: SAColors.accent,
+                      backgroundColor: SAColors.card,
+                      onRefresh: () async => ref.invalidate(_allClinicsProvider),
+                      child: clinicsAsync.when(
+                        loading: () => const Center(
+                          child: CircularProgressIndicator(color: SAColors.accent),
+                        ),
+                        error: (e, _) => Center(
+                          child: Text('Error: $e', style: context.textStyles.bodyMedium.copyWith(color: SAColors.error)),
+                        ),
+                        data: (clinics) => clinics.isEmpty
+                            ? ListView(
+                                children: [
+                                  const SizedBox(height: 80),
+                                  Center(
+                                    child: Column(children: [
+                                      const Icon(Icons.business_outlined, color: SAColors.textHint, size: 48),
+                                      const SizedBox(height: 12),
+                                      Text('No clinics found', style: context.textStyles.bodyMedium.copyWith(color: SAColors.textHint)),
+                                    ]),
+                                  ),
+                                ],
+                              )
+                            : ListView.separated(
+                                padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                                itemCount: clinics.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                itemBuilder: (ctx, i) => _ClinicListCard(
+                                  record: clinics[i],
+                                  onTap: () => Navigator.of(context)
+                                      .pushNamed('/superadmin/clinic', arguments: clinics[i].id)
+                                      .then((_) => ref.invalidate(_allClinicsProvider)),
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../constants/app_colors.dart';
-import '../constants/app_text_styles.dart';
+import 'package:pms_app/core/constants/app_colors.dart';
+import 'package:pms_app/core/constants/app_text_styles.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
 

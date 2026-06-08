@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
-import '../../../core/constants/pb_collections.dart';
-import '../../../core/providers/pocketbase_provider.dart';
-import '../../auth/providers/auth_provider.dart';
-import 'add_staff_receptionist_screen.dart';
+import 'package:pms_app/core/constants/app_colors.dart';
+import 'package:pms_app/core/constants/app_text_styles.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/features/settings/screens/add_staff_receptionist_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
-import '../../../core/services/audit_service.dart';
+import 'package:pms_app/core/services/audit_service.dart';
 import 'package:intl/intl.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 

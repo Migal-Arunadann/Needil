@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:pocketbase/pocketbase.dart';
-import '../constants/pb_collections.dart';
-import '../../features/treatments/models/session_model.dart';
-import '../../features/treatments/models/treatment_plan_model.dart';
-import '../../features/auth/models/doctor_model.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
+import 'package:pms_app/features/treatments/models/session_model.dart';
+import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
+import 'package:pms_app/features/auth/models/doctor_model.dart';
 
 /// Handles automatic session lifecycle events:
 ///   – Auto-marking missed sessions the day after they were scheduled

@@ -7,8 +7,8 @@ import '../../../../../core/widgets/app_text_field.dart';
 import '../../../../../core/utils/validators.dart';
 import '../../../../../core/constants/pb_collections.dart';
 import '../../../../../core/providers/pocketbase_provider.dart';
-import '../../providers/auth_provider.dart';
-import '../otp_verification_screen.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/features/auth/screens/otp_verification_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 

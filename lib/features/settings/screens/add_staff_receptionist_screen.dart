@@ -5,7 +5,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/widgets/app_button.dart';
 import '../../../../core/widgets/app_text_field.dart';
-import '../../auth/providers/auth_provider.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
 
