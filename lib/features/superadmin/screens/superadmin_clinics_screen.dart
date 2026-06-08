@@ -152,6 +152,7 @@ class _ClinicListCard extends StatelessWidget {
     final state = record.getStringValue('state');
     final clinicCode = record.getStringValue('clinic_id');
     final verified = record.getBoolValue('verified');
+    final isDeactivated = record.getBoolValue('is_deactivated');
     final bedCount = record.getIntValue('bed_count');
     final created = DateTime.tryParse(record.getStringValue('created'));
 
@@ -162,9 +163,13 @@ class _ClinicListCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: SAColors.card,
+          color: isDeactivated
+              ? SAColors.warning.withValues(alpha: 0.06)
+              : SAColors.card,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: SAColors.border),
+          border: Border.all(
+            color: isDeactivated ? SAColors.warning.withValues(alpha: 0.4) : SAColors.border,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -196,14 +201,19 @@ class _ClinicListCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: verified
-                        ? SAColors.success.withValues(alpha: 0.15)
-                        : SAColors.warning.withValues(alpha: 0.15),
+                    color: isDeactivated
+                        ? SAColors.warning.withValues(alpha: 0.15)
+                        : verified
+                            ? SAColors.success.withValues(alpha: 0.15)
+                            : SAColors.warning.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(verified ? '✓ Verified' : '⚠ Pending',
+                  child: Text(
+                    isDeactivated ? '⊘ Deactivated' : (verified ? '✓ Verified' : '⚠ Pending'),
                     style: context.textStyles.caption.copyWith(
-                      color: verified ? SAColors.success : SAColors.warning,
+                      color: isDeactivated
+                          ? SAColors.warning
+                          : (verified ? SAColors.success : SAColors.warning),
                       fontWeight: FontWeight.w700,
                       fontSize: 11,
                     )),

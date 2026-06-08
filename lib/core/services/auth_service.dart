@@ -145,6 +145,26 @@ class AuthService {
           .collection(PBCollections.clinics)
           .authWithPassword(username, password);
 
+      // ── Block deactivated clinics ──────────────────────────────────────────
+      // Check is_deactivated flag before creating a session.
+      // This is a client-side gate; PocketBase API rules should also enforce this.
+      final isDeactivated = result.record.getBoolValue('is_deactivated');
+      if (isDeactivated) {
+        // Clear the newly created auth session so no token persists
+        pb.authStore.clear();
+        final scheduledDate = result.record.getStringValue('scheduled_deletion_date');
+        final dateStr = scheduledDate.isNotEmpty
+            ? scheduledDate.substring(0, 10)
+            : 'soon';
+        return AuthResult(
+          success: false,
+          error: 'This clinic account has been deactivated. '
+              'Scheduled for deletion on $dateStr. '
+              'Contact support to reactivate.',
+        );
+      }
+      // ── End deactivation check ─────────────────────────────────────────────
+
       await _saveSession('clinic', result.token, result.record.id);
 
       return AuthResult(
