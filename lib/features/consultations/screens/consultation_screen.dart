@@ -1808,9 +1808,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(9),
             child: kIsWeb 
-                ? Image.network(ImageHelper.getSecureUrl(_photos[index].path).authStore.token),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Icon(Icons.image_rounded, color: context.colors.textHint),
+                ? Image.network(ImageHelper.getSecureUrl(_photos[index].path), 
+                    fit: BoxFit.cover, 
+                    errorBuilder: (_, __, ___) => Icon(Icons.image_rounded, color: context.colors.textHint), 
                   )
                 : Image.file(
                     File(_photos[index].path),
@@ -1862,7 +1862,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                   panEnabled: true,
                   minScale: 0.5,
                   maxScale: 4.0,
-                  child: Image.network(ImageHelper.getSecureUrl(url).authStore.token), fit: BoxFit.contain),
+                  child: Image.network(ImageHelper.getSecureUrl(url),  fit: BoxFit.contain),
                 ),
                 Positioned(
                   top: -16,
@@ -1890,9 +1890,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(9),
-          child: Image.network(ImageHelper.getSecureUrl(url).authStore.token),
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Icon(Icons.image_rounded, color: context.colors.textHint),
+          child: Image.network(ImageHelper.getSecureUrl(url), 
+            fit: BoxFit.cover, 
+            errorBuilder: (_, __, ___) => Icon(Icons.image_rounded, color: context.colors.textHint), 
           ),
         ),
       ),

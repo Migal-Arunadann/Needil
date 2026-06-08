@@ -443,7 +443,7 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
       gradient: photoUrl == null ? (isPrimary ? context.colors.heroGradient : null) : null,
       color: photoUrl == null && !isPrimary ? context.colors.accent.withValues(alpha: 0.1) : null,
       borderRadius: BorderRadius.circular(12),
-      image: photoUrl != null ? DecorationImage(image: NetworkImage(ImageHelper.getSecureUrl(photoUrl).authStore.token)), fit: BoxFit.cover) : null,
+      image: photoUrl != null ? DecorationImage(image: NetworkImage(ImageHelper.getSecureUrl(photoUrl)), fit: BoxFit.cover) : null,
     ),
     child: photoUrl == null
         ? Icon(isPrimary ? Icons.star_rounded : Icons.person_rounded,
