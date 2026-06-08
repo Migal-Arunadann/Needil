@@ -1,11 +1,15 @@
+import 'dart:io' show Directory, File;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 import 'package:pms_app/core/services/clinic_deletion_service.dart';
 import 'package:pms_app/core/services/data_export_service.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 /// Full-page lockout shown when a clinic is in `status = pending_deletion`.
 /// No sidebar, no navigation — only deletion info + limited actions.
@@ -24,6 +28,7 @@ class _ClinicDeletionScreenState extends ConsumerState<ClinicDeletionScreen>
 
   bool _isExporting = false;
   String? _exportStatus;
+  String? _exportPath;
   bool _isRequesting = false;
   String? _reactivationStatus;
 
@@ -67,6 +72,38 @@ class _ClinicDeletionScreenState extends ConsumerState<ClinicDeletionScreen>
     ));
   }
 
+  Future<Directory?> _getSaveDirectory() async {
+    try {
+      final downloadsDir = await getDownloadsDirectory();
+      if (downloadsDir != null) return downloadsDir;
+    } catch (_) {}
+    try {
+      return await getApplicationDocumentsDirectory();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _openExportFolder() async {
+    if (_exportPath == null) return;
+    try {
+      final uri = Uri.directory(_exportPath!);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      } else {
+        await launchUrl(Uri.parse('file://$_exportPath'));
+      }
+    } catch (e) {
+      _snack('Could not open folder automatically: $e', error: true);
+    }
+  }
+
+  Future<void> _copyExportPath() async {
+    if (_exportPath == null) return;
+    await Clipboard.setData(ClipboardData(text: _exportPath!));
+    _snack('Folder path copied to clipboard');
+  }
+
   Future<void> _downloadData() async {
     final auth = ref.read(authProvider);
     final clinicId = auth.clinicId;
@@ -76,6 +113,7 @@ class _ClinicDeletionScreenState extends ConsumerState<ClinicDeletionScreen>
     setState(() {
       _isExporting = true;
       _exportStatus = 'Fetching data…';
+      _exportPath = null;
     });
 
     try {
@@ -92,11 +130,37 @@ class _ClinicDeletionScreenState extends ConsumerState<ClinicDeletionScreen>
         }
         setState(() => _exportStatus = '✓ ${csvFiles.length} files downloaded!');
       } else {
-        setState(() => _exportStatus =
-            '✓ ${csvFiles.length} CSV files exported successfully.');
+        setState(() => _exportStatus = 'Saving files locally…');
+        final baseDir = await _getSaveDirectory();
+        if (baseDir == null) {
+          throw 'Could not access local storage directories.';
+        }
+
+        final sanitizedName = clinicName
+            .replaceAll(RegExp(r'[^\w\s-]'), '')
+            .trim()
+            .replaceAll(' ', '_');
+        final dateStr = DateTime.now().toIso8601String().substring(0, 10);
+        final exportDir = Directory('${baseDir.path}/Needil_Export_${sanitizedName}_$dateStr');
+        if (!await exportDir.exists()) {
+          await exportDir.create(recursive: true);
+        }
+
+        for (final entry in csvFiles.entries) {
+          final file = File('${exportDir.path}/${entry.key}');
+          await file.writeAsString(entry.value);
+        }
+
+        setState(() {
+          _exportPath = exportDir.path;
+          _exportStatus = '✓ ${csvFiles.length} CSV files exported successfully to:\n${exportDir.path}';
+        });
       }
     } catch (e) {
-      setState(() => _exportStatus = '✗ Export failed: $e');
+      setState(() {
+        _exportStatus = '✗ Export failed: $e';
+        _exportPath = null;
+      });
     } finally {
       setState(() => _isExporting = false);
     }
@@ -295,6 +359,28 @@ class _ClinicDeletionScreenState extends ConsumerState<ClinicDeletionScreen>
                         success: _exportStatus!.startsWith('✓'),
                         error: _exportStatus!.startsWith('✗'),
                       ),
+                      if (_exportPath != null) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _outlineButton(
+                                icon: Icons.folder_open_rounded,
+                                label: 'Open Folder',
+                                onTap: _openExportFolder,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _outlineButton(
+                                icon: Icons.copy_all_rounded,
+                                label: 'Copy Path',
+                                onTap: _copyExportPath,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 12),
                     ],
 

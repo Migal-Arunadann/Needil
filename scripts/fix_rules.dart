@@ -9,8 +9,21 @@ library;
 import 'dart:io';
 import 'dart:convert';
 
-const String pbUrl =
-    'http://pocketbase-ibzovc8gc0m0e8mt4g1pw5aa.178.16.138.198.sslip.io';
+String pbUrl = 'http://pocketbase-ibzovc8gc0m0e8mt4g1pw5aa.178.16.138.198.sslip.io';
+
+String _getPbUrl() {
+  try {
+    final file = File('lib/core/providers/pocketbase_provider.dart');
+    if (file.existsSync()) {
+      final content = file.readAsStringSync();
+      final match = RegExp(r"pbBaseUrl\s*=\s*[\x27\x22]([^\x27\x22]+)[\x27\x22]").firstMatch(content);
+      if (match != null) {
+        return match.group(1)!;
+      }
+    }
+  } catch (_) {}
+  return pbUrl;
+}
 
 // Rules per collection:
 // - Auth collections (clinics, doctors): createRule="" so anyone can register
@@ -84,16 +97,31 @@ final Map<String, Map<String, String?>> _rules = {
     'updateRule': "@request.auth.id != ''",
     'deleteRule': null,
   },
+  'clinic_reactivation_requests': {
+    'listRule': "@request.auth.id != ''",
+    'viewRule': "@request.auth.id != ''",
+    'createRule': "@request.auth.id != ''",
+    'updateRule': null,
+    'deleteRule': null,
+  },
 };
 
 Future<void> main(List<String> args) async {
   if (args.length < 2) {
-    print('Usage: dart run scripts/fix_rules.dart <admin_email> <admin_password>');
+    print('Usage: dart run scripts/fix_rules.dart <admin_email> <admin_password> [pocketbase_url]');
     exit(1);
   }
 
   final email = args[0];
   final password = args[1];
+
+  if (args.length >= 3) {
+    pbUrl = args[2];
+  } else {
+    pbUrl = _getPbUrl();
+  }
+  print('🌐 PocketBase URL: $pbUrl');
+
   final client = HttpClient();
 
   try {
