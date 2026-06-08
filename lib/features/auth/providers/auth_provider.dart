@@ -118,6 +118,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         clinic: result.role == UserRole.clinic ? result.user as ClinicModel : null,
         doctor: result.role == UserRole.doctor ? result.user as DoctorModel : null,
         receptionist: result.role == UserRole.receptionist ? result.user as ReceptionistModel : null,
+        isPendingDeletion: result.isPendingDeletion,
+        purgeAt: result.purgeAt,
       );
     } else {
       state = const AuthState(isInitializing: false);

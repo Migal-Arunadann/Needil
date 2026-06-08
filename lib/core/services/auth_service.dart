@@ -124,10 +124,15 @@ class AuthService {
 
       switch (role) {
         case 'clinic':
+          final clinicRecord = result.record;
+          final clinicStatus = clinicRecord.getStringValue('status');
+          final clinicPurgeAt = DateTime.tryParse(clinicRecord.getStringValue('purge_at'));
           return AuthResult(
             success: true,
             role: UserRole.clinic,
-            user: ClinicModel.fromRecord(result.record),
+            user: ClinicModel.fromRecord(clinicRecord),
+            isPendingDeletion: clinicStatus == 'pending_deletion',
+            purgeAt: clinicPurgeAt,
           );
         case 'doctor':
           return AuthResult(

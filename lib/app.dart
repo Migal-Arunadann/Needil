@@ -6,6 +6,7 @@ import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/core/services/auth_service.dart';
 import 'package:pms_app/features/dashboard/screens/main_layout.dart';
 import 'package:pms_app/features/auth/screens/login_screen.dart';
+import 'package:pms_app/features/auth/screens/clinic_deletion_screen.dart';
 import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step1_screen.dart';
 import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
@@ -57,6 +58,9 @@ class _PmsAppState extends ConsumerState<PmsApp> {
   Widget _getHomeForAuth(AuthState state) {
     if (state.role == UserRole.superadmin) return const SuperadminShell();
     if (state.role == UserRole.clinic) {
+      // Clinic pending self-deletion — full-page lockout, no sidebar/nav
+      if (state.isPendingDeletion) return const ClinicDeletionScreen();
+      // New clinic registration not yet complete
       if (state.clinic != null && state.clinic!.name.isEmpty) {
         return const ClinicStep1Screen();
       }
