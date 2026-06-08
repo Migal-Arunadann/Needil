@@ -152,6 +152,30 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
     }
   }
 
+  Future<void> _cancelSelfDeletion(String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _darkDialog(
+        title: 'Cancel Pending Deletion?',
+        subtitle: 'This will restore "$name" to active status and cancel the scheduled deletion. The clinic and all its data will be preserved.',
+        child: const SizedBox.shrink(),
+        confirmLabel: 'Cancel Deletion',
+        confirmColor: SAColors.success,
+        onConfirm: () => Navigator.pop(context, true),
+        onCancel: () => Navigator.pop(context, false),
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      await SuperadminService(pb).cancelSelfDeletion(widget.clinicId);
+      _snack('Deletion cancelled. Clinic is now active again.');
+      ref.invalidate(_clinicDetailProvider(widget.clinicId));
+    } catch (e) {
+      _snack('Failed: $e', error: true);
+    }
+  }
+
   Future<void> _permanentlyDeleteClinic(String name) async {
     final ctrl = TextEditingController();
     final confirmed = await showDialog<bool>(
@@ -244,6 +268,7 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
                         clinicId: widget.clinicId,
                         onDeactivate: () => _deactivateClinic(clinic.getStringValue('name')),
                         onReactivate: () => _reactivateClinic(clinic.getStringValue('name')),
+                        onCancelSelfDeletion: () => _cancelSelfDeletion(clinic.getStringValue('name')),
                         onPermanentDelete: () => _permanentlyDeleteClinic(clinic.getStringValue('name')),
                         onResetClinicPass: () => _resetPassword('clinic', widget.clinicId, clinic.getStringValue('name')),
                       ),
@@ -589,6 +614,7 @@ class _DangerTab extends ConsumerStatefulWidget {
   final String clinicId;
   final VoidCallback onDeactivate;
   final VoidCallback onReactivate;
+  final VoidCallback onCancelSelfDeletion;
   final VoidCallback onPermanentDelete;
   final VoidCallback onResetClinicPass;
 
@@ -597,6 +623,7 @@ class _DangerTab extends ConsumerStatefulWidget {
     required this.clinicId,
     required this.onDeactivate,
     required this.onReactivate,
+    required this.onCancelSelfDeletion,
     required this.onPermanentDelete,
     required this.onResetClinicPass,
   });
@@ -612,11 +639,21 @@ class _DangerTabState extends ConsumerState<_DangerTab> {
   bool get _isDeactivated =>
       widget.clinicRecord.getBoolValue('is_deactivated');
 
+  /// True when the clinic has self-requested deletion (clinic admin deleted own account).
+  /// This is stored as status='pending_deletion' + purge_at field, distinct from
+  /// superadmin-initiated deactivation (which uses is_deactivated=true).
+  bool get _isPendingDeletion =>
+      widget.clinicRecord.getStringValue('status') == 'pending_deletion' ||
+      widget.clinicRecord.getStringValue('purge_at').isNotEmpty;
+
   DateTime? get _scheduledDeletion => DateTime.tryParse(
       widget.clinicRecord.getStringValue('scheduled_deletion_date'));
 
+  DateTime? get _purgeAt => DateTime.tryParse(
+      widget.clinicRecord.getStringValue('purge_at'));
+
   int get _daysRemaining {
-    final del = _scheduledDeletion;
+    final del = _scheduledDeletion ?? _purgeAt;
     if (del == null) return 30;
     return del.difference(DateTime.now()).inDays.clamp(0, 9999);
   }
@@ -662,7 +699,30 @@ class _DangerTabState extends ConsumerState<_DangerTab> {
       padding: const EdgeInsets.all(20),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // ── Status Banner ──────────────────────────────────────────────────
-        if (_isDeactivated)
+        if (_isPendingDeletion)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.4)),
+            ),
+            child: Row(children: [
+              const Icon(Icons.delete_sweep_rounded, color: Color(0xFFEF4444), size: 22),
+              const SizedBox(width: 12),
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Pending Deletion (Self-Requested)',
+                    style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.w700, fontSize: 14)),
+                Text(
+                  _purgeAt != null
+                      ? 'Clinic requested deletion. Scheduled purge in $_daysRemaining days (${_purgeAt!.toLocal().toString().substring(0, 10)}).'
+                      : 'Clinic has requested account deletion.',
+                  style: const TextStyle(color: SAColors.textHint, fontSize: 12),
+                ),
+              ])),
+            ]),
+          )
+        else if (_isDeactivated)
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -674,7 +734,8 @@ class _DangerTabState extends ConsumerState<_DangerTab> {
               const Icon(Icons.lock_outline_rounded, color: SAColors.warning, size: 22),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Clinic Deactivated', style: const TextStyle(color: SAColors.warning, fontWeight: FontWeight.w700, fontSize: 14)),
+                const Text('Clinic Deactivated (Superadmin)',
+                    style: TextStyle(color: SAColors.warning, fontWeight: FontWeight.w700, fontSize: 14)),
                 Text(
                   _scheduledDeletion != null
                       ? 'Scheduled deletion in $_daysRemaining days (${_scheduledDeletion!.toLocal().toString().substring(0, 10)})'
@@ -799,7 +860,43 @@ class _DangerTabState extends ConsumerState<_DangerTab> {
             ]),
             const SizedBox(height: 10),
 
-            if (!_isDeactivated) ...[
+            if (_isPendingDeletion) ...[
+              // Clinic self-requested deletion via their own account settings
+              Text(
+                '"$clinicName" has requested account deletion. You can cancel this deletion to restore the clinic '
+                'to active status, or permanently delete all data immediately (10 collections). Permanent deletion cannot be undone.',
+                style: const TextStyle(color: SAColors.textHint, fontSize: 12, height: 1.5),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity, height: 46,
+                child: ElevatedButton.icon(
+                  onPressed: widget.onCancelSelfDeletion,
+                  icon: const Icon(Icons.restore_rounded, size: 20),
+                  label: const Text('Cancel Deletion & Restore'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SAColors.success,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity, height: 46,
+                child: ElevatedButton.icon(
+                  onPressed: widget.onPermanentDelete,
+                  icon: const Icon(Icons.delete_forever_rounded, size: 20),
+                  label: const Text('Permanently Delete All Data Now'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SAColors.error,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+            ] else if (!_isDeactivated) ...[
+              // Clinic is active — superadmin can deactivate it
               Text(
                 'Deactivating "$clinicName" will block all clinic, doctor, and receptionist logins immediately. '
                 'The clinic data is preserved for 30 days, after which it can be permanently deleted.',
@@ -820,8 +917,9 @@ class _DangerTabState extends ConsumerState<_DangerTab> {
                 ),
               ),
             ] else ...[
+              // Clinic deactivated by superadmin — can reactivate or permanently delete
               Text(
-                'This clinic is deactivated. You can reactivate it within the 30-day window, '
+                'This clinic is deactivated by superadmin. You can reactivate it within the 30-day window, '
                 'or permanently delete all data now. Permanent deletion removes all records '
                 'across all 10 collections and cannot be undone.',
                 style: const TextStyle(color: SAColors.textHint, fontSize: 12, height: 1.5),

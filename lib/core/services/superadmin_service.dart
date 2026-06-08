@@ -101,6 +101,29 @@ class SuperadminService {
     });
   }
 
+  /// Cancels a clinic's self-initiated deletion request (status = pending_deletion)
+  /// and restores it to active status. This is separate from superadmin-initiated
+  /// deactivation (which uses is_deactivated).
+  Future<void> cancelSelfDeletion(String clinicId) async {
+    await pb.collection(PBCollections.clinics).update(clinicId, body: {
+      'status': 'active',
+      'deletion_requested_at': '',
+      'purge_at': '',
+      'deletion_requested_by': '',
+      'deletion_reason': '',
+    });
+    try {
+      await pb.collection('audit_logs').create(body: {
+        'user_id': pb.authStore.record?.id ?? 'superadmin',
+        'user_role': 'superadmin',
+        'action': 'clinic_deletion_cancelled_by_superadmin',
+        'target_id': clinicId,
+        'details': 'Superadmin cancelled pending deletion. Clinic restored to active.',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (_) {}
+  }
+
   /// Permanently deletes a clinic and cascades through ALL 10 collections.
   Future<void> permanentlyDeleteClinic(String clinicId) async {
     // 1. Fetch all doctor IDs (needed for sessions/consultations filter)
