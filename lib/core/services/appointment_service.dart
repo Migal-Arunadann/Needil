@@ -274,6 +274,8 @@ class AppointmentService {
     List<String>? familyMembers,
     String? howDidYouHear,
     String? photoPath,
+    bool consentGiven = true,
+    bool privacyPolicyAccepted = false,
   }) async {
     // ── Auto-generate patient ID from clinic prefix ──
     String? resolvedPatientId = patientId;
@@ -330,8 +332,10 @@ class AppointmentService {
         'family_members': familyMembers,
       if (howDidYouHear != null && howDidYouHear.isNotEmpty)
         'how_did_you_hear': howDidYouHear,
-      'consent_given': true,
+      'consent_given': consentGiven,
       'consent_date': _todayString(),
+      'privacy_policy_accepted': privacyPolicyAccepted,
+      if (privacyPolicyAccepted) 'privacy_policy_accepted_date': _todayString(),
     };
 
     if (photoPath != null && photoPath.isNotEmpty) {

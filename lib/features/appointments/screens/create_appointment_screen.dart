@@ -57,7 +57,8 @@ class _CreateAppointmentScreenState
   final _emailCtrl = TextEditingController();
   final _referenceCtrl = TextEditingController();
   String? _selectedGender;
-  bool _consentGiven = false;
+  bool _dataConsentGiven = false;
+  bool _privacyPolicyAccepted = false;
   File? _patientPhoto;
   List<Map<String, String>> _familyMembers = [];
   String? _howDidYouHear;
@@ -240,11 +241,11 @@ class _CreateAppointmentScreenState
       return;
     }
 
-    // Consent is mandatory for walk-in
-    if (!_isCallBy && !_consentGiven) {
+    // Both consent checkboxes are mandatory for walk-in
+    if (!_isCallBy && (!_dataConsentGiven || !_privacyPolicyAccepted)) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Patient consent is required to proceed.'),
+          content: const Text('Both consent checkboxes are required to proceed.'),
           backgroundColor: context.colors.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -505,6 +506,8 @@ class _CreateAppointmentScreenState
             : null,
         howDidYouHear: _howDidYouHear,
         photoPath: _patientPhoto?.path,
+        consentGiven: _dataConsentGiven,
+        privacyPolicyAccepted: _privacyPolicyAccepted,
       );
       success = result != null;
     }
@@ -933,8 +936,10 @@ class _CreateAppointmentScreenState
                       referenceCtrl: _referenceCtrl,
                       selectedGender: _selectedGender,
                       onGenderChanged: (v) => setState(() => _selectedGender = v),
-                      consentGiven: _consentGiven,
-                      onConsentChanged: (v) => setState(() => _consentGiven = v),
+                      consentGiven: _dataConsentGiven,
+                      onConsentChanged: (v) => setState(() => _dataConsentGiven = v),
+                      privacyPolicyAccepted: _privacyPolicyAccepted,
+                      onPrivacyPolicyChanged: (v) => setState(() => _privacyPolicyAccepted = v),
                       photoFile: _patientPhoto,
                       onPhotoChanged: (f) => setState(() => _patientPhoto = f),
                       familyMembers: _familyMembers,

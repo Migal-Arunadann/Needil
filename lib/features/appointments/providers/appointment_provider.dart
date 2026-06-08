@@ -168,6 +168,8 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     List<String>? familyMembers,
     String? howDidYouHear,
     String? photoPath,
+    bool consentGiven = true,
+    bool privacyPolicyAccepted = false,
   }) async {
     try {
       final schedulingService = _ref.read(schedulingServiceProvider);
@@ -202,6 +204,8 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
           familyMembers: familyMembers,
           howDidYouHear: howDidYouHear,
           photoPath: photoPath,
+          consentGiven: consentGiven,
+          privacyPolicyAccepted: privacyPolicyAccepted,
         );
         patientId = patient.id;
       }

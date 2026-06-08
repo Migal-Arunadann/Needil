@@ -18,6 +18,8 @@ class PatientModel {
   final String? clinicId;
   final bool consentGiven;
   final String? consentDate;
+  final bool privacyPolicyAccepted;
+  final String? privacyPolicyAcceptedDate;
   final String? gender;
   final String? occupation;
   final String? email;
@@ -52,6 +54,8 @@ class PatientModel {
     this.howDidYouHear,
     this.consentGiven = false,
     this.consentDate,
+    this.privacyPolicyAccepted = false,
+    this.privacyPolicyAcceptedDate,
     this.created,
     this.updated,
   });
@@ -101,6 +105,8 @@ class PatientModel {
       howDidYouHear: record.getStringValue('how_did_you_hear'),
       consentGiven: record.getBoolValue('consent_given'),
       consentDate: record.getStringValue('consent_date'),
+      privacyPolicyAccepted: record.getBoolValue('privacy_policy_accepted'),
+      privacyPolicyAcceptedDate: record.getStringValue('privacy_policy_accepted_date'),
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
     );
@@ -135,6 +141,9 @@ class PatientModel {
       'consent_given': consentGiven,
       if (consentDate != null && consentDate!.isNotEmpty)
         'consent_date': consentDate,
+      'privacy_policy_accepted': privacyPolicyAccepted,
+      if (privacyPolicyAcceptedDate != null && privacyPolicyAcceptedDate!.isNotEmpty)
+        'privacy_policy_accepted_date': privacyPolicyAcceptedDate,
     };
   }
 }

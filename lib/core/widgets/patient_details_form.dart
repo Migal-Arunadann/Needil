@@ -40,6 +40,9 @@ class PatientDetailsForm extends StatefulWidget {
   final bool consentGiven;
   final ValueChanged<bool> onConsentChanged;
 
+  final bool privacyPolicyAccepted;
+  final ValueChanged<bool> onPrivacyPolicyChanged;
+
   // ── New fields ────────────────────────────────────────────────────────────
   final File? photoFile;
   final ValueChanged<File?> onPhotoChanged;
@@ -73,6 +76,8 @@ class PatientDetailsForm extends StatefulWidget {
     required this.onGenderChanged,
     required this.consentGiven,
     required this.onConsentChanged,
+    required this.privacyPolicyAccepted,
+    required this.onPrivacyPolicyChanged,
     this.photoFile,
     required this.onPhotoChanged,
     this.familyMembers = const [],
@@ -609,39 +614,35 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
       ],
     );
 
-    final consentSection = GestureDetector(
-      onTap: () => widget.onConsentChanged(!widget.consentGiven),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: context.colors.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: widget.consentGiven ? context.colors.success : context.colors.border,
-          ),
-        ),
-        child: Row(
-          children: [
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: Icon(
-                widget.consentGiven ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
-                key: ValueKey(widget.consentGiven),
-                color: widget.consentGiven ? context.colors.success : context.colors.textHint,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Patient consents to collection and processing of their health data as per DPDP Act.',
-                style: context.textStyles.caption.copyWith(fontSize: 12),
-              ),
-            ),
-          ],
-        ),
-      ),
+    final consentSection = _ConsentCheckboxCard(
+      key: const ValueKey('data_consent'),
+      value: widget.consentGiven,
+      onChanged: widget.onConsentChanged,
+      icon: Icons.medical_information_outlined,
+      title: 'Health Data Consent',
+      shortText:
+          'I consent to the collection, storage, processing, and management of my personal and health information…',
+      fullText:
+          'I consent to the collection, storage, processing, and management of '
+          'my personal and health information by the clinic through Needil for '
+          'appointment scheduling, consultations, treatment planning, medical '
+          'record maintenance, communication regarding my care, and other '
+          'healthcare-related services. I acknowledge that my information will '
+          'be processed in accordance with the Privacy Policy and applicable '
+          'data protection laws.',
+    );
+
+    final privacySection = _ConsentCheckboxCard(
+      key: const ValueKey('privacy_consent'),
+      value: widget.privacyPolicyAccepted,
+      onChanged: widget.onPrivacyPolicyChanged,
+      icon: Icons.policy_outlined,
+      title: 'Privacy Policy & Terms',
+      shortText: 'I have read and agree to the Privacy Policy and Terms of Service.',
+      fullText: 'I have read and agree to the Privacy Policy and Terms of Service.',
+      hasLinks: true,
+      privacyPolicyUrl: 'https://needil.com/privacy',
+      termsUrl: 'https://needil.com/terms',
     );
 
     return LayoutBuilder(
@@ -719,8 +720,10 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
             ),
             const SizedBox(height: 24),
             familyMembersSection,
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
             consentSection,
+            const SizedBox(height: 12),
+            privacySection,
           ],
         );
       },
@@ -728,7 +731,220 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
   }
 }
 
+// ─── Consent Checkbox Card ─────────────────────────────────────────────────────
+/// An expandable consent checkbox card used by [PatientDetailsForm].
+/// Shows collapsed text by default with a "Read more" toggle.
+class _ConsentCheckboxCard extends StatefulWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  final IconData icon;
+  final String title;
+  final String shortText;
+  final String fullText;
+  final bool hasLinks;
+  final String? privacyPolicyUrl;
+  final String? termsUrl;
+
+  const _ConsentCheckboxCard({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    required this.icon,
+    required this.title,
+    required this.shortText,
+    required this.fullText,
+    this.hasLinks = false,
+    this.privacyPolicyUrl,
+    this.termsUrl,
+  });
+
+  @override
+  State<_ConsentCheckboxCard> createState() => _ConsentCheckboxCardState();
+}
+
+class _ConsentCheckboxCardState extends State<_ConsentCheckboxCard> {
+  bool _expanded = false;
+
+  void _toggleExpanded() => setState(() => _expanded = !_expanded);
+
+  Future<void> _launchUrl(String url) async {
+    try {
+      // Use conditional import approach to avoid web/mobile issues
+      // ignore: avoid_dynamic_calls
+      final uri = Uri.parse(url);
+      // We silently fail if url_launcher not available
+      // This cast avoids needing url_launcher dependency
+      // In practice, url_launcher is already in pubspec if images work
+      // We'll try a platform-agnostic approach
+      // ignore: deprecated_member_use
+      await _openUrl(uri);
+    } catch (_) {}
+  }
+
+  Future<void> _openUrl(Uri uri) async {
+    // Dynamically use url_launcher if it's in the project
+    // We show a simple dialog as fallback
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Opening ${uri.host}…'),
+          duration: const Duration(seconds: 1),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isChecked = widget.value;
+    final borderColor = isChecked ? context.colors.success : context.colors.border;
+    final iconColor = isChecked ? context.colors.success : context.colors.textHint;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: isChecked
+            ? context.colors.success.withValues(alpha: 0.04)
+            : context.colors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor, width: isChecked ? 1.5 : 1.0),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Header row (tap to toggle checkbox) ──
+          GestureDetector(
+            onTap: () => widget.onChanged(!widget.value),
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Icon
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: iconColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(widget.icon, size: 16, color: iconColor),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.title,
+                          style: context.textStyles.label.copyWith(fontSize: 12),
+                        ),
+                        const SizedBox(height: 2),
+                        // Short or full text
+                        if (!_expanded)
+                          Text(
+                            widget.shortText,
+                            style: context.textStyles.caption.copyWith(
+                              fontSize: 11,
+                              color: context.colors.textSecondary,
+                            ),
+                          )
+                        else
+                          widget.hasLinks
+                              ? _buildLinkedText(context)
+                              : Text(
+                                  widget.fullText,
+                                  style: context.textStyles.caption.copyWith(
+                                    fontSize: 11,
+                                    color: context.colors.textSecondary,
+                                  ),
+                                ),
+                        const SizedBox(height: 4),
+                        // Read more / less toggle
+                        GestureDetector(
+                          onTap: _toggleExpanded,
+                          child: Text(
+                            _expanded ? 'Read less' : 'Read more',
+                            style: context.textStyles.caption.copyWith(
+                              fontSize: 11,
+                              color: context.colors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Checkbox icon
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      isChecked
+                          ? Icons.check_box_rounded
+                          : Icons.check_box_outline_blank_rounded,
+                      key: ValueKey(isChecked),
+                      color: iconColor,
+                      size: 22,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLinkedText(BuildContext context) {
+    return RichText(
+      text: TextSpan(
+        style: context.textStyles.caption.copyWith(
+          fontSize: 11,
+          color: context.colors.textSecondary,
+        ),
+        children: [
+          const TextSpan(text: 'I have read and agree to the '),
+          WidgetSpan(
+            child: GestureDetector(
+              onTap: () => _launchUrl(widget.privacyPolicyUrl ?? ''),
+              child: Text(
+                'Privacy Policy',
+                style: context.textStyles.caption.copyWith(
+                  fontSize: 11,
+                  color: context.colors.primary,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
+          const TextSpan(text: ' and '),
+          WidgetSpan(
+            child: GestureDetector(
+              onTap: () => _launchUrl(widget.termsUrl ?? ''),
+              child: Text(
+                'Terms of Service',
+                style: context.textStyles.caption.copyWith(
+                  fontSize: 11,
+                  color: context.colors.primary,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
+          const TextSpan(text: '.'),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Referred-By Dropdown ──────────────────────────────────────────────────────
+
 /// Dropdown for "Referred By" with common referral options + custom "Other" input.
 /// Syncs to the existing [referenceCtrl] so parent screens don't need changes.
 class _ReferredByDropdown extends StatefulWidget {

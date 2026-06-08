@@ -28,7 +28,8 @@ class PatientInfoScreen extends ConsumerStatefulWidget {
 class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isSubmitting = false;
-  bool _consentGiven = false;
+  bool _dataConsentGiven = false;
+  bool _privacyPolicyAccepted = false;
   String? _selectedGender;
 
   final _nameCtrl = TextEditingController();
@@ -118,9 +119,9 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
       return;
     }
 
-    if (!_consentGiven) {
+    if (!_dataConsentGiven || !_privacyPolicyAccepted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Patient consent is required to proceed.'),
+        content: const Text('Both consent checkboxes are required to proceed.'),
         backgroundColor: context.colors.error,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -198,7 +199,61 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
               : null,
           howDidYouHear: _howDidYouHear,
           photoPath: _patientPhoto?.path,
+          consentGiven: _dataConsentGiven,
+          privacyPolicyAccepted: _privacyPolicyAccepted,
         );
+
+        // ── Consent Audit Logging ──────────────────────────────────────────
+        // Log each consent type to consent_records for a full audit trail
+        try {
+          final pb = ref.read(pocketbaseProvider);
+          final now = DateTime.now().toUtc().toIso8601String();
+          const dataConsentText =
+              'I consent to the collection, storage, processing, and management of '
+              'my personal and health information by the clinic through Needil for '
+              'appointment scheduling, consultations, treatment planning, medical '
+              'record maintenance, communication regarding my care, and other '
+              'healthcare-related services.';
+          const privacyPolicyText =
+              'I have read and agree to the Privacy Policy and Terms of Service.';
+          // Simple hash using string length + checksum (no crypto dependency needed)
+          String textHash(String text) {
+            final bytes = text.codeUnits;
+            int hash = 0;
+            for (final b in bytes) { hash = (hash * 31 + b) & 0x7FFFFFFF; }
+            return 'v1.0:${hash.toRadixString(16).padLeft(8, '0')}';
+          }
+          await pb.collection('consent_records').create(body: {
+            'patient_id': patient.id,
+            'clinic_id': widget.appointment.clinicId ?? '',
+            'consent_type': 'data_processing',
+            'granted': true,
+            'version': '1.0',
+            'text_hash': textHash(dataConsentText),
+            'taken_by_staff_id': ref.read(authProvider).userId ?? '',
+            'timestamp': now,
+            // Legacy fields (keep for backwards compat with ConsentScreen)
+            'user_id': patient.id,
+            'purpose': 'Patient health data consent — DPDP Act 2023',
+            'withdrawn': false,
+          });
+          await pb.collection('consent_records').create(body: {
+            'patient_id': patient.id,
+            'clinic_id': widget.appointment.clinicId ?? '',
+            'consent_type': 'privacy_policy',
+            'granted': true,
+            'version': '1.0',
+            'text_hash': textHash(privacyPolicyText),
+            'taken_by_staff_id': ref.read(authProvider).userId ?? '',
+            'timestamp': now,
+            'user_id': patient.id,
+            'purpose': 'Privacy Policy & Terms of Service acceptance',
+            'withdrawn': false,
+          });
+        } catch (_) {
+          // Non-fatal: audit logging failure should not block patient registration
+        }
+        // ── End Consent Audit Logging ────────────────────────────────────────
       }
 
       await service.linkPatient(widget.appointment.id, patient.id);
@@ -304,8 +359,10 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                     referenceCtrl: _referenceCtrl,
                     selectedGender: _selectedGender,
                     onGenderChanged: (v) => setState(() => _selectedGender = v),
-                    consentGiven: _consentGiven,
-                    onConsentChanged: (v) => setState(() => _consentGiven = v),
+                    consentGiven: _dataConsentGiven,
+                    onConsentChanged: (v) => setState(() => _dataConsentGiven = v),
+                    privacyPolicyAccepted: _privacyPolicyAccepted,
+                    onPrivacyPolicyChanged: (v) => setState(() => _privacyPolicyAccepted = v),
                     photoFile: _patientPhoto,
                     onPhotoChanged: (f) => setState(() => _patientPhoto = f),
                     familyMembers: _familyMembers,
