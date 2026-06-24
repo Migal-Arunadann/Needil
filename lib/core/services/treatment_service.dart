@@ -536,6 +536,12 @@ class TreatmentService {
     if (isCompleted) {
       // Also mark the linked appointment as completed
       await _syncAppointmentStatus(session, 'completed');
+      try {
+        await pb.collection(PBCollections.treatmentPlans).update(
+          session.treatmentPlanId,
+          body: {'consecutive_misses': 0},
+        );
+      } catch (_) {}
     }
 
     return session;

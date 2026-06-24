@@ -358,6 +358,64 @@ class SessionLifecycleService {
     } catch (_) {}
   }
 
+  /// Retrieves all active treatment plans that have 3+ consecutive misses
+  /// and are not paused.
+  Future<List<TreatmentPlanModel>> getPendingMissedPlans(String doctorIdOrClinicId, {bool isClinic = false}) async {
+    try {
+      String filter;
+      if (isClinic) {
+        final docs = await pb.collection('doctors').getList(
+          filter: 'clinic = "$doctorIdOrClinicId"',
+          perPage: 50,
+        );
+        if (docs.items.isEmpty) return [];
+        final doctorFilter = docs.items.map((doc) => 'doctor = "${doc.id}"').join(' || ');
+        filter = '($doctorFilter) && consecutive_misses >= 3 && is_paused = false && status = "active"';
+      } else {
+        filter = 'doctor = "$doctorIdOrClinicId" && consecutive_misses >= 3 && is_paused = false && status = "active"';
+      }
+
+      final result = await pb.collection(PBCollections.treatmentPlans).getList(
+        filter: filter,
+        expand: 'patient,doctor',
+        perPage: 100,
+      );
+
+      return result.items.map((r) => TreatmentPlanModel.fromRecord(r)).toList();
+    } catch (e) {
+      debugPrint('[SessionLifecycle] getPendingMissedPlans error: $e');
+      return [];
+    }
+  }
+
+  /// Public entry point to explicitly run auto-rescheduling for a plan
+  /// that was held back due to hitting the miss limit.
+  Future<List<String>> autoRescheduleForPlan(String planId) async {
+    try {
+      // Fetch all sessions for this plan with status = 'missed'
+      final sessRes = await pb.collection(PBCollections.sessions).getList(
+        filter: 'treatment_plan = "$planId" && status = "missed"',
+        sort: 'session_number',
+        perPage: 100,
+      );
+
+      final missedSessions = sessRes.items.map((r) => SessionModel.fromRecord(r)).toList();
+      if (missedSessions.isEmpty) return [];
+
+      final results = await _autoRescheduleForPlan(planId, missedSessions);
+
+      // Reset consecutive misses to 0 since we have rescheduled them
+      await pb.collection(PBCollections.treatmentPlans).update(planId, body: {
+        'consecutive_misses': 0,
+      });
+
+      return results;
+    } catch (e) {
+      debugPrint('[SessionLifecycle] autoRescheduleForPlan error: $e');
+      return [];
+    }
+  }
+
   String _formatDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }

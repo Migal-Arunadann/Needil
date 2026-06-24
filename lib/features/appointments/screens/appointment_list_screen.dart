@@ -21,10 +21,12 @@ import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/core/services/auth_service.dart';
 import 'package:pms_app/core/services/session_lifecycle_service.dart';
 import 'package:pms_app/features/appointments/screens/patient_info_screen.dart';
+import 'package:pms_app/features/appointments/screens/auto_scheduling_dashboard.dart';
 import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
 import 'package:pms_app/features/analytics/providers/analytics_provider.dart';
 import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 import 'package:pms_app/features/treatments/models/session_model.dart';
+import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/services/session_timer_service.dart';
 import 'package:pms_app/core/utils/whatsapp_helper.dart';
@@ -47,6 +49,8 @@ class _AppointmentListScreenState
   late List<DateTime> _dates;
   bool _hasMultipleDoctors = false;
   bool _lifecycleChecked = false;
+  List<TreatmentPlanModel> _pendingAutoSchedulingPlans = [];
+  bool _didAutoPopupDashboard = false;
   String? _clinicLocation;
   String _selectedListFilter = 'all'; // 'all', 'consultations', 'sessions'
   String _activeQuickFilter = 'today'; // 'today', 'tomorrow', 'this_week', 'all'
@@ -77,8 +81,6 @@ class _AppointmentListScreenState
     final pb = ref.read(pocketbaseProvider);
     final lifecycle = SessionLifecycleService(pb);
 
-    List<String> allSummaries = [];
-
     if (auth.role == UserRole.clinic && auth.clinicId != null) {
       // Clinic: check for all doctors in the clinic
       try {
@@ -87,128 +89,63 @@ class _AppointmentListScreenState
           perPage: 50,
         );
         for (final doc in docs.items) {
-          final sums = await lifecycle.checkAndMarkMissedSessions(doc.id);
-          allSummaries.addAll(sums);
+          // Run lifecycle check for side effects (marking missed, auto-rescheduling 1-2 misses)
+          await lifecycle.checkAndMarkMissedSessions(doc.id);
         }
       } catch (_) {}
     } else if (auth.userId != null) {
-      allSummaries = await lifecycle.checkAndMarkMissedSessions(auth.userId!);
+      // Run lifecycle check for side effects (marking missed, auto-rescheduling 1-2 misses)
+      await lifecycle.checkAndMarkMissedSessions(auth.userId!);
     }
 
-    if (allSummaries.isNotEmpty && mounted) {
-      // Separate pause prompts from regular rescheduling summaries
-      final pausePrompts = allSummaries.where((s) => s.startsWith('PAUSE_PROMPT:')).toList();
-      final rescheduleSummaries = allSummaries.where((s) => !s.startsWith('PAUSE_PROMPT:')).toList();
+    // Load any pending auto-scheduling plans (from DB, including any newly detected)
+    await _loadPendingAutoScheduling();
 
+    if (mounted) {
       ref.read(appointmentListProvider.notifier).loadAppointments();
 
-      // Show rescheduling notification
-      if (rescheduleSummaries.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-            '${rescheduleSummaries.length} session(s) auto-rescheduled:\n${rescheduleSummaries.take(3).join('\n')}'
-            '${rescheduleSummaries.length > 3 ? '\n...and ${rescheduleSummaries.length - 3} more' : ''}',
-          ),
-          backgroundColor: context.colors.warning,
-          duration: const Duration(seconds: 6),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ));
-      }
+      // Silent auto-reschedules (1–2 misses) are fully silent — no snackbar.
+      // Only the dashboard popup is used for 3+ consecutive misses.
 
-      // Show pause dialogs for plans that hit the 3-miss limit
-      for (final prompt in pausePrompts) {
-        if (!mounted) break;
-        final parts = prompt.split(':');
-        if (parts.length < 4) continue;
-        final planId = parts[1];
-        final patientName = parts[2];
-        final missCount = parts[3];
-        await _showPausePromptDialog(planId, patientName, int.tryParse(missCount) ?? 3);
+      // Auto-popup the dashboard if there are pending plans and we haven't popped up yet
+      if (_pendingAutoSchedulingPlans.isNotEmpty && !_didAutoPopupDashboard) {
+        _didAutoPopupDashboard = true;
+        // Delay slightly to let the UI finish mounting and rendering
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            AutoSchedulingDashboard.show(
+              context,
+              plans: _pendingAutoSchedulingPlans,
+              onRefresh: () {
+                _loadPendingAutoScheduling();
+                ref.read(appointmentListProvider.notifier).loadAppointments();
+              },
+            );
+          }
+        });
       }
     }
   }
 
-  /// Show dialog when a plan hits the 3-consecutive-miss limit.
-  Future<void> _showPausePromptDialog(String planId, String patientName, int missCount) async {
-    final result = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        backgroundColor: context.colors.surface,
-        title: Row(children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-              color: context.colors.warning.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(Icons.warning_amber_rounded, color: context.colors.warning, size: 22),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: Text('$missCount Consecutive Misses', style: context.textStyles.h3)),
-        ]),
-        content: Text(
-          '$patientName has missed $missCount consecutive sessions.\n\nWould you like to pause their sessions or continue auto-rescheduling?',
-          style: context.textStyles.bodyMedium,
-        ),
-        actions: [
-          TextButton.icon(
-            onPressed: () => Navigator.pop(ctx, 'pause'),
-            icon: Icon(Icons.pause_circle_rounded, color: context.colors.error, size: 18),
-            label: Text('Pause Sessions', style: TextStyle(color: context.colors.error, fontWeight: FontWeight.w600)),
-          ),
-          ElevatedButton.icon(
-            onPressed: () => Navigator.pop(ctx, 'continue'),
-            icon: const Icon(Icons.fast_forward_rounded, size: 18),
-            label: const Text('Continue Rescheduling'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: context.colors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
-        ],
-      ),
-    );
+  /// Loads the pending auto-scheduling plans for the current doctor/clinic
+  Future<void> _loadPendingAutoScheduling() async {
+    final auth = ref.read(authProvider);
+    final pb = ref.read(pocketbaseProvider);
+    final lifecycle = SessionLifecycleService(pb);
 
-    if (!mounted) return;
+    List<TreatmentPlanModel> pending = [];
+    try {
+      if (auth.role == UserRole.clinic && auth.clinicId != null) {
+        pending = await lifecycle.getPendingMissedPlans(auth.clinicId!, isClinic: true);
+      } else if (auth.userId != null) {
+        pending = await lifecycle.getPendingMissedPlans(auth.userId!, isClinic: false);
+      }
+    } catch (_) {}
 
-    if (result == 'pause') {
-      try {
-        final service = ref.read(treatmentServiceProvider);
-        await service.pauseSessions(planId);
-        ref.read(appointmentListProvider.notifier).loadAppointments();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Sessions for $patientName have been paused'),
-            backgroundColor: context.colors.info,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ));
-        }
-      } catch (e) {
-        if (mounted) _showError('Failed to pause: $e');
-      }
-    } else if (result == 'continue') {
-      // Reset the consecutive miss counter and let auto-reschedule continue
-      try {
-        final pb = ref.read(pocketbaseProvider);
-        await pb.collection('treatment_plans').update(planId, body: {
-          'consecutive_misses': 0,
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Auto-rescheduling will continue for $patientName'),
-            backgroundColor: context.colors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ));
-        }
-      } catch (e) {
-        if (mounted) _showError('Failed: $e');
-      }
+    if (mounted) {
+      setState(() {
+        _pendingAutoSchedulingPlans = pending;
+      });
     }
   }
 
@@ -388,17 +325,69 @@ class _AppointmentListScreenState
       
       final schedService = SchedulingService(pb);
       final daySchedule = schedService.getScheduleForDay(doctor.workingSchedule, DateTime.now().weekday);
-      if (daySchedule == null) {
-        if (mounted) _showError("Doctor is not scheduled to work today.");
-        return;
-      }
       
-      final now = DateTime.now();
-      final nowStr = '${now.hour.toString().padLeft(2,'0')}:${now.minute.toString().padLeft(2,'0')}';
-      if (!schedService.isWithinWorkingHours(daySchedule, nowStr)) {
-        if (mounted) _showError("Patient arrival can only be captured between doctor's working hours.");
-        return;
+      bool proceed = true;
+      if (daySchedule == null) {
+        if (mounted) {
+          final confirm = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              backgroundColor: context.colors.surface,
+              title: Row(children: [
+                Icon(Icons.warning_amber_rounded, color: context.colors.warning, size: 22),
+                const SizedBox(width: 10),
+                const Text('Doctor Not Scheduled'),
+              ]),
+              content: Text('Doctor is not scheduled to work today. Do you want to mark ${apt.displayName} as arrived anyway?'),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: context.colors.warning, foregroundColor: Colors.white),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Mark Arrived'),
+                ),
+              ],
+            ),
+          );
+          proceed = confirm == true;
+        } else {
+          proceed = false;
+        }
+      } else {
+        final now = DateTime.now();
+        final nowStr = '${now.hour.toString().padLeft(2,'0')}:${now.minute.toString().padLeft(2,'0')}';
+        if (!schedService.isWithinWorkingHours(daySchedule, nowStr)) {
+          if (mounted) {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                backgroundColor: context.colors.surface,
+                title: Row(children: [
+                  Icon(Icons.warning_amber_rounded, color: context.colors.warning, size: 22),
+                  const SizedBox(width: 10),
+                  const Text('Outside Working Hours'),
+                ]),
+                content: Text('Patient arrival is outside the doctor\'s working hours today. Do you want to mark ${apt.displayName} as arrived anyway?'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: context.colors.warning, foregroundColor: Colors.white),
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Mark Arrived'),
+                  ),
+                ],
+              ),
+            );
+            proceed = confirm == true;
+          } else {
+            proceed = false;
+          }
+        }
       }
+
+      if (!proceed) return;
 
       final service = ref.read(appointmentServiceProvider);
       await service.markArrived(apt.id);
@@ -988,6 +977,119 @@ class _AppointmentListScreenState
     ));
   }
 
+  Widget _buildAutoSchedulingButton({bool desktop = false}) {
+    final hasPending = _pendingAutoSchedulingPlans.isNotEmpty;
+
+    if (desktop) {
+      return GestureDetector(
+        onTap: () {
+          AutoSchedulingDashboard.show(
+            context,
+            plans: _pendingAutoSchedulingPlans,
+            onRefresh: () {
+              _loadPendingAutoScheduling();
+              ref.read(appointmentListProvider.notifier).loadAppointments();
+            },
+          );
+        },
+        child: Container(
+          height: 40,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: hasPending ? context.colors.warning.withValues(alpha: 0.1) : context.colors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: hasPending ? context.colors.warning : context.colors.border.withValues(alpha: 0.5),
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                hasPending ? Icons.sync_problem_rounded : Icons.sync_rounded,
+                size: 18,
+                color: hasPending ? context.colors.warning : context.colors.textSecondary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Auto-Scheduling',
+                style: context.textStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: hasPending ? context.colors.warning : context.colors.textSecondary,
+                ),
+              ),
+              if (hasPending) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: context.colors.error,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${_pendingAutoSchedulingPlans.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
+    } else {
+      return GestureDetector(
+        onTap: () {
+          AutoSchedulingDashboard.show(
+            context,
+            plans: _pendingAutoSchedulingPlans,
+            onRefresh: () {
+              _loadPendingAutoScheduling();
+              ref.read(appointmentListProvider.notifier).loadAppointments();
+            },
+          );
+        },
+        child: hasPending
+            ? Badge(
+                label: Text('${_pendingAutoSchedulingPlans.length}'),
+                backgroundColor: context.colors.error,
+                child: Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    color: context.colors.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: context.colors.warning.withValues(alpha: 0.5),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Icon(
+                    Icons.sync_problem_rounded,
+                    size: 20,
+                    color: context.colors.warning,
+                  ),
+                ),
+              )
+            : Container(
+                width: 44, height: 44,
+                decoration: BoxDecoration(
+                  color: context.colors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.sync_rounded,
+                  size: 20,
+                  color: context.colors.textSecondary,
+                ),
+              ),
+      );
+    }
+  }
+
   Widget _buildNewAppointmentButton({bool compact = false}) {
     return PopupMenuButton<bool>(
       onSelected: (isCallBy) {
@@ -1280,7 +1382,13 @@ class _AppointmentListScreenState
                               ),
                             ],
                           ),
-                          _buildNewAppointmentButton(),
+                          Row(
+                            children: [
+                              _buildAutoSchedulingButton(desktop: true),
+                              const SizedBox(width: 12),
+                              _buildNewAppointmentButton(),
+                            ],
+                          ),
                         ],
                       ),
                     ),
@@ -1577,6 +1685,8 @@ class _AppointmentListScreenState
                                   child: Icon(Icons.calendar_month_rounded, size: 20, color: context.colors.primary),
                                 ),
                               ),
+                              const SizedBox(width: 8),
+                              _buildAutoSchedulingButton(desktop: false),
                             ],
                           ),
                         ],
@@ -2446,6 +2556,8 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
       statusColor = context.colors.error; statusStr = 'Cancelled'; statusIcon = Icons.cancel_rounded;
     } else if (apt.status == AppointmentStatus.inProgress) {
       statusColor = context.colors.warning; statusStr = 'In Progress'; statusIcon = Icons.sync_rounded;
+    } else if (apt.status == AppointmentStatus.waiting) {
+      statusColor = const Color(0xFFF59E0B); statusStr = 'Waiting'; statusIcon = Icons.hourglass_empty_rounded;
     } else if (apt.status == AppointmentStatus.scheduled) {
       statusColor = const Color(0xFF7C3AED); statusStr = 'Scheduled'; statusIcon = Icons.access_time_filled;
     }
@@ -2456,7 +2568,10 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
     final typeIcon = isCallBy ? Icons.event_note_rounded : Icons.directions_walk_rounded;
 
     final isScheduled = apt.status == AppointmentStatus.scheduled;
+    final isWaiting = apt.status == AppointmentStatus.waiting;
     final isInProgress = apt.status == AppointmentStatus.inProgress;
+    // Treat waiting + inProgress together as the "active" post-arrival state
+    final isActive = isWaiting || isInProgress;
     final hasPatientLinked = apt.patientId != null && apt.patientId!.isNotEmpty;
 
     // Step 1: Patient Arrived
@@ -2464,7 +2579,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
     final showRescheduleBtn = isScheduled && (widget.isFutureDate || !widget.isMissed) || widget.isMissed && !isInProgress;
 
     // Step 2: Fill Patient Details
-    final showFillDetailsBtn = isInProgress && !hasPatientLinked && isCallBy;
+    final showFillDetailsBtn = isActive && !hasPatientLinked && isCallBy;
     final fillDetailsLabel = apt.patientDetailsPartial && !apt.patientDetailsSaved
         ? 'Resume Filling Details'
         : 'Fill Patient Details';
@@ -2476,7 +2591,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
         (!isCallBy && hasPatientLinked);
 
     // Step 3: Start/Resume Consultation
-    final showStartConsultationBtn = isInProgress &&
+    final showStartConsultationBtn = isActive &&
         hasPatientLinked &&
         effectivePatientDetailsSaved &&
         !apt.consultationFormSaved;
@@ -2498,14 +2613,14 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
     final effectiveShowStartConsultation = showStartConsultationBtn && !isReceptionist;
     final effectiveShowPlanSection = showPlanSection && !isReceptionist;
     final isCompleted = apt.status == AppointmentStatus.completed;
-    final showEndedBtn = apt.consultationFormSaved && !isReceptionist && !isCompleted;
+    final showEndedBtn = apt.consultationFormSaved && !isReceptionist && !isCompleted && !isWaiting;
 
     // Left accent color
     final accentColor = widget.isMissed || apt.status == AppointmentStatus.cancelled
         ? context.colors.error
         : widget.isLate
             ? context.colors.warning
-            : isInProgress
+            : isActive
                 ? context.colors.warning
                 : statusColor;
 
@@ -2706,7 +2821,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                                 ),
                                               ),
                                               if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty &&
-                                                  !(isInProgress && apt.checkInTime != null && apt.consultationStartTime != null && !apt.consultationFormSaved)) ...[
+                                                  !(isActive && apt.checkInTime != null && apt.consultationStartTime != null && !apt.consultationFormSaved)) ...[
                                                 const SizedBox(height: 8),
                                                 _buildContactButtons(context, apt),
                                               ],
@@ -2800,7 +2915,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                               ),
                                             ),
                                             if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty &&
-                                                !(isInProgress && apt.checkInTime != null && apt.consultationStartTime != null && !apt.consultationFormSaved)) ...[
+                                                !(isActive && apt.checkInTime != null && apt.consultationStartTime != null && !apt.consultationFormSaved)) ...[
                                               const SizedBox(height: 8),
                                               _buildContactButtons(context, apt),
                                             ],
@@ -2911,7 +3026,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                     ),
 
                                   // Undo Arrival
-                                  if (isCallBy && isInProgress && apt.checkInTime != null &&
+                                  if (isCallBy && isActive && apt.checkInTime != null &&
                                       !apt.patientDetailsSaved && !apt.consultationFormSaved) ...[
                                     const SizedBox(height: 8),
                                     Row(
