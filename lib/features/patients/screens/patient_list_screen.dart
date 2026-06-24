@@ -618,24 +618,27 @@ class _WebDesktopTable extends StatelessWidget {
   }
 }
 
-class _WebDesktopTableRow extends StatefulWidget {
+class _WebDesktopTableRow extends ConsumerStatefulWidget {
   final PatientModel patient;
   final VoidCallback onTap;
   const _WebDesktopTableRow({required this.patient, required this.onTap});
 
   @override
-  State<_WebDesktopTableRow> createState() => _WebDesktopTableRowState();
+  ConsumerState<_WebDesktopTableRow> createState() => _WebDesktopTableRowState();
 }
 
-class _WebDesktopTableRowState extends State<_WebDesktopTableRow> {
+class _WebDesktopTableRowState extends ConsumerState<_WebDesktopTableRow> {
   bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width >= 900;
     final patient = widget.patient;
-    final lastVisit = (patient.updated ?? patient.created) != null
-        ? DateFormat('MMM d, yyyy').format(patient.updated ?? patient.created!)
+    
+    final lastVisitDates = ref.watch(patientListProvider.select((s) => s.lastVisitDates));
+    final lastVisitDate = lastVisitDates[patient.id];
+    final lastVisit = lastVisitDate != null
+        ? DateFormat('MMM d, yyyy').format(lastVisitDate)
         : '\u2014';
     final initials =
         patient.fullName.isNotEmpty ? patient.fullName[0].toUpperCase() : '?';

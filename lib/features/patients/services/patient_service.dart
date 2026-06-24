@@ -42,4 +42,41 @@ class PatientService {
     );
     return result.items.map((r) => PatientModel.fromRecord(r)).toList();
   }
+
+  /// Update an existing patient record.
+  Future<PatientModel> updatePatient(String patientId, Map<String, dynamic> body) async {
+    final record = await pb.collection(PBCollections.patients).update(patientId, body: body);
+    return PatientModel.fromRecord(record);
+  }
+
+  /// Fetch the latest completed appointment date for a list of patient IDs.
+  Future<Map<String, DateTime>> getLastVisitDates(List<String> patientIds) async {
+    if (patientIds.isEmpty) return {};
+
+    final idsFilter = patientIds.map((id) => 'patient = "$id"').join(' || ');
+    final filter = 'status = "completed" && ($idsFilter)';
+
+    try {
+      final records = await pb.collection(PBCollections.appointments).getFullList(
+        filter: filter,
+        sort: '-date,-time',
+        fields: 'patient,date',
+      );
+
+      final Map<String, DateTime> lastVisits = {};
+      for (final r in records) {
+        final pId = r.getStringValue('patient');
+        final dateStr = r.getStringValue('date');
+        if (pId.isNotEmpty && dateStr.isNotEmpty && !lastVisits.containsKey(pId)) {
+          final dt = DateTime.tryParse(dateStr);
+          if (dt != null) {
+            lastVisits[pId] = dt;
+          }
+        }
+      }
+      return lastVisits;
+    } catch (_) {
+      return {};
+    }
+  }
 }

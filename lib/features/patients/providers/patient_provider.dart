@@ -13,22 +13,26 @@ final patientServiceProvider = Provider<PatientService>((ref) {
 class PatientListState {
   final bool isLoading;
   final List<PatientModel> patients;
+  final Map<String, DateTime> lastVisitDates;
   final String? error;
 
   const PatientListState({
     this.isLoading = false,
     this.patients = const [],
+    this.lastVisitDates = const {},
     this.error,
   });
 
   PatientListState copyWith({
     bool? isLoading,
     List<PatientModel>? patients,
+    Map<String, DateTime>? lastVisitDates,
     String? error,
   }) {
     return PatientListState(
       isLoading: isLoading ?? this.isLoading,
       patients: patients ?? this.patients,
+      lastVisitDates: lastVisitDates ?? this.lastVisitDates,
       error: error,
     );
   }
@@ -49,7 +53,7 @@ class PatientListNotifier extends StateNotifier<PatientListState> {
       
       final userId = _authState.userId;
       if (userId == null) {
-        state = state.copyWith(isLoading: false, patients: []);
+        state = state.copyWith(isLoading: false, patients: [], lastVisitDates: {});
         return;
       }
 
@@ -59,7 +63,15 @@ class PatientListNotifier extends StateNotifier<PatientListState> {
         result = await _service.getDoctorPatients(userId);
       }
 
-      state = state.copyWith(isLoading: false, patients: result);
+      // Fetch last completed appointment dates for all patients in batch
+      final patientIds = result.map((p) => p.id).toList();
+      final lastVisits = await _service.getLastVisitDates(patientIds);
+
+      state = state.copyWith(
+        isLoading: false,
+        patients: result,
+        lastVisitDates: lastVisits,
+      );
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }

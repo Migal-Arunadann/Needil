@@ -15,6 +15,8 @@ import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/features/dashboard/widgets/dashboard_widgets.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/widgets/app_text_field.dart';
+import 'package:pms_app/features/patients/providers/patient_provider.dart';
 
 
 class PatientProfileScreen extends ConsumerStatefulWidget {
@@ -31,6 +33,7 @@ class PatientProfileScreen extends ConsumerStatefulWidget {
 class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  late PatientModel _patient;
 
   /// null = not yet checked; '' = none found; non-empty = ongoing consultation ID.
   String? _ongoingConsultationId;
@@ -42,6 +45,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   @override
   void initState() {
     super.initState();
+    _patient = widget.patient;
     _desktopTabIndex = widget.initialTabIndex == 2 ? 0 : widget.initialTabIndex;
     _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTabIndex);
     _tabController.addListener(() {
@@ -66,8 +70,8 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
       final aptService = ref.read(appointmentServiceProvider);
       final ongoing = await aptService.findOngoingConsultation(
-        widget.patient.id,
-        widget.patient.doctorId,
+        _patient.id,
+        _patient.doctorId,
       );
       if (mounted) setState(() => _ongoingConsultationId = ongoing?.id ?? '');
     } catch (_) {
@@ -216,6 +220,13 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       appBar: AppBar(
         title: Text('Patient Profile', style: context.textStyles.h4),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_rounded),
+            tooltip: 'Edit Profile',
+            onPressed: _openEditPatientDialog,
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: context.colors.primary,
@@ -243,6 +254,20 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     );
   }
 
+  Future<void> _openEditPatientDialog() async {
+    final result = await showDialog<PatientModel>(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => _EditPatientDialog(patient: _patient),
+    );
+
+    if (result != null && mounted) {
+      setState(() {
+        _patient = result;
+      });
+    }
+  }
+
   Future<void> _startConsultation() async {
     final aptService = ref.read(appointmentServiceProvider);
     try {
@@ -252,8 +277,8 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         consultationId = id;
       } else {
         final newC = await aptService.createConsultation(
-          widget.patient.id,
-          widget.patient.doctorId,
+          _patient.id,
+          _patient.doctorId,
         );
         consultationId = newC.id;
       }
@@ -262,9 +287,9 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         context,
         MaterialPageRoute(
           builder: (_) => ConsultationScreen(
-            patientId: widget.patient.id,
-            patientName: widget.patient.fullName,
-            doctorId: widget.patient.doctorId,
+            patientId: _patient.id,
+            patientName: _patient.fullName,
+            doctorId: _patient.doctorId,
             consultationId: consultationId,
             appointmentId: widget.appointment?.id,
           ),
@@ -300,7 +325,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   }
 
   Widget _buildDesktopDetailsPane() {
-    final p = widget.patient;
+    final p = _patient;
     final initials = p.fullName.trim().split(' ')
         .where((s) => s.isNotEmpty)
         .take(2)
@@ -318,6 +343,15 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // Edit Profile Button (Top-Right)
+            Align(
+              alignment: Alignment.topRight,
+              child: IconButton(
+                icon: const Icon(Icons.edit_rounded, color: Colors.white70, size: 20),
+                tooltip: 'Edit Profile',
+                onPressed: _openEditPatientDialog,
+              ),
+            ),
             // Avatar
             Center(
               child: Container(
@@ -378,6 +412,17 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
             if (p.city?.isNotEmpty == true) _buildDesktopDetailRow('City', p.city!),
             if (p.area?.isNotEmpty == true) _buildDesktopDetailRow('Area', p.area!),
             if (p.email?.isNotEmpty == true) _buildDesktopDetailRow('Email', p.email!),
+
+            if (p.allergiesConditions?.isNotEmpty == true || p.emergencyContact?.isNotEmpty == true) ...[
+              const SizedBox(height: 24),
+              // Medical & Emergency
+              _buildDesktopSectionHeader('Medical & Emergency', Icons.health_and_safety_rounded),
+              const SizedBox(height: 12),
+              if (p.allergiesConditions?.isNotEmpty == true)
+                _buildDesktopDetailRow('Allergies/Conditions', p.allergiesConditions!),
+              if (p.emergencyContact?.isNotEmpty == true)
+                _buildDesktopDetailRow('Emergency Contact', p.emergencyContact!),
+            ],
           ],
         ),
       ),
@@ -438,9 +483,9 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
               context,
               MaterialPageRoute(
                 builder: (_) => ConsultationScreen(
-                  patientId: widget.patient.id,
-                  patientName: widget.patient.fullName,
-                  doctorId: widget.patient.doctorId,
+                  patientId: _patient.id,
+                  patientName: _patient.fullName,
+                  doctorId: _patient.doctorId,
                   consultationId: _ongoingConsultationId!,
                   appointmentId: widget.appointment?.id,
                 ),
@@ -585,7 +630,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
   Future<List<_ConsultationEntry>> _loadConsultations() async {
     final pb = ref.read(pocketbaseProvider);
-    final patientId = widget.patient.id;
+    final patientId = _patient.id;
 
     final aptsRes = await pb.collection(PBCollections.appointments).getList(
       filter: 'patient = "$patientId"',
@@ -647,7 +692,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
               child: _ConsultationCard(
                 key: ValueKey('cc_${entry.consultation.id}_$_refreshKey'),
                 entry: entry,
-                patient: widget.patient,
+                patient: _patient,
                 onReturn: () => setState(() => _refreshKey++),
               ),
             );
@@ -661,7 +706,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
   Widget _buildHistoryTab() {
     final pb = ref.read(pocketbaseProvider);
-    final patientId = widget.patient.id;
+    final patientId = _patient.id;
 
     return FutureBuilder(
       future: pb.collection(PBCollections.appointments).getList(
@@ -811,7 +856,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   // ─── PATIENT DETAILS TAB ─────────────────────────────────────────────────────
 
   Widget _buildBasicDetailsTab() {
-    final p = widget.patient;
+    final p = _patient;
     final initials = p.fullName.trim().split(' ')
         .where((s) => s.isNotEmpty)
         .take(2)
@@ -882,6 +927,19 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
               if (p.city?.isNotEmpty == true) _profileDetailRow('City', p.city!),
               if (p.area?.isNotEmpty == true) _profileDetailRow('Area', p.area!),
               if (p.email?.isNotEmpty == true) _profileDetailRow('Email', p.email!),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // ── Medical & Emergency Card ──────────────────────────────────────
+          _profileInfoCard(
+            title: 'Medical & Emergency',
+            icon: Icons.health_and_safety_rounded,
+            children: [
+              if (p.allergiesConditions?.isNotEmpty == true)
+                _profileDetailRow('Allergies/Conditions', p.allergiesConditions!),
+              if (p.emergencyContact?.isNotEmpty == true)
+                _profileDetailRow('Emergency Contact', p.emergencyContact!),
             ],
           ),
           const SizedBox(height: 24),
@@ -2375,3 +2433,537 @@ class _HistoryEvent {
     this.detailsTimeline = const [],
   });
 }
+
+class _EditPatientDialog extends ConsumerStatefulWidget {
+  final PatientModel patient;
+
+  const _EditPatientDialog({super.key, required this.patient});
+
+  @override
+  ConsumerState<_EditPatientDialog> createState() => _EditPatientDialogState();
+}
+
+class _EditPatientDialogState extends ConsumerState<_EditPatientDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _nameCtrl;
+  late TextEditingController _phoneCtrl;
+  late TextEditingController _dobCtrl;
+  late TextEditingController _pincodeCtrl;
+  late TextEditingController _cityCtrl;
+  late TextEditingController _areaCtrl;
+  late TextEditingController _occupationCtrl;
+  late TextEditingController _emailCtrl;
+  late TextEditingController _allergiesCtrl;
+  late TextEditingController _emergencyContactCtrl;
+
+  String? _selectedGender;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.patient;
+    _nameCtrl = TextEditingController(text: p.fullName);
+    _phoneCtrl = TextEditingController(text: p.phone);
+    _dobCtrl = TextEditingController(text: p.dateOfBirth ?? '');
+    _pincodeCtrl = TextEditingController(text: p.pincode ?? '');
+    _cityCtrl = TextEditingController(text: p.city ?? '');
+    _areaCtrl = TextEditingController(text: p.area ?? '');
+    _occupationCtrl = TextEditingController(text: p.occupation ?? '');
+    _emailCtrl = TextEditingController(text: p.email ?? '');
+    _allergiesCtrl = TextEditingController(text: p.allergiesConditions ?? '');
+    _emergencyContactCtrl = TextEditingController(text: p.emergencyContact ?? '');
+    _selectedGender = p.gender;
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _phoneCtrl.dispose();
+    _dobCtrl.dispose();
+    _pincodeCtrl.dispose();
+    _cityCtrl.dispose();
+    _areaCtrl.dispose();
+    _occupationCtrl.dispose();
+    _emailCtrl.dispose();
+    _allergiesCtrl.dispose();
+    _emergencyContactCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDob() async {
+    DateTime initial = DateTime(1990);
+    if (_dobCtrl.text.isNotEmpty) {
+      final parsed = DateTime.tryParse(_dobCtrl.text);
+      if (parsed != null) initial = parsed;
+    }
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1920),
+      lastDate: DateTime.now(),
+    );
+    if (picked != null) {
+      setState(() {
+        _dobCtrl.text =
+            '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+      });
+    }
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedGender == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Please select gender'),
+        backgroundColor: Colors.red,
+      ));
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      final patientService = ref.read(patientServiceProvider);
+
+      // Auto-calculate age from DoB if entered
+      int? calculatedAge;
+      if (_dobCtrl.text.isNotEmpty) {
+        final dob = DateTime.tryParse(_dobCtrl.text);
+        if (dob != null) {
+          final today = DateTime.now();
+          calculatedAge = today.year - dob.year;
+          if (today.month < dob.month || (today.month == dob.month && today.day < dob.day)) {
+            calculatedAge--;
+          }
+          if (calculatedAge < 0) calculatedAge = null;
+        }
+      }
+
+      final body = {
+        'full_name': _nameCtrl.text.trim(),
+        'phone': _phoneCtrl.text.trim(),
+        'gender': _selectedGender,
+        'date_of_birth': _dobCtrl.text.trim(),
+        'age': calculatedAge,
+        'pincode': _pincodeCtrl.text.trim(),
+        'city': _cityCtrl.text.trim(),
+        'area': _areaCtrl.text.trim(),
+        'occupation': _occupationCtrl.text.trim(),
+        'email': _emailCtrl.text.trim(),
+        'allergies_conditions': _allergiesCtrl.text.trim(),
+        'emergency_contact': _emergencyContactCtrl.text.trim(),
+      };
+
+      final updated = await patientService.updatePatient(widget.patient.id, body);
+      
+      // Also refresh lists
+      ref.read(patientListProvider.notifier).loadPatients();
+      ref.read(appointmentListProvider.notifier).loadAppointments();
+
+      if (mounted) {
+        Navigator.pop(context, updated);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error saving: $e'),
+          backgroundColor: context.colors.error,
+        ));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
+  Widget _buildGenderDropdown(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        RichText(
+          text: TextSpan(children: [
+            TextSpan(text: 'Gender ', style: context.textStyles.label),
+            const TextSpan(
+              text: '*',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: context.colors.border.withValues(alpha: 0.5),
+              width: 0.8,
+            ),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedGender,
+              isExpanded: true,
+              dropdownColor: context.colors.surface,
+              style: context.textStyles.bodyLarge.copyWith(color: context.colors.textPrimary),
+              hint: Text('Select Gender', style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint)),
+              items: ['Male', 'Female', 'Other']
+                  .map((g) => DropdownMenuItem(
+                        value: g,
+                        child: Text(g, style: TextStyle(color: context.colors.textPrimary)),
+                      ))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedGender = v),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDobField(BuildContext context) {
+    String displayDate = '';
+    if (_dobCtrl.text.isNotEmpty) {
+      final parsed = DateTime.tryParse(_dobCtrl.text);
+      if (parsed != null) {
+        displayDate = '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}/${parsed.year}';
+      }
+    }
+
+    return AppTextField(
+      controller: TextEditingController(text: displayDate),
+      label: 'Date of Birth',
+      hint: 'DD/MM/YYYY',
+      readOnly: true,
+      onTap: _pickDob,
+      suffixIcon: GestureDetector(
+        onTap: _pickDob,
+        child: Icon(Icons.calendar_month_rounded, color: context.colors.primary),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 600;
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      backgroundColor: context.colors.background,
+      clipBehavior: Clip.antiAlias,
+      child: Container(
+        width: isMobile ? width * 0.95 : 650,
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Header
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+              decoration: BoxDecoration(
+                color: context.colors.surface,
+                border: Border(
+                  bottom: BorderSide(
+                    color: context.colors.border.withValues(alpha: 0.5),
+                  ),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: context.colors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.edit_rounded,
+                      color: context.colors.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      'Edit Patient Details',
+                      style: context.textStyles.h2.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.close_rounded, color: context.colors.textSecondary),
+                    onPressed: _isSaving ? null : () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+
+            // Form Content
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (isMobile) ...[
+                        AppTextField(
+                          controller: _nameCtrl,
+                          label: 'Full Name *',
+                          hint: 'e.g. John Doe',
+                          validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                        ),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          controller: _phoneCtrl,
+                          label: 'Phone Number *',
+                          hint: 'e.g. +91 98765 43210',
+                          keyboardType: TextInputType.phone,
+                          validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                        ),
+                        const SizedBox(height: 16),
+                        _buildGenderDropdown(context),
+                        const SizedBox(height: 16),
+                        _buildDobField(context),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          controller: _emailCtrl,
+                          label: 'Email',
+                          hint: 'e.g. name@example.com',
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          controller: _occupationCtrl,
+                          label: 'Occupation',
+                          hint: 'e.g. Engineer, Business',
+                        ),
+                      ] else ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: AppTextField(
+                                controller: _nameCtrl,
+                                label: 'Full Name *',
+                                hint: 'e.g. John Doe',
+                                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: AppTextField(
+                                controller: _phoneCtrl,
+                                label: 'Phone Number *',
+                                hint: 'e.g. +91 98765 43210',
+                                keyboardType: TextInputType.phone,
+                                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(child: _buildGenderDropdown(context)),
+                            const SizedBox(width: 16),
+                            Expanded(child: _buildDobField(context)),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: AppTextField(
+                                controller: _emailCtrl,
+                                label: 'Email',
+                                hint: 'e.g. name@example.com',
+                                keyboardType: TextInputType.emailAddress,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: AppTextField(
+                                controller: _occupationCtrl,
+                                label: 'Occupation',
+                                hint: 'e.g. Engineer, Business',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      const SizedBox(height: 24),
+                      Divider(color: context.colors.border.withValues(alpha: 0.5)),
+                      const SizedBox(height: 16),
+
+                      Text('Contact & Address', style: context.textStyles.h3.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 16),
+
+                      if (isMobile) ...[
+                        AppTextField(
+                          controller: _pincodeCtrl,
+                          label: 'Pincode',
+                          hint: 'e.g. 560001',
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          controller: _cityCtrl,
+                          label: 'City',
+                          hint: 'e.g. Bangalore',
+                        ),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          controller: _areaCtrl,
+                          label: 'Area / Locality',
+                          hint: 'e.g. Indiranagar',
+                        ),
+                      ] else ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: AppTextField(
+                                controller: _pincodeCtrl,
+                                label: 'Pincode',
+                                hint: 'e.g. 560001',
+                                keyboardType: TextInputType.number,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: AppTextField(
+                                controller: _cityCtrl,
+                                label: 'City',
+                                hint: 'e.g. Bangalore',
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: AppTextField(
+                                controller: _areaCtrl,
+                                label: 'Area / Locality',
+                                hint: 'e.g. Indiranagar',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+
+                      const SizedBox(height: 24),
+                      Divider(color: context.colors.border.withValues(alpha: 0.5)),
+                      const SizedBox(height: 16),
+
+                      Text('Medical & Emergency', style: context.textStyles.h3.copyWith(fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 16),
+
+                      if (isMobile) ...[
+                        AppTextField(
+                          controller: _allergiesCtrl,
+                          label: 'Allergies & Conditions',
+                          hint: 'e.g. Peanut allergy, Hypertension',
+                          maxLines: 2,
+                        ),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          controller: _emergencyContactCtrl,
+                          label: 'Emergency Contact',
+                          hint: 'e.g. Name (Relation) - Phone',
+                        ),
+                      ] else ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: AppTextField(
+                                controller: _allergiesCtrl,
+                                label: 'Allergies & Conditions',
+                                hint: 'e.g. Peanut allergy, Hypertension',
+                                maxLines: 2,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: AppTextField(
+                                controller: _emergencyContactCtrl,
+                                label: 'Emergency Contact',
+                                hint: 'e.g. Name (Relation) - Phone',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+            // Footer
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: context.colors.surface,
+                border: Border(
+                  top: BorderSide(
+                    color: context.colors.border.withValues(alpha: 0.5),
+                  ),
+                ),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: _isSaving ? null : () => Navigator.pop(context),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(color: context.colors.textSecondary),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: _isSaving ? null : _save,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: context.colors.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
