@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
 /// A styled text field with consistent theming and high-performance native interactions.
@@ -47,6 +48,32 @@ class AppTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
+
+    if (isDesktop) {
+      return _WebTextField(
+        label: label,
+        hint: hint,
+        controller: controller,
+        validator: validator,
+        keyboardType: keyboardType,
+        obscureText: obscureText,
+        prefixIcon: prefixIcon,
+        suffixIcon: suffixIcon,
+        maxLines: maxLines,
+        minLines: minLines,
+        enabled: enabled,
+        onChanged: onChanged,
+        focusNode: focusNode,
+        textInputAction: textInputAction,
+        readOnly: readOnly,
+        onTap: onTap,
+        inputFormatters: inputFormatters,
+        errorText: errorText,
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -68,7 +95,7 @@ class AppTextField extends StatelessWidget {
           focusNode: focusNode,
           textInputAction: textInputAction,
           inputFormatters: inputFormatters,
-          style: context.textStyles.bodyLarge.copyWith(color: Colors.white),
+          style: context.textStyles.bodyLarge.copyWith(color: context.colors.textPrimary),
           decoration: InputDecoration(
             errorText: errorText,
             hintText: hint,
@@ -83,12 +110,12 @@ class AppTextField extends StatelessWidget {
                 return context.colors.divider;
               }
               if (states.contains(WidgetState.focused)) {
-                return const Color(0xFF1E293B).withValues(alpha: 0.2);
+                return context.colors.primary.withValues(alpha: 0.08);
               }
               if (states.contains(WidgetState.hovered)) {
-                return Colors.white.withValues(alpha: 0.04);
+                return context.colors.border.withValues(alpha: 0.4);
               }
-              return Colors.white.withValues(alpha: 0.02);
+              return context.colors.divider;
             }),
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
@@ -106,7 +133,7 @@ class AppTextField extends StatelessWidget {
               borderSide: BorderSide(
                 color: WidgetStateColor.resolveWith((states) {
                   if (states.contains(WidgetState.hovered)) {
-                    return Colors.white.withValues(alpha: 0.12);
+                    return context.colors.border.withValues(alpha: 0.5);
                   }
                   return context.colors.border.withValues(alpha: 0.5);
                 }),
@@ -132,6 +159,182 @@ class AppTextField extends StatelessWidget {
               ),
             ),
             errorStyle: context.textStyles.caption.copyWith(color: context.colors.error),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WebTextField extends StatefulWidget {
+  final String label;
+  final String? hint;
+  final TextEditingController? controller;
+  final String? Function(String?)? validator;
+  final TextInputType keyboardType;
+  final bool obscureText;
+  final Widget? prefixIcon;
+  final Widget? suffixIcon;
+  final int? maxLines;
+  final int? minLines;
+  final bool enabled;
+  final void Function(String)? onChanged;
+  final FocusNode? focusNode;
+  final TextInputAction? textInputAction;
+  final bool readOnly;
+  final VoidCallback? onTap;
+  final List<TextInputFormatter>? inputFormatters;
+  final String? errorText;
+
+  const _WebTextField({
+    required this.label,
+    this.hint,
+    this.controller,
+    this.validator,
+    this.keyboardType = TextInputType.text,
+    this.obscureText = false,
+    this.prefixIcon,
+    this.suffixIcon,
+    this.maxLines = 1,
+    this.minLines,
+    this.enabled = true,
+    this.onChanged,
+    this.focusNode,
+    this.textInputAction,
+    this.readOnly = false,
+    this.onTap,
+    this.inputFormatters,
+    this.errorText,
+  });
+
+  @override
+  State<_WebTextField> createState() => _WebTextFieldState();
+}
+
+class _WebTextFieldState extends State<_WebTextField> {
+  late final FocusNode _effectiveFocusNode;
+  bool _isFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _effectiveFocusNode = widget.focusNode ?? FocusNode();
+    _effectiveFocusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (mounted) {
+      setState(() {
+        _isFocused = _effectiveFocusNode.hasFocus;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    if (widget.focusNode == null) {
+      _effectiveFocusNode.dispose();
+    } else {
+      _effectiveFocusNode.removeListener(_onFocusChange);
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = const Color(0xFF0F5D4F);
+    final border = const Color(0xFFE8E6E2);
+    final textDark = const Color(0xFF161616);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.label.isNotEmpty) ...[
+          Text(
+            widget.label,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: textDark,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          height: (widget.maxLines != null && widget.maxLines! > 1) ? null : 54,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _isFocused ? primary : border,
+              width: _isFocused ? 1.5 : 1,
+            ),
+            boxShadow: _isFocused
+                ? [
+                    BoxShadow(
+                      color: primary.withValues(alpha: 0.08),
+                      blurRadius: 15,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : null,
+          ),
+          child: TextFormField(
+            controller: widget.controller,
+            focusNode: _effectiveFocusNode,
+            validator: widget.validator,
+            keyboardType: widget.keyboardType,
+            obscureText: widget.obscureText,
+            maxLines: widget.maxLines,
+            minLines: widget.minLines,
+            enabled: widget.enabled,
+            readOnly: widget.readOnly,
+            onTap: widget.onTap,
+            onChanged: widget.onChanged,
+            textInputAction: widget.textInputAction,
+            inputFormatters: widget.inputFormatters,
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: FontWeight.w400,
+              color: textDark,
+            ),
+            decoration: InputDecoration(
+              errorText: widget.errorText,
+              hintText: widget.hint,
+              hintStyle: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w400,
+                color: const Color(0xFFA0A0A0),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 15,
+              ),
+              prefixIcon: widget.prefixIcon != null
+                  ? IconTheme(
+                      data: const IconThemeData(
+                        size: 20,
+                        color: Color(0xFF999999),
+                      ),
+                      child: widget.prefixIcon!,
+                    )
+                  : null,
+              suffixIcon: widget.suffixIcon != null
+                  ? IconTheme(
+                      data: const IconThemeData(
+                        size: 20,
+                        color: Color(0xFF999999),
+                      ),
+                      child: widget.suffixIcon!,
+                    )
+                  : null,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              errorBorder: InputBorder.none,
+              focusedErrorBorder: InputBorder.none,
+            ),
           ),
         ),
       ],

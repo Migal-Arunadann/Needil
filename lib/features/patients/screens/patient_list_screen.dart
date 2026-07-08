@@ -234,10 +234,7 @@ class _WebPatientScreen extends ConsumerWidget {
                             children: [
                               Text(
                                 'Patients',
-                                style: context.textStyles.h1.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 28,
-                                ),
+                                style: context.textStyles.h1,
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -314,11 +311,11 @@ class _WebPatientScreen extends ConsumerWidget {
                                     color: context.colors.primary,
                                     borderRadius: BorderRadius.circular(10),
                                   ),
-                                  child: const Row(
+                                  child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Icon(Icons.add,
-                                          color: Colors.white, size: 18),
+                                          color: context.colors.textPrimary, size: 18),
                                     ],
                                   ),
                                 ),
@@ -561,10 +558,10 @@ class _WebDesktopTable extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               decoration: BoxDecoration(
-                color: isDesktop ? Colors.white.withOpacity(0.02) : context.colors.background.withValues(alpha: 0.6),
+                color: isDesktop ? context.colors.divider : context.colors.background.withValues(alpha: 0.6),
                 border: Border(
                   bottom: BorderSide(
-                      color: isDesktop ? Colors.white.withOpacity(0.08) : context.colors.border.withValues(alpha: 0.5)),
+                      color: isDesktop ? context.colors.border : context.colors.border.withValues(alpha: 0.5)),
                 ),
               ),
               child: Row(
@@ -653,11 +650,11 @@ class _WebDesktopTableRowState extends ConsumerState<_WebDesktopTableRow> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           decoration: BoxDecoration(
             color: _hovered
-                ? (isDesktop ? Colors.white.withOpacity(0.04) : context.colors.primary.withValues(alpha: 0.04))
+                ? (isDesktop ? context.colors.divider : context.colors.primary.withValues(alpha: 0.04))
                 : Colors.transparent,
             border: Border(
               bottom: BorderSide(
-                  color: isDesktop ? Colors.white.withOpacity(0.05) : context.colors.border.withValues(alpha: 0.3)),
+                  color: isDesktop ? context.colors.divider : context.colors.border.withValues(alpha: 0.3)),
             ),
           ),
           child: Row(
@@ -1260,7 +1257,7 @@ class _AppPatientScreen extends ConsumerWidget {
                   children: [
                     Text(
                       'New Appointment',
-                      style: context.textStyles.h3.copyWith(fontWeight: FontWeight.bold),
+                      style: context.textStyles.h3,
                     ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded),
@@ -1368,7 +1365,7 @@ class _AppPatientScreen extends ConsumerWidget {
         shape: const CircleBorder(),
         backgroundColor: context.colors.primary,
         onPressed: () => _showAppointmentTypeSelector(context),
-        child: const Icon(Icons.add, color: Colors.white, size: 24),
+        child: Icon(Icons.add, color: context.colors.textPrimary, size: 24),
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -1385,7 +1382,6 @@ class _AppPatientScreen extends ConsumerWidget {
                     Text(
                       'Patients',
                       style: context.textStyles.h1.copyWith(
-                        fontWeight: FontWeight.w800,
                         fontSize: 32,
                       ),
                     ),
@@ -1531,8 +1527,8 @@ class _AppPatientScreen extends ConsumerWidget {
                                     alignment: Alignment.center,
                                     child: Text(
                                       initials,
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                      style: TextStyle(
+                                        color: context.colors.textPrimary,
                                         fontSize: 20,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -1726,7 +1722,7 @@ class _NewAppointmentCTAButtonState extends State<_NewAppointmentCTAButton> {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF3B82F6).withOpacity(_isHovered ? 0.35 : 0.2),
+              color: const Color(0xFF3B82F6).withValues(alpha: _isHovered ? 0.35 : 0.2),
               blurRadius: _isHovered ? 20 : 16,
               offset: const Offset(0, 4),
             ),
@@ -1745,33 +1741,33 @@ class _NewAppointmentCTAButtonState extends State<_NewAppointmentCTAButton> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    const Color(0xFF60A5FA).withOpacity(_isHovered ? 0.4 : 0.3),
-                    const Color(0xFF1D4ED8).withOpacity(0.15),
+                    const Color(0xFF60A5FA).withValues(alpha: _isHovered ? 0.4 : 0.3),
+                    const Color(0xFF1D4ED8).withValues(alpha: 0.15),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: const Color(0xFF60A5FA).withOpacity(_isHovered ? 0.45 : 0.35),
+                  color: const Color(0xFF60A5FA).withValues(alpha: _isHovered ? 0.45 : 0.35),
                   width: 1.0,
                 ),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+                  Icon(Icons.add_rounded, color: context.colors.textPrimary, size: 18),
                   const SizedBox(width: 8),
                   Text(
                     'New Appointment',
                     style: context.textStyles.buttonMedium.copyWith(
-                      color: Colors.white,
+                      color: context.colors.textPrimary,
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const VerticalDivider(color: Colors.white24, width: 1, indent: 10, endIndent: 10),
+                  VerticalDivider(color: context.colors.textHint, width: 1, indent: 10, endIndent: 10),
                   const SizedBox(width: 8),
-                  const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 18),
+                  Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textSecondary, size: 18),
                 ],
               ),
             ),

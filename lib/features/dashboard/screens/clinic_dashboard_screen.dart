@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -9,17 +8,15 @@ import 'package:pms_app/core/widgets/responsive_wrapper.dart';
 import 'package:pms_app/features/dashboard/screens/main_layout.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
-import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:pms_app/features/appointments/models/appointment_model.dart';
+import 'package:pms_app/features/patients/models/patient_model.dart';
+import 'package:pms_app/features/patients/providers/patient_provider.dart';
+import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
 
 class ClinicDashboardScreen extends ConsumerWidget {
   const ClinicDashboardScreen({super.key});
 
-  String _greeting() {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
 
   void _showNewAppointmentTypeSelector(BuildContext context) {
     showModalBottomSheet(
@@ -41,7 +38,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                   children: [
                     Text(
                       'New Appointment',
-                      style: context.textStyles.h3.copyWith(fontWeight: FontWeight.bold),
+                      style: context.textStyles.h3,
                     ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded),
@@ -155,13 +152,13 @@ class ClinicDashboardScreen extends ConsumerWidget {
     final isDesktop = width >= 900.0;
 
     return Scaffold(
-      backgroundColor: isDesktop ? Colors.transparent : const Color(0xFF0E121D), // Dark Dashboard Background
+      backgroundColor: isDesktop ? Colors.transparent : context.colors.background,
       floatingActionButton: !isDesktop
           ? FloatingActionButton.extended(
               onPressed: () => _showNewAppointmentTypeSelector(context),
               label: const Text('New Appointment',
                   style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-              icon: const Icon(Icons.add_rounded, color: Colors.white),
+              icon: const Icon(Icons.add_rounded, color: Colors.white), // white-on-primary is always white
               backgroundColor: const Color(0xFF3B82F6),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
             )
@@ -187,18 +184,10 @@ class ClinicDashboardScreen extends ConsumerWidget {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
+                            color: context.colors.border.withValues(alpha: 0.3),
                             shape: BoxShape.circle,
-                            image: clinic?.logoUrl != null
-                                ? DecorationImage(
-                                    image: NetworkImage(ImageHelper.getSecureUrl(clinic!.logoUrl!)),
-                                    fit: BoxFit.cover,
-                                  )
-                                : null,
                           ),
-                          child: clinic?.logoUrl == null
-                              ? const Icon(Icons.business_rounded, color: Colors.white70, size: 22)
-                              : null,
+                          child: Icon(Icons.business_rounded, color: context.colors.textPrimary, size: 22),
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -206,38 +195,63 @@ class ClinicDashboardScreen extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${_greeting()}, 👋',
-                                style: context.textStyles.caption.copyWith(
-                                  color: Colors.white38,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
                                 clinic?.name ?? 'Clinic',
                                 style: context.textStyles.h1.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
                                   fontSize: 26,
-                                  letterSpacing: -0.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: context.colors.textPrimary,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now()),
+                                DateFormat('EEEE, d MMMM y').format(DateTime.now()),
                                 style: context.textStyles.caption.copyWith(
-                                  color: Colors.white24,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w400,
+                                  color: context.colors.textSecondary,
+                                  fontSize: 13,
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        // Right Side Header: Search, Notifications, + New Appointment button
-                        _buildHeaderActions(context, isDesktop),
+                        // Right Side Header: + New Appointment, Notification Bell, User Avatar
+                        Row(
+                          children: [
+                            _buildHeaderActions(context, isDesktop),
+                            const SizedBox(width: 16),
+                            // Notification bell
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: context.colors.border.withValues(alpha: 0.8)),
+                              ),
+                              child: Icon(Icons.notifications_none_rounded, color: context.colors.textPrimary, size: 20),
+                            ),
+                            const SizedBox(width: 16),
+                            // User avatar
+                            Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                image: clinic?.logoUrl != null
+                                    ? DecorationImage(
+                                        image: NetworkImage(ImageHelper.getSecureUrl(clinic!.logoUrl!)),
+                                        fit: BoxFit.cover,
+                                      )
+                                    : null,
+                                border: Border.all(color: context.colors.border.withValues(alpha: 0.8)),
+                              ),
+                              child: clinic?.logoUrl == null
+                                  ? Icon(Icons.person_rounded, color: context.colors.textSecondary, size: 20)
+                                  : null,
+                            ),
+                          ],
+                        ),
                       ],
                     )
                   else ...[
@@ -248,7 +262,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
+                            color: context.colors.primary.withValues(alpha: 0.08),
                             shape: BoxShape.circle,
                             image: clinic?.logoUrl != null
                                 ? DecorationImage(
@@ -258,7 +272,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                                 : null,
                           ),
                           child: clinic?.logoUrl == null
-                              ? const Icon(Icons.business_rounded, color: Colors.white70, size: 20)
+                              ? Icon(Icons.business_rounded, color: context.colors.primary, size: 20)
                               : null,
                         ),
                         const SizedBox(width: 12),
@@ -267,16 +281,15 @@ class ClinicDashboardScreen extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${_greeting()} 👋',
-                                style: context.textStyles.caption.copyWith(color: Colors.white38, fontSize: 14),
-                              ),
-                              Text(
                                 clinic?.name ?? 'Clinic',
-                                style: context.textStyles.h3.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 22,
-                                ),
+                                style: context.textStyles.h2,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                DateFormat('EEE, d MMM').format(DateTime.now()),
+                                style: context.textStyles.caption,
                               ),
                             ],
                           ),
@@ -287,7 +300,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                     Text(
                       DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now()),
                       style: context.textStyles.caption.copyWith(
-                        color: Colors.white30,
+                        color: context.colors.textMuted,
                         fontSize: 13,
                       ),
                     ),
@@ -299,7 +312,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                     const Center(
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: 60),
-                        child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
+                        child: CircularProgressIndicator(),
                       ),
                     )
                   else if (isDesktop)
@@ -315,14 +328,26 @@ class ClinicDashboardScreen extends ConsumerWidget {
                               Text(
                                 "Today's Overview",
                                 style: context.textStyles.h2.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
+                                  color: context.colors.textPrimary,
                                   fontSize: 18,
                                   letterSpacing: -0.3,
                                 ),
                               ),
                               const SizedBox(height: 18),
                               DashboardOverviewSection(stats: stats),
+                              const SizedBox(height: 28),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _TodayScheduleCard(appointments: stats.todayAppointments),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  Expanded(
+                                    child: _RecentPatientsCard(),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
@@ -336,8 +361,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                               Text(
                                 'Practice Overview',
                                 style: context.textStyles.h2.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
+                                  color: context.colors.textPrimary,
                                   fontSize: 18,
                                   letterSpacing: -0.3,
                                 ),
@@ -347,24 +371,23 @@ class ClinicDashboardScreen extends ConsumerWidget {
                                 icon: Icons.people_rounded,
                                 label: 'Total Patients',
                                 value: '${stats.totalPatients}',
-                                color: const Color(0xFF3B82F6),
+                                color: context.colors.primary,
                               ),
                               const SizedBox(height: 16),
                               QuickStatRow(
                                 icon: Icons.medical_services_rounded,
                                 label: 'Patients under active sessions',
                                 value: '${stats.patientsWithActiveSessions}',
-                                color: const Color(0xFF10B981),
+                                color: context.colors.success,
                               ),
                               const SizedBox(height: 36),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    'Today\'s Patient Stream',
+                                    'Patients Waiting',
                                     style: context.textStyles.h2.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
+                                      color: context.colors.textPrimary,
                                       fontSize: 18,
                                       letterSpacing: -0.3,
                                     ),
@@ -373,10 +396,10 @@ class ClinicDashboardScreen extends ConsumerWidget {
                                     onPressed: () {
                                       mainLayoutKey.currentState?.switchToTab(1);
                                     },
-                                    child: const Text(
+                                    child: Text(
                                       'View all',
                                       style: TextStyle(
-                                        color: Color(0xFF3B82F6),
+                                        color: context.colors.primary,
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -385,7 +408,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              PatientTimelineStream(appointments: stats.todayAppointments),
+                              PatientsWaitingList(appointments: stats.todayAppointments),
                             ],
                           ),
                         ),
@@ -396,9 +419,8 @@ class ClinicDashboardScreen extends ConsumerWidget {
                     Text(
                       "Today's Overview",
                       style: context.textStyles.h3.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                        color: context.colors.textPrimary,
+                        ),
                     ),
                     const SizedBox(height: 12),
                     DashboardOverviewSection(stats: stats),
@@ -406,33 +428,31 @@ class ClinicDashboardScreen extends ConsumerWidget {
                     Text(
                       'Practice Overview',
                       style: context.textStyles.h3.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                        color: context.colors.textPrimary,
+                        ),
                     ),
                     const SizedBox(height: 12),
                     QuickStatRow(
                       icon: Icons.people_rounded,
                       label: 'Total Patients',
                       value: '${stats.totalPatients}',
-                      color: const Color(0xFF3B82F6),
+                      color: context.colors.primary,
                     ),
                     const SizedBox(height: 10),
                     QuickStatRow(
                       icon: Icons.medical_services_rounded,
                       label: 'Patients under active sessions',
                       value: '${stats.patientsWithActiveSessions}',
-                      color: const Color(0xFF10B981),
+                      color: context.colors.success,
                     ),
                     const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Today\'s Patient Stream',
+                          'Patients Waiting',
                           style: context.textStyles.h3.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
+                            color: context.colors.textPrimary,
                             fontSize: 16,
                           ),
                         ),
@@ -440,10 +460,10 @@ class ClinicDashboardScreen extends ConsumerWidget {
                           onPressed: () {
                             mainLayoutKey.currentState?.switchToTab(1);
                           },
-                          child: const Text(
+                          child: Text(
                             'View all',
                             style: TextStyle(
-                              color: Color(0xFF3B82F6),
+                              color: context.colors.primary,
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
                             ),
@@ -452,7 +472,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    PatientTimelineStream(appointments: stats.todayAppointments),
+                    PatientsWaitingList(appointments: stats.todayAppointments),
                   ],
                 ],
               ),
@@ -466,14 +486,14 @@ class ClinicDashboardScreen extends ConsumerWidget {
   Widget _buildHeaderActions(BuildContext context, bool isDesktop) {
     return Theme(
       data: Theme.of(context).copyWith(
-        cardColor: const Color(0xFF131924),
+        cardColor: context.colors.surface,
       ),
       child: PopupMenuButton<bool>(
         tooltip: 'Book New Appointment',
         offset: const Offset(0, 44),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.white.withOpacity(0.05)),
+          side: BorderSide(color: context.colors.border.withValues(alpha: 0.5)),
         ),
         onSelected: (isCallBy) {
           Navigator.pushNamed(
@@ -487,9 +507,9 @@ class ClinicDashboardScreen extends ConsumerWidget {
             value: true,
             child: Row(
               children: [
-                Icon(Icons.phone_in_talk_rounded, color: Colors.blueAccent, size: 16),
+                Icon(Icons.phone_in_talk_rounded, color: context.colors.info, size: 16),
                 const SizedBox(width: 8),
-                const Text('Call-By / Booking', style: TextStyle(color: Colors.white, fontSize: 13)),
+                Text('Call-By / Booking', style: TextStyle(color: context.colors.textPrimary, fontSize: 13)),
               ],
             ),
           ),
@@ -497,9 +517,9 @@ class ClinicDashboardScreen extends ConsumerWidget {
             value: false,
             child: Row(
               children: [
-                Icon(Icons.directions_walk_rounded, color: Colors.greenAccent, size: 16),
+                Icon(Icons.directions_walk_rounded, color: context.colors.success, size: 16),
                 const SizedBox(width: 8),
-                const Text('Walk-In Patient', style: TextStyle(color: Colors.white, fontSize: 13)),
+                Text('Walk-In Patient', style: TextStyle(color: context.colors.textPrimary, fontSize: 13)),
               ],
             ),
           ),
@@ -510,11 +530,11 @@ class ClinicDashboardScreen extends ConsumerWidget {
               height: 38,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: const Color(0xFF2563EB),
+                color: context.colors.primary,
                 borderRadius: BorderRadius.circular(10),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF2563EB).withOpacity(0.3),
+                    color: context.colors.primary.withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -560,61 +580,470 @@ class _HeaderCTAButtonState extends State<_HeaderCTAButton> {
       onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        transform: Matrix4.identity()..scale(_isHovered ? 1.03 : 1.0),
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          color: _isHovered ? const Color(0xFF136B5C) : const Color(0xFF0F5D4F),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF3B82F6).withOpacity(_isHovered ? 0.35 : 0.2),
-              blurRadius: _isHovered ? 20 : 16,
-              offset: const Offset(0, 4),
+              color: const Color(0xFF0F5D4F).withValues(alpha: _isHovered ? 0.25 : 0.15),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFF60A5FA).withOpacity(_isHovered ? 0.4 : 0.3),
-                    const Color(0xFF1D4ED8).withOpacity(0.15),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFF60A5FA).withOpacity(_isHovered ? 0.45 : 0.35),
-                  width: 1.0,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'New Appointment',
-                    style: context.textStyles.bodyMedium.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 18),
-                ],
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              'New Appointment',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
               ),
             ),
-          ),
+            const SizedBox(width: 8),
+            const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 18),
+          ],
         ),
       ),
     );
   }
+}
+
+class _TodayScheduleCard extends StatelessWidget {
+  final List<AppointmentModel> appointments;
+
+  const _TodayScheduleCard({required this.appointments});
+
+  String _formatTimeString(String timeStr) {
+    try {
+      final parts = timeStr.split(':');
+      if (parts.length >= 2) {
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+        final ampm = hour >= 12 ? 'PM' : 'AM';
+        final formattedHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+        final formattedMinute = minute.toString().padLeft(2, '0');
+        return '$formattedHour:$formattedMinute $ampm';
+      }
+    } catch (_) {}
+    return timeStr;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isEmpty = appointments.isEmpty;
+    final List<_ScheduleItem> items = [];
+    if (!isEmpty) {
+      // Deduplicate by patientId + time to avoid duplicate items
+      final seenKeys = <String>{};
+      final uniqueAppts = <AppointmentModel>[];
+      for (final appt in appointments) {
+        final key = '${appt.patientId ?? appt.displayName}_${appt.time}';
+        if (!seenKeys.contains(key)) {
+          seenKeys.add(key);
+          uniqueAppts.add(appt);
+        }
+      }
+
+      final sorted = List<AppointmentModel>.from(uniqueAppts)
+        ..sort((a, b) => a.time.compareTo(b.time));
+      for (final appt in sorted) {
+        items.add(_ScheduleItem(
+          time: _formatTimeString(appt.time),
+          name: appt.displayName,
+          treatment: appt.type == AppointmentType.session ? 'Treatment' : 'Consultation',
+          appointmentId: appt.id,
+        ));
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.colors.border.withValues(alpha: 0.6),
+          width: 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: context.colors.shadowColor.withValues(alpha: 0.02),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Today's Schedule",
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: context.colors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 18),
+          isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.calendar_today_rounded,
+                          size: 32,
+                          color: context.colors.textSecondary.withValues(alpha: 0.5),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No appointments scheduled today',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: context.colors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final item = items[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 75,
+                            child: Text(
+                              item.time,
+                              style: GoogleFonts.inter(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: context.colors.textPrimary,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 4,
+                            child: MouseRegion(
+                              cursor: item.appointmentId != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+                              child: GestureDetector(
+                                onTap: item.appointmentId == null ? null : () {
+                                  mainLayoutKey.currentState?.switchToTab(1, highlightAppointmentId: item.appointmentId);
+                                },
+                                child: Text(
+                                  item.name,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: item.appointmentId != null ? const Color(0xFF0F5D4F) : context.colors.textPrimary,
+                                    decoration: item.appointmentId != null ? TextDecoration.underline : null,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 4,
+                            child: Text(
+                              item.treatment,
+                              style: GoogleFonts.inter(
+                                  fontSize: 12.5,
+                                  color: context.colors.textSecondary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+          const SizedBox(height: 6),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () {
+                mainLayoutKey.currentState?.switchToTab(1);
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'View full schedule',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF0F5D4F),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.arrow_forward_rounded, color: Color(0xFF0F5D4F), size: 14),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScheduleItem {
+  final String time;
+  final String name;
+  final String treatment;
+  final String? appointmentId;
+
+  const _ScheduleItem({
+    required this.time,
+    required this.name,
+    required this.treatment,
+    this.appointmentId,
+  });
+}
+
+class _RecentPatientsCard extends ConsumerWidget {
+  const _RecentPatientsCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final patientState = ref.watch(patientListProvider);
+    final patientsList = patientState.patients;
+    final lastVisits = patientState.lastVisitDates;
+
+    // Deduplicate by name/lowercase to avoid duplicate values
+    final seenPatientKeys = <String>{};
+    final uniquePatients = <PatientModel>[];
+    for (final p in patientsList) {
+      final key = p.fullName.trim().toLowerCase();
+      if (key.isNotEmpty && !seenPatientKeys.contains(key)) {
+        seenPatientKeys.add(key);
+        uniquePatients.add(p);
+      }
+    }
+
+    final sortedPatients = List<PatientModel>.from(uniquePatients)
+      ..sort((a, b) {
+        final dateA = lastVisits[a.id];
+        final dateB = lastVisits[b.id];
+        if (dateA == null && dateB == null) return 0;
+        if (dateA == null) return 1;
+        if (dateB == null) return -1;
+        return dateB.compareTo(dateA);
+      });
+
+    final bool isEmpty = sortedPatients.isEmpty;
+    final List<_RecentPatientItem> items = [];
+    if (!isEmpty) {
+      String formatLastVisit(DateTime? dt) {
+        if (dt == null) return 'No visits recorded';
+        final diff = DateTime.now().difference(dt).inDays;
+        if (diff <= 0) return 'Last visit: Today';
+        if (diff == 1) return 'Last visit: Yesterday';
+        if (diff < 7) return 'Last visit: $diff days ago';
+        if (diff < 30) {
+          final weeks = (diff / 7).round();
+          return 'Last visit: $weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
+        }
+        final months = (diff / 30).round();
+        return 'Last visit: $months ${months == 1 ? 'month' : 'months'} ago';
+      }
+
+      for (final p in sortedPatients.take(4)) {
+        items.add(_RecentPatientItem(
+          name: p.fullName,
+          lastVisit: formatLastVisit(lastVisits[p.id]),
+          patientModel: p,
+        ));
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.colors.border.withValues(alpha: 0.6),
+          width: 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: context.colors.shadowColor.withValues(alpha: 0.02),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Recent Patients",
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: context.colors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 18),
+          isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.people_outline_rounded,
+                          size: 32,
+                          color: context.colors.textSecondary.withValues(alpha: 0.5),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No recent patients found',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: context.colors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+              final item = items[index];
+              final initials = item.name.split(' ').map((e) => e[0]).take(2).join().toUpperCase();
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F5D4F).withValues(alpha: 0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        initials,
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF0F5D4F),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          MouseRegion(
+                            cursor: item.patientModel != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+                            child: GestureDetector(
+                              onTap: item.patientModel == null ? null : () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => PatientProfileScreen(patient: item.patientModel!),
+                                  ),
+                                );
+                              },
+                              child: Text(
+                                item.name,
+                                style: GoogleFonts.inter(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: item.patientModel != null ? const Color(0xFF0F5D4F) : context.colors.textPrimary,
+                                  decoration: item.patientModel != null ? TextDecoration.underline : null,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            item.lastVisit,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: context.colors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 18),
+          MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () {
+                mainLayoutKey.currentState?.switchToTab(3);
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'View all patients',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF0F5D4F),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.arrow_forward_rounded, color: Color(0xFF0F5D4F), size: 14),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecentPatientItem {
+  final String name;
+  final String lastVisit;
+  final PatientModel? patientModel;
+
+  const _RecentPatientItem({
+    required this.name,
+    required this.lastVisit,
+    this.patientModel,
+  });
 }

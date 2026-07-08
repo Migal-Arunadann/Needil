@@ -105,7 +105,7 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
   void _showError(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: const TextStyle(color: Colors.white)),
+      content: Text(msg, style: TextStyle(color: context.colors.textPrimary)),
       backgroundColor: _SA.error,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -225,7 +225,7 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
                               borderRadius: BorderRadius.circular(24),
                               boxShadow: [BoxShadow(color: _SA.accent.withValues(alpha: 0.4), blurRadius: 28, offset: const Offset(0, 10))],
                             ),
-                            child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 42),
+                            child: Icon(Icons.admin_panel_settings_rounded, color: context.colors.textPrimary, size: 42),
                           ),
                           const SizedBox(height: 28),
                           Text('Superadmin Access', style: context.textStyles.h2.copyWith(color: _SA.textPrimary)),
@@ -361,8 +361,8 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
         ),
         child: Center(
           child: _isLoading
-              ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5))
-              : Text(label, style: context.textStyles.buttonLarge.copyWith(color: Colors.white)),
+              ? SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: context.colors.textPrimary, strokeWidth: 2.5))
+              : Text(label, style: context.textStyles.buttonLarge.copyWith(color: context.colors.textPrimary)),
         ),
       ),
     );

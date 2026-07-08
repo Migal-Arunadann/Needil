@@ -58,12 +58,12 @@ class AboutScreen extends StatelessWidget {
                           color: Colors.white.withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 38),
+                        child: Icon(Icons.local_hospital_rounded, color: context.colors.textPrimary, size: 38),
                       ),
                       const SizedBox(height: 16),
                       Text(
                         'Needil',
-                        style: context.textStyles.h1.copyWith(color: Colors.white, fontSize: 28),
+                        style: context.textStyles.h1.copyWith(color: context.colors.textPrimary, ),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -83,7 +83,7 @@ class AboutScreen extends StatelessWidget {
                         child: Text(
                           'Version $_appVersion (Build $_buildNumber) • OTA Active',
                           style: context.textStyles.caption.copyWith(
-                            color: Colors.white,
+                            color: context.colors.textPrimary,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -190,7 +190,7 @@ class AboutScreen extends StatelessWidget {
                         border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
+                            color: context.colors.shadowColor.withValues(alpha: 0.2),
                             blurRadius: 32,
                             spreadRadius: 4,
                             offset: const Offset(0, 16),

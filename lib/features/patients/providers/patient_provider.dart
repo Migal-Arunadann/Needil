@@ -59,6 +59,11 @@ class PatientListNotifier extends StateNotifier<PatientListState> {
 
       if (_authState.role == UserRole.clinic) {
         result = await _service.getClinicPatients(userId);
+      } else if (_authState.role == UserRole.receptionist) {
+        final clinicId = _authState.clinicId;
+        if (clinicId != null) {
+          result = await _service.getClinicPatients(clinicId);
+        }
       } else if (_authState.role == UserRole.doctor) {
         result = await _service.getDoctorPatients(userId);
       }

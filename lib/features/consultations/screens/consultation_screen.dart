@@ -1156,7 +1156,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                         border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
+                            color: context.colors.shadowColor.withValues(alpha: 0.2),
                             blurRadius: 32,
                             spreadRadius: 4,
                             offset: const Offset(0, 16),
@@ -1834,7 +1834,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                 shape: BoxShape.circle,
               ),
               child:
-                  const Icon(Icons.close_rounded, size: 14, color: Colors.white),
+                  Icon(Icons.close_rounded, size: 14, color: context.colors.textPrimary),
             ),
           ),
         ),
@@ -1867,9 +1867,9 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                   top: -16,
                   right: -16,
                   child: IconButton(
-                    icon: const CircleAvatar(
+                    icon: CircleAvatar(
                       backgroundColor: Colors.white,
-                      child: Icon(Icons.close_rounded, color: Colors.black, size: 20),
+                      child: Icon(Icons.close_rounded, color: context.colors.shadowColor, size: 20),
                     ),
                     onPressed: () => Navigator.pop(context),
                   ),
@@ -2018,18 +2018,18 @@ class _ChiefComplaintWarningDialog extends StatelessWidget {
     return BackdropFilter(
       filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
       child: AlertDialog(
-        backgroundColor: context.colors.surface.withOpacity(0.85),
+        backgroundColor: context.colors.surface.withValues(alpha: 0.85),
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(24),
-          side: BorderSide(color: Colors.white.withOpacity(0.08)),
+          side: BorderSide(color: context.colors.border.withValues(alpha: 0.4)),
         ),
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: context.colors.warning.withOpacity(0.15),
+                color: context.colors.warning.withValues(alpha: 0.15),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -2042,10 +2042,7 @@ class _ChiefComplaintWarningDialog extends StatelessWidget {
             Expanded(
               child: Text(
                 'Missing Chief Complaint',
-                style: context.textStyles.h3.copyWith(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
+                style: context.textStyles.h3,
               ),
             ),
           ],

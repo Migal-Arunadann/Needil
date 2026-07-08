@@ -9,17 +9,10 @@ import 'package:pms_app/core/widgets/responsive_wrapper.dart';
 import 'package:pms_app/features/dashboard/screens/main_layout.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
-import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 class ReceptionistDashboardScreen extends ConsumerWidget {
   const ReceptionistDashboardScreen({super.key});
 
-  String _greeting() {
-    final h = DateTime.now().hour;
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
 
   void _showNewAppointmentTypeSelector(BuildContext context) {
     showModalBottomSheet(
@@ -41,7 +34,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                   children: [
                     Text(
                       'New Appointment',
-                      style: context.textStyles.h3.copyWith(fontWeight: FontWeight.bold),
+                      style: context.textStyles.h3,
                     ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded),
@@ -155,7 +148,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
     final isDesktop = width >= 900.0;
 
     return Scaffold(
-      backgroundColor: isDesktop ? Colors.transparent : const Color(0xFF0E121D), // Dark Dashboard Background
+      backgroundColor: isDesktop ? Colors.transparent : context.colors.background,
       floatingActionButton: !isDesktop
           ? FloatingActionButton.extended(
               onPressed: () => _showNewAppointmentTypeSelector(context),
@@ -187,7 +180,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
+                            color: context.colors.primary.withValues(alpha: 0.08),
                             shape: BoxShape.circle,
                             image: receptionist?.photoUrl != null
                                 ? DecorationImage(
@@ -197,7 +190,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                                 : null,
                           ),
                           child: receptionist?.photoUrl == null
-                              ? const Icon(Icons.support_agent_rounded, color: Colors.white70, size: 22)
+                              ? Icon(Icons.support_agent_rounded, color: context.colors.primary, size: 22)
                               : null,
                         ),
                         const SizedBox(width: 14),
@@ -205,30 +198,18 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                '${_greeting()}, 👋',
-                                style: context.textStyles.caption.copyWith(
-                                  color: Colors.white38,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
                               const SizedBox(height: 4),
                               Text(
                                 receptionist?.name ?? 'Receptionist',
                                 style: context.textStyles.h1.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 26,
-                                  letterSpacing: -0.5,
-                                ),
+                                  color: context.colors.textPrimary,
+                                  ),
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now()),
                                 style: context.textStyles.caption.copyWith(
-                                  color: Colors.white24,
+                                  color: context.colors.textMuted,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w400,
                                 ),
@@ -248,7 +229,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
+                            color: context.colors.primary.withValues(alpha: 0.08),
                             shape: BoxShape.circle,
                             image: receptionist?.photoUrl != null
                                 ? DecorationImage(
@@ -258,7 +239,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                                 : null,
                           ),
                           child: receptionist?.photoUrl == null
-                              ? const Icon(Icons.support_agent_rounded, color: Colors.white70, size: 20)
+                              ? Icon(Icons.support_agent_rounded, color: context.colors.primary, size: 20)
                               : null,
                         ),
                         const SizedBox(width: 12),
@@ -267,14 +248,9 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${_greeting()} 👋',
-                                style: context.textStyles.caption.copyWith(color: Colors.white38, fontSize: 14),
-                              ),
-                              Text(
                                 receptionist?.name ?? 'Receptionist',
                                 style: context.textStyles.h3.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w800,
+                                  color: context.colors.textPrimary,
                                   fontSize: 22,
                                 ),
                               ),
@@ -287,7 +263,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                     Text(
                       DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now()),
                       style: context.textStyles.caption.copyWith(
-                        color: Colors.white30,
+                        color: context.colors.textMuted,
                         fontSize: 13,
                       ),
                     ),
@@ -315,8 +291,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                               Text(
                                 "Today's Overview",
                                 style: context.textStyles.h2.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
+                                  color: context.colors.textPrimary,
                                   fontSize: 18,
                                   letterSpacing: -0.3,
                                 ),
@@ -336,8 +311,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                               Text(
                                 'Practice Overview',
                                 style: context.textStyles.h2.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
+                                  color: context.colors.textPrimary,
                                   fontSize: 18,
                                   letterSpacing: -0.3,
                                 ),
@@ -361,10 +335,9 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
-                                    'Today\'s Patient Stream',
+                                    'Patients Waiting',
                                     style: context.textStyles.h2.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
+                                      color: context.colors.textPrimary,
                                       fontSize: 18,
                                       letterSpacing: -0.3,
                                     ),
@@ -385,7 +358,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              PatientTimelineStream(appointments: stats.todayAppointments),
+                              PatientsWaitingList(appointments: stats.todayAppointments),
                             ],
                           ),
                         ),
@@ -396,9 +369,8 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                     Text(
                       "Today's Overview",
                       style: context.textStyles.h3.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                        color: context.colors.textPrimary,
+                        ),
                     ),
                     const SizedBox(height: 12),
                     DashboardOverviewSection(stats: stats),
@@ -406,9 +378,8 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                     Text(
                       'Practice Overview',
                       style: context.textStyles.h3.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                        color: context.colors.textPrimary,
+                        ),
                     ),
                     const SizedBox(height: 12),
                     QuickStatRow(
@@ -429,10 +400,9 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Today\'s Patient Stream',
+                          'Patients Waiting',
                           style: context.textStyles.h3.copyWith(
                             color: Colors.white,
-                            fontWeight: FontWeight.bold,
                             fontSize: 16,
                           ),
                         ),
@@ -452,7 +422,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    PatientTimelineStream(appointments: stats.todayAppointments),
+                    PatientsWaitingList(appointments: stats.todayAppointments),
                   ],
                 ],
               ),
@@ -466,14 +436,14 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
   Widget _buildHeaderActions(BuildContext context, bool isDesktop) {
     return Theme(
       data: Theme.of(context).copyWith(
-        cardColor: const Color(0xFF131924),
+        cardColor: context.colors.surface,
       ),
       child: PopupMenuButton<bool>(
         tooltip: 'Book New Appointment',
         offset: const Offset(0, 44),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.white.withOpacity(0.05)),
+          side: BorderSide(color: context.colors.border.withValues(alpha: 0.5)),
         ),
         onSelected: (isCallBy) {
           Navigator.pushNamed(
@@ -489,7 +459,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
               children: [
                 Icon(Icons.phone_in_talk_rounded, color: Colors.blueAccent, size: 16),
                 const SizedBox(width: 8),
-                const Text('Call-By / Booking', style: TextStyle(color: Colors.white, fontSize: 13)),
+                Text('Call-By / Booking', style: TextStyle(color: context.colors.textPrimary, fontSize: 13)),
               ],
             ),
           ),
@@ -499,7 +469,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
               children: [
                 Icon(Icons.directions_walk_rounded, color: Colors.greenAccent, size: 16),
                 const SizedBox(width: 8),
-                const Text('Walk-In Patient', style: TextStyle(color: Colors.white, fontSize: 13)),
+                Text('Walk-In Patient', style: TextStyle(color: context.colors.textPrimary, fontSize: 13)),
               ],
             ),
           ),
@@ -514,7 +484,7 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                 borderRadius: BorderRadius.circular(10),
                 boxShadow: [
                   BoxShadow(
-                    color: const Color(0xFF2563EB).withOpacity(0.3),
+                    color: const Color(0xFF2563EB).withValues(alpha: 0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
@@ -565,7 +535,7 @@ class _HeaderCTAButtonState extends State<_HeaderCTAButton> {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF3B82F6).withOpacity(_isHovered ? 0.35 : 0.2),
+              color: const Color(0xFF3B82F6).withValues(alpha: _isHovered ? 0.35 : 0.2),
               blurRadius: _isHovered ? 20 : 16,
               offset: const Offset(0, 4),
             ),
@@ -584,13 +554,13 @@ class _HeaderCTAButtonState extends State<_HeaderCTAButton> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [
-                    const Color(0xFF60A5FA).withOpacity(_isHovered ? 0.4 : 0.3),
-                    const Color(0xFF1D4ED8).withOpacity(0.15),
+                    const Color(0xFF60A5FA).withValues(alpha: _isHovered ? 0.4 : 0.3),
+                    const Color(0xFF1D4ED8).withValues(alpha: 0.15),
                   ],
                 ),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: const Color(0xFF60A5FA).withOpacity(_isHovered ? 0.45 : 0.35),
+                  color: const Color(0xFF60A5FA).withValues(alpha: _isHovered ? 0.45 : 0.35),
                   width: 1.0,
                 ),
               ),

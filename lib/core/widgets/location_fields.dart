@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:pms_app/core/widgets/app_text_field.dart';
@@ -418,6 +419,72 @@ class _DropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
+
+    if (isDesktop) {
+      final textDark = const Color(0xFF161616);
+      final border = const Color(0xFFE8E6E2);
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (label.isNotEmpty) ...[
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: textDark,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          Container(
+            height: 54,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: border,
+                width: 1,
+              ),
+            ),
+            child: DropdownButtonFormField<String>(
+              value: value,
+              decoration: InputDecoration(
+                prefixIcon: Icon(icon, color: const Color(0xFF999999), size: 20),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+              ),
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w400,
+                color: textDark,
+              ),
+              dropdownColor: Colors.white,
+              isExpanded: true,
+              hint: Text('Select', style: GoogleFonts.inter(fontSize: 15, color: const Color(0xFFA0A0A0))),
+              validator: required
+                  ? (v) => (v == null || v.isEmpty) ? '$label is required' : null
+                  : null,
+              items: items
+                  .map((item) => DropdownMenuItem(
+                        value: item,
+                        child: Text(item, style: GoogleFonts.inter(fontSize: 15, color: textDark)),
+                      ))
+                  .toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ],
+      );
+    }
+
     return DropdownButtonFormField<String>(
       value: value,
       decoration: InputDecoration(

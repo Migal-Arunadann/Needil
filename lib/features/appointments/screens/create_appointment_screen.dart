@@ -422,7 +422,7 @@ class _CreateAppointmentScreenState
                 ElevatedButton(
                   onPressed: () => Navigator.pop(dialogContext, true),
                   style: ElevatedButton.styleFrom(backgroundColor: context.colors.warning),
-                  child: const Text('Proceed Anyway', style: TextStyle(color: Colors.white)),
+                  child: Text('Proceed Anyway', style: TextStyle(color: context.colors.textPrimary)),
                 ),
               ],
             ),
@@ -455,7 +455,7 @@ class _CreateAppointmentScreenState
                 ElevatedButton(
                   onPressed: () => Navigator.pop(dialogContext, true),
                   style: ElevatedButton.styleFrom(backgroundColor: context.colors.warning),
-                  child: const Text('Proceed Anyway', style: TextStyle(color: Colors.white)),
+                  child: Text('Proceed Anyway', style: TextStyle(color: context.colors.textPrimary)),
                 ),
               ],
             ),
@@ -978,7 +978,7 @@ class _CreateAppointmentScreenState
                         border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
+                            color: context.colors.textPrimary.withValues(alpha: 0.2),
                             blurRadius: 32,
                             spreadRadius: 4,
                             offset: const Offset(0, 16),

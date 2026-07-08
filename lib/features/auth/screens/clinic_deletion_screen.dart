@@ -11,6 +11,7 @@ import 'package:pms_app/core/services/data_export_service.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
 
 /// Full-page lockout shown when a clinic is in `status = pending_deletion`.
 /// No sidebar, no navigation — only deletion info + limited actions.
@@ -70,7 +71,7 @@ class _ClinicDeletionScreenState extends ConsumerState<ClinicDeletionScreen>
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: const TextStyle(color: Colors.white)),
+      content: Text(msg, style: TextStyle(color: context.colors.textPrimary)),
       backgroundColor: error ? _error : _success,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -617,11 +618,11 @@ class _ClinicDeletionScreenState extends ConsumerState<ClinicDeletionScreen>
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (loading)
-            const SizedBox(
+            SizedBox(
               width: 18,
               height: 18,
               child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Colors.white),
+                  strokeWidth: 2, color: context.colors.textPrimary),
             )
           else if (icon != null)
             Icon(icon, size: 20),

@@ -88,7 +88,7 @@ class _SuperadminDashboardScreenState
                               gradient: SAColors.accentGradient,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 22),
+                            child: Icon(Icons.admin_panel_settings_rounded, color: context.colors.textPrimary, size: 22),
                           ),
                           const SizedBox(width: 12),
                           Column(

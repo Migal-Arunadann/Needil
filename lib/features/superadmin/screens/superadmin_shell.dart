@@ -85,7 +85,7 @@ class _SuperadminShellState extends ConsumerState<SuperadminShell> {
           border: const Border(top: BorderSide(color: SAColors.border, width: 0.8)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.4),
+              color: context.colors.shadowColor.withValues(alpha: 0.4),
               blurRadius: 20,
               offset: const Offset(0, -5),
             ),
@@ -193,7 +193,7 @@ class _SuperadminShellState extends ConsumerState<SuperadminShell> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
+            color: context.colors.shadowColor.withValues(alpha: 0.3),
             blurRadius: 30,
             offset: const Offset(0, 10),
           ),
@@ -214,7 +214,7 @@ class _SuperadminShellState extends ConsumerState<SuperadminShell> {
                     gradient: SAColors.accentGradient,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 20),
+                  child: Icon(Icons.admin_panel_settings_rounded, color: context.colors.textPrimary, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -225,8 +225,6 @@ class _SuperadminShellState extends ConsumerState<SuperadminShell> {
                         'Needil',
                         style: context.textStyles.h3.copyWith(
                           color: SAColors.textPrimary,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 20,
                           letterSpacing: -0.5,
                         ),
                       ),

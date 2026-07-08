@@ -1,12 +1,12 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
-import 'package:pms_app/core/theme/app_colors_extension.dart';
-import 'package:pms_app/core/theme/app_text_styles_extension.dart';
+
 import 'package:pms_app/features/dashboard/providers/dashboard_provider.dart';
 import 'package:pms_app/features/appointments/models/appointment_model.dart';
+import 'package:pms_app/features/dashboard/screens/main_layout.dart';
 
 // Helper to format time (e.g., "10:00" -> "10:00 AM")
 String formatTimeString(String timeStr) {
@@ -56,88 +56,56 @@ class _SummaryCardState extends State<SummaryCard> {
 
     Widget content = Container(
       padding: isDesktop
-          ? const EdgeInsets.symmetric(horizontal: 24, vertical: 20)
-          : const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          ? const EdgeInsets.symmetric(horizontal: 22, vertical: 18)
+          : const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
         color: isDesktop
-            ? const Color(0xFF131A26).withOpacity(0.07)
-            : const Color(0xFF131924),
-        borderRadius: BorderRadius.circular(isDesktop ? 28 : 16),
+            ? context.colors.cardBackground.withValues(alpha: 0.72)
+            : context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(isDesktop ? 24 : 16),
         border: Border.all(
-          color: Colors.white.withOpacity(0.06),
+          color: context.colors.border.withValues(alpha: 0.4),
           width: 1.0,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Accent bar + Icon row ──────────────────────────
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Icon wrapper
+              // Slim colour accent bar
               Container(
-                width: 36,
-                height: 36,
+                width: 3,
+                height: 28,
                 decoration: BoxDecoration(
-                  color: widget.color.withOpacity(0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(widget.icon, color: widget.color, size: 18),
-              ),
-              // Value
-              Text(
-                widget.value,
-                style: textStyles.h2.copyWith(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 24,
-                  color: Colors.white,
+                  color: widget.color,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
+              const SizedBox(width: 10),
+              Icon(widget.icon, color: widget.color, size: 20),
             ],
           ),
           const SizedBox(height: 14),
-          // Label and trend row
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  widget.label,
-                  style: textStyles.bodySmall.copyWith(
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(width: 4),
-              // Delta badge
-              if (widget.delta != '-')
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: widget.delta.startsWith('+') || widget.delta.startsWith('↗')
-                        ? const Color(0xFF065F46).withOpacity(0.3)
-                        : Colors.white.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    widget.delta,
-                    style: TextStyle(
-                      color: widget.delta.startsWith('+') || widget.delta.startsWith('↗')
-                          ? const Color(0xFF34D399)
-                          : Colors.white38,
-                      fontSize: 9,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 4),
+          // ── Big number ─────────────────────────────────────
           Text(
-            'vs last 7 days',
-            style: textStyles.caption.copyWith(color: Colors.white30, fontSize: 9),
+            widget.value,
+            style: textStyles.displayNumber.copyWith(
+              color: context.colors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 6),
+          // ── Label ──────────────────────────────────────────
+          Text(
+            widget.label,
+            style: textStyles.caption.copyWith(
+              color: context.colors.textSecondary,
+              fontSize: 11,
+              letterSpacing: 0.1,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -159,17 +127,17 @@ class _SummaryCardState extends State<SummaryCard> {
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(mainShadowOpacity),
+                color: context.colors.shadowColor.withValues(alpha: mainShadowOpacity),
                 blurRadius: 36,
                 offset: const Offset(0, 16),
               ),
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: context.colors.shadowColor.withValues(alpha: 0.15),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
               BoxShadow(
-                color: widget.color.withOpacity(hoverGlowOpacity),
+                color: widget.color.withValues(alpha: hoverGlowOpacity),
                 blurRadius: 20,
                 spreadRadius: 2,
               ),
@@ -200,9 +168,9 @@ class TodaySummaryBar extends StatelessWidget {
       return Container(
         height: 110,
         decoration: BoxDecoration(
-          color: const Color(0xFF131924),
+          color: context.colors.cardBackground,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+          border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
         ),
         child: const Center(
           child: CircularProgressIndicator(color: Color(0xFF3B82F6), strokeWidth: 2.5),
@@ -262,7 +230,7 @@ class TodaySummaryBar extends StatelessWidget {
 }
 
 // ─── Practice Overview Quick Stat Row ───────────────────────
-class QuickStatRow extends StatefulWidget {
+class QuickStatRow extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
@@ -277,30 +245,23 @@ class QuickStatRow extends StatefulWidget {
   });
 
   @override
-  State<QuickStatRow> createState() => _QuickStatRowState();
-}
-
-class _QuickStatRowState extends State<QuickStatRow> {
-  bool _isHovered = false;
-
-  @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final isDesktop = width >= 900.0;
-
-    Widget content = Container(
-      padding: isDesktop
-          ? const EdgeInsets.symmetric(horizontal: 20, vertical: 16)
-          : const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        color: isDesktop
-            ? const Color(0xFF131A26).withOpacity(0.07)
-            : const Color(0xFF131924),
-        borderRadius: BorderRadius.circular(isDesktop ? 28 : 14),
+        color: context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withOpacity(0.06),
+          color: context.colors.border.withValues(alpha: 0.6),
           width: 1.0,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: context.colors.shadowColor.withValues(alpha: 0.02),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Row(
         children: [
@@ -308,73 +269,33 @@ class _QuickStatRowState extends State<QuickStatRow> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: widget.color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(widget.icon, color: widget.color, size: 20),
+            child: Icon(icon, color: color, size: 18),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Text(
-              widget.label,
-              style: context.textStyles.bodyMedium.copyWith(color: Colors.white),
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: context.colors.textPrimary,
+              ),
             ),
           ),
           Text(
-            widget.value,
-            style: context.textStyles.h3.copyWith(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 16,
               fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: Colors.white,
+              color: context.colors.textPrimary,
             ),
           ),
         ],
       ),
     );
-
-    if (isDesktop) {
-      final translationY = _isHovered ? -3.0 : 0.0;
-      final hoverGlowOpacity = _isHovered ? 0.08 : 0.04;
-      final mainShadowOpacity = _isHovered ? 0.40 : 0.35;
-
-      return MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          transform: Matrix4.translationValues(0.0, translationY, 0.0),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(mainShadowOpacity),
-                blurRadius: 36,
-                offset: const Offset(0, 16),
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-              BoxShadow(
-                color: widget.color.withOpacity(hoverGlowOpacity),
-                blurRadius: 20,
-                spreadRadius: 2,
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: content,
-            ),
-          ),
-        ),
-      );
-    }
-    return content;
   }
 }
 
@@ -390,17 +311,17 @@ class EmptyState extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 32),
       decoration: BoxDecoration(
-        color: const Color(0xFF131924),
+        color: context.colors.cardBackground,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
       ),
       child: Column(
         children: [
-          Icon(icon, size: 40, color: Colors.white24),
+          Icon(icon, size: 40, color: context.colors.textMuted),
           const SizedBox(height: 10),
           Text(
             message,
-            style: context.textStyles.caption.copyWith(color: Colors.white38),
+            style: context.textStyles.caption.copyWith(color: context.colors.textMuted),
           ),
         ],
       ),
@@ -420,94 +341,88 @@ class DashboardOverviewSection extends StatelessWidget {
 
     final card1 = DashboardOverviewCard(
       title: "Today's Consultations",
-      icon: Icons.medical_information_rounded,
-      color: const Color(0xFF3B82F6),
+      icon: Icons.calendar_today_rounded,
+      color: const Color(0xFF0F5D4F),
       children: [
         DashboardOverviewItem(
           label: "Total Scheduled",
           value: '${stats.consultationsTotalToday}',
-          color: Colors.white70,
+          color: const Color(0xFF0F5D4F),
         ),
         const DashboardOverviewDivider(),
         DashboardOverviewItem(
           label: "Completed",
           value: '${stats.consultationsCompletedToday}',
-          color: const Color(0xFF10B981),
+          color: const Color(0xFF16A34A),
         ),
         const DashboardOverviewDivider(),
         DashboardOverviewItem(
           label: "Pending",
           value: '${stats.consultationsPendingToday}',
-          color: const Color(0xFFF59E0B),
+          color: const Color(0xFFD97706),
         ),
       ],
     );
 
     final card2 = DashboardOverviewCard(
       title: "Today's Sessions",
-      icon: Icons.event_repeat_rounded,
-      color: const Color(0xFF10B981),
+      icon: Icons.personal_injury_outlined,
+      color: const Color(0xFF0F5D4F),
       children: [
         DashboardOverviewItem(
           label: "Total Scheduled",
           value: '${stats.sessionsTotalToday}',
-          color: const Color(0xFF10B981),
+          color: const Color(0xFF0F5D4F),
         ),
         const DashboardOverviewDivider(),
         DashboardOverviewItem(
           label: "Completed",
           value: '${stats.sessionsCompletedToday}',
-          color: const Color(0xFF34D399),
+          color: const Color(0xFF16A34A),
         ),
         const DashboardOverviewDivider(),
         DashboardOverviewItem(
           label: "Pending",
           value: '${stats.sessionsPendingToday}',
-          color: const Color(0xFFF59E0B),
+          color: const Color(0xFFD97706),
         ),
       ],
     );
 
     final card3 = DashboardOverviewCard(
       title: "Patients Seen Today",
-      icon: Icons.people_outline_rounded,
-      color: const Color(0xFFA78BFA),
+      icon: Icons.group_outlined,
+      color: const Color(0xFF4F46E5),
       children: [
         DashboardOverviewItem(
           label: "Unique Patients Checked-In / Visited Today",
           value: '${stats.patientsSeenToday}',
-          color: const Color(0xFFA78BFA),
+          color: const Color(0xFF4F46E5),
         ),
       ],
     );
 
     final card4 = DashboardOverviewCard(
-      title: "Today's Fee Collections",
+      title: "Today's Revenue",
       icon: Icons.payments_outlined,
-      color: const Color(0xFFF59E0B),
+      color: const Color(0xFFD97706),
       children: [
         DashboardOverviewItem(
           label: "Total Collected",
           value: '₹${stats.feesTotalToday}',
-          color: const Color(0xFFF59E0B),
+          color: const Color(0xFF111827),
         ),
         const DashboardOverviewDivider(),
         DashboardOverviewItem(
-          label: "Only Consult",
+          label: "Consultations",
           value: '₹${stats.feesOnlyConsultationToday}',
-          color: Colors.white60,
+          color: const Color(0xFF4B5563),
         ),
         const DashboardOverviewDivider(),
         DashboardOverviewItem(
-          label: "Consult + Sess",
-          value: '₹${stats.feesConsultationAndSessionToday}',
-          color: Colors.white60,
-        ),
-        const DashboardOverviewDivider(),
-        DashboardOverviewItem(
-          label: "Only Session",
+          label: "Sessions",
           value: '₹${stats.feesOnlySessionToday}',
-          color: Colors.white60,
+          color: const Color(0xFF4B5563),
         ),
       ],
     );
@@ -567,26 +482,24 @@ class DashboardOverviewCard extends StatefulWidget {
 }
 
 class _DashboardOverviewCardState extends State<DashboardOverviewCard> {
-  bool _isHovered = false;
-
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final isDesktop = width >= 900.0;
-
-    Widget content = Container(
-      padding: isDesktop
-          ? const EdgeInsets.symmetric(horizontal: 24, vertical: 20)
-          : const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       decoration: BoxDecoration(
-        color: isDesktop
-            ? const Color(0xFF131A26).withOpacity(0.07)
-            : const Color(0xFF131924),
-        borderRadius: BorderRadius.circular(isDesktop ? 28 : 16),
+        color: context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withOpacity(0.06),
+          color: context.colors.border.withValues(alpha: 0.6),
           width: 1.0,
         ),
+        boxShadow: [
+          BoxShadow(
+            color: context.colors.shadowColor.withValues(alpha: 0.02),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -597,7 +510,7 @@ class _DashboardOverviewCardState extends State<DashboardOverviewCard> {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: widget.color.withOpacity(0.12),
+                  color: widget.color.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(widget.icon, color: widget.color, size: 16),
@@ -607,8 +520,8 @@ class _DashboardOverviewCardState extends State<DashboardOverviewCard> {
                 widget.title,
                 style: context.textStyles.h3.copyWith(
                   fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                  color: context.colors.textPrimary,
                 ),
               ),
             ],
@@ -620,53 +533,6 @@ class _DashboardOverviewCardState extends State<DashboardOverviewCard> {
         ],
       ),
     );
-
-    if (isDesktop) {
-      final translationY = _isHovered ? -3.0 : 0.0;
-      final hoverGlowOpacity = _isHovered ? 0.08 : 0.04;
-      final mainShadowOpacity = _isHovered ? 0.40 : 0.35;
-
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 16),
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) => setState(() => _isHovered = true),
-          onExit: (_) => setState(() => _isHovered = false),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            transform: Matrix4.translationValues(0.0, translationY, 0.0),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(mainShadowOpacity),
-                  blurRadius: 36,
-                  offset: const Offset(0, 16),
-                ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-                BoxShadow(
-                  color: widget.color.withOpacity(hoverGlowOpacity),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(28),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                child: content,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    return content;
   }
 }
 
@@ -689,18 +555,19 @@ class DashboardOverviewItem extends StatelessWidget {
         children: [
           Text(
             value,
-            style: context.textStyles.h2.copyWith(
-              fontWeight: FontWeight.w800,
+            style: GoogleFonts.inter(
               color: color,
-              fontSize: 18,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             label,
-            style: context.textStyles.caption.copyWith(
-              fontSize: 10,
-              color: Colors.white38,
+            style: GoogleFonts.inter(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+              color: context.colors.textSecondary,
             ),
             textAlign: TextAlign.center,
             maxLines: 2,
@@ -721,7 +588,7 @@ class DashboardOverviewDivider extends StatelessWidget {
       width: 1,
       height: 30,
       margin: const EdgeInsets.symmetric(horizontal: 4),
-      color: Colors.white.withValues(alpha: 0.05),
+      color: context.colors.divider,
     );
   }
 }
@@ -746,11 +613,11 @@ class _AppointmentsTrendChartState extends State<AppointmentsTrendChart> {
       padding: isDesktop ? const EdgeInsets.all(24) : const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDesktop
-            ? const Color(0xFF131A26).withOpacity(0.07)
-            : const Color(0xFF131924),
+            ? context.colors.cardBackground.withValues(alpha: 0.72)
+            : context.colors.cardBackground,
         borderRadius: BorderRadius.circular(isDesktop ? 28 : 16),
         border: Border.all(
-          color: Colors.white.withOpacity(0.06),
+          color: context.colors.border.withValues(alpha: 0.4),
           width: 1.0,
         ),
       ),
@@ -764,28 +631,27 @@ class _AppointmentsTrendChartState extends State<AppointmentsTrendChart> {
                 'Appointments Trend',
                 style: context.textStyles.h3.copyWith(
                   fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: context.colors.textPrimary,
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1C2230),
+                  color: context.colors.cardBackgroundAlt,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white.withOpacity(0.05)),
+                  border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
                 ),
                 child: Row(
                   children: [
                     Text(
                       'This Week',
                       style: context.textStyles.caption.copyWith(
-                        color: Colors.white70,
+                        color: context.colors.textSecondary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(width: 4),
-                    const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white54, size: 14),
+                    Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textHint, size: 14),
                   ],
                 ),
               ),
@@ -808,7 +674,7 @@ class _AppointmentsTrendChartState extends State<AppointmentsTrendChart> {
                       getTitlesWidget: (value, meta) {
                         return Text(
                           value.toInt().toString(),
-                          style: context.textStyles.caption.copyWith(color: Colors.white30, fontSize: 9),
+                          style: context.textStyles.caption.copyWith(color: context.colors.textMuted, fontSize: 9),
                         );
                       },
                       reservedSize: 22,
@@ -826,7 +692,7 @@ class _AppointmentsTrendChartState extends State<AppointmentsTrendChart> {
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
                               days[value.toInt()],
-                              style: context.textStyles.caption.copyWith(color: Colors.white54, fontSize: 9),
+                              style: context.textStyles.caption.copyWith(color: context.colors.textHint, fontSize: 9),
                             ),
                           );
                         }
@@ -864,7 +730,7 @@ class _AppointmentsTrendChartState extends State<AppointmentsTrendChart> {
                           radius: 4,
                           color: const Color(0xFF1D4ED8),
                           strokeWidth: 2,
-                          strokeColor: Colors.white,
+                          strokeColor: context.colors.textOnPrimary,
                         );
                       },
                     ),
@@ -872,8 +738,8 @@ class _AppointmentsTrendChartState extends State<AppointmentsTrendChart> {
                       show: true,
                       gradient: LinearGradient(
                         colors: [
-                          const Color(0xFF3B82F6).withOpacity(0.15),
-                          const Color(0xFF3B82F6).withOpacity(0.0),
+                          const Color(0xFF3B82F6).withValues(alpha: 0.15),
+                          const Color(0xFF3B82F6).withValues(alpha: 0.0),
                         ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
@@ -904,17 +770,17 @@ class _AppointmentsTrendChartState extends State<AppointmentsTrendChart> {
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(mainShadowOpacity),
+                color: context.colors.shadowColor.withValues(alpha: mainShadowOpacity),
                 blurRadius: 36,
                 offset: const Offset(0, 16),
               ),
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: context.colors.shadowColor.withValues(alpha: 0.15),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
               BoxShadow(
-                color: const Color(0xFF3B82F6).withOpacity(hoverGlowOpacity),
+                color: const Color(0xFF3B82F6).withValues(alpha: hoverGlowOpacity),
                 blurRadius: 20,
                 spreadRadius: 2,
               ),
@@ -935,308 +801,374 @@ class _AppointmentsTrendChartState extends State<AppointmentsTrendChart> {
 }
 
 // ─── Patient Timeline Stream ──────────────────────────────────
-class PatientTimelineStream extends StatefulWidget {
+class PatientTimelineStream extends StatelessWidget {
   final List<AppointmentModel> appointments;
+
   const PatientTimelineStream({super.key, required this.appointments});
 
   @override
-  State<PatientTimelineStream> createState() => _PatientTimelineStreamState();
-}
-
-class _PatientTimelineStreamState extends State<PatientTimelineStream> {
-  bool _isHovered = false;
-
-  String _getTypeLabel(AppointmentType type) {
-    switch (type) {
-      case AppointmentType.walkIn:
-        return 'Walk-in';
-      case AppointmentType.session:
-        return 'Session';
-      case AppointmentType.callBy:
-        return 'Consultation';
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final isDesktop = width >= 900.0;
-
-    Widget content;
+    final bool isEmpty = appointments.isEmpty;
+    final List<_StreamItem> items = [];
     
-    if (widget.appointments.isEmpty) {
-      content = Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 32),
-        decoration: BoxDecoration(
-          color: isDesktop
-              ? const Color(0xFF131A26).withOpacity(0.07)
-              : const Color(0xFF131924),
-          borderRadius: BorderRadius.circular(isDesktop ? 28 : 16),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.06),
-            width: 1.0,
-          ),
-        ),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.history_toggle_off_rounded, color: Colors.white24, size: 36),
-              const SizedBox(height: 10),
-              Text(
-                'No events today',
-                style: context.textStyles.caption.copyWith(color: Colors.white38),
-              ),
-            ],
-          ),
-        ),
-      );
-    } else {
-      // Sort chronologically by scheduled time
-      final sorted = List<AppointmentModel>.from(widget.appointments)
+    if (!isEmpty) {
+      // Build from real appointments
+      final sorted = List<AppointmentModel>.from(appointments)
         ..sort((a, b) => a.time.compareTo(b.time));
+      for (final appt in sorted) {
+        final inProgress = appt.status == AppointmentStatus.inProgress;
+        final isCompleted = appt.status == AppointmentStatus.completed;
+        final isWaiting = appt.status == AppointmentStatus.waiting;
 
-      content = Container(
-        padding: isDesktop
-            ? const EdgeInsets.symmetric(horizontal: 24, vertical: 20)
-            : const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDesktop
-              ? const Color(0xFF131A26).withOpacity(0.07)
-              : const Color(0xFF131924),
-          borderRadius: BorderRadius.circular(isDesktop ? 28 : 16),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.06),
-            width: 1.0,
-          ),
+        String detail = 'Upcoming Appointment';
+        bool isUpcoming = true;
+
+        if (isCompleted) {
+          detail = appt.type == AppointmentType.session ? 'Completed Session' : 'Completed Consultation';
+          isUpcoming = false;
+        } else if (inProgress) {
+          detail = appt.type == AppointmentType.session ? 'In session for treatment' : 'In Consultation';
+          isUpcoming = false;
+        } else if (isWaiting) {
+          detail = appt.type == AppointmentType.session ? 'Checked in for treatment' : 'Checked in for Consultation';
+          isUpcoming = false;
+        }
+
+        items.add(_StreamItem(
+          name: appt.displayName,
+          detail: detail,
+          time: formatTimeString(appt.time),
+          isUpcoming: isUpcoming,
+        ));
+      }
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.colors.border.withValues(alpha: 0.6),
+          width: 1.0,
         ),
-        child: ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: sorted.length,
-          itemBuilder: (context, index) {
-            final appt = sorted[index];
-            final isLast = index == sorted.length - 1;
+        boxShadow: [
+          BoxShadow(
+            color: context.colors.shadowColor.withValues(alpha: 0.02),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: isEmpty
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.timeline_rounded,
+                      size: 32,
+                      color: context.colors.textSecondary.withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No patient stream activity today',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: context.colors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : Column(
+              children: List.generate(items.length, (index) {
+                final item = items[index];
+                final isLast = index == items.length - 1;
+                
+                final initials = item.name.split(' ').map((e) => e[0]).take(2).join().toUpperCase();
 
-            // Determine icon, colors, and timeline descriptions
-            IconData nodeIcon;
-            Color nodeColor;
-            String statusText = '';
-            String timeText = formatTimeString(appt.time);
-            
-            final inProgress = appt.status == AppointmentStatus.inProgress;
-            final isCompleted = appt.status == AppointmentStatus.completed;
-            final isCancelled = appt.status == AppointmentStatus.cancelled;
-            final isWaiting = appt.status == AppointmentStatus.waiting;
-
-            if (isCompleted) {
-              nodeIcon = Icons.check_circle_rounded;
-              nodeColor = context.colors.success;
-              
-              if (appt.checkInTime != null && appt.consultationStartTime != null) {
-                final waitDiff = appt.consultationStartTime!.difference(appt.checkInTime!);
-                final waitMin = waitDiff.inMinutes;
-                statusText = 'Completed • Waited ${waitMin}m';
-              } else {
-                statusText = 'Completed';
-              }
-              if (appt.consultationStartTime != null) {
-                timeText = DateFormat('h:mm a').format(appt.consultationStartTime!.toLocal());
-              }
-            } else if (inProgress) {
-              nodeIcon = Icons.play_circle_filled_rounded;
-              nodeColor = context.colors.info;
-              
-              if (appt.checkInTime != null && appt.consultationStartTime != null) {
-                final waitDiff = appt.consultationStartTime!.difference(appt.checkInTime!);
-                statusText = 'In Session • Waited ${waitDiff.inMinutes}m';
-              } else {
-                statusText = 'In Session';
-              }
-              if (appt.consultationStartTime != null) {
-                timeText = DateFormat('h:mm a').format(appt.consultationStartTime!.toLocal());
-              }
-            } else if (isWaiting) {
-              nodeIcon = Icons.hourglass_empty_rounded;
-              nodeColor = const Color(0xFFFBBF24); // Warm yellow
-              
-              if (appt.checkInTime != null) {
-                final waitDiff = DateTime.now().difference(appt.checkInTime!);
-                statusText = 'Waiting Room • Arrived ${DateFormat('h:mm a').format(appt.checkInTime!.toLocal())} (${waitDiff.inMinutes}m ago)';
-              } else {
-                statusText = 'Waiting Room';
-              }
-            } else if (isCancelled) {
-              nodeIcon = Icons.cancel_rounded;
-              nodeColor = context.colors.error;
-              statusText = 'Cancelled';
-            } else {
-              // Scheduled / Upcoming
-              nodeIcon = Icons.radio_button_unchecked_rounded;
-              nodeColor = context.colors.textHint;
-              statusText = 'Scheduled';
-            }
-
-            return IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Left timeline lines and circle
-                  Column(
+                return Padding(
+                  padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+                  child: Row(
                     children: [
+                      // Patient Avatar
                       Container(
-                        width: 24,
-                        height: 24,
+                        width: 36,
+                        height: 36,
                         decoration: BoxDecoration(
-                          color: nodeColor.withValues(alpha: 0.12),
+                          color: const Color(0xFF0F5D4F).withValues(alpha: 0.08),
                           shape: BoxShape.circle,
                         ),
                         alignment: Alignment.center,
-                        child: Icon(
-                          nodeIcon,
-                          color: nodeColor,
-                          size: 15,
+                        child: Text(
+                          initials,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF0F5D4F),
+                          ),
                         ),
                       ),
-                      if (!isLast)
-                        Expanded(
-                          child: Container(
-                            width: 2,
-                            color: Colors.white.withValues(alpha: 0.08),
-                          ),
+                      const SizedBox(width: 12),
+                      // Details
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.name,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: context.colors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              item.detail,
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: context.colors.textSecondary,
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
+                      // Time & Status Dot
+                      Row(
+                        children: [
+                          Text(
+                            item.time,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: context.colors.textSecondary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: item.isUpcoming ? const Color(0xFFD97706) : const Color(0xFF16A34A),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
-                  const SizedBox(width: 14),
-                  // Right contents
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                appt.displayName,
-                                style: context.textStyles.bodyMedium.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  fontSize: 14.5,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              timeText,
-                              style: context.textStyles.caption.copyWith(
-                                color: Colors.white54,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 11.5,
-                              ),
-                            ),
-                          ],
+                );
+              }),
+            ),
+    );
+  }
+}
+
+class _StreamItem {
+  final String name;
+  final String detail;
+  final String time;
+  final bool isUpcoming;
+
+  const _StreamItem({
+    required this.name,
+    required this.detail,
+    required this.time,
+    required this.isUpcoming,
+  });
+}
+
+// ─── Patients Waiting List ─────────────────────────────────────
+class PatientsWaitingList extends StatelessWidget {
+  final List<AppointmentModel> appointments;
+
+  const PatientsWaitingList({super.key, required this.appointments});
+
+  @override
+  Widget build(BuildContext context) {
+    // Filter today's appointments for status == AppointmentStatus.waiting
+    final waitingAppointments = appointments
+        .where((appt) => appt.status == AppointmentStatus.waiting)
+        .toList();
+
+    // Sort by check-in time (longest waiting first)
+    waitingAppointments.sort((a, b) {
+      if (a.checkInTime == null && b.checkInTime == null) return 0;
+      if (a.checkInTime == null) return 1;
+      if (b.checkInTime == null) return -1;
+      return a.checkInTime!.compareTo(b.checkInTime!); // oldest checkInTime first
+    });
+
+    final bool isEmpty = waitingAppointments.isEmpty;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.colors.border.withValues(alpha: 0.6),
+          width: 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: context.colors.shadowColor.withValues(alpha: 0.02),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: isEmpty
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 40.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.done_all_rounded,
+                      size: 32,
+                      color: const Color(0xFF16A34A).withValues(alpha: 0.8),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No patients waiting right now',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: context.colors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : Column(
+              children: List.generate(waitingAppointments.length, (index) {
+                final appt = waitingAppointments[index];
+                final isLast = index == waitingAppointments.length - 1;
+                
+                final name = appt.displayName;
+                final initials = name.split(' ').map((e) => e[0]).take(2).join().toUpperCase();
+
+                // Compute wait time
+                String waitText = 'Checked in';
+                if (appt.checkInTime != null) {
+                  final diff = DateTime.now().difference(appt.checkInTime!).inMinutes;
+                  if (diff <= 0) {
+                    waitText = 'Waiting < 1 min';
+                  } else {
+                    waitText = 'Waiting for $diff mins';
+                  }
+                }
+
+                final typeLabel = appt.type == AppointmentType.session ? 'Session' : 'Consultation';
+
+                return Padding(
+                  padding: EdgeInsets.only(bottom: isLast ? 0 : 16),
+                  child: Row(
+                    children: [
+                      // Patient Avatar
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0F5D4F).withValues(alpha: 0.08),
+                          shape: BoxShape.circle,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          statusText,
-                          style: context.textStyles.caption.copyWith(
-                            color: inProgress ? context.colors.info : (isWaiting ? const Color(0xFFFBBF24) : Colors.white38),
-                            fontSize: 11,
+                        alignment: Alignment.center,
+                        child: Text(
+                          initials,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF0F5D4F),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Row(
+                      ),
+                      const SizedBox(width: 12),
+                      // Details
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.05),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                _getTypeLabel(appt.type),
-                                style: TextStyle(
-                                  color: appt.type == AppointmentType.session 
-                                      ? const Color(0xFF34D399) 
-                                      : (appt.type == AppointmentType.walkIn ? const Color(0xFFFBBF24) : const Color(0xFF60A5FA)),
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.bold,
+                            MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: GestureDetector(
+                                onTap: () {
+                                  mainLayoutKey.currentState?.switchToTab(1, highlightAppointmentId: appt.id);
+                                },
+                                child: Text(
+                                  name,
+                                  style: GoogleFonts.inter(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF0F5D4F),
+                                    decoration: TextDecoration.underline,
+                                  ),
                                 ),
                               ),
                             ),
-                            if (appt.doctorName != null && appt.doctorName!.isNotEmpty) ...[
-                              const SizedBox(width: 8),
-                              Text(
-                                'Dr. ${appt.doctorName}',
-                                style: context.textStyles.caption.copyWith(
-                                  color: Colors.white24,
-                                  fontSize: 9.5,
-                                ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '$typeLabel • $waitText',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: context.colors.textSecondary,
                               ),
-                            ],
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 16), // Bottom spacing for nodes
-                      ],
-                    ),
+                      ),
+                      // Start Action Link
+                      MouseRegion(
+                        cursor: SystemMouseCursors.click,
+                        child: GestureDetector(
+                          onTap: () {
+                            mainLayoutKey.currentState?.switchToTab(1, highlightAppointmentId: appt.id);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF0F5D4F).withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Start',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: const Color(0xFF0F5D4F),
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 12,
+                                  color: const Color(0xFF0F5D4F),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            );
-          },
-        ),
-      );
-    }
-
-    if (isDesktop) {
-      final translationY = _isHovered ? -3.0 : 0.0;
-      final hoverGlowOpacity = _isHovered ? 0.06 : 0.02;
-      final mainShadowOpacity = _isHovered ? 0.40 : 0.35;
-
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) => setState(() => _isHovered = true),
-          onExit: (_) => setState(() => _isHovered = false),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            transform: Matrix4.translationValues(0.0, translationY, 0.0),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(mainShadowOpacity),
-                  blurRadius: 36,
-                  offset: const Offset(0, 16),
-                ),
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-                BoxShadow(
-                  color: const Color(0xFF10B981).withOpacity(hoverGlowOpacity),
-                  blurRadius: 20,
-                  spreadRadius: 2,
-                ),
-              ],
+                );
+              }),
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(28),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                child: content,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-    return content;
+    );
   }
 }
 
@@ -1276,7 +1208,7 @@ class _WebGlassCardState extends State<WebGlassCard> {
           border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: context.colors.shadowColor.withValues(alpha: 0.08),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -1299,25 +1231,25 @@ class _WebGlassCardState extends State<WebGlassCard> {
         duration: const Duration(milliseconds: 200),
         transform: Matrix4.translationValues(0.0, translationY, 0.0),
         decoration: BoxDecoration(
-          color: const Color(0xFF131A26).withOpacity(0.07),
+          color: context.colors.cardBackground.withValues(alpha: 0.72),
           borderRadius: BorderRadius.circular(widget.borderRadius),
           border: Border.all(
-            color: Colors.white.withOpacity(0.08),
+            color: context.colors.border.withValues(alpha: 0.4),
             width: 1.0,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(mainShadowOpacity),
+              color: context.colors.shadowColor.withValues(alpha: mainShadowOpacity),
               blurRadius: 36,
               offset: const Offset(0, 16),
             ),
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: context.colors.shadowColor.withValues(alpha: 0.15),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
             BoxShadow(
-              color: activeGlowColor.withOpacity(hoverGlowOpacity),
+              color: activeGlowColor.withValues(alpha: hoverGlowOpacity),
               blurRadius: 20,
               spreadRadius: 2,
             ),

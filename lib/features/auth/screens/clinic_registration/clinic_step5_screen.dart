@@ -3,10 +3,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:pms_app/core/constants/app_colors.dart';
 import 'package:pms_app/core/constants/app_text_styles.dart';
 import 'package:pms_app/core/widgets/app_button.dart';
 import 'package:pms_app/core/widgets/app_text_field.dart';
+import 'package:pms_app/core/widgets/animated_form_list.dart';
 import 'package:pms_app/core/widgets/loading_overlay.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/features/auth/providers/registration_cache_provider.dart';
@@ -198,66 +200,139 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: context.colors.background,
+        backgroundColor: isDesktop ? Colors.white : context.colors.background,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
+            icon: Icon(Icons.arrow_back_rounded,
+                color: isDesktop ? const Color(0xFF161616) : context.colors.textPrimary),
             onPressed: () { FocusScope.of(context).unfocus(); Navigator.of(context).pop(); },
           ),
-          title: Text('Clinic Registration', style: context.textStyles.h4),
+          title: isDesktop ? null : Text('Clinic Registration', style: context.textStyles.h4),
           centerTitle: true,
         ),
         body: LoadingOverlay(
           isLoading: authState.isLoading,
           message: 'Creating your clinic...',
           child: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 8),
-                  _buildStepIndicator(5, 5),
-                  const SizedBox(height: 24),
-
-                  // Header
-                  Text('Almost Done!', style: context.textStyles.h2),
-                  const SizedBox(height: 6),
-                  Text('Optionally set up a receptionist account for your clinic.',
-                    style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
-                  const SizedBox(height: 32),
-
-                  // Summary card
-                  _buildSummaryCard(),
-                  const SizedBox(height: 28),
-
-                  // Receptionist toggle card
-                  _buildReceptionistCard(),
-                  const SizedBox(height: 32),
-
-                  AppButton(
-                    label: 'Create Clinic',
-                    onPressed: (_isSubmitting || authState.isLoading) ? null : _submit,
-                    isLoading: _isSubmitting || authState.isLoading,
-                    icon: Icons.check_circle_outline_rounded,
+            child: isDesktop
+                ? Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        child: _buildStepIndicator(5, 5),
+                      ),
+                      Expanded(
+                        child: AnimatedFormList(
+                          gradientColor: Colors.white,
+                          horizontalPadding: 32,
+                          items: [
+                            // Header block
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                            'Almost Done!',
+                            style: GoogleFonts.cormorantGaramond(
+                              fontSize: 38,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF161616),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Optionally set up a receptionist account for your clinic.',
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              color: const Color(0xFF6F6F6F),
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Summary card
+                      _buildSummaryCard(),
+                      // Receptionist toggle card
+                      _buildReceptionistCard(),
+                      // Submit button + hint
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          AppButton(
+                            label: 'Create Clinic',
+                            onPressed: (_isSubmitting || authState.isLoading) ? null : _submit,
+                            isLoading: _isSubmitting || authState.isLoading,
+                            icon: Icons.check_circle_outline_rounded,
+                          ),
+                          const SizedBox(height: 12),
+                          if (!_enableReceptionist)
+                            Center(
+                              child: Text(
+                                'You can add a receptionist later from Settings.',
+                                style: context.textStyles.caption.copyWith(color: context.colors.textHint),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  if (!_enableReceptionist)
-                    Center(child: Text(
-                      'You can add a receptionist later from Settings.',
-                      style: context.textStyles.caption.copyWith(color: context.colors.textHint),
-                      textAlign: TextAlign.center,
-                    )),
-                  const SizedBox(height: 32),
                 ],
-              ),
-            ),
+              )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 8),
+                        _buildStepIndicator(5, 5),
+                        const SizedBox(height: 24),
+
+                        // Header
+                        Text(
+                          'Almost Done!',
+                          style: context.textStyles.h2,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Optionally set up a receptionist account for your clinic.',
+                          style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary),
+                        ),
+                        const SizedBox(height: 32),
+
+                        // Summary card
+                        _buildSummaryCard(),
+                        const SizedBox(height: 28),
+
+                        // Receptionist toggle card
+                        _buildReceptionistCard(),
+                        const SizedBox(height: 32),
+
+                        AppButton(
+                          label: 'Create Clinic',
+                          onPressed: (_isSubmitting || authState.isLoading) ? null : _submit,
+                          isLoading: _isSubmitting || authState.isLoading,
+                          icon: Icons.check_circle_outline_rounded,
+                        ),
+                        const SizedBox(height: 12),
+                        if (!_enableReceptionist)
+                          Center(child: Text(
+                            'You can add a receptionist later from Settings.',
+                            style: context.textStyles.caption.copyWith(color: context.colors.textHint),
+                            textAlign: TextAlign.center,
+                          )),
+                        const SizedBox(height: 32),
+                      ],
+                    ),
+                  ),
           ),
         ),
       ),
@@ -311,8 +386,11 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
   }
 
   Widget _buildReceptionistCard() {
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
+
     return Container(
-      padding: EdgeInsets.all(18),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: _enableReceptionist ? context.colors.info.withValues(alpha: 0.04) : context.colors.surface,
         borderRadius: BorderRadius.circular(18),
@@ -344,52 +422,113 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
         ]),
 
         if (_enableReceptionist) ...[
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           Divider(color: context.colors.border.withValues(alpha: 0.5), height: 1),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
 
-          AppTextField(
-            label: 'Receptionist Name',
-            hint: 'e.g. Priya',
-            controller: _recNameCtrl,
-            prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
-          ),
-          SizedBox(height: 14),
-
-          Stack(
-            alignment: Alignment.centerRight,
-            children: [
-              AppTextField(
-                label: 'Username',
-                hint: 'Login username for receptionist',
-                controller: _recUsernameCtrl,
-                errorText: _usernameError,
-                prefixIcon: Icon(Icons.alternate_email_rounded, color: context.colors.textHint),
-              ),
-              if (_isCheckingUsername)
-                Positioned(
-                  right: 16,
-                  top: 40,
-                  child: SizedBox(
-                    width: 16, height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
+          if (isDesktop) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: AppTextField(
+                    label: 'Receptionist Name',
+                    hint: 'e.g. Priya',
+                    controller: _recNameCtrl,
+                    prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
                   ),
                 ),
-            ],
-          ),
-          SizedBox(height: 14),
-
-          AppTextField(
-            label: 'Password',
-            hint: 'Min 8 characters',
-            controller: _recPasswordCtrl,
-            prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint),
-            suffixIcon: GestureDetector(
-              onTap: () => setState(() => _obscurePassword = !_obscurePassword),
-              child: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                color: context.colors.textHint, size: 20),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Stack(
+                    alignment: Alignment.centerRight,
+                    children: [
+                      AppTextField(
+                        label: 'Username',
+                        hint: 'Login username for receptionist',
+                        controller: _recUsernameCtrl,
+                        errorText: _usernameError,
+                        prefixIcon: Icon(Icons.alternate_email_rounded, color: context.colors.textHint),
+                      ),
+                      if (_isCheckingUsername)
+                        Positioned(
+                          right: 16,
+                          top: 40,
+                          child: SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ),
+            const SizedBox(height: 14),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: AppTextField(
+                    label: 'Password',
+                    hint: 'Min 8 characters',
+                    controller: _recPasswordCtrl,
+                    prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint),
+                    suffixIcon: GestureDetector(
+                      onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+                      child: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                        color: context.colors.textHint, size: 20),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(child: SizedBox()),
+              ],
+            ),
+          ] else ...[
+            AppTextField(
+              label: 'Receptionist Name',
+              hint: 'e.g. Priya',
+              controller: _recNameCtrl,
+              prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
+            ),
+            const SizedBox(height: 14),
+
+            Stack(
+              alignment: Alignment.centerRight,
+              children: [
+                AppTextField(
+                  label: 'Username',
+                  hint: 'Login username for receptionist',
+                  controller: _recUsernameCtrl,
+                  errorText: _usernameError,
+                  prefixIcon: Icon(Icons.alternate_email_rounded, color: context.colors.textHint),
+                ),
+                if (_isCheckingUsername)
+                  Positioned(
+                    right: 16,
+                    top: 40,
+                    child: SizedBox(
+                      width: 16, height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            AppTextField(
+              label: 'Password',
+              hint: 'Min 8 characters',
+              controller: _recPasswordCtrl,
+              prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint),
+              suffixIcon: GestureDetector(
+                onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+                child: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                  color: context.colors.textHint, size: 20),
+              ),
+            ),
+          ],
 
           const SizedBox(height: 14),
           Container(

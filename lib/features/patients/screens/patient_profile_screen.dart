@@ -122,7 +122,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                 height: 300,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF3B82F6).withOpacity(0.08),
+                  color: const Color(0xFF3B82F6).withValues(alpha: 0.08),
                 ),
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
@@ -138,7 +138,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                 height: 300,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF10B981).withOpacity(0.05),
+                  color: const Color(0xFF10B981).withValues(alpha: 0.05),
                 ),
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
@@ -159,22 +159,22 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                         children: [
                           // Back button
                           Material(
-                            color: Colors.white.withOpacity(0.06),
+                            color: context.colors.border,
                             borderRadius: BorderRadius.circular(12),
                             child: InkWell(
                               borderRadius: BorderRadius.circular(12),
                               onTap: () => Navigator.pop(context),
-                              child: const Padding(
+                              child: Padding(
                                 padding: EdgeInsets.all(8),
-                                child: Icon(Icons.arrow_back_rounded, color: Colors.white70, size: 20),
+                                child: Icon(Icons.arrow_back_rounded, color: context.colors.textSecondary, size: 20),
                               ),
                             ),
                           ),
                           const SizedBox(width: 16),
-                          const Text(
+                          Text(
                             'Patient Profile',
                             style: TextStyle(
-                              color: Colors.white,
+                              color: context.colors.textPrimary,
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                               letterSpacing: -0.3,
@@ -304,7 +304,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e', style: const TextStyle(color: Colors.white)),
+          content: Text('Error: $e', style: TextStyle(color: context.colors.textPrimary)),
           backgroundColor: context.colors.error,
         ));
       }
@@ -318,9 +318,9 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     return FloatingActionButton.extended(
       onPressed: _startConsultation,
       backgroundColor: context.colors.primary,
-      icon: const Icon(Icons.add_comment_rounded, color: Colors.white),
-      label: const Text('Start Consult',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+      icon: Icon(Icons.add_comment_rounded, color: context.colors.textPrimary),
+      label: Text('Start Consult',
+          style: TextStyle(color: context.colors.textPrimary, fontWeight: FontWeight.bold)),
     );
   }
 
@@ -347,7 +347,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
             Align(
               alignment: Alignment.topRight,
               child: IconButton(
-                icon: const Icon(Icons.edit_rounded, color: Colors.white70, size: 20),
+                icon: Icon(Icons.edit_rounded, color: context.colors.textSecondary, size: 20),
                 tooltip: 'Edit Profile',
                 onPressed: _openEditPatientDialog,
               ),
@@ -365,7 +365,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF3B82F6).withOpacity(0.3),
+                      color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
                       blurRadius: 20,
                       offset: const Offset(0, 6),
                     ),
@@ -374,20 +374,20 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                 child: Center(
                   child: Text(
                     initials.isNotEmpty ? initials : '?',
-                    style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: context.colors.textPrimary, fontSize: 36, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            Text(p.fullName, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+            Text(p.fullName, style: TextStyle(color: context.colors.textPrimary, fontSize: 22, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
             const SizedBox(height: 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.phone_rounded, size: 14, color: Colors.white38),
+                Icon(Icons.phone_rounded, size: 14, color: context.colors.textMuted),
                 const SizedBox(width: 6),
-                Text(p.phone, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                Text(p.phone, style: TextStyle(color: context.colors.textSecondary, fontSize: 14)),
               ],
             ),
             const SizedBox(height: 24),
@@ -448,10 +448,10 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         children: [
           SizedBox(
             width: 100,
-            child: Text(label, style: const TextStyle(color: Colors.white38, fontSize: 12)),
+            child: Text(label, style: TextStyle(color: context.colors.textMuted, fontSize: 12)),
           ),
           Expanded(
-            child: Text(value, style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
+            child: Text(value, style: TextStyle(color: context.colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
           ),
         ],
       ),
@@ -471,7 +471,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFFD97706).withOpacity(0.25),
+              color: const Color(0xFFD97706).withValues(alpha: 0.25),
               blurRadius: 16,
               offset: const Offset(0, 4),
             ),
@@ -496,8 +496,8 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
               _refreshKey++;
             });
           },
-          icon: const Icon(Icons.play_arrow_rounded, color: Colors.white),
-          label: const Text('Resume Consult', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          icon: Icon(Icons.play_arrow_rounded, color: context.colors.textPrimary),
+          label: Text('Resume Consult', style: TextStyle(color: context.colors.textPrimary, fontWeight: FontWeight.bold)),
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFFD97706),
             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -512,7 +512,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF3B82F6).withOpacity(0.25),
+            color: const Color(0xFF3B82F6).withValues(alpha: 0.25),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -520,8 +520,8 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       ),
       child: ElevatedButton.icon(
         onPressed: _startConsultation,
-        icon: const Icon(Icons.add_comment_rounded, color: Colors.white),
-        label: const Text('Start Consult', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        icon: Icon(Icons.add_comment_rounded, color: context.colors.textPrimary),
+        label: Text('Start Consult', style: TextStyle(color: context.colors.textPrimary, fontWeight: FontWeight.bold)),
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF3B82F6),
           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -541,20 +541,20 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           decoration: BoxDecoration(
-            color: const Color(0xFF131A26).withOpacity(0.07),
+            color: context.colors.cardBackgroundAlt,
             borderRadius: BorderRadius.circular(28),
             border: Border.all(
-              color: Colors.white.withOpacity(0.08),
+              color: context.colors.border,
               width: 1.0,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.35),
+                color: context.colors.textPrimary.withValues(alpha: 0.35),
                 blurRadius: 36,
                 offset: const Offset(0, 16),
               ),
               BoxShadow(
-                color: Colors.black.withOpacity(0.15),
+                color: context.colors.shadowColor.withValues(alpha: 0.15),
                 blurRadius: 10,
                 offset: const Offset(0, 4),
               ),
@@ -569,7 +569,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: Colors.white.withOpacity(0.07),
+                      color: context.colors.textPrimary.withValues(alpha: 0.07),
                       width: 1,
                     ),
                   ),
@@ -604,7 +604,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         decoration: BoxDecoration(
-          color: active ? Colors.white.withOpacity(0.07) : Colors.transparent,
+          color: active ? context.colors.border.withValues(alpha: 0.4) : Colors.transparent,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           border: Border(
             bottom: BorderSide(
@@ -616,7 +616,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         child: Text(
           text,
           style: TextStyle(
-            color: active ? Colors.white : Colors.white38,
+            color: active ? Colors.white : context.colors.textMuted,
             fontWeight: active ? FontWeight.bold : FontWeight.normal,
             fontSize: 13.5,
             letterSpacing: active ? -0.1 : 0,
@@ -887,12 +887,12 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                 child: Center(
                   child: Text(
                     initials.isNotEmpty ? initials : '?',
-                    style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                    style: TextStyle(color: context.colors.textPrimary, fontSize: 32, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
               const SizedBox(height: 14),
-              Text(p.fullName, style: context.textStyles.h2.copyWith(fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+              Text(p.fullName, style: context.textStyles.h2, textAlign: TextAlign.center),
               const SizedBox(height: 6),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1192,7 +1192,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: activeColor.withOpacity(0.12),
+                        color: activeColor.withValues(alpha: 0.12),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
@@ -1213,7 +1213,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                                   c.chiefComplaint?.isNotEmpty == true
                                       ? c.chiefComplaint!
                                       : 'General Consultation',
-                                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                  style: TextStyle(color: context.colors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -1226,7 +1226,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                             c.created != null
                                 ? DateFormat('MMM d, yyyy · h:mm a').format(c.created!.toLocal())
                                 : '—',
-                            style: const TextStyle(color: Colors.white38, fontSize: 11),
+                            style: TextStyle(color: context.colors.textMuted, fontSize: 11),
                           ),
                           if (_planLoaded && _treatmentPlan != null) ...[
                             const SizedBox(height: 4),
@@ -1247,7 +1247,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                     ),
                     Icon(
                       _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                      color: Colors.white38,
+                      color: context.colors.textMuted,
                     ),
                   ],
                 ),
@@ -1255,7 +1255,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
             ),
             // Expanded body
             if (_expanded) ...[
-              Divider(height: 1, indent: 20, endIndent: 20, color: Colors.white.withOpacity(0.08)),
+              Divider(height: 1, indent: 20, endIndent: 20, color: context.colors.border),
               _buildConsultationDetails(),
               if (_planLoaded) _buildSessionsSection(),
               const SizedBox(height: 12),
@@ -1280,7 +1280,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: context.colors.textPrimary.withValues(alpha: 0.04),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1401,9 +1401,9 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
         margin: const EdgeInsets.only(left: 8),
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
+          color: color.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: color.withOpacity(0.25), width: 1),
+          border: Border.all(color: color.withValues(alpha: 0.25), width: 1),
         ),
         child: Text(
           label,
@@ -1469,7 +1469,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 label: const Text('Resume Consultation'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: isDesktop
-                      ? const Color(0xFFD97706).withOpacity(0.2)
+                      ? const Color(0xFFD97706).withValues(alpha: 0.2)
                       : context.colors.warning,
                   foregroundColor: isDesktop
                       ? const Color(0xFFFBBF24)
@@ -1514,7 +1514,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                         foregroundColor: isDesktop ? const Color(0xFF60A5FA) : context.colors.info,
                         side: BorderSide(
                           color: isDesktop
-                              ? const Color(0xFF3B82F6).withOpacity(0.4)
+                              ? const Color(0xFF3B82F6).withValues(alpha: 0.4)
                               : context.colors.info.withValues(alpha: 0.5),
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1560,7 +1560,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                       label: const Text('Create Plan'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: isDesktop
-                            ? const Color(0xFF2563EB).withOpacity(0.3)
+                            ? const Color(0xFF2563EB).withValues(alpha: 0.3)
                             : context.colors.primary,
                         foregroundColor: isDesktop
                             ? const Color(0xFF60A5FA)
@@ -1602,7 +1602,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                     foregroundColor: isDesktop ? const Color(0xFF60A5FA) : context.colors.info,
                     side: BorderSide(
                       color: isDesktop
-                          ? const Color(0xFF3B82F6).withOpacity(0.4)
+                          ? const Color(0xFF3B82F6).withValues(alpha: 0.4)
                           : context.colors.info.withValues(alpha: 0.5),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1629,7 +1629,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Divider(height: 1, color: isDesktop ? Colors.white.withOpacity(0.08) : context.colors.border),
+          Divider(height: 1, color: isDesktop ? context.colors.border : context.colors.border),
           const SizedBox(height: 12),
 
           if (!_planLoaded)
@@ -1649,7 +1649,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               const SizedBox(height: 8),
               if (_treatmentSessions.isEmpty)
                 Text('No sessions found.',
-                    style: TextStyle(color: isDesktop ? Colors.white38 : context.colors.textSecondary, fontSize: 12))
+                    style: TextStyle(color: isDesktop ? context.colors.textMuted : context.colors.textSecondary, fontSize: 12))
               else
                 ...List.generate(
                   _treatmentSessions.length,
@@ -1674,7 +1674,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                       foregroundColor: isDesktop ? const Color(0xFFF87171) : context.colors.error,
                       side: BorderSide(
                         color: isDesktop
-                            ? const Color(0xFFEF4444).withOpacity(0.4)
+                            ? const Color(0xFFEF4444).withValues(alpha: 0.4)
                             : context.colors.error.withValues(alpha: 0.5),
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1721,7 +1721,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                   label: const Text('Create Maintenance Plan'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isDesktop
-                        ? const Color(0xFF10B981).withOpacity(0.2)
+                        ? const Color(0xFF10B981).withValues(alpha: 0.2)
                         : context.colors.success,
                     foregroundColor: isDesktop
                         ? const Color(0xFF34D399)
@@ -1750,7 +1750,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               const SizedBox(height: 8),
               if (_maintenanceSessions.isEmpty)
                 Text('No maintenance sessions found.',
-                    style: TextStyle(color: isDesktop ? Colors.white38 : context.colors.textSecondary, fontSize: 12))
+                    style: TextStyle(color: isDesktop ? context.colors.textMuted : context.colors.textSecondary, fontSize: 12))
               else
                 ...List.generate(
                   _maintenanceSessions.length,
@@ -1785,7 +1785,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
         Text(
           '${plan.treatmentType} · ₹${plan.sessionFee.toInt()}/session',
           style: isDesktop
-              ? const TextStyle(color: Colors.white38, fontSize: 11)
+              ? TextStyle(color: context.colors.textMuted, fontSize: 11)
               : context.textStyles.caption.copyWith(color: context.colors.textSecondary),
         ),
       ],
@@ -1832,7 +1832,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
           shape: BoxShape.circle,
         ),
         alignment: Alignment.center,
-        child: const Icon(Icons.check, size: 13, color: Colors.white),
+        child: Icon(Icons.check, size: 13, color: context.colors.textPrimary),
       );
     } else if (isInProgress) {
       dotWidget = Container(
@@ -1845,7 +1845,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
         alignment: Alignment.center,
         child: Text(
           '${session.sessionNumber}',
-          style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+          style: TextStyle(color: context.colors.textPrimary, fontSize: 10, fontWeight: FontWeight.bold),
         ),
       );
     } else if (isMissed || isCancelled) {
@@ -1860,7 +1860,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
         child: Icon(
           isCancelled ? Icons.close_rounded : Icons.priority_high_rounded,
           size: 11,
-          color: Colors.white,
+          color: context.colors.textPrimary,
         ),
       );
     } else {
@@ -1869,14 +1869,14 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
         width: 24,
         height: 24,
         decoration: BoxDecoration(
-          color: isDesktop ? Colors.white.withOpacity(0.04) : context.colors.surface,
+          color: isDesktop ? context.colors.divider : context.colors.surface,
           shape: BoxShape.circle,
-          border: Border.all(color: isDesktop ? Colors.white.withOpacity(0.12) : context.colors.border, width: 2),
+          border: Border.all(color: isDesktop ? context.colors.border.withValues(alpha: 0.5) : context.colors.border, width: 2),
         ),
         alignment: Alignment.center,
         child: Text(
           '${session.sessionNumber}',
-          style: TextStyle(color: isDesktop ? Colors.white38 : context.colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w700),
+          style: TextStyle(color: isDesktop ? context.colors.textMuted : context.colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w700),
         ),
       );
     }
@@ -1940,7 +1940,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                       color: index == 0
                           ? Colors.transparent
                           : (isDesktop
-                              ? Colors.white.withOpacity(0.08)
+                              ? context.colors.border
                               : context.colors.border.withValues(alpha: 0.8)),
                     ),
                   ),
@@ -1951,7 +1951,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                       color: index == totalCount - 1
                           ? Colors.transparent
                           : (isDesktop
-                              ? Colors.white.withOpacity(0.08)
+                              ? context.colors.border
                               : context.colors.border.withValues(alpha: 0.8)),
                     ),
                   ),
@@ -1967,8 +1967,8 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 decoration: BoxDecoration(
                   color: isDesktop
                       ? (isEditable
-                          ? accentColor.withOpacity(0.08)
-                          : Colors.white.withOpacity(0.02))
+                          ? accentColor.withValues(alpha: 0.08)
+                          : context.colors.divider)
                       : (isEditable
                           ? accentColor.withValues(alpha: 0.03)
                           : context.colors.background.withValues(alpha: 0.5)),
@@ -1976,8 +1976,8 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                   border: Border.all(
                     color: isDesktop
                         ? (isEditable
-                            ? accentColor.withOpacity(0.3)
-                            : Colors.white.withOpacity(0.06))
+                            ? accentColor.withValues(alpha: 0.3)
+                            : context.colors.border)
                         : (isEditable
                             ? accentColor.withValues(alpha: 0.2)
                             : context.colors.border.withValues(alpha: 0.5)),
@@ -1994,7 +1994,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                               Text(
                                 '${isMaintenance ? "Maintenance" : "Session"} ${session.sessionNumber}',
                                 style: isDesktop
-                                    ? const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)
+                                    ? TextStyle(color: context.colors.textPrimary, fontSize: 13, fontWeight: FontWeight.bold)
                                     : context.textStyles.label.copyWith(
                                         fontSize: 13,
                                         fontWeight: FontWeight.w700,
@@ -2019,7 +2019,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                           Text(
                             dateLabel,
                             style: isDesktop
-                                ? const TextStyle(color: Colors.white38, fontSize: 11)
+                                ? TextStyle(color: context.colors.textMuted, fontSize: 11)
                                 : context.textStyles.caption.copyWith(fontSize: 11),
                           ),
                         ],
@@ -2029,9 +2029,9 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: statusColor.withOpacity(0.12),
+                        color: statusColor.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: statusColor.withOpacity(0.25)),
+                        border: Border.all(color: statusColor.withValues(alpha: 0.25)),
                       ),
                       child: Text(
                         _sessionStatusLabel(session, effectiveStatus),
@@ -2050,8 +2050,8 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                     ),
                     if (isEditable) ...[
                       const SizedBox(width: 4),
-                      Icon(Icons.chevron_right_rounded, color: isDesktop ? Colors.white38 : context.colors.textHint, size: 16),
-                      Icon(Icons.more_vert_rounded, color: isDesktop ? Colors.white12 : context.colors.textHint.withValues(alpha: 0.4), size: 13),
+                      Icon(Icons.chevron_right_rounded, color: isDesktop ? context.colors.textMuted : context.colors.textHint, size: 16),
+                      Icon(Icons.more_vert_rounded, color: isDesktop ? context.colors.textMuted : context.colors.textHint.withValues(alpha: 0.4), size: 13),
                     ],
                   ],
                 ),
@@ -2652,7 +2652,7 @@ class _EditPatientDialogState extends ConsumerState<_EditPatientDialog> {
     final isMobile = width < 600;
 
     return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       backgroundColor: context.colors.background,
       clipBehavior: Clip.antiAlias,
       child: Container(
@@ -2694,7 +2694,7 @@ class _EditPatientDialogState extends ConsumerState<_EditPatientDialog> {
                   Expanded(
                     child: Text(
                       'Edit Patient Details',
-                      style: context.textStyles.h2.copyWith(fontWeight: FontWeight.bold),
+                      style: context.textStyles.h2,
                     ),
                   ),
                   IconButton(
@@ -2807,7 +2807,7 @@ class _EditPatientDialogState extends ConsumerState<_EditPatientDialog> {
                       Divider(color: context.colors.border.withValues(alpha: 0.5)),
                       const SizedBox(height: 16),
 
-                      Text('Contact & Address', style: context.textStyles.h3.copyWith(fontWeight: FontWeight.bold)),
+                      Text('Contact & Address', style: context.textStyles.h3),
                       const SizedBox(height: 16),
 
                       if (isMobile) ...[
@@ -2865,7 +2865,7 @@ class _EditPatientDialogState extends ConsumerState<_EditPatientDialog> {
                       Divider(color: context.colors.border.withValues(alpha: 0.5)),
                       const SizedBox(height: 16),
 
-                      Text('Medical & Emergency', style: context.textStyles.h3.copyWith(fontWeight: FontWeight.bold)),
+                      Text('Medical & Emergency', style: context.textStyles.h3),
                       const SizedBox(height: 16),
 
                       if (isMobile) ...[

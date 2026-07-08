@@ -30,7 +30,7 @@ class SuperadminSettingsScreen extends ConsumerWidget {
                         width: 56, height: 56,
                         decoration: BoxDecoration(gradient: SAColors.accentGradient, borderRadius: BorderRadius.circular(16),
                           boxShadow: [BoxShadow(color: SAColors.accent.withValues(alpha: 0.3), blurRadius: 16, offset: const Offset(0, 6))]),
-                        child: const Icon(Icons.admin_panel_settings_rounded, color: Colors.white, size: 28),
+                        child: Icon(Icons.admin_panel_settings_rounded, color: context.colors.textPrimary, size: 28),
                       ),
                       const SizedBox(width: 14),
                       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

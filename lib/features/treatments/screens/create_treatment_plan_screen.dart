@@ -1000,7 +1000,7 @@ class _CreateTreatmentPlanScreenState
                             border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
+                                color: context.colors.shadowColor.withValues(alpha: 0.2),
                                 blurRadius: 32,
                                 spreadRadius: 4,
                                 offset: const Offset(0, 16),
@@ -1023,7 +1023,7 @@ class _CreateTreatmentPlanScreenState
           ),
           if (_isSubmitting)
             Container(
-              color: Colors.black.withValues(alpha: 0.6),
+              color: context.colors.shadowColor.withValues(alpha: 0.6),
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 32),
@@ -1033,7 +1033,7 @@ class _CreateTreatmentPlanScreenState
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.25),
+                        color: context.colors.shadowColor.withValues(alpha: 0.25),
                         blurRadius: 24,
                         offset: const Offset(0, 8),
                       ),

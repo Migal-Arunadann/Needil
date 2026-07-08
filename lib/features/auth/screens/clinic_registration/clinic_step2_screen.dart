@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:pms_app/core/constants/app_colors.dart';
 import 'package:pms_app/core/constants/app_text_styles.dart';
 import 'package:pms_app/core/widgets/app_button.dart';
@@ -30,17 +31,20 @@ class _ClinicStep2ScreenState extends State<ClinicStep2Screen> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
+
     return Scaffold(
-      backgroundColor: context.colors.background,
+      backgroundColor: isDesktop ? Colors.white : context.colors.background,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_rounded,
-              color: context.colors.textPrimary),
+              color: isDesktop ? const Color(0xFF161616) : context.colors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('Clinic Registration', style: context.textStyles.h4),
+        title: isDesktop ? null : Text('Clinic Registration', style: context.textStyles.h4),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -52,12 +56,26 @@ class _ClinicStep2ScreenState extends State<ClinicStep2Screen> {
               const SizedBox(height: 8),
               _buildStepIndicator(2, 5),
               const SizedBox(height: 24),
-              Text('Bed Capacity', style: context.textStyles.h2),
+              Text(
+                'Bed Capacity',
+                style: isDesktop
+                    ? GoogleFonts.cormorantGaramond(
+                        fontSize: 38,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFF161616),
+                      )
+                    : context.textStyles.h2,
+              ),
               const SizedBox(height: 8),
               Text(
                 'How many beds/treatment stations does your clinic have? This determines concurrent appointment capacity.',
-                style: context.textStyles.bodyMedium
-                    .copyWith(color: context.colors.textSecondary),
+                style: isDesktop
+                    ? GoogleFonts.inter(
+                        fontSize: 15,
+                        color: const Color(0xFF6F6F6F),
+                      )
+                    : context.textStyles.bodyMedium
+                        .copyWith(color: context.colors.textSecondary),
               ),
               const SizedBox(height: 48),
               // Bed counter
@@ -66,12 +84,14 @@ class _ClinicStep2ScreenState extends State<ClinicStep2Screen> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                   decoration: BoxDecoration(
-                    color: context.colors.surface,
+                    color: isDesktop ? Colors.white : context.colors.surface,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: context.colors.border),
+                    border: Border.all(color: isDesktop ? const Color(0xFFE8E6E2) : context.colors.border),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.04),
+                        color: isDesktop
+                            ? const Color(0xFF0F5D4F).withValues(alpha: 0.04)
+                            : context.colors.shadowColor.withValues(alpha: 0.04),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
                       ),
@@ -134,6 +154,29 @@ class _ClinicStep2ScreenState extends State<ClinicStep2Screen> {
     required VoidCallback onTap,
     required bool enabled,
   }) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
+
+    if (isDesktop) {
+      final primary = const Color(0xFF0F5D4F);
+      return GestureDetector(
+        onTap: enabled ? onTap : null,
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: enabled ? primary : const Color(0xFFF5F5F5),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(
+            icon,
+            color: enabled ? Colors.white : const Color(0xFFCCCCCC),
+            size: 24,
+          ),
+        ),
+      );
+    }
+
     return GestureDetector(
       onTap: enabled ? onTap : null,
       child: Container(

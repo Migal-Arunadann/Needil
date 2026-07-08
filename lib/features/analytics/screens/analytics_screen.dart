@@ -248,10 +248,8 @@ class _AnalyticsHeader extends ConsumerWidget {
         Text(
           'Analytics',
           style: context.textStyles.h1.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-            fontSize: 28,
-          ),
+            color: context.colors.textPrimary,
+            ),
         ),
         const SizedBox(height: 4),
         Text(
@@ -331,12 +329,12 @@ class _AnalyticsHeader extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.file_download_rounded, color: Colors.white, size: 18),
+                Icon(Icons.file_download_rounded, color: context.colors.textPrimary, size: 18),
                 const SizedBox(width: 8),
                 Text(
                   'Export Report',
                   style: context.textStyles.buttonMedium.copyWith(
-                    color: Colors.white,
+                    color: context.colors.textPrimary,
                     fontSize: 13,
                   ),
                 ),
@@ -460,7 +458,7 @@ class _ExportProgressDialogState extends State<_ExportProgressDialog> {
                     color: Color(0xFF10B981),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.check_rounded, color: Colors.white, size: 20),
+                  child: Icon(Icons.check_rounded, color: context.colors.textPrimary, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -501,7 +499,7 @@ class _ExportProgressDialogState extends State<_ExportProgressDialog> {
               height: 150,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.2),
+                color: context.colors.shadowColor.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: context.colors.border.withValues(alpha: 0.5)),
               ),
@@ -886,8 +884,7 @@ class _KpiCard extends StatelessWidget {
                     Text(
                       value,
                       style: context.textStyles.h2.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                        color: context.colors.textPrimary,
                         fontSize: isDesktop ? 22 : 19,
                       ),
                     ),
@@ -974,7 +971,7 @@ class _KpiCard extends StatelessWidget {
         border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: context.colors.shadowColor.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1033,8 +1030,7 @@ class _RevenueCard extends StatelessWidget {
                     Text(
                       '₹$formatted',
                       style: context.textStyles.h2.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                        color: context.colors.textPrimary,
                         fontSize: isDesktop ? 24 : 20,
                       ),
                     ),
@@ -1152,7 +1148,7 @@ class _RevenueCard extends StatelessWidget {
         border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: context.colors.shadowColor.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1216,7 +1212,7 @@ class _TodaySnapshotRow extends StatelessWidget {
         border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: context.colors.shadowColor.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1255,8 +1251,8 @@ class _TodayTile extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             '$value',
-            style: const TextStyle(
-              color: Colors.white,
+            style: TextStyle(
+              color: context.colors.textPrimary,
               fontSize: 22,
               fontWeight: FontWeight.bold,
             ),
@@ -1736,10 +1732,10 @@ class _TypeRow extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Colors.white,
+                  color: context.colors.textPrimary,
                 ),
               ),
             ),
@@ -1756,7 +1752,7 @@ class _TypeRow extends StatelessWidget {
         const SizedBox(height: 6),
         LinearProgressIndicator(
           value: pct,
-          backgroundColor: Colors.white.withValues(alpha: 0.05),
+          backgroundColor: context.colors.border.withValues(alpha: 0.4),
           color: color,
           minHeight: 5,
           borderRadius: BorderRadius.circular(4),
@@ -1967,7 +1963,7 @@ class _PlanConversionCard extends StatelessWidget {
                   'Conversion Stats',
                   style: context.textStyles.bodyMedium.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: context.colors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 12),

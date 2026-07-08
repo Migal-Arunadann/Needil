@@ -663,7 +663,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                         border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
+                            color: context.colors.shadowColor.withValues(alpha: 0.2),
                             blurRadius: 32,
                             spreadRadius: 4,
                             offset: const Offset(0, 16),
@@ -748,7 +748,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
             child: Container(
               width: 32, height: 32,
               decoration: BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-              child: const Icon(Icons.close_rounded, color: Colors.white, size: 18),
+              child: Icon(Icons.close_rounded, color: context.colors.textPrimary, size: 18),
             ),
           )),
         ]),
@@ -773,7 +773,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
           _onFieldChanged();
         },
         child: Container(width: 22, height: 22, decoration: BoxDecoration(color: context.colors.error, shape: BoxShape.circle),
-          child: const Icon(Icons.close_rounded, size: 14, color: Colors.white)),
+          child: Icon(Icons.close_rounded, size: 14, color: context.colors.textPrimary)),
       )),
     ]);
   }

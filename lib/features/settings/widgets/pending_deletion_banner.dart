@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/core/services/clinic_deletion_service.dart';
@@ -37,35 +38,35 @@ class _PendingDeletionBannerState
       builder: (_) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E2E),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(children: [
+        title: Row(children: [
           Icon(Icons.restore_rounded, color: Color(0xFF10B981), size: 22),
           SizedBox(width: 10),
           Text('Request Reactivation',
-              style: TextStyle(color: Colors.white, fontSize: 17)),
+              style: TextStyle(color: context.colors.textPrimary, fontSize: 17)),
         ]),
         content: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Text(
+          Text(
             'Your reactivation request will be reviewed by the Needil team. '
             'Approval is required to restore your clinic access.',
-            style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
+            style: TextStyle(color: context.colors.textSecondary, fontSize: 13, height: 1.5),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: reasonCtrl,
             maxLines: 3,
-            style: const TextStyle(color: Colors.white),
+            style: TextStyle(color: context.colors.textPrimary),
             decoration: InputDecoration(
               hintText: 'Reason for reactivation (required)',
-              hintStyle: const TextStyle(color: Colors.white38),
+              hintStyle: TextStyle(color: context.colors.textMuted),
               filled: true,
-              fillColor: Colors.white.withOpacity(0.06),
+              fillColor: context.colors.border.withValues(alpha: 0.4),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+                borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -77,7 +78,7 @@ class _PendingDeletionBannerState
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.white38)),
+            child: Text('Cancel', style: TextStyle(color: context.colors.textMuted)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -156,9 +157,9 @@ class _PendingDeletionBannerState
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: urgentColor.withOpacity(0.12),
+        color: urgentColor.withValues(alpha: 0.12),
         border: Border(
-          bottom: BorderSide(color: urgentColor.withOpacity(0.4), width: 1),
+          bottom: BorderSide(color: urgentColor.withValues(alpha: 0.4), width: 1),
         ),
       ),
       child: Row(children: [
@@ -185,8 +186,8 @@ class _PendingDeletionBannerState
               Text(
                 'Deletion Date: $dateStr ($days days remaining). '
                 'Submit a reactivation request to restore access.',
-                style: const TextStyle(
-                  color: Colors.white70,
+                style: TextStyle(
+                  color: context.colors.textSecondary,
                   fontSize: 11,
                   height: 1.4,
                 ),
@@ -196,16 +197,16 @@ class _PendingDeletionBannerState
         ),
         const SizedBox(width: 8),
         _isSubmitting
-            ? const SizedBox(
+            ? SizedBox(
                 width: 18,
                 height: 18,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.white),
+                    strokeWidth: 2, color: context.colors.textPrimary),
               )
             : TextButton(
                 onPressed: _showReactivationDialog,
                 style: TextButton.styleFrom(
-                  backgroundColor: urgentColor.withOpacity(0.2),
+                  backgroundColor: urgentColor.withValues(alpha: 0.2),
                   foregroundColor: urgentColor,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

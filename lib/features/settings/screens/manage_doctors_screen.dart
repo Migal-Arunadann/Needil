@@ -210,7 +210,7 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
                                 border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.2),
+                                    color: context.colors.shadowColor.withValues(alpha: 0.2),
                                     blurRadius: 32,
                                     spreadRadius: 4,
                                     offset: const Offset(0, 16),
@@ -573,8 +573,8 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         ),
         child: _loading
-            ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : Text('Reset', style: context.textStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+            ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: context.colors.textPrimary, strokeWidth: 2))
+            : Text('Reset', style: context.textStyles.caption.copyWith(color: context.colors.textPrimary, fontWeight: FontWeight.w700)),
       ),
     ],
   );

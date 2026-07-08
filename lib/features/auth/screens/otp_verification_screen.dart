@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:pms_app/core/constants/app_colors.dart';
 import 'package:pms_app/core/constants/app_text_styles.dart';
 import 'package:pms_app/core/widgets/app_button.dart';
@@ -164,6 +165,33 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final isLoading = _isVerifying || authState.isLoading;
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
+
+    if (isDesktop) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded, color: Color(0xFF161616)),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: _buildWebLayout(context, isLoading),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: context.colors.background,
@@ -199,8 +227,8 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.mark_email_read_rounded,
-                        color: Colors.white, size: 38),
+                    child: Icon(Icons.mark_email_read_rounded,
+                        color: context.colors.textPrimary, size: 38),
                   ),
                 ),
                 const SizedBox(height: 28),
@@ -290,6 +318,194 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWebLayout(BuildContext context, bool isLoading) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const SizedBox(height: 32),
+        Text(
+          widget.mode == OtpMode.registration ? 'Verify Your Email' : 'Reset Password',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.cormorantGaramond(
+            fontSize: 44,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF161616),
+            height: 1.1,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'We sent a 6-digit code to',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            fontWeight: FontWeight.w400,
+            color: const Color(0xFF6F6F6F),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          _maskedEmail,
+          textAlign: TextAlign.center,
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: const Color(0xFF0F5D4F),
+          ),
+        ),
+        const SizedBox(height: 36),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: List.generate(6, (i) => _otpBoxWeb(i)),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded, size: 16, color: Color(0xFFEF4444)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _error!,
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: const Color(0xFFEF4444),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 36),
+        SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: ElevatedButton(
+            onPressed: isLoading ? null : _verify,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0F5D4F),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
+            ),
+            child: isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Text(
+                    'Verify Code',
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                "Didn't receive the code? ",
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: const Color(0xFF6F6F6F),
+                ),
+              ),
+              GestureDetector(
+                onTap: _canResend ? _resend : null,
+                child: Text(
+                  _canResend ? 'Resend' : 'Resend in ${_resendSeconds}s',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: _canResend ? const Color(0xFF0F5D4F) : const Color(0xFF999999),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _otpBoxWeb(int index) {
+    final focusNode = _focusNodes[index];
+    final controller = _controllers[index];
+
+    return Focus(
+      onFocusChange: (_) => setState(() {}),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 50,
+        height: 56,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: focusNode.hasFocus ? const Color(0xFF0F5D4F) : const Color(0xFFE8E6E2),
+            width: focusNode.hasFocus ? 1.5 : 1,
+          ),
+          boxShadow: focusNode.hasFocus
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF0F5D4F).withValues(alpha: 0.08),
+                    blurRadius: 15,
+                    spreadRadius: 2,
+                  ),
+                ]
+              : null,
+        ),
+        child: KeyboardListener(
+          focusNode: FocusNode(),
+          onKeyEvent: (event) {
+            if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.backspace) {
+              if (controller.text.isEmpty && index > 0) {
+                _focusNodes[index - 1].requestFocus();
+              }
+            }
+          },
+          child: TextFormField(
+            controller: controller,
+            focusNode: focusNode,
+            textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
+            maxLength: 1,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            style: GoogleFonts.inter(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: const Color(0xFF161616),
+            ),
+            decoration: const InputDecoration(
+              contentPadding: EdgeInsets.zero,
+              counterText: '',
+              border: InputBorder.none,
+            ),
+            onChanged: (v) => _onDigitChanged(index, v),
           ),
         ),
       ),

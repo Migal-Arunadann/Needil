@@ -23,7 +23,7 @@ class LoadingOverlay extends StatelessWidget {
         child,
         if (isLoading)
           Container(
-            color: Colors.black.withValues(alpha: 0.3),
+            color: context.colors.shadowColor.withValues(alpha: 0.3),
             child: Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -35,7 +35,7 @@ class LoadingOverlay extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
+                      color: context.colors.shadowColor.withValues(alpha: 0.1),
                       blurRadius: 20,
                       offset: Offset(0, 8),
                     ),

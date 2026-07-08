@@ -577,7 +577,7 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
                           border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
+                              color: context.colors.shadowColor.withValues(alpha: 0.2),
                               blurRadius: 32,
                               spreadRadius: 4,
                               offset: const Offset(0, 16),
@@ -605,7 +605,7 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
                     color: context.colors.surface,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
+                        color: context.colors.shadowColor.withValues(alpha: 0.1),
                         blurRadius: 16,
                         offset: const Offset(0, -4),
                       ),
@@ -638,8 +638,8 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
                         ElevatedButton.icon(
                           onPressed: _isDeleting ? null : _deleteSelected,
                           icon: _isDeleting
-                              ? const SizedBox(width: 16, height: 16,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              ? SizedBox(width: 16, height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.textPrimary))
                               : const Icon(Icons.delete_rounded, size: 18),
                           label: Text(_isDeleting ? 'Deleting...' : 'Delete'),
                           style: ElevatedButton.styleFrom(
@@ -732,7 +732,7 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
                         begin: Alignment.bottomCenter,
                         end: Alignment.topCenter,
                         colors: [
-                          Colors.black.withValues(alpha: 0.7),
+                          context.colors.shadowColor.withValues(alpha: 0.7),
                           Colors.transparent,
                         ],
                       ),
@@ -745,8 +745,8 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
                       children: [
                         Text(
                           photo.type,
-                          style: const TextStyle(
-                            color: Colors.white, fontSize: 9,
+                          style: TextStyle(
+                            color: context.colors.textPrimary, fontSize: 9,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -773,13 +773,13 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.3),
+                            color: context.colors.shadowColor.withValues(alpha: 0.3),
                             blurRadius: 4,
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.check_rounded,
-                          color: Colors.white, size: 16),
+                      child: Icon(Icons.check_rounded,
+                          color: context.colors.textPrimary, size: 16),
                     ),
                   ),
               ],
@@ -830,10 +830,10 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
                 child: Container(
                   width: 36, height: 36,
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.6),
+                    color: context.colors.shadowColor.withValues(alpha: 0.6),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.close_rounded, color: Colors.white, size: 20),
+                  child: Icon(Icons.close_rounded, color: context.colors.textPrimary, size: 20),
                 ),
               ),
             ),

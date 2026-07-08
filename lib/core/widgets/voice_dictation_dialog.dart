@@ -267,7 +267,7 @@ class _VoiceDictationDialogState extends State<VoiceDictationDialog>
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
+            color: context.colors.shadowColor.withValues(alpha: 0.2),
             blurRadius: 24,
             offset: const Offset(0, -4),
           ),
@@ -687,7 +687,7 @@ class _VoiceDictationDialogState extends State<VoiceDictationDialog>
               backgroundColor: context.colors.primary,
               foregroundColor: Colors.white,
               disabledBackgroundColor: context.colors.primary.withValues(alpha: 0.3),
-              disabledForegroundColor: Colors.white54,
+              disabledForegroundColor: context.colors.textHint,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),

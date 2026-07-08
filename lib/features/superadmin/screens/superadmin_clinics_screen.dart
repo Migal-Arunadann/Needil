@@ -198,7 +198,7 @@ class _ClinicListCard extends StatelessWidget {
                     gradient: SAColors.accentGradient,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.business_rounded, color: Colors.white, size: 22),
+                  child: Icon(Icons.business_rounded, color: context.colors.textPrimary, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

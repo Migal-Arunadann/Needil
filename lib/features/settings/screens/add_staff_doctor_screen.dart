@@ -292,13 +292,13 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
                                 : null,
                           ),
                           child: photoFile == null
-                              ? const Icon(Icons.person_rounded, color: Colors.white, size: 36) : null,
+                              ? Icon(Icons.person_rounded, color: context.colors.textPrimary, size: 36) : null,
                         ),
                         Positioned(bottom: 0, right: 0,
                           child: Container(
                             width: 26, height: 26,
-                            decoration: BoxDecoration(color: context.colors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white, width: 2)),
-                            child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
+                            decoration: BoxDecoration(color: context.colors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: context.colors.textPrimary, width: 2)),
+                            child: Icon(Icons.camera_alt_rounded, color: context.colors.textPrimary, size: 14),
                           )),
                       ]),
                     )),
@@ -421,7 +421,7 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
                           border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
+                              color: context.colors.shadowColor.withValues(alpha: 0.2),
                               blurRadius: 32,
                               spreadRadius: 4,
                               offset: const Offset(0, 16),

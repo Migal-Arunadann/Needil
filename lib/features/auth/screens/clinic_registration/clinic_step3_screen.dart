@@ -2,10 +2,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pms_app/core/constants/app_colors.dart';
 import 'package:pms_app/core/constants/app_text_styles.dart';
 import 'package:pms_app/core/widgets/app_button.dart';
+import 'package:pms_app/core/widgets/animated_form_list.dart';
 import 'package:pms_app/core/widgets/app_text_field.dart';
 import 'package:pms_app/core/widgets/time_slot_picker.dart';
 import 'package:pms_app/core/utils/validators.dart';
@@ -388,158 +390,456 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
+
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: context.colors.background,
+        backgroundColor: isDesktop ? Colors.white : context.colors.background,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
+            icon: Icon(Icons.arrow_back_rounded,
+                color: isDesktop ? const Color(0xFF161616) : context.colors.textPrimary),
             onPressed: () { FocusScope.of(context).unfocus(); Navigator.of(context).pop(); },
           ),
-          title: Text('Clinic Registration', style: context.textStyles.h4),
+          title: isDesktop ? null : Text('Clinic Registration', style: context.textStyles.h4),
           centerTitle: true,
         ),
         body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 8),
-                  _buildStepIndicator(3, 5),
-                  const SizedBox(height: 24),
-                  Text('Primary Doctor', style: context.textStyles.h2),
-                  const SizedBox(height: 6),
-                  Text('Set up the primary doctor (clinic owner)',
-                    style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
-                  const SizedBox(height: 24),
+          child: Form(
+            key: _formKey,
+            child: isDesktop
+                ? Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        child: _buildStepIndicator(3, 5),
+                      ),
+                      Expanded(
+                        child: AnimatedFormList(
+                          gradientColor: Colors.white,
+                          horizontalPadding: 32,
+                          items: [
+                            // ── Header ──────────────────────────────────────────
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Primary Doctor',
+                                  style: GoogleFonts.cormorantGaramond(
+                                    fontSize: 38,
+                                    fontWeight: FontWeight.w700,
+                                    color: const Color(0xFF161616),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Set up the primary doctor (clinic owner)',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 15,
+                                    color: const Color(0xFF6F6F6F),
+                                  ),
+                                ),
+                              ],
+                            ),
 
-                   // Photo
-                  if (kIsWeb) ...[
-                    Center(
-                      child: Column(
-                        children: [
-                          Icon(Icons.person_outline_rounded, color: context.colors.textHint, size: 52),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Doctor photo upload is available on the mobile app.',
-                            style: context.textStyles.caption.copyWith(color: context.colors.textHint),
-                            textAlign: TextAlign.center,
+                      // ── Photo ────────────────────────────────────────────
+                      if (kIsWeb)
+                        Center(
+                          child: Column(
+                            children: [
+                              Icon(Icons.person_outline_rounded, color: context.colors.textHint, size: 52),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Doctor photo upload is available on the mobile app.',
+                                style: context.textStyles.caption.copyWith(color: context.colors.textHint),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
+                        )
+                      else
+                        Center(
+                          child: Column(
+                            children: [
+                              GestureDetector(
+                                onTap: _pickDoctorPhoto,
+                                child: Stack(children: [
+                                  Container(
+                                    width: 96, height: 96,
+                                    decoration: BoxDecoration(
+                                      gradient: _doctorPhotoFile == null ? context.colors.heroGradient : null,
+                                      borderRadius: BorderRadius.circular(28),
+                                      image: _doctorPhotoFile != null
+                                          ? DecorationImage(image: FileImage(_doctorPhotoFile!), fit: BoxFit.cover)
+                                          : null,
+                                    ),
+                                    child: _doctorPhotoFile == null
+                                        ? Icon(Icons.person_rounded, color: context.colors.textPrimary, size: 42) : null,
+                                  ),
+                                  Positioned(bottom: 0, right: 0,
+                                    child: Container(
+                                      width: 30, height: 30,
+                                      decoration: BoxDecoration(
+                                        color: context.colors.primary,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: context.colors.textPrimary, width: 2),
+                                      ),
+                                      child: Icon(Icons.camera_alt_rounded, color: context.colors.textPrimary, size: 16),
+                                    ),
+                                  ),
+                                ]),
+                              ),
+                              const SizedBox(height: 6),
+                              Text('Doctor Photo (Optional)',
+                                style: context.textStyles.caption.copyWith(color: context.colors.textSecondary)),
+                            ],
+                          ),
+                        ),
+
+                      if (isDesktop) ...[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: AppTextField(
+                                label: 'Doctor Name *', hint: 'e.g. Dr. Sharma',
+                                controller: _doctorNameController,
+                                validator: (v) => Validators.required(v, 'Name'),
+                                prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () async {
+                                  FocusManager.instance.primaryFocus?.unfocus();
+                                  await Future.delayed(Duration.zero);
+                                  if (!mounted) return;
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: _dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
+                                    firstDate: DateTime(1940),
+                                    lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+                                    locale: const Locale('en', 'IN'),
+                                  );
+                                  if (!mounted) return;
+                                  FocusManager.instance.primaryFocus?.unfocus();
+                                  if (picked != null) setState(() => _dateOfBirth = picked);
+                                },
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Date of Birth *',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: const Color(0xFF161616),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      height: 54,
+                                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: const Color(0xFFE8E6E2), width: 1),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.cake_outlined, color: Color(0xFF999999), size: 20),
+                                          const SizedBox(width: 14),
+                                          Expanded(
+                                            child: Text(
+                                              _dateOfBirth == null
+                                                  ? 'Date of Birth'
+                                                  : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 15,
+                                                color: _dateOfBirth == null ? const Color(0xFFA0A0A0) : const Color(0xFF161616),
+                                              ),
+                                            ),
+                                          ),
+                                          const Icon(Icons.calendar_today_rounded, size: 16, color: Color(0xFF999999)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ] else ...[
+                        AppTextField(
+                          label: 'Doctor Name *', hint: 'e.g. Dr. Sharma',
+                          controller: _doctorNameController,
+                          validator: (v) => Validators.required(v, 'Name'),
+                          prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
+                        ),
+                        const SizedBox(height: 16),
+                        GestureDetector(
+                          onTap: () async {
+                            FocusManager.instance.primaryFocus?.unfocus();
+                            await Future.delayed(Duration.zero);
+                            if (!mounted) return;
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
+                              firstDate: DateTime(1940),
+                              lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+                              locale: const Locale('en', 'IN'),
+                            );
+                            if (!mounted) return;
+                            FocusManager.instance.primaryFocus?.unfocus();
+                            if (picked != null) setState(() => _dateOfBirth = picked);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: context.colors.surface,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: context.colors.border),
+                            ),
+                            child: Row(children: [
+                              Icon(Icons.cake_outlined, color: context.colors.textHint, size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(child: Text(
+                                _dateOfBirth == null
+                                    ? 'Date of Birth'
+                                    : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
+                                style: context.textStyles.bodyMedium.copyWith(
+                                  color: _dateOfBirth == null ? context.colors.textHint : context.colors.textPrimary),
+                              )),
+                              Icon(Icons.calendar_today_rounded, size: 16, color: context.colors.textHint),
+                            ]),
+                          ),
+                        ),
+                      ],
+
+                      // ── Working Schedule ──────────────────────────────────
+                      _buildScheduleSection(),
+
+                      // ── Treatments ────────────────────────────────────────
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Treatments Offered', style: context.textStyles.h3),
+                          const SizedBox(height: 12),
+                          ..._availableTreatments.map((t) => _buildTreatmentTile(t)),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                  ] else ...[
-                    Center(child: GestureDetector(
-                      onTap: _pickDoctorPhoto,
-                      child: Stack(children: [
-                        Container(
-                          width: 96, height: 96,
-                          decoration: BoxDecoration(
-                            gradient: _doctorPhotoFile == null ? context.colors.heroGradient : null,
-                            borderRadius: BorderRadius.circular(28),
-                            image: _doctorPhotoFile != null
-                                ? DecorationImage(image: FileImage(_doctorPhotoFile!), fit: BoxFit.cover)
-                                : null,
-                          ),
-                          child: _doctorPhotoFile == null
-                              ? const Icon(Icons.person_rounded, color: Colors.white, size: 42) : null,
-                        ),
-                        Positioned(bottom: 0, right: 0,
-                          child: Container(
-                            width: 30, height: 30,
-                            decoration: BoxDecoration(
-                              color: context.colors.primary,
-                              borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
-                            child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 16),
-                          ),
-                        ),
-                      ]),
-                    )),
-                    SizedBox(height: 6),
-                    Center(child: Text('Doctor Photo (Optional)',
-                      style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))),
-                    SizedBox(height: 20),
-                  ],
 
-                  // Name
-                  AppTextField(
-                    label: 'Doctor Name *', hint: 'e.g. Dr. Sharma',
-                    controller: _doctorNameController,
-                    validator: (v) => Validators.required(v, 'Name'),
-                    prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // DOB
-                  GestureDetector(
-                    onTap: () async {
-                      FocusManager.instance.primaryFocus?.unfocus();
-                      await Future.delayed(Duration.zero);
-                      if (!mounted) return;
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: _dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
-                        firstDate: DateTime(1940),
-                        lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
-                        locale: const Locale('en', 'IN'),
-                      );
-                      if (!mounted) return;
-                      FocusManager.instance.primaryFocus?.unfocus();
-                      if (picked != null) setState(() => _dateOfBirth = picked);
-                    },
-                    child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: context.colors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: context.colors.border),
+                      // ── Next button ───────────────────────────────────────
+                      AppButton(
+                        label: 'Next: Add Working Doctors',
+                        onPressed: _next,
+                        icon: Icons.arrow_forward_rounded,
                       ),
-                      child: Row(children: [
-                        Icon(Icons.cake_outlined, color: context.colors.textHint, size: 20),
-                        SizedBox(width: 12),
-                        Expanded(child: Text(
-                          _dateOfBirth == null
-                              ? 'Date of Birth'
-                              : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
-                          style: context.textStyles.bodyMedium.copyWith(
-                            color: _dateOfBirth == null ? context.colors.textHint : context.colors.textPrimary),
-                        )),
-                        Icon(Icons.calendar_today_rounded, size: 16, color: context.colors.textHint),
-                      ]),
+                    ],
+                  ),
+                ),
+              ],
+            )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 8),
+                        _buildStepIndicator(3, 5),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Primary Doctor',
+                          style: context.textStyles.h2,
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Set up the primary doctor (clinic owner)',
+                          style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Photo
+                        if (kIsWeb) ...[
+                          Center(
+                            child: Column(
+                              children: [
+                                Icon(Icons.person_outline_rounded, color: context.colors.textHint, size: 52),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Doctor photo upload is available on the mobile app.',
+                                  style: context.textStyles.caption.copyWith(color: context.colors.textHint),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ] else ...[
+                          Center(child: GestureDetector(
+                            onTap: _pickDoctorPhoto,
+                            child: Stack(children: [
+                              Container(
+                                width: 96, height: 96,
+                                decoration: BoxDecoration(
+                                  gradient: _doctorPhotoFile == null ? context.colors.heroGradient : null,
+                                  borderRadius: BorderRadius.circular(28),
+                                  image: _doctorPhotoFile != null
+                                      ? DecorationImage(image: FileImage(_doctorPhotoFile!), fit: BoxFit.cover)
+                                      : null,
+                                ),
+                                child: _doctorPhotoFile == null
+                                    ? Icon(Icons.person_rounded, color: context.colors.textPrimary, size: 42) : null,
+                              ),
+                              Positioned(bottom: 0, right: 0,
+                                child: Container(
+                                  width: 30, height: 30,
+                                  decoration: BoxDecoration(
+                                    color: context.colors.primary,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(color: context.colors.textPrimary, width: 2),
+                                  ),
+                                  child: Icon(Icons.camera_alt_rounded, color: context.colors.textPrimary, size: 16),
+                                ),
+                              ),
+                            ]),
+                          )),
+                          SizedBox(height: 6),
+                          Center(child: Text('Doctor Photo (Optional)',
+                            style: context.textStyles.caption.copyWith(color: context.colors.textSecondary))),
+                          SizedBox(height: 20),
+                        ],
+
+                        // Name
+                        AppTextField(
+                          label: 'Doctor Name *', hint: 'e.g. Dr. Sharma',
+                          controller: _doctorNameController,
+                          validator: (v) => Validators.required(v, 'Name'),
+                          prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // DOB
+                        GestureDetector(
+                          onTap: () async {
+                            FocusManager.instance.primaryFocus?.unfocus();
+                            await Future.delayed(Duration.zero);
+                            if (!mounted) return;
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
+                              firstDate: DateTime(1940),
+                              lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+                              locale: const Locale('en', 'IN'),
+                            );
+                            if (!mounted) return;
+                            FocusManager.instance.primaryFocus?.unfocus();
+                            if (picked != null) setState(() => _dateOfBirth = picked);
+                          },
+                          child: Builder(
+                            builder: (context) {
+                              final width = MediaQuery.sizeOf(context).width;
+                              final isDesktop = width >= 900;
+
+                              if (isDesktop) {
+                                final textDark = const Color(0xFF161616);
+                                final border = const Color(0xFFE8E6E2);
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Date of Birth *',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: textDark,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      height: 54,
+                                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: border, width: 1),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(Icons.cake_outlined, color: Color(0xFF999999), size: 20),
+                                          const SizedBox(width: 14),
+                                          Expanded(
+                                            child: Text(
+                                              _dateOfBirth == null
+                                                  ? 'Date of Birth'
+                                                  : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
+                                              style: GoogleFonts.inter(
+                                                fontSize: 15,
+                                                color: _dateOfBirth == null ? const Color(0xFFA0A0A0) : textDark,
+                                              ),
+                                            ),
+                                          ),
+                                          const Icon(Icons.calendar_today_rounded, size: 16, color: Color(0xFF999999)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }
+
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: context.colors.surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: context.colors.border),
+                                ),
+                                child: Row(children: [
+                                  Icon(Icons.cake_outlined, color: context.colors.textHint, size: 20),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: Text(
+                                    _dateOfBirth == null
+                                        ? 'Date of Birth'
+                                        : '${_dateOfBirth!.day.toString().padLeft(2, '0')}/${_dateOfBirth!.month.toString().padLeft(2, '0')}/${_dateOfBirth!.year}',
+                                    style: context.textStyles.bodyMedium.copyWith(
+                                      color: _dateOfBirth == null ? context.colors.textHint : context.colors.textPrimary),
+                                  )),
+                                  Icon(Icons.calendar_today_rounded, size: 16, color: context.colors.textHint),
+                                ]),
+                              );
+                            }
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        const SizedBox(height: 32),
+
+                        // Working Schedule
+                        _buildScheduleSection(),
+                        const SizedBox(height: 32),
+
+                        // Treatments
+                        Text('Treatments Offered', style: context.textStyles.h3),
+                        const SizedBox(height: 12),
+                        ..._availableTreatments.map((t) => _buildTreatmentTile(t)),
+                        const SizedBox(height: 32),
+
+                        AppButton(
+                          label: 'Next: Add Working Doctors',
+                          onPressed: _next,
+                          icon: Icons.arrow_forward_rounded,
+                        ),
+                        const SizedBox(height: 32),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-
-                  const SizedBox(height: 32),
-
-                  // Working Schedule
-                  _buildScheduleSection(),
-                  const SizedBox(height: 32),
-
-                  // Treatments
-                  Text('Treatments Offered', style: context.textStyles.h3),
-                  const SizedBox(height: 12),
-                  ..._availableTreatments.map((t) => _buildTreatmentTile(t)),
-                  const SizedBox(height: 32),
-
-                  AppButton(
-                    label: 'Next: Add Working Doctors',
-                    onPressed: _next,
-                    icon: Icons.arrow_forward_rounded,
-                  ),
-                  const SizedBox(height: 32),
-                ],
-              ),
-            ),
           ),
         ),
       ),
@@ -947,6 +1247,57 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
   }
 
   Widget _miniField(String label, TextEditingController controller) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
+
+    if (isDesktop) {
+      final textDark = const Color(0xFF161616);
+      final border = const Color(0xFFE8E6E2);
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: textDark,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: border,
+                width: 1,
+              ),
+            ),
+            child: TextFormField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                color: textDark,
+              ),
+              decoration: const InputDecoration(
+                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label, style: context.textStyles.caption),
       SizedBox(height: 4),

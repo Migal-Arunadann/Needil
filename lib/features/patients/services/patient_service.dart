@@ -53,30 +53,36 @@ class PatientService {
   Future<Map<String, DateTime>> getLastVisitDates(List<String> patientIds) async {
     if (patientIds.isEmpty) return {};
 
-    final idsFilter = patientIds.map((id) => 'patient = "$id"').join(' || ');
-    final filter = 'status = "completed" && ($idsFilter)';
+    final Map<String, DateTime> lastVisits = {};
+    const chunkSize = 50;
 
-    try {
-      final records = await pb.collection(PBCollections.appointments).getFullList(
-        filter: filter,
-        sort: '-date,-time',
-        fields: 'patient,date',
-      );
+    for (var i = 0; i < patientIds.length; i += chunkSize) {
+      final chunk = patientIds.sublist(i, (i + chunkSize).clamp(0, patientIds.length));
+      final idsFilter = chunk.map((id) => 'patient = "$id"').join(' || ');
+      final filter = 'status = "completed" && ($idsFilter)';
 
-      final Map<String, DateTime> lastVisits = {};
-      for (final r in records) {
-        final pId = r.getStringValue('patient');
-        final dateStr = r.getStringValue('date');
-        if (pId.isNotEmpty && dateStr.isNotEmpty && !lastVisits.containsKey(pId)) {
-          final dt = DateTime.tryParse(dateStr);
-          if (dt != null) {
-            lastVisits[pId] = dt;
+      try {
+        final records = await pb.collection(PBCollections.appointments).getFullList(
+          filter: filter,
+          sort: '-date,-time',
+          fields: 'patient,date',
+        );
+
+        for (final r in records) {
+          final pId = r.getStringValue('patient');
+          final dateStr = r.getStringValue('date');
+          if (pId.isNotEmpty && dateStr.isNotEmpty && !lastVisits.containsKey(pId)) {
+            final dt = DateTime.tryParse(dateStr);
+            if (dt != null) {
+              lastVisits[pId] = dt;
+            }
           }
         }
+      } catch (_) {
+        // Continue to the next chunk even if one fails
       }
-      return lastVisits;
-    } catch (_) {
-      return {};
     }
+
+    return lastVisits;
   }
 }

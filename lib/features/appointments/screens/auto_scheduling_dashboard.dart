@@ -234,7 +234,7 @@ class _AutoSchedulingDashboardState extends ConsumerState<AutoSchedulingDashboar
                       children: [
                         Text(
                           'Auto-Scheduling Action Required',
-                          style: context.textStyles.h2.copyWith(fontWeight: FontWeight.bold),
+                          style: context.textStyles.h2,
                         ),
                         const SizedBox(height: 4),
                         Text(
@@ -327,7 +327,7 @@ class _AutoSchedulingDashboardState extends ConsumerState<AutoSchedulingDashboar
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.02),
+                                color: context.colors.textPrimary.withValues(alpha: 0.02),
                                 blurRadius: 8,
                                 offset: const Offset(0, 4),
                               ),
@@ -346,9 +346,7 @@ class _AutoSchedulingDashboardState extends ConsumerState<AutoSchedulingDashboar
                                       children: [
                                         Text(
                                           plan.patientName ?? 'Patient',
-                                          style: context.textStyles.h3.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                          style: context.textStyles.h3,
                                         ),
                                         const SizedBox(height: 4),
                                         Text(

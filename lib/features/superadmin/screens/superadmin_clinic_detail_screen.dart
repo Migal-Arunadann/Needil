@@ -41,7 +41,7 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: const TextStyle(color: Colors.white)),
+      content: Text(msg, style: TextStyle(color: context.colors.textPrimary)),
       backgroundColor: error ? SAColors.error : SAColors.success,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -456,7 +456,7 @@ class _InfoTabState extends ConsumerState<_InfoTab> {
           child: ElevatedButton.icon(
             onPressed: _saving ? null : _save,
             icon: _saving
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.textPrimary))
                 : const Icon(Icons.save_rounded),
             label: Text(_saving ? 'Saving…' : 'Save Changes'),
             style: ElevatedButton.styleFrom(
@@ -829,8 +829,8 @@ class _DangerTabState extends ConsumerState<_DangerTab> {
               child: ElevatedButton.icon(
                 onPressed: _isExporting ? null : _exportData,
                 icon: _isExporting
-                    ? const SizedBox(width: 16, height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    ? SizedBox(width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.textPrimary))
                     : const Icon(Icons.download_rounded, size: 18),
                 label: Text(_isExporting ? 'Exporting…' : 'Export Data'),
                 style: ElevatedButton.styleFrom(

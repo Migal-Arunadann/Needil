@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/features/auth/widgets/brand_panel.dart';
 import 'package:pms_app/features/auth/screens/login_screen.dart';
 import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step0_otp_screen.dart';
 import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step1_screen.dart';
@@ -39,47 +41,57 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
     // Register link now goes directly to clinic registration step 0
     case '/register/clinic':
     case '/register/clinic/step0':
-      return _slide(const ClinicStep0OtpScreen(), settings);
+      return _slide(const AuthWebShell(child: ClinicStep0OtpScreen()), settings);
 
     case '/register/clinic/step1':
-      return _slide(const ClinicStep1Screen(), settings);
+      return _slide(const AuthWebShell(child: ClinicStep1Screen()), settings);
 
     case '/register/clinic/step2':
+      if (settings.arguments == null) return _fade(const LoginScreen(), settings);
       final args = settings.arguments as Map<String, dynamic>;
-      return _slide(ClinicStep2Screen(clinicData: args), settings);
+      return _slide(AuthWebShell(child: ClinicStep2Screen(clinicData: args)), settings);
 
     case '/register/clinic/step3':
+      if (settings.arguments == null) return _fade(const LoginScreen(), settings);
       final args = settings.arguments as Map<String, dynamic>;
-      return _slide(ClinicStep3Screen(clinicData: args), settings);
+      return _slide(AuthWebShell(child: ClinicStep3Screen(clinicData: args)), settings);
 
     case '/register/clinic/step4':
+      if (settings.arguments == null) return _fade(const LoginScreen(), settings);
       final args = settings.arguments as Map<String, dynamic>;
-      return _slide(ClinicStep4Screen(clinicData: args), settings);
+      return _slide(AuthWebShell(child: ClinicStep4Screen(clinicData: args)), settings);
 
     case '/register/clinic/step5':
+      if (settings.arguments == null) return _fade(const LoginScreen(), settings);
       final args = settings.arguments as Map<String, dynamic>;
-      return _slide(ClinicStep5Screen(clinicData: args), settings);
+      return _slide(AuthWebShell(child: ClinicStep5Screen(clinicData: args)), settings);
 
     case '/auth/otp-verify':
+      if (settings.arguments == null) return _fade(const LoginScreen(), settings);
       final args = settings.arguments as Map<String, dynamic>;
       return _slide(
-        OtpVerificationScreen(
-          mode: args['mode'] as OtpMode,
-          email: args['email'] as String,
-          clinicData: args['clinic_data'] as Map<String, dynamic>?,
+        AuthWebShell(
+          child: OtpVerificationScreen(
+            mode: args['mode'] as OtpMode,
+            email: args['email'] as String,
+            clinicData: args['clinic_data'] as Map<String, dynamic>?,
+          ),
         ),
         settings,
       );
 
     case '/auth/forgot-password':
-      return _slide(const ForgotPasswordScreen(), settings);
+      return _slide(const AuthWebShell(child: ForgotPasswordScreen()), settings);
 
     case '/auth/reset-password':
+      if (settings.arguments == null) return _fade(const LoginScreen(), settings);
       final args = settings.arguments as Map<String, dynamic>;
       return _slide(
-        ResetPasswordScreen(
-          otpCode: args['otp_code'] as String,
-          otpId: args['otp_id'] as String?,
+        AuthWebShell(
+          child: ResetPasswordScreen(
+            otpCode: args['otp_code'] as String,
+            otpId: args['otp_id'] as String?,
+          ),
         ),
         settings,
       );
@@ -184,7 +196,7 @@ PageRouteBuilder _fade(Widget page, RouteSettings settings) {
     transitionsBuilder: (_, animation, secondaryAnim, child) {
       return FadeTransition(opacity: animation, child: child);
     },
-    transitionDuration: const Duration(milliseconds: 250),
+    transitionDuration: const Duration(milliseconds: 200),
   );
 }
 
@@ -192,7 +204,17 @@ PageRouteBuilder _slide(Widget page, RouteSettings settings) {
   return PageRouteBuilder(
     settings: settings,
     pageBuilder: (_, a, b) => page,
-    transitionsBuilder: (_, animation, secondaryAnim, child) {
+    transitionsBuilder: (context, animation, secondaryAnim, child) {
+      final width = MediaQuery.sizeOf(context).width;
+      final isDesktop = width >= 900;
+
+      if (isDesktop) {
+        return FadeTransition(
+          opacity: animation,
+          child: child,
+        );
+      }
+
       return SlideTransition(
         position: Tween<Offset>(
           begin: const Offset(1.0, 0.0),
@@ -201,6 +223,49 @@ PageRouteBuilder _slide(Widget page, RouteSettings settings) {
         child: child,
       );
     },
-    transitionDuration: const Duration(milliseconds: 300),
+    transitionDuration: const Duration(milliseconds: 200),
   );
+}
+
+class AuthWebShell extends StatelessWidget {
+  final Widget child;
+
+  const AuthWebShell({super.key, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
+
+    if (!isDesktop) {
+      return child;
+    }
+
+    return Theme(
+      data: AppTheme.lightTheme,
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        body: Row(
+          children: [
+            const Expanded(
+              flex: 55,
+              child: BrandPanel(),
+            ),
+            Expanded(
+              flex: 45,
+              child: Container(
+                color: Colors.white,
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: isDesktop ? 650 : 420),
+                    child: child,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

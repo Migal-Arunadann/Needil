@@ -285,7 +285,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                                     shape: BoxShape.circle,
                                     border: Border.all(color: context.colors.background, width: 2),
                                   ),
-                                  child: const Icon(Icons.camera_alt_rounded, size: 14, color: Colors.white),
+                                  child: Icon(Icons.camera_alt_rounded, size: 14, color: context.colors.textPrimary),
                                 ),
                               ),
                           ],
@@ -402,7 +402,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                           border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
+                              color: context.colors.shadowColor.withValues(alpha: 0.2),
                               blurRadius: 32,
                               spreadRadius: 4,
                               offset: const Offset(0, 16),

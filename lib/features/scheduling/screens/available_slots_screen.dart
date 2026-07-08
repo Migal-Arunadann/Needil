@@ -154,7 +154,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                         border: Border.all(color: context.colors.border),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
+                            color: context.colors.shadowColor.withValues(alpha: 0.04),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -340,7 +340,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                         border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
+                            color: context.colors.shadowColor.withValues(alpha: 0.2),
                             blurRadius: 32,
                             spreadRadius: 4,
                             offset: const Offset(0, 16),
@@ -487,7 +487,7 @@ class _InlineCalendar extends StatelessWidget {
         border: Border.all(color: context.colors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: context.colors.shadowColor.withValues(alpha: 0.04),
             blurRadius: 12,
             offset: const Offset(0, 3),
           ),
@@ -758,7 +758,7 @@ class _ConfirmPanel extends StatelessWidget {
         child: InkWell(
           onTap: onConfirm,
           borderRadius: BorderRadius.circular(20),
-          splashColor: Colors.white.withValues(alpha: 0.12),
+          splashColor: context.colors.border.withValues(alpha: 0.5),
           child: Padding(
             padding:
                 const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -771,8 +771,8 @@ class _ConfirmPanel extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(Icons.check_rounded,
-                      color: Colors.white, size: 22),
+                  child: Icon(Icons.check_rounded,
+                      color: context.colors.textPrimary, size: 22),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -781,8 +781,8 @@ class _ConfirmPanel extends StatelessWidget {
                     children: [
                       Text(
                         TimeUtils.formatStringTime(selectedSlot),
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: context.colors.textPrimary,
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.3,
@@ -806,10 +806,10 @@ class _ConfirmPanel extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Confirm',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: context.colors.textPrimary,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),

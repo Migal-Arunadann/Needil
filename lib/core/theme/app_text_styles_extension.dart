@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 class AppTextStylesExtension extends ThemeExtension<AppTextStylesExtension> {
+  final TextStyle displayNumber; // Big stat numbers — tabular, heavy
   final TextStyle h1;
   final TextStyle h2;
   final TextStyle h3;
@@ -15,6 +16,7 @@ class AppTextStylesExtension extends ThemeExtension<AppTextStylesExtension> {
   final TextStyle caption;
 
   const AppTextStylesExtension({
+    required this.displayNumber,
     required this.h1,
     required this.h2,
     required this.h3,
@@ -31,6 +33,7 @@ class AppTextStylesExtension extends ThemeExtension<AppTextStylesExtension> {
 
   @override
   ThemeExtension<AppTextStylesExtension> copyWith({
+    TextStyle? displayNumber,
     TextStyle? h1,
     TextStyle? h2,
     TextStyle? h3,
@@ -45,6 +48,7 @@ class AppTextStylesExtension extends ThemeExtension<AppTextStylesExtension> {
     TextStyle? caption,
   }) {
     return AppTextStylesExtension(
+      displayNumber: displayNumber ?? this.displayNumber,
       h1: h1 ?? this.h1,
       h2: h2 ?? this.h2,
       h3: h3 ?? this.h3,
@@ -66,6 +70,7 @@ class AppTextStylesExtension extends ThemeExtension<AppTextStylesExtension> {
       return this;
     }
     return AppTextStylesExtension(
+      displayNumber: TextStyle.lerp(displayNumber, other.displayNumber, t)!,
       h1: TextStyle.lerp(h1, other.h1, t)!,
       h2: TextStyle.lerp(h2, other.h2, t)!,
       h3: TextStyle.lerp(h3, other.h3, t)!,

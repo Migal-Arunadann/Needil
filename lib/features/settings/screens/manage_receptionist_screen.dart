@@ -225,7 +225,7 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
                                 border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.2),
+                                    color: context.colors.shadowColor.withValues(alpha: 0.2),
                                     blurRadius: 32,
                                     spreadRadius: 4,
                                     offset: const Offset(0, 16),
@@ -289,7 +289,7 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
         color: context.colors.surface,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: isActive ? context.colors.border : context.colors.error.withValues(alpha: 0.3)),
-        boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 8, offset: Offset(0, 2))],
+        boxShadow: [BoxShadow(color: context.colors.shadowColor.withValues(alpha: 0.03), blurRadius: 8, offset: Offset(0, 2))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // ── Header row ──
@@ -532,8 +532,8 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         ),
         child: _loading
-            ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : Text('Reset', style: context.textStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+            ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: context.colors.textPrimary, strokeWidth: 2))
+            : Text('Reset', style: context.textStyles.caption.copyWith(color: context.colors.textPrimary, fontWeight: FontWeight.w700)),
       ),
     ],
   );
@@ -649,8 +649,8 @@ class _EditReceptionistDialogState extends State<_EditReceptionistDialog> {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         ),
         child: _loading
-            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : Text('Save', style: context.textStyles.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w700)),
+            ? SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: context.colors.textPrimary, strokeWidth: 2))
+            : Text('Save', style: context.textStyles.caption.copyWith(color: context.colors.textPrimary, fontWeight: FontWeight.w700)),
       ),
     ],
   );
@@ -729,7 +729,7 @@ class _ActivityLogSheet extends StatelessWidget {
         color: context.colors.surface,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 24, offset: const Offset(0, -4)),
+          BoxShadow(color: context.colors.shadowColor.withValues(alpha: 0.15), blurRadius: 24, offset: const Offset(0, -4)),
         ],
       ),
       child: Column(

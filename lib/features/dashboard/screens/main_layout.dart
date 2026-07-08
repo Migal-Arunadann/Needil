@@ -1,7 +1,7 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:pms_app/core/services/auth_service.dart';
 import 'package:pms_app/features/dashboard/screens/clinic_dashboard_screen.dart';
 import 'package:pms_app/features/dashboard/screens/doctor_dashboard_screen.dart';
@@ -15,7 +15,6 @@ import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/features/appointments/providers/appointment_provider.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
-import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 /// Global key to access MainLayout state from dashboard screens.
 final mainLayoutKey = GlobalKey<MainLayoutState>();
@@ -137,10 +136,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             const AmbientBackground(),
             Row(
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(left: 24, top: 24, bottom: 24),
-                  child: _buildSidebar(context, tabs),
-                ),
+                _buildSidebar(context, tabs),
                 Expanded(
                   child: Column(
                     children: [
@@ -233,243 +229,243 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     }
 
     return Container(
-      width: 232,
+      width: 240, // Simple and trendy docked width
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(40),
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            const Color(0xFFFAF6EE).withOpacity(0.24),
-            const Color(0xFF141722).withOpacity(0.06),
-          ],
-        ),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.15),
-          width: 1.0,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 40,
-            offset: const Offset(0, 12),
+        color: const Color(0xFF0F5D4F), // Same color as new appointment button
+        border: Border(
+          right: BorderSide(
+            color: Colors.white.withValues(alpha: 0.12),
+            width: 1.0,
           ),
-        ],
+        ),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(40),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ── Branding / Header ──
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.only(left: 18, top: 36, bottom: 28),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Image.asset(
-                      'assets/images/neediliconforweb.png',
-                      width: 52,
-                      height: 52,
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Icon(Icons.add_rounded, color: Colors.white, size: 24);
-                      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Branding / Header ──
+          Padding(
+            padding: const EdgeInsets.only(left: 16, right: 16, top: 32, bottom: 20),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(99), // Perfect pill shape
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    'assets/images/needil_logo_cropped.png',
+                    height: 30, // Fit inside the pill nicely
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Text(
+                        'Needil',
+                        style: context.textStyles.h2.copyWith(
+                          color: const Color(0xFF0F5D4F),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '— CLINIC MANAGEMENT —',
+                    style: GoogleFonts.inter(
+                      fontSize: 7.2,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.5,
+                      color: const Color(0xFF0F5D4F).withValues(alpha: 0.7),
                     ),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Needil',
-                      style: context.textStyles.h2.copyWith(
-                        color: const Color(0xFFFAF8F5),
-                        fontWeight: FontWeight.w900,
-                        fontSize: 26,
-                        letterSpacing: -0.8,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 8),
+
+          // ── Navigation Tabs ──
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: tabs.length,
+              itemBuilder: (context, index) {
+                final tab = tabs[index];
+                final isSelected = _currentIndex == index;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: _SidebarNavItem(
+                    icon: tab.icon,
+                    label: tab.label == 'Appts' ? 'Appointments' : (tab.label == 'Profile' ? 'Profile' : tab.label),
+                    isSelected: isSelected,
+                    onTap: () {
+                      if (_currentIndex == index) return;
+                      HapticFeedback.selectionClick();
+                      setState(() => _currentIndex = index);
+                      final isApptsTab = tab.label == 'Appts';
+                      if (isApptsTab) {
+                        ref.read(appointmentListProvider.notifier).loadAppointments();
+                      }
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+
+          // ── User Profile Footer Card ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: InkWell(
+              onTap: () {
+                final profileIndex = tabs.indexWhere((t) => t.label == 'Profile');
+                if (profileIndex != -1) {
+                  setState(() => _currentIndex = profileIndex);
+                }
+              },
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                        image: photoUrl != null
+                            ? DecorationImage(
+                                image: NetworkImage(ImageHelper.getSecureUrl(photoUrl)),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                      ),
+                      child: photoUrl == null
+                          ? Icon(fallbackIcon, color: Colors.white, size: 16)
+                          : null,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            name,
+                            style: context.textStyles.bodyMedium.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              fontSize: 13,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 1),
+                          Text(
+                            roleStr,
+                            style: context.textStyles.caption.copyWith(
+                              color: Colors.white.withValues(alpha: 0.55),
+                              fontSize: 10,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      color: Colors.white.withValues(alpha: 0.6),
+                      size: 16,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // ── Bottom Logout ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            child: InkWell(
+              onTap: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    backgroundColor: context.colors.surface,
+                    title: Text('Confirm Sign Out', style: TextStyle(color: context.colors.textPrimary)),
+                    content: Text('Are you sure you want to sign out from your account?', style: TextStyle(color: context.colors.textSecondary)),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: Text('Cancel', style: TextStyle(color: context.colors.textMuted)),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                        child: const Text('Sign Out'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  ref.read(authProvider.notifier).logout();
+                }
+              },
+              borderRadius: BorderRadius.circular(99),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.redAccent.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(99),
+                  border: Border.all(color: Colors.redAccent.withValues(alpha: 0.15)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.logout_rounded,
+                      color: Colors.redAccent,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Sign Out',
+                        style: context.textStyles.bodyMedium.copyWith(
+                          color: Colors.redAccent,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
-              
-              const SizedBox(height: 8),
-
-              // ── Navigation Tabs ──
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: tabs.length,
-                  itemBuilder: (context, index) {
-                    final tab = tabs[index];
-                    final isSelected = _currentIndex == index;
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: _SidebarNavItem(
-                        icon: tab.icon,
-                        label: tab.label == 'Appts' ? 'Appointments' : (tab.label == 'Profile' ? 'Profile' : tab.label),
-                        isSelected: isSelected,
-                        onTap: () {
-                          if (_currentIndex == index) return;
-                          HapticFeedback.selectionClick();
-                          setState(() => _currentIndex = index);
-                          final isApptsTab = tab.label == 'Appts';
-                          if (isApptsTab) {
-                            ref.read(appointmentListProvider.notifier).loadAppointments();
-                          }
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
-
-              // ── User Profile Footer Card ──
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: InkWell(
-                  onTap: () {
-                    final profileIndex = tabs.indexWhere((t) => t.label == 'Profile');
-                    if (profileIndex != -1) {
-                      setState(() => _currentIndex = profileIndex);
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.04),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 32,
-                          height: 32,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
-                            shape: BoxShape.circle,
-                            image: photoUrl != null
-                                ? DecorationImage(
-                                    image: NetworkImage(ImageHelper.getSecureUrl(photoUrl)),
-                                    fit: BoxFit.cover,
-                                  )
-                                : null,
-                          ),
-                          child: photoUrl == null
-                              ? Icon(fallbackIcon, color: Colors.white70, size: 16)
-                              : null,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                name,
-                                style: context.textStyles.bodyMedium.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  fontSize: 13,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 1),
-                              Text(
-                                roleStr,
-                                style: context.textStyles.caption.copyWith(
-                                  color: Colors.white38,
-                                  fontSize: 10,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(
-                          Icons.chevron_right_rounded,
-                          color: Colors.white70,
-                          size: 16,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // ── Bottom Logout ──
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                child: InkWell(
-                  onTap: () async {
-                    final confirm = await showDialog<bool>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        backgroundColor: const Color(0xFF1E1E2C),
-                        title: const Text('Confirm Sign Out', style: TextStyle(color: Colors.white)),
-                        content: const Text('Are you sure you want to sign out from your account?', style: TextStyle(color: Colors.white70)),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Cancel', style: TextStyle(color: Colors.white38)),
-                          ),
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, true),
-                            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
-                            child: const Text('Sign Out'),
-                          ),
-                        ],
-                      ),
-                    );
-                    if (confirm == true) {
-                      ref.read(authProvider.notifier).logout();
-                    }
-                  },
-                  borderRadius: BorderRadius.circular(16),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEE2E2).withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.redAccent.withOpacity(0.15)),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          Icons.logout_rounded,
-                          color: Colors.redAccent,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Sign Out',
-                            style: context.textStyles.bodyMedium.copyWith(
-                              color: Colors.redAccent,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -542,10 +538,13 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
 
   @override
   Widget build(BuildContext context) {
-    final hoverBgColor = Colors.white.withOpacity(0.04);
-    final activeBgColor = Colors.white.withOpacity(0.08);
+    final hoverBgColor = Colors.white.withValues(alpha: 0.06);
+    final activeBgColor = Colors.white.withValues(alpha: 0.12);
 
-    final color = widget.isSelected ? Colors.white : Colors.white.withOpacity(0.4);
+    final color = widget.isSelected 
+        ? Colors.white 
+        : (_isHovered ? Colors.white : Colors.white.withValues(alpha: 0.65));
+        
     final bgColor = widget.isSelected 
         ? activeBgColor 
         : (_isHovered ? hoverBgColor : Colors.transparent);
@@ -554,17 +553,10 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(99),
+        borderRadius: BorderRadius.circular(12),
         border: widget.isSelected 
-            ? Border.all(color: Colors.white.withOpacity(0.14), width: 1.0)
+            ? Border.all(color: Colors.white.withValues(alpha: 0.08), width: 1.0)
             : Border.all(color: Colors.transparent, width: 1.0),
-        boxShadow: widget.isSelected ? [
-          BoxShadow(
-            color: Colors.white.withOpacity(0.05),
-            blurRadius: 12,
-            spreadRadius: 0,
-          )
-        ] : null,
       ),
       child: Row(
         children: [
@@ -596,18 +588,7 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
       ),
     );
 
-    if (widget.isSelected) {
-      itemContent = ClipRRect(
-        borderRadius: BorderRadius.circular(99),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-          child: itemContent,
-        ),
-      );
-    }
-
-    final translationY = _isHovered && !widget.isSelected ? -1.5 : 0.0;
-    final scaleVal = _isHovered && !widget.isSelected ? 1.025 : 1.0;
+    final translationY = _isHovered && !widget.isSelected ? -1.0 : 0.0;
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -617,9 +598,7 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          transform: Matrix4.identity()
-            ..translate(0.0, translationY)
-            ..scale(scaleVal),
+          transform: Matrix4.translationValues(0.0, translationY, 0.0),
           child: itemContent,
         ),
       ),
@@ -638,81 +617,85 @@ class AmbientBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // ── Light mode: pure white canvas, barely-visible cool orbs ──
+    // ── Dark mode: deep navy with vivid blue glow orbs ──
+    final baseColor = isDark
+        ? const Color(0xFF0C0E15)
+        : const Color(0xFFFFFFFF); // pure white — not blue-gray
+
     return Stack(
       children: [
-        // Base dark navy/black background
-        Positioned.fill(
-          child: Container(
-            color: const Color(0xFF0C0E15),
-          ),
-        ),
-        // Glow streak 1 - top left
+        Positioned.fill(child: Container(color: baseColor)),
+
+        // Orb 1 — top left
         Positioned(
-          left: -150,
-          top: -150,
-          width: 650,
-          height: 650,
+          left: -150, top: -150, width: 650, height: 650,
           child: Container(
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  const Color(0xFF1D4ED8).withOpacity(0.25),
-                  const Color(0xFF0C0E15).withOpacity(0.0),
+                  isDark
+                      ? const Color(0xFF1D4ED8).withValues(alpha: 0.25)
+                      : context.colors.primary.withValues(alpha: 0.04), // very subtle in light
+                  baseColor.withValues(alpha: 0.0),
                 ],
               ),
             ),
           ),
         ),
-        // Glow streak 2 - bottom right
+
+        // Orb 2 — bottom right
         Positioned(
-          right: -200,
-          bottom: -200,
-          width: 850,
-          height: 850,
+          right: -200, bottom: -200, width: 850, height: 850,
           child: Container(
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  const Color(0xFF2563EB).withOpacity(0.18),
-                  const Color(0xFF0C0E15).withOpacity(0.0),
+                  isDark
+                      ? const Color(0xFF2563EB).withValues(alpha: 0.18)
+                      : context.colors.accent.withValues(alpha: 0.03),
+                  baseColor.withValues(alpha: 0.0),
                 ],
               ),
             ),
           ),
         ),
-        // Glow streak 3 - top right secondary
+
+        // Orb 3 — top right
         Positioned(
-          right: 50,
-          top: -100,
-          width: 500,
-          height: 500,
+          right: 50, top: -100, width: 500, height: 500,
           child: Container(
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: RadialGradient(
                 colors: [
-                  const Color(0xFF1D4ED8).withOpacity(0.10),
-                  const Color(0xFF0C0E15).withOpacity(0.0),
+                  isDark
+                      ? const Color(0xFF1D4ED8).withValues(alpha: 0.10)
+                      : context.colors.primary.withValues(alpha: 0.03),
+                  baseColor.withValues(alpha: 0.0),
                 ],
               ),
             ),
           ),
         ),
-        // Glow streak 4 - vertical ambient in middle
+
+        // Orb 4 — centre ambient
         Positioned(
           left: MediaQuery.of(context).size.width * 0.3,
-          top: 0,
-          bottom: 0,
-          width: 450,
+          top: 0, bottom: 0, width: 450,
           child: Container(
             decoration: BoxDecoration(
               gradient: RadialGradient(
                 radius: 0.8,
                 colors: [
-                  const Color(0xFF3B82F6).withOpacity(0.12),
-                  const Color(0xFF0C0E15).withOpacity(0.0),
+                  isDark
+                      ? const Color(0xFF3B82F6).withValues(alpha: 0.12)
+                      : context.colors.primary.withValues(alpha: 0.025),
+                  baseColor.withValues(alpha: 0.0),
                 ],
               ),
             ),
@@ -722,3 +705,4 @@ class AmbientBackground extends StatelessWidget {
     );
   }
 }
+

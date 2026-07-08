@@ -804,7 +804,7 @@ class _AppointmentListScreenState
             ElevatedButton(
               onPressed: () => Navigator.pop(context, true),
               style: ElevatedButton.styleFrom(backgroundColor: context.colors.error),
-              child: const Text('Stop Timer & End Session', style: TextStyle(color: Colors.white)),
+              child: Text('Stop Timer & End Session', style: TextStyle(color: context.colors.textPrimary)),
             ),
           ],
         ),
@@ -1029,8 +1029,8 @@ class _AppointmentListScreenState
                   ),
                   child: Text(
                     '${_pendingAutoSchedulingPlans.length}',
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: context.colors.textPrimary,
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1144,22 +1144,22 @@ class _AppointmentListScreenState
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.add, color: Colors.white, size: 18),
+            Icon(Icons.add, color: context.colors.textPrimary, size: 18),
             if (!compact) ...[
               const SizedBox(width: 8),
               Text(
                 'New Appointment',
-                style: context.textStyles.buttonMedium.copyWith(color: Colors.white),
+                style: context.textStyles.buttonMedium.copyWith(color: context.colors.textPrimary),
               ),
               const SizedBox(width: 8),
-              const VerticalDivider(
-                color: Colors.white24,
+              VerticalDivider(
+                color: context.colors.textMuted,
                 width: 1,
                 indent: 10,
                 endIndent: 10,
               ),
               const SizedBox(width: 8),
-              const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
+              Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textPrimary, size: 18),
             ],
           ],
         ),
@@ -1187,7 +1187,7 @@ class _AppointmentListScreenState
                   children: [
                     Text(
                       'New Appointment',
-                      style: context.textStyles.h3.copyWith(fontWeight: FontWeight.bold),
+                      style: context.textStyles.h3,
                     ),
                     IconButton(
                       icon: const Icon(Icons.close_rounded),
@@ -1349,7 +1349,7 @@ class _AppointmentListScreenState
               shape: const CircleBorder(),
               backgroundColor: context.colors.primary,
               onPressed: () => _showAppointmentTypeSelector(context),
-              child: const Icon(Icons.add, color: Colors.white, size: 24),
+              child: Icon(Icons.add, color: context.colors.textPrimary, size: 24),
             ),
       body: SafeArea(
         child: ResponsiveWrapper(
@@ -1368,10 +1368,7 @@ class _AppointmentListScreenState
                             children: [
                               Text(
                                 'Appointments',
-                                style: context.textStyles.h1.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 28,
-                                ),
+                                style: context.textStyles.h1,
                               ),
                               const SizedBox(height: 4),
                               Text(
@@ -1426,10 +1423,7 @@ class _AppointmentListScreenState
                                         const SizedBox(width: 12),
                                         Text(
                                           'Calendar',
-                                          style: context.textStyles.h3.copyWith(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                          style: context.textStyles.h3,
                                         ),
                                       ],
                                     ),
@@ -1561,7 +1555,6 @@ class _AppointmentListScreenState
                                                 Text(
                                                   headerTitle,
                                                   style: context.textStyles.h2.copyWith(
-                                                    fontWeight: FontWeight.bold,
                                                     fontSize: 20,
                                                   ),
                                                 ),
@@ -1662,10 +1655,10 @@ class _AppointmentListScreenState
                                       ),
                                     ],
                                   ),
-                                  child: const Center(
+                                  child: Center(
                                     child: Text('Today',
                                         style: TextStyle(
-                                          color: Colors.white,
+                                          color: context.colors.textPrimary,
                                           fontSize: 13,
                                           fontWeight: FontWeight.w600,
                                         )),
@@ -2205,7 +2198,7 @@ class _FilterTabButtonState extends State<_FilterTabButton> {
 
     final countBgColor = widget.isActive 
         ? Colors.white.withValues(alpha: 0.2) 
-        : Colors.black.withValues(alpha: 0.2);
+        : context.colors.shadowColor.withValues(alpha: 0.2);
 
     final countTextColor = widget.isActive 
         ? Colors.white 
@@ -2640,15 +2633,15 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
           child: Container(
             decoration: isDesktop
                 ? BoxDecoration(
-                    color: Colors.white.withOpacity(0.04),
+                    color: context.colors.border.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.08),
+                      color: context.colors.border.withValues(alpha: 0.4),
                       width: 1.0,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: context.colors.shadowColor.withValues(alpha: 0.1),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -2727,8 +2720,8 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                           alignment: Alignment.center,
                                           child: Text(
                                             '${widget.index + 1}',
-                                            style: const TextStyle(
-                                              color: Colors.white,
+                                            style: TextStyle(
+                                              color: context.colors.textPrimary,
                                               fontWeight: FontWeight.bold,
                                               fontSize: 14,
                                             ),
@@ -2745,7 +2738,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                             children: [
                                               Text(
                                                 apt.displayName,
-                                                style: context.textStyles.h3.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
+                                                style: context.textStyles.h3.copyWith(fontSize: 16, ),
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
                                               ),
@@ -3722,15 +3715,15 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
           child: Container(
             decoration: isDesktop
                 ? BoxDecoration(
-                    color: Colors.white.withOpacity(0.04),
+                    color: context.colors.border.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.08),
+                      color: context.colors.border.withValues(alpha: 0.4),
                       width: 1.0,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: context.colors.shadowColor.withValues(alpha: 0.1),
                         blurRadius: 20,
                         offset: const Offset(0, 8),
                       ),
@@ -3803,8 +3796,8 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                               alignment: Alignment.center,
                                               child: Text(
                                                 '${widget.index + 1}',
-                                                style: const TextStyle(
-                                                  color: Colors.white,
+                                                style: TextStyle(
+                                                  color: context.colors.textPrimary,
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 14,
                                                 ),
@@ -3821,7 +3814,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                                 children: [
                                                   Text(
                                                     apt.displayName,
-                                                    style: context.textStyles.h3.copyWith(fontSize: 16, fontWeight: FontWeight.bold),
+                                                    style: context.textStyles.h3.copyWith(fontSize: 16, ),
                                                     maxLines: 1,
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
@@ -4735,7 +4728,7 @@ class _WebGlassCardState extends State<WebGlassCard> {
           border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: context.colors.shadowColor.withValues(alpha: 0.08),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -4758,25 +4751,25 @@ class _WebGlassCardState extends State<WebGlassCard> {
         duration: const Duration(milliseconds: 200),
         transform: Matrix4.translationValues(0.0, translationY, 0.0),
         decoration: BoxDecoration(
-          color: const Color(0xFF131A26).withOpacity(0.07),
+          color: context.colors.cardBackground.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(widget.borderRadius),
           border: Border.all(
-            color: Colors.white.withOpacity(0.08),
+            color: context.colors.border.withValues(alpha: 0.4),
             width: 1.0,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(mainShadowOpacity),
+              color: context.colors.shadowColor.withValues(alpha: mainShadowOpacity),
               blurRadius: 36,
               offset: const Offset(0, 16),
             ),
             BoxShadow(
-              color: Colors.black.withOpacity(0.15),
+              color: context.colors.shadowColor.withValues(alpha: 0.15),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
             BoxShadow(
-              color: activeGlowColor.withOpacity(hoverGlowOpacity),
+              color: activeGlowColor.withValues(alpha: hoverGlowOpacity),
               blurRadius: 20,
               spreadRadius: 2,
             ),

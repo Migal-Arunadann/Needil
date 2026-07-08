@@ -113,7 +113,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen>
               ),
               child: Text('Go to Login',
                   style: context.textStyles.buttonMedium
-                      .copyWith(color: Colors.white)),
+                      .copyWith(color: context.colors.textPrimary)),
             ),
           ),
         ]),

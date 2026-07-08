@@ -2,10 +2,13 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pms_app/core/constants/app_colors.dart';
 import 'package:pms_app/core/constants/app_text_styles.dart';
 import 'package:pms_app/core/widgets/app_button.dart';
+import 'package:pms_app/core/widgets/animated_form_list.dart';
+import 'package:pms_app/core/widgets/app_text_field.dart';
 import 'package:pms_app/core/widgets/time_slot_picker.dart';
 import 'package:pms_app/core/utils/time_utils.dart';
 import 'dart:async';
@@ -301,87 +304,190 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
+
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        backgroundColor: context.colors.background,
+        backgroundColor: isDesktop ? Colors.white : context.colors.background,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           leading: IconButton(
-            icon: Icon(Icons.arrow_back_rounded, color: context.colors.textPrimary),
+            icon: Icon(Icons.arrow_back_rounded,
+                color: isDesktop ? const Color(0xFF161616) : context.colors.textPrimary),
             onPressed: () { FocusScope.of(context).unfocus(); Navigator.of(context).pop(); },
           ),
-          title: Text('Clinic Registration', style: context.textStyles.h4),
+          title: isDesktop ? null : Text('Clinic Registration', style: context.textStyles.h4),
           centerTitle: true,
         ),
         body: SafeArea(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 8),
-                _buildStepIndicator(4, 5),
-                const SizedBox(height: 24),
-                Text('Working Doctors', style: context.textStyles.h2),
-                const SizedBox(height: 6),
-                Text('Add doctors who work at your clinic. They get their own login.',
-                  style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: context.colors.info.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: context.colors.info.withValues(alpha: 0.2)),
-                  ),
-                  child: Row(children: [
-                    Icon(Icons.info_outline_rounded, color: context.colors.info, size: 18),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text('Optional — You can also add doctors later from Settings.',
-                      style: context.textStyles.caption.copyWith(color: context.colors.info))),
-                  ]),
-                ),
-                const SizedBox(height: 24),
-
-                // Doctor cards
-                ..._doctors.asMap().entries.map((entry) {
-                  final i = entry.key;
-                  final doc = entry.value;
-                  return _buildDoctorCard(i, doc);
-                }),
-
-                // Add Doctor button
-                GestureDetector(
-                  onTap: _addDoctor,
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: context.colors.accent.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: context.colors.accent.withValues(alpha: 0.3)),
+          child: isDesktop
+              ? Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      child: _buildStepIndicator(4, 5),
                     ),
-                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Icon(Icons.add_circle_outline_rounded, color: context.colors.accent, size: 22),
-                      const SizedBox(width: 10),
-                      Text('Add Working Doctor',
-                        style: context.textStyles.bodyMedium.copyWith(color: context.colors.accent, fontWeight: FontWeight.w600)),
-                    ]),
+                    Expanded(
+                      child: AnimatedFormList(
+                        gradientColor: Colors.white,
+                        horizontalPadding: 32,
+                        items: [
+                          // ── Item 2: Title + subtitle ────────────────────────
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                          'Working Doctors',
+                          style: GoogleFonts.cormorantGaramond(
+                            fontSize: 38,
+                            fontWeight: FontWeight.w700,
+                            color: const Color(0xFF161616),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Add doctors who work at your clinic. They get their own login.',
+                          style: GoogleFonts.inter(
+                            fontSize: 15,
+                            color: const Color(0xFF6F6F6F),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // ── Item 3: Info banner ─────────────────────────────
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: context.colors.info.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: context.colors.info.withValues(alpha: 0.2)),
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.info_outline_rounded, color: context.colors.info, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text('Optional — You can also add doctors later from Settings.',
+                          style: context.textStyles.caption.copyWith(color: context.colors.info))),
+                      ]),
+                    ),
+
+                    // ── Item 4: Doctor cards ────────────────────────────
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ..._doctors.asMap().entries.map((entry) {
+                          final i = entry.key;
+                          final doc = entry.value;
+                          return _buildDoctorCard(i, doc);
+                        }),
+                      ],
+                    ),
+
+                    // ── Item 5: Add Doctor button ───────────────────────
+                    GestureDetector(
+                      onTap: _addDoctor,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: context.colors.accent.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: context.colors.accent.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                          Icon(Icons.add_circle_outline_rounded, color: context.colors.accent, size: 22),
+                          const SizedBox(width: 10),
+                          Text('Add Working Doctor',
+                            style: context.textStyles.bodyMedium.copyWith(color: context.colors.accent, fontWeight: FontWeight.w600)),
+                        ]),
+                      ),
+                    ),
+
+                    // ── Item 6: Next button ─────────────────────────────
+                      AppButton(
+                        label: _doctors.isEmpty ? 'Skip — No Working Doctors' : 'Next: Receptionist',
+                        onPressed: _next,
+                        icon: Icons.arrow_forward_rounded,
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 32),
-
-                AppButton(
-                  label: _doctors.isEmpty ? 'Skip — No Working Doctors' : 'Next: Receptionist',
-                  onPressed: _next,
-                  icon: Icons.arrow_forward_rounded,
-                ),
-                const SizedBox(height: 32),
               ],
-            ),
-          ),
+            )
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 8),
+                      _buildStepIndicator(4, 5),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Working Doctors',
+                        style: context.textStyles.h2,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Add doctors who work at your clinic. They get their own login.',
+                        style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary),
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: context.colors.info.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: context.colors.info.withValues(alpha: 0.2)),
+                        ),
+                        child: Row(children: [
+                          Icon(Icons.info_outline_rounded, color: context.colors.info, size: 18),
+                          const SizedBox(width: 10),
+                          Expanded(child: Text('Optional — You can also add doctors later from Settings.',
+                            style: context.textStyles.caption.copyWith(color: context.colors.info))),
+                        ]),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Doctor cards
+                      ..._doctors.asMap().entries.map((entry) {
+                        final i = entry.key;
+                        final doc = entry.value;
+                        return _buildDoctorCard(i, doc);
+                      }),
+
+                      // Add Doctor button
+                      GestureDetector(
+                        onTap: _addDoctor,
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color: context.colors.accent.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: context.colors.accent.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                            Icon(Icons.add_circle_outline_rounded, color: context.colors.accent, size: 22),
+                            const SizedBox(width: 10),
+                            Text('Add Working Doctor',
+                              style: context.textStyles.bodyMedium.copyWith(color: context.colors.accent, fontWeight: FontWeight.w600)),
+                          ]),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+
+                      AppButton(
+                        label: _doctors.isEmpty ? 'Skip — No Working Doctors' : 'Next: Receptionist',
+                        onPressed: _next,
+                        icon: Icons.arrow_forward_rounded,
+                      ),
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+                ),
         ),
       ),
     );
@@ -390,6 +496,8 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
   Widget _buildDoctorCard(int index, _WorkingDoctorData doc) {
     final isExpanded = _expandedIndex == index;
     final hasName = doc.nameCtrl.text.isNotEmpty;
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -469,13 +577,13 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
                             : null,
                       ),
                       child: doc.photoFile == null
-                          ? const Icon(Icons.person_rounded, color: Colors.white, size: 36) : null,
+                          ? Icon(Icons.person_rounded, color: context.colors.textPrimary, size: 36) : null,
                     ),
                     Positioned(bottom: 0, right: 0,
                       child: Container(
                         width: 26, height: 26,
-                        decoration: BoxDecoration(color: context.colors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.white, width: 2)),
-                        child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
+                        decoration: BoxDecoration(color: context.colors.primary, borderRadius: BorderRadius.circular(8), border: Border.all(color: context.colors.textPrimary, width: 2)),
+                        child: Icon(Icons.camera_alt_rounded, color: context.colors.textPrimary, size: 14),
                       )),
                   ]),
                 )),
@@ -484,85 +592,200 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
                 const SizedBox(height: 16),
               ],
 
-              // Name
-              _field('Doctor Name', 'e.g. Dr. Vijayan', Icons.person_outline_rounded, controller: doc.nameCtrl),
-              SizedBox(height: 12),
-
-              // Username
-              _field('Username', 'Login username', Icons.alternate_email_rounded,
-                controller: doc.usernameCtrl,
-                errorText: doc.usernameError,
-                suffixIcon: doc.isCheckingUsername
-                    ? Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                          width: 16, height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
-                        ),
-                      )
-                    : null,
-                onChanged: (val) {
-                  if (doc.debounce?.isActive ?? false) doc.debounce!.cancel();
-                  if (val.length < 3) {
-                    setState(() => doc.usernameError = null);
-                    return;
-                  }
-                  setState(() => doc.isCheckingUsername = true);
-                  doc.debounce = Timer(const Duration(milliseconds: 600), () async {
-                    final authService = ref.read(authProvider.notifier).authService;
-                    final exists = await authService.checkUsernameExists(val);
-                    if (mounted) {
-                      setState(() {
-                        doc.isCheckingUsername = false;
-                        doc.usernameError = exists ? 'Username is already taken' : null;
-                      });
-                    }
-                  });
-                },
-              ),
-              const SizedBox(height: 12),
-
-              // Password
-              _field('Password', 'Min 8 characters', Icons.lock_outline_rounded, controller: doc.passwordCtrl, obscure: true),
-              const SizedBox(height: 16),
-
-              // DOB
-              GestureDetector(
-                onTap: () async {
-                  FocusManager.instance.primaryFocus?.unfocus();
-                  await Future.delayed(Duration.zero);
-                  if (!mounted) return;
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: doc.dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
-                    firstDate: DateTime(1940),
-                    lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
-                    locale: const Locale('en', 'IN'),
-                  );
-                  if (!mounted) return;
-                  FocusManager.instance.primaryFocus?.unfocus();
-                  if (picked != null) setState(() => doc.dateOfBirth = picked);
-                },
-                child: Container(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: context.colors.surface, borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: context.colors.border),
-                  ),
-                  child: Row(children: [
-                    Icon(Icons.cake_outlined, color: context.colors.textHint, size: 20),
-                    SizedBox(width: 12),
-                    Expanded(child: Text(
-                      doc.dateOfBirth == null
-                          ? 'Date of Birth'
-                          : '${doc.dateOfBirth!.day.toString().padLeft(2, '0')}/${doc.dateOfBirth!.month.toString().padLeft(2, '0')}/${doc.dateOfBirth!.year}',
-                      style: context.textStyles.bodyMedium.copyWith(
-                        color: doc.dateOfBirth == null ? context.colors.textHint : context.colors.textPrimary),
-                    )),
-                    Icon(Icons.calendar_today_rounded, size: 16, color: context.colors.textHint),
-                  ]),
+              if (isDesktop) ...[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _field('Doctor Name', 'e.g. Dr. Vijayan', Icons.person_outline_rounded, controller: doc.nameCtrl),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _field('Username', 'Login username', Icons.alternate_email_rounded,
+                        controller: doc.usernameCtrl,
+                        errorText: doc.usernameError,
+                        suffixIcon: doc.isCheckingUsername
+                            ? Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 16, height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
+                                ),
+                              )
+                            : null,
+                        onChanged: (val) {
+                          if (doc.debounce?.isActive ?? false) doc.debounce!.cancel();
+                          if (val.length < 3) {
+                            setState(() => doc.usernameError = null);
+                            return;
+                          }
+                          setState(() => doc.isCheckingUsername = true);
+                          doc.debounce = Timer(const Duration(milliseconds: 600), () async {
+                            final authService = ref.read(authProvider.notifier).authService;
+                            final exists = await authService.checkUsernameExists(val);
+                            if (mounted) {
+                              setState(() {
+                                doc.isCheckingUsername = false;
+                                doc.usernameError = exists ? 'Username is already taken' : null;
+                              });
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                  ],
                 ),
-              ),
+                const SizedBox(height: 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _field('Password', 'Min 8 characters', Icons.lock_outline_rounded, controller: doc.passwordCtrl, obscure: true),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                          await Future.delayed(Duration.zero);
+                          if (!mounted) return;
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: doc.dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
+                            firstDate: DateTime(1940),
+                            lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+                            locale: const Locale('en', 'IN'),
+                          );
+                          if (!mounted) return;
+                          FocusManager.instance.primaryFocus?.unfocus();
+                          if (picked != null) setState(() => doc.dateOfBirth = picked);
+                        },
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Date of Birth *',
+                              style: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF161616),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              height: 54,
+                              padding: const EdgeInsets.symmetric(horizontal: 18),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE8E6E2), width: 1),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.cake_outlined, color: Color(0xFF999999), size: 20),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Text(
+                                      doc.dateOfBirth == null
+                                          ? 'Date of Birth'
+                                          : '${doc.dateOfBirth!.day.toString().padLeft(2, '0')}/${doc.dateOfBirth!.month.toString().padLeft(2, '0')}/${doc.dateOfBirth!.year}',
+                                      style: GoogleFonts.inter(
+                                        fontSize: 15,
+                                        color: doc.dateOfBirth == null ? const Color(0xFFA0A0A0) : const Color(0xFF161616),
+                                      ),
+                                    ),
+                                  ),
+                                  const Icon(Icons.calendar_today_rounded, size: 16, color: Color(0xFF999999)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
+                // Name
+                _field('Doctor Name', 'e.g. Dr. Vijayan', Icons.person_outline_rounded, controller: doc.nameCtrl),
+                const SizedBox(height: 12),
+
+                // Username
+                _field('Username', 'Login username', Icons.alternate_email_rounded,
+                  controller: doc.usernameCtrl,
+                  errorText: doc.usernameError,
+                  suffixIcon: doc.isCheckingUsername
+                      ? Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 16, height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: context.colors.primary),
+                          ),
+                        )
+                      : null,
+                  onChanged: (val) {
+                    if (doc.debounce?.isActive ?? false) doc.debounce!.cancel();
+                    if (val.length < 3) {
+                      setState(() => doc.usernameError = null);
+                      return;
+                    }
+                    setState(() => doc.isCheckingUsername = true);
+                    doc.debounce = Timer(const Duration(milliseconds: 600), () async {
+                      final authService = ref.read(authProvider.notifier).authService;
+                      final exists = await authService.checkUsernameExists(val);
+                      if (mounted) {
+                        setState(() {
+                          doc.isCheckingUsername = false;
+                          doc.usernameError = exists ? 'Username is already taken' : null;
+                        });
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // Password
+                _field('Password', 'Min 8 characters', Icons.lock_outline_rounded, controller: doc.passwordCtrl, obscure: true),
+                const SizedBox(height: 16),
+
+                // DOB
+                GestureDetector(
+                  onTap: () async {
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    await Future.delayed(Duration.zero);
+                    if (!mounted) return;
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: doc.dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
+                      firstDate: DateTime(1940),
+                      lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
+                      locale: const Locale('en', 'IN'),
+                    );
+                    if (!mounted) return;
+                    FocusManager.instance.primaryFocus?.unfocus();
+                    if (picked != null) setState(() => doc.dateOfBirth = picked);
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: context.colors.surface, borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: context.colors.border),
+                    ),
+                    child: Row(children: [
+                      Icon(Icons.cake_outlined, color: context.colors.textHint, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(child: Text(
+                        doc.dateOfBirth == null
+                            ? 'Date of Birth'
+                            : '${doc.dateOfBirth!.day.toString().padLeft(2, '0')}/${doc.dateOfBirth!.month.toString().padLeft(2, '0')}/${doc.dateOfBirth!.year}',
+                        style: context.textStyles.bodyMedium.copyWith(
+                          color: doc.dateOfBirth == null ? context.colors.textHint : context.colors.textPrimary),
+                      )),
+                      Icon(Icons.calendar_today_rounded, size: 16, color: context.colors.textHint),
+                    ]),
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
 
               // Working schedule
@@ -590,29 +813,15 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
   }
 
   Widget _field(String label, String hint, IconData icon, {required TextEditingController controller, bool obscure = false, String? errorText, void Function(String)? onChanged, Widget? suffixIcon}) {
-    return TextFormField(
+    return AppTextField(
+      label: label,
+      hint: hint,
       controller: controller,
       obscureText: obscure,
       onChanged: onChanged,
-      validator: (v) {
-        if (errorText != null) return errorText;
-        return null;
-      },
-      style: context.textStyles.bodyMedium,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        errorText: errorText,
-        hintStyle: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint),
-        labelStyle: context.textStyles.caption.copyWith(color: context.colors.textHint),
-        prefixIcon: Icon(icon, color: context.colors.textHint, size: 20),
-        suffixIcon: suffixIcon,
-        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.colors.border)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.colors.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: context.colors.primary)),
-        filled: true, fillColor: context.colors.surface,
-      ),
+      prefixIcon: Icon(icon),
+      suffixIcon: suffixIcon,
+      errorText: errorText,
     );
   }
 
@@ -887,6 +1096,57 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
   }
 
   Widget _miniField(String label, TextEditingController ctrl) {
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900;
+
+    if (isDesktop) {
+      final textDark = const Color(0xFF161616);
+      final border = const Color(0xFFE8E6E2);
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: textDark,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: border,
+                width: 1,
+              ),
+            ),
+            child: TextFormField(
+              controller: ctrl,
+              keyboardType: TextInputType.number,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+                color: textDark,
+              ),
+              decoration: const InputDecoration(
+                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                errorBorder: InputBorder.none,
+                focusedErrorBorder: InputBorder.none,
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(label, style: context.textStyles.caption.copyWith(fontSize: 11)),
       SizedBox(height: 3),

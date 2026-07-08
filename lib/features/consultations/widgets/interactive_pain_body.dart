@@ -274,7 +274,7 @@ class _InteractivePainBodyState extends State<InteractivePainBody> {
       children: [
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.colors.textPrimary,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: context.colors.border),
           ),

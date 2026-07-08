@@ -240,7 +240,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
               }
             },
             style: ElevatedButton.styleFrom(backgroundColor: context.colors.primary),
-            child: const Text('Add', style: TextStyle(color: Colors.white)),
+            child: Text('Add', style: TextStyle(color: context.colors.textPrimary)),
           ),
         ],
       ),
@@ -376,9 +376,9 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
                       decoration: BoxDecoration(
                         color: context.colors.primary,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white, width: 2),
+                        border: Border.all(color: context.colors.textPrimary, width: 2),
                       ),
-                      child: const Icon(Icons.camera_alt_rounded, color: Colors.white, size: 14),
+                      child: Icon(Icons.camera_alt_rounded, color: context.colors.textPrimary, size: 14),
                     ),
                   ),
                 ],

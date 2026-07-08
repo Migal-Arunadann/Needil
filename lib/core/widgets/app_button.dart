@@ -80,30 +80,18 @@ class _AppButtonState extends State<AppButton> {
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             decoration: BoxDecoration(
-              gradient: isButtonEnabled
-                  ? LinearGradient(
-                      colors: _isHovered
-                          ? [const Color(0xFF4F46E5), const Color(0xFF3B82F6)]
-                          : [const Color(0xFF3B82F6), const Color(0xFF2563EB)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                  : null,
-              color: !isButtonEnabled ? const Color(0xFF1E293B).withValues(alpha: 0.5) : null,
+              color: isButtonEnabled
+                  ? (_isHovered
+                      ? context.colors.primaryDark
+                      : context.colors.primary)
+                  : context.colors.surface,
               borderRadius: BorderRadius.circular(14),
-              border: isButtonEnabled
-                  ? Border.all(color: Colors.white.withValues(alpha: 0.08), width: 0.8)
-                  : Border.all(color: Colors.white.withValues(alpha: 0.03), width: 0.8),
-              boxShadow: isButtonEnabled
-                  ? [
-                      BoxShadow(
-                        color: const Color(0xFF3B82F6).withValues(alpha: _isHovered ? 0.35 : 0.2),
-                        blurRadius: _isHovered ? 16 : 12,
-                        spreadRadius: _isHovered ? 1 : 0,
-                        offset: const Offset(0, 4),
-                      ),
-                    ]
-                  : null,
+              border: Border.all(
+                color: isButtonEnabled
+                    ? context.colors.primary.withValues(alpha: 0.3)
+                    : context.colors.border.withValues(alpha: 0.4),
+                width: 0.8,
+              ),
             ),
             child: ElevatedButton(
               onPressed: widget.isLoading ? null : widget.onPressed,
