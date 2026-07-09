@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
+
 import 'package:pms_app/core/services/auth_service.dart';
 import 'package:pms_app/features/dashboard/screens/clinic_dashboard_screen.dart';
 import 'package:pms_app/features/dashboard/screens/doctor_dashboard_screen.dart';
@@ -243,52 +243,23 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── Branding / Header ──
-          Padding(
-            padding: const EdgeInsets.only(left: 16, right: 16, top: 32, bottom: 20),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(99), // Perfect pill shape
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.06),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.only(top: 36, bottom: 24, left: 16, right: 16),
+            alignment: Alignment.center,
+            child: Image.asset(
+              'assets/images/needil-whitebg logo.png',
+              height: 44, // Perfectly sized for the sidebar
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                return Text(
+                  'Needil',
+                  style: context.textStyles.h2.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Image.asset(
-                    'assets/images/needil_logo_cropped.png',
-                    height: 30, // Fit inside the pill nicely
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Text(
-                        'Needil',
-                        style: context.textStyles.h2.copyWith(
-                          color: const Color(0xFF0F5D4F),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '— CLINIC MANAGEMENT —',
-                    style: GoogleFonts.inter(
-                      fontSize: 7.2,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.5,
-                      color: const Color(0xFF0F5D4F).withValues(alpha: 0.7),
-                    ),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
           

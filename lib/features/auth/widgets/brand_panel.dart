@@ -27,7 +27,7 @@ class BrandPanel extends StatelessWidget {
             Positioned(
               right: -130, // Clean cutoff on the right of the brand panel
               bottom: -20, // Sit nicely near the bottom
-              width: width * 0.50, // Increased size to 50% of the screen width
+              width: width * 0.66, // Increased size by another 15% (from 57.5% to 66% of width)
               child: Image.asset(
                 'assets/images/needil-loginbg.png',
                 fit: BoxFit.contain,
