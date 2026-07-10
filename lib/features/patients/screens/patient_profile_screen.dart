@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pms_app/core/constants/pb_collections.dart';
@@ -303,10 +304,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e', style: TextStyle(color: context.colors.textPrimary)),
-          backgroundColor: context.colors.error,
-        ));
+        AppToast.show('Error: $e', type: ToastType.error);
       }
     }
   }
@@ -2196,7 +2194,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error starting session: $e')));
+        AppToast.show('Error starting session: $e', type: ToastType.error);
       }
     }
   }
@@ -2244,12 +2242,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
         ref.read(appointmentListProvider.notifier).loadAppointments();
       } catch (_) {}
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('$pendingCount session(s) cancelled and removed from schedule.'),
-          backgroundColor: context.colors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ));
+        AppToast.show('$pendingCount session(s) cancelled and removed from schedule.', type: ToastType.success);
         // Refresh sessions
         setState(() {
           _planLoaded = false;
@@ -2261,10 +2254,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed: $e'),
-          backgroundColor: context.colors.error,
-        ));
+        AppToast.show('Failed: $e', type: ToastType.error);
       }
     }
   }
@@ -2297,19 +2287,14 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       final service = ref.read(treatmentServiceProvider);
       await service.rescheduleSession(sessionId: session.id, newDate: newDateStr, newTime: newTimeStr);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Session ${session.sessionNumber} rescheduled.'),
-          backgroundColor: context.colors.success,
-        ));
+        AppToast.show('Session ${session.sessionNumber} rescheduled.', type: ToastType.success);
         final isMaintenance = session.isMaintenance;
         final planId = isMaintenance ? _maintenancePlan?.id : _treatmentPlan?.id;
         if (planId != null) await _loadSessions(planId, isMaintenance: isMaintenance);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed: $e'), backgroundColor: context.colors.error,
-        ));
+        AppToast.show('Failed: $e', type: ToastType.error);
       }
     }
   }
@@ -2319,18 +2304,14 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       final service = ref.read(treatmentServiceProvider);
       await service.markSessionMissed(session.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Session marked as missed.'), backgroundColor: context.colors.warning,
-        ));
+        AppToast.show('Session marked as missed.', type: ToastType.warning);
         final isMaintenance = session.isMaintenance;
         final planId = isMaintenance ? _maintenancePlan?.id : _treatmentPlan?.id;
         if (planId != null) await _loadSessions(planId, isMaintenance: isMaintenance);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed: $e'), backgroundColor: context.colors.error,
-        ));
+        AppToast.show('Failed: $e', type: ToastType.error);
       }
     }
   }
@@ -2359,18 +2340,14 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       final service = ref.read(treatmentServiceProvider);
       await service.cancelSession(session.id);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Session cancelled.'), backgroundColor: context.colors.success,
-        ));
+        AppToast.show('Session cancelled.', type: ToastType.success);
         final isMaintenance = session.isMaintenance;
         final planId = isMaintenance ? _maintenancePlan?.id : _treatmentPlan?.id;
         if (planId != null) await _loadSessions(planId, isMaintenance: isMaintenance);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed: $e'), backgroundColor: context.colors.error,
-        ));
+        AppToast.show('Failed: $e', type: ToastType.error);
       }
     }
   }
@@ -2514,10 +2491,7 @@ class _EditPatientDialogState extends ConsumerState<_EditPatientDialog> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedGender == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Please select gender'),
-        backgroundColor: Colors.red,
-      ));
+      AppToast.show('Please select gender', type: ToastType.error);
       return;
     }
 
@@ -2566,10 +2540,7 @@ class _EditPatientDialogState extends ConsumerState<_EditPatientDialog> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error saving: $e'),
-          backgroundColor: context.colors.error,
-        ));
+        AppToast.show('Error saving: $e', type: ToastType.error);
       }
     } finally {
       if (mounted) {

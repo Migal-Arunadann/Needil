@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pms_app/core/constants/pb_collections.dart';
 import 'package:pms_app/core/widgets/app_button.dart';
@@ -99,32 +100,17 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     final navigator = Navigator.of(context);
 
     if (_selectedGender == null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Please select gender.'),
-        backgroundColor: context.colors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ));
+      AppToast.show('Please select gender.', type: ToastType.error);
       return;
     }
 
     if (_dobCtrl.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Date of birth is required.'),
-        backgroundColor: context.colors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ));
+      AppToast.show('Date of birth is required.', type: ToastType.error);
       return;
     }
 
     if (!_dataConsentGiven || !_privacyPolicyAccepted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Both consent checkboxes are required to proceed.'),
-        backgroundColor: context.colors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ));
+      AppToast.show('Both consent checkboxes are required to proceed.', type: ToastType.error);
       return;
     }
 
@@ -169,14 +155,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
       if (existingPatient != null) {
         patient = existingPatient;
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content:
-                Text('Returning patient "${existingPatient.fullName}" linked ✓'),
-            backgroundColor: context.colors.info,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ));
+          AppToast.show('Returning patient "${existingPatient.fullName}" linked ✓');
         }
       } else {
         patient = await service.createPatient(
@@ -261,21 +240,12 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
 
       if (mounted) {
         if (existingPatient == null) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: const Text('Patient registered!'),
-            backgroundColor: context.colors.success,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ));
+          AppToast.show('Patient registered!', type: ToastType.error);
         }
         navigator.pop();
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error: $e'),
-        backgroundColor: context.colors.error,
-      ));
+      AppToast.show('Error: $e', type: ToastType.error);
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }

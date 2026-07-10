@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pms_app/core/constants/pb_collections.dart';
@@ -183,9 +184,7 @@ class _CreateAppointmentScreenState
     final doctorId = isClinic ? _selectedDoctorId : auth.userId;
 
     if (doctorId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a doctor first')),
-      );
+      AppToast.show('Please select a doctor first');
       return;
     }
 
@@ -229,39 +228,18 @@ class _CreateAppointmentScreenState
 
     // Gender is mandatory for walk-in
     if (!_isCallBy && _selectedGender == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please select the patient\'s gender'),
-          backgroundColor: context.colors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      AppToast.show('Please select the patient\'s gender', type: ToastType.error);
       return;
     }
 
     // Both consent checkboxes are mandatory for walk-in
     if (!_isCallBy && (!_dataConsentGiven || !_privacyPolicyAccepted)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Both consent checkboxes are required to proceed.'),
-          backgroundColor: context.colors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      AppToast.show('Both consent checkboxes are required to proceed.', type: ToastType.error);
       return;
     }
 
     if (!_hasSlotSelected) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please select a time slot first'),
-          backgroundColor: context.colors.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      AppToast.show('Please select a time slot first', type: ToastType.error);
       return;
     }
     final auth = ref.read(authProvider);
@@ -279,19 +257,9 @@ class _CreateAppointmentScreenState
       final todayDuplicate = await service.findAnyActiveTodayByPhone(phone, doctorId);
       if (todayDuplicate != null && mounted) {
         final existingName = todayDuplicate.displayName;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'This phone number is already registered today as "$existingName". '
+        AppToast.show('This phone number is already registered today as "$existingName". '
               'A patient can only have one consultation per day. '
-              'Please find the existing appointment in the schedule.',
-            ),
-            backgroundColor: context.colors.error,
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 6),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+              'Please find the existing appointment in the schedule.', type: ToastType.error, duration: const Duration(seconds: 6));
         return;
       }
     }
@@ -360,7 +328,7 @@ class _CreateAppointmentScreenState
           await ref.read(pocketbaseProvider).collection(PBCollections.appointments).delete(existingAppt.id);
         } catch (e) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete old appointment: $e'), backgroundColor: context.colors.error));
+            AppToast.show('Failed to delete old appointment: $e', type: ToastType.error);
           }
           setState(() => _isSubmitting = false);
           return;
@@ -524,29 +492,13 @@ class _CreateAppointmentScreenState
           details: 'Created ${_isCallBy ? 'call-by' : 'walk-in'} for ${_nameCtrl.text.trim()}',
         );
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content:
-              Text('${_isCallBy ? 'Call-by' : 'Walk-in'} appointment created!'),
-          backgroundColor: context.colors.success,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      AppToast.show('${_isCallBy ? 'Call-by' : 'Walk-in'} appointment created!', type: ToastType.success);
       navigator.pop();
     } else if (mounted) {
       // Show error from provider state
       final err = ref.read(appointmentListProvider).error;
       if (err != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(err),
-            backgroundColor: context.colors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        AppToast.show(err, type: ToastType.error);
       }
     }
   }

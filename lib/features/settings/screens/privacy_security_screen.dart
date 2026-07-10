@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pms_app/core/constants/app_colors.dart';
 import 'package:pms_app/core/constants/app_text_styles.dart';
@@ -75,13 +76,7 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
         _currentPassCtrl.clear();
         _newPassCtrl.clear();
         _confirmPassCtrl.clear();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Password changed successfully. Please log in again.'),
-          backgroundColor: context.colors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          duration: const Duration(seconds: 3),
-        ));
+        AppToast.show('Password changed successfully. Please log in again.', type: ToastType.success, duration: const Duration(seconds: 3));
         await Future.delayed(const Duration(seconds: 2));
         if (mounted) {
           ref.read(authProvider.notifier).logout();
@@ -95,12 +90,7 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: context.colors.error,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
+    AppToast.show(msg, type: ToastType.error);
   }
 
   @override

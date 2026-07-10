@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
 /// Shows a dialog when the clinic's photo upload limit has been reached.
@@ -110,14 +111,7 @@ Future<void> showPhotoLimitDialog(
           ElevatedButton.icon(
             onPressed: () {
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Upgrade plans coming soon!'),
-                  backgroundColor: context.colors.info,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-              );
+              AppToast.show('Upgrade plans coming soon!');
             },
             icon: const Icon(Icons.rocket_launch_rounded, size: 18),
             label: const Text('Upgrade Plan'),

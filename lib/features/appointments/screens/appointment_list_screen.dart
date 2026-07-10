@@ -1,5 +1,6 @@
 // AUTO-GENERATED â€” Web-only layout.
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'dart:ui';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -404,12 +405,7 @@ class _AppointmentListScreenState
       }
       ref.read(appointmentListProvider.notifier).loadAppointments();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${apt.displayName} marked as arrived \u2713'),
-          backgroundColor: context.colors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ));
+        AppToast.show('${apt.displayName} marked as arrived \u2713', type: ToastType.success);
       }
     } catch (e) {
       if (mounted) _showError('$e');
@@ -423,12 +419,7 @@ class _AppointmentListScreenState
       ref.read(appointmentListProvider.notifier).loadAppointments();
       ref.read(analyticsProvider.notifier).load(); // background refresh
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${apt.displayName} \u2014 consultation ended \u2713'),
-          backgroundColor: context.colors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ));
+        AppToast.show('${apt.displayName} \u2014 consultation ended \u2713', type: ToastType.success);
       }
     } catch (e) {
       if (mounted) _showError('$e');
@@ -520,12 +511,7 @@ class _AppointmentListScreenState
         await service.rescheduleAppointment(apt.id, newDate, newTime);
         ref.read(appointmentListProvider.notifier).loadAppointments();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('${apt.displayName} rescheduled to $newDate at ${TimeUtils.formatStringTime(newTime)} \u2713'),
-            backgroundColor: context.colors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ));
+          AppToast.show('${apt.displayName} rescheduled to $newDate at ${TimeUtils.formatStringTime(newTime)} \u2713', type: ToastType.success);
         }
       } catch (e) {
         if (mounted) _showError('$e');
@@ -618,26 +604,12 @@ class _AppointmentListScreenState
             final service = ref.read(appointmentServiceProvider);
             await service.markEnded(apt.id);
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: const Text(
-                  'Treatment plan created & consultation ended. Session 1 is waiting on today\'s schedule.'),
-                backgroundColor: context.colors.success,
-                duration: const Duration(seconds: 5),
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ));
+              AppToast.show('Treatment plan created & consultation ended. Session 1 is waiting on today\'s schedule.', type: ToastType.success, duration: const Duration(seconds: 5));
             }
           } else {
             // Don't auto-end Ã¢â‚¬â€ sessions start on a different day
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: const Text(
-                  'Treatment plan created & sessions scheduled! You may end this appointment now or keep it open.'),
-                backgroundColor: context.colors.success,
-                duration: const Duration(seconds: 5),
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ));
+              AppToast.show('Treatment plan created & sessions scheduled! You may end this appointment now or keep it open.', type: ToastType.success, duration: const Duration(seconds: 5));
             }
           }
         }
@@ -682,12 +654,7 @@ class _AppointmentListScreenState
       }
       ref.read(appointmentListProvider.notifier).loadAppointments();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('${apt.displayName} is now waiting for session \u2713'),
-          backgroundColor: const Color(0xFFF59E0B),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ));
+        AppToast.show('${apt.displayName} is now waiting for session \u2713');
       }
     } catch (e) {
       if (mounted) _showError('$e');
@@ -819,12 +786,7 @@ class _AppointmentListScreenState
       ref.read(appointmentListProvider.notifier).loadAppointments();
       ref.read(analyticsProvider.notifier).load(); // background refresh
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Session for ${apt.displayName} completed \u2713'),
-          backgroundColor: context.colors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ));
+        AppToast.show('Session for ${apt.displayName} completed \u2713', type: ToastType.success);
       }
     } catch (e) {
       if (mounted) _showError('$e');
@@ -836,12 +798,7 @@ class _AppointmentListScreenState
     // Block navigation for future/scheduled sessions Ã¢â‚¬â€ only reschedule is available
     if (apt.status == AppointmentStatus.scheduled) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text('Session hasn\'t started yet. Only reschedule is available.'),
-          backgroundColor: context.colors.info,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ));
+        AppToast.show('Session hasn\'t started yet. Only reschedule is available.', type: ToastType.info);
       }
       return;
     }
@@ -918,12 +875,7 @@ class _AppointmentListScreenState
         await service.rescheduleSessionAppointment(apt.id, apt, newDate, newTime);
         ref.read(appointmentListProvider.notifier).loadAppointments();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Session for ${apt.displayName} rescheduled to $newDate at ${TimeUtils.formatStringTime(newTime)} \u2713'),
-            backgroundColor: context.colors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ));
+          AppToast.show('Session for ${apt.displayName} rescheduled to $newDate at ${TimeUtils.formatStringTime(newTime)} \u2713', type: ToastType.success);
         }
       } catch (e) {
         if (mounted) _showError('$e');
@@ -969,12 +921,7 @@ class _AppointmentListScreenState
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: context.colors.error,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
+    AppToast.show(msg, type: ToastType.error);
   }
 
   Widget _buildAutoSchedulingButton({bool desktop = false}) {
@@ -1359,7 +1306,7 @@ class _AppointmentListScreenState
                   children: [
                     // Top Header spanning full width
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+                      padding: const EdgeInsets.fromLTRB(36, 20, 36, 8),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -1391,7 +1338,7 @@ class _AppointmentListScreenState
                     ),
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                        padding: const EdgeInsets.fromLTRB(36, 12, 36, 0),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -4738,10 +4685,23 @@ class _WebGlassCardState extends State<WebGlassCard> {
       );
     }
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final translationY = widget.animateHover && _isHovered ? -3.0 : 0.0;
     final hoverGlowOpacity = widget.animateHover && _isHovered ? 0.08 : 0.04;
-    final mainShadowOpacity = widget.animateHover && _isHovered ? 0.40 : 0.35;
+    
+    // Soften shadows in light mode to prevent muddy translucent bleeding
+    final mainShadowOpacity = isDark
+        ? (widget.animateHover && _isHovered ? 0.40 : 0.35)
+        : (widget.animateHover && _isHovered ? 0.08 : 0.05);
+    final secondShadowOpacity = isDark ? 0.15 : 0.02;
+
     final activeGlowColor = widget.glowColor ?? const Color(0xFF3B82F6);
+    
+    // In light mode, use a clean, highly opaque white background (alpha 0.90).
+    // In dark mode, keep the translucent glassmorphic look (alpha 0.07).
+    final cardBgColor = isDark
+        ? context.colors.cardBackground.withValues(alpha: 0.07)
+        : context.colors.cardBackground.withValues(alpha: 0.90);
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -4751,10 +4711,10 @@ class _WebGlassCardState extends State<WebGlassCard> {
         duration: const Duration(milliseconds: 200),
         transform: Matrix4.translationValues(0.0, translationY, 0.0),
         decoration: BoxDecoration(
-          color: context.colors.cardBackground.withValues(alpha: 0.07),
+          color: cardBgColor,
           borderRadius: BorderRadius.circular(widget.borderRadius),
           border: Border.all(
-            color: context.colors.border.withValues(alpha: 0.4),
+            color: context.colors.border.withValues(alpha: isDark ? 0.4 : 0.6),
             width: 1.0,
           ),
           boxShadow: [
@@ -4764,15 +4724,16 @@ class _WebGlassCardState extends State<WebGlassCard> {
               offset: const Offset(0, 16),
             ),
             BoxShadow(
-              color: context.colors.shadowColor.withValues(alpha: 0.15),
+              color: context.colors.shadowColor.withValues(alpha: secondShadowOpacity),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
-            BoxShadow(
-              color: activeGlowColor.withValues(alpha: hoverGlowOpacity),
-              blurRadius: 20,
-              spreadRadius: 2,
-            ),
+            if (isDark)
+              BoxShadow(
+                color: activeGlowColor.withValues(alpha: hoverGlowOpacity),
+                blurRadius: 20,
+                spreadRadius: 2,
+              ),
           ],
         ),
         child: ClipRRect(

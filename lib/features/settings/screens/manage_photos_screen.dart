@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:intl/intl.dart';
@@ -202,9 +203,7 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading photos: $e'), backgroundColor: context.colors.error),
-        );
+        AppToast.show('Error loading photos: $e', type: ToastType.error);
       }
     }
   }
@@ -302,23 +301,14 @@ class _ManagePhotosScreenState extends ConsumerState<ManagePhotosScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('$deletedCount photo${deletedCount != 1 ? 's' : ''} deleted'),
-            backgroundColor: context.colors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        AppToast.show('$deletedCount photo${deletedCount != 1 ? 's' : ''} deleted', type: ToastType.success);
       }
 
       // Reload everything
       await _loadPhotos();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: context.colors.error),
-        );
+        AppToast.show('Error: $e', type: ToastType.error);
       }
     } finally {
       if (mounted) setState(() => _isDeleting = false);

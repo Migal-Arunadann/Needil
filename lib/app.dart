@@ -10,6 +10,7 @@ import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step1_s
 import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/services/notification_service.dart';
+import 'package:flutter/foundation.dart';
 import 'package:pms_app/core/widgets/splash_screen.dart';
 
 /// Global navigator key so the timer service can push dialogs from anywhere.
@@ -23,8 +24,8 @@ class PmsApp extends ConsumerStatefulWidget {
 }
 
 class _PmsAppState extends ConsumerState<PmsApp> {
-  /// True once the startup animation has finished playing.
-  bool _splashDone = false;
+  /// True once the startup animation has finished playing. Skips on web.
+  bool _splashDone = kIsWeb;
 
   @override
   void initState() {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -122,14 +123,7 @@ class _OtpVerificationScreenState extends ConsumerState<OtpVerificationScreen>
         // If the clinic is already fully registered, we can show a brief message
         // before popping to the dashboard.
         if (authState.clinic?.name.isNotEmpty == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Welcome back! You are already registered.'),
-              backgroundColor: context.colors.success,
-              behavior: SnackBarBehavior.floating,
-              duration: Duration(seconds: 2),
-            ),
-          );
+          AppToast.show('Welcome back! You are already registered.', type: ToastType.error);
         }
 
         // Pop all overlayed screens (Step 0, OTP screen) so app.dart's root home takes over

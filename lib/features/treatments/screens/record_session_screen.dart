@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io' show Platform, File;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -250,14 +251,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                 return;
               }
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Only $remaining photo(s) remaining in your quota. Selecting first $remaining.'),
-                    backgroundColor: context.colors.warning,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                );
+                AppToast.show('Only $remaining photo(s) remaining in your quota. Selecting first $remaining.', type: ToastType.warning);
               }
               imgs.removeRange(remaining, imgs.length);
             }
@@ -314,12 +308,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         }
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Session ${_liveSession.sessionNumber} details saved ✓'),
-          backgroundColor: context.colors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ));
+        AppToast.show('Session ${_liveSession.sessionNumber} details saved ✓', type: ToastType.success);
         if (isAlreadyCompleted) {
           setState(() => _isViewMode = true);
         }
@@ -327,11 +316,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
     } catch (e) {
       setState(() => _isSubmitting = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to save: $e'),
-          backgroundColor: context.colors.error,
-          behavior: SnackBarBehavior.floating,
-        ));
+        AppToast.show('Failed to save: $e', type: ToastType.error);
       }
     }
   }

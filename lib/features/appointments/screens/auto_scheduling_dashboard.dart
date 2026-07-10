@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
@@ -59,16 +60,9 @@ class _AutoSchedulingDashboardState extends ConsumerState<AutoSchedulingDashboar
       final results = await lifecycle.autoRescheduleForPlan(plan.id);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(
-            results.isNotEmpty
+        AppToast.show(results.isNotEmpty
                 ? 'Rescheduled: ${results.length} session(s) moved to new slots.'
-                : 'Session auto-rescheduled successfully.',
-          ),
-          backgroundColor: context.colors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ));
+                : 'Session auto-rescheduled successfully.', type: ToastType.success);
 
         setState(() {
           _plans.removeWhere((p) => p.id == plan.id);
@@ -81,11 +75,7 @@ class _AutoSchedulingDashboardState extends ConsumerState<AutoSchedulingDashboar
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to reschedule: $e'),
-          backgroundColor: context.colors.error,
-          behavior: SnackBarBehavior.floating,
-        ));
+        AppToast.show('Failed to reschedule: $e', type: ToastType.error);
       }
     } finally {
       if (mounted) {
@@ -108,12 +98,7 @@ class _AutoSchedulingDashboardState extends ConsumerState<AutoSchedulingDashboar
       await treatmentService.pauseSessions(plan.id);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Sessions for ${plan.patientName ?? "Patient"} have been paused.'),
-          backgroundColor: context.colors.info,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ));
+        AppToast.show('Sessions for ${plan.patientName ?? "Patient"} have been paused.');
 
         setState(() {
           _plans.removeWhere((p) => p.id == plan.id);
@@ -126,11 +111,7 @@ class _AutoSchedulingDashboardState extends ConsumerState<AutoSchedulingDashboar
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to pause plan: $e'),
-          backgroundColor: context.colors.error,
-          behavior: SnackBarBehavior.floating,
-        ));
+        AppToast.show('Failed to pause plan: $e', type: ToastType.error);
       }
     } finally {
       if (mounted) {
@@ -165,12 +146,7 @@ class _AutoSchedulingDashboardState extends ConsumerState<AutoSchedulingDashboar
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Successfully rescheduled $successCount patient(s).'),
-        backgroundColor: context.colors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ));
+      AppToast.show('Successfully rescheduled $successCount patient(s).', type: ToastType.success);
       widget.onRefresh();
       Navigator.of(context).pop();
     }

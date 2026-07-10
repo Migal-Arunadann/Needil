@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:pms_app/features/auth/theme/needil_auth_theme.dart';
@@ -21,19 +22,7 @@ class GoogleSignInButton extends StatelessWidget {
       height: 48,
       child: OutlinedButton(
         onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Google Sign-In will be available in a future update.',
-                style: GoogleFonts.inter(fontSize: 13),
-              ),
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              duration: const Duration(seconds: 3),
-            ),
-          );
+          AppToast.show('Google Sign-In will be available in a future update.', duration: const Duration(seconds: 3));
         },
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: borderColor),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pms_app/core/constants/app_colors.dart';
 import 'package:pms_app/core/constants/app_text_styles.dart';
@@ -68,22 +69,12 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
       });
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Consent recorded'),
-            backgroundColor: context.colors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        AppToast.show('Consent recorded', type: ToastType.success);
       }
     } catch (e) {
       setState(() => _isSaving = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: context.colors.error),
-        );
+        AppToast.show('Error: $e', type: ToastType.error);
       }
     }
   }
@@ -144,15 +135,7 @@ class _ConsentScreenState extends ConsumerState<ConsentScreen> {
         });
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Consent withdrawn'),
-              backgroundColor: context.colors.warning,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-            ),
-          );
+          AppToast.show('Consent withdrawn', type: ToastType.warning);
         }
       } catch (e) {
         setState(() => _isSaving = false);

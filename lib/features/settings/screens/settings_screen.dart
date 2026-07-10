@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -44,14 +45,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   void _showSuccess(String msg) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: context.colors.success,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      AppToast.show(msg, type: ToastType.success);
     }
   }
 
@@ -232,7 +226,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         body: SafeArea(
           child: ResponsiveWrapper(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -305,7 +299,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           Positioned.fill(
             child: SafeArea(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 56, vertical: 48),
+                padding: const EdgeInsets.fromLTRB(36, 20, 36, 100),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1240),
@@ -1059,21 +1053,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     
     if (email == null || email.isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No email configured to verify.')));
+        AppToast.show('No email configured to verify.', type: ToastType.error);
       }
       return;
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Sending verification email...'),
-          backgroundColor: context.colors.primary,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          duration: const Duration(seconds: 1),
-        ),
-      );
+      AppToast.show('Sending verification email...', type: ToastType.info, duration: const Duration(seconds: 1));
     }
 
     try {
@@ -1082,26 +1068,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       await pb.collection(collection).requestVerification(email);
       
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Verification email sent to $email! Please check your inbox.'),
-            backgroundColor: context.colors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: const Duration(seconds: 4),
-          ),
-        );
+        AppToast.show('Verification email sent to $email! Please check your inbox.', type: ToastType.success, duration: const Duration(seconds: 4));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to send verification email: $e'),
-            backgroundColor: context.colors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        AppToast.show('Failed to send verification email: $e', type: ToastType.error);
       }
     }
   }

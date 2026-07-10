@@ -41,8 +41,8 @@ class AnalyticsScreen extends ConsumerWidget {
                     slivers: [
                       SliverPadding(
                         padding: isDesktop
-                            ? const EdgeInsets.fromLTRB(36, 12, 36, 100)
-                            : const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                            ? const EdgeInsets.fromLTRB(36, 20, 36, 100)
+                            : const EdgeInsets.fromLTRB(24, 20, 24, 100),
                         sliver: SliverList(
                           delegate: SliverChildListDelegate([
                             _AnalyticsHeader(data: data),

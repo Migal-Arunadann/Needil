@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -582,9 +583,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Camera error: $e'), backgroundColor: context.colors.error),
-        );
+        AppToast.show('Camera error: $e', type: ToastType.error);
       }
     }
   }
@@ -625,14 +624,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                 return;
               }
               if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Only $remaining photo(s) remaining in your quota. Selecting first $remaining.'),
-                    backgroundColor: context.colors.warning,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                );
+                AppToast.show('Only $remaining photo(s) remaining in your quota. Selecting first $remaining.', type: ToastType.warning);
               }
               // Trim to remaining quota
               imgs.removeRange(remaining, imgs.length);
@@ -653,9 +645,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Gallery error: $e'), backgroundColor: context.colors.error),
-        );
+        AppToast.show('Gallery error: $e', type: ToastType.error);
       }
     }
   }
@@ -699,16 +689,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         final service = ref.read(treatmentServiceProvider);
         await service.endTreatment(widget.consultationId!);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Treatment ended. All pending sessions cancelled.'), backgroundColor: context.colors.success),
-          );
+          AppToast.show('Treatment ended. All pending sessions cancelled.', type: ToastType.success);
           navigator.pop();
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to end treatment: $e'), backgroundColor: context.colors.error),
-          );
+          AppToast.show('Failed to end treatment: $e', type: ToastType.error);
         }
       }
     }
@@ -737,12 +723,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Please fill out the Chief Complaint field.'),
-              backgroundColor: context.colors.error,
-            ),
-          );
+          AppToast.show('Please fill out the Chief Complaint field.', type: ToastType.error);
         }
         return;
       }
@@ -750,12 +731,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
 
     if (!_consentGiven) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Consent must be given to proceed.'),
-            backgroundColor: context.colors.error,
-          ),
-        );
+        AppToast.show('Consent must be given to proceed.', type: ToastType.error);
       }
       return;
     }
@@ -763,12 +739,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     // Validate charge amount
     if (_charged && _chargeCtrl.text.trim().isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Please enter the consultation fee amount or toggle off charging.'),
-            backgroundColor: context.colors.error,
-          ),
-        );
+        AppToast.show('Please enter the consultation fee amount or toggle off charging.', type: ToastType.error);
       }
       return;
     }
@@ -875,22 +846,13 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Consultation recorded!'),
-            backgroundColor: context.colors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        AppToast.show('Consultation recorded!', type: ToastType.success);
         // Return the consultation so the caller can create a treatment plan
         navigator.pop(consultation);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: context.colors.error),
-        );
+        AppToast.show('Error: $e', type: ToastType.error);
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
@@ -928,19 +890,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         newTime: newTimeStr,
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Session ${session.sessionNumber} rescheduled to ${DateFormat('MMM d, yyyy').format(newDate)} at ${newTime.format(context)}'),
-            backgroundColor: context.colors.success,
-          ),
-        );
+        AppToast.show('Session ${session.sessionNumber} rescheduled to ${DateFormat('MMM d, yyyy').format(newDate)} at ${newTime.format(context)}', type: ToastType.success);
         _loadExistingData();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to reschedule: $e'), backgroundColor: context.colors.error),
-        );
+        AppToast.show('Failed to reschedule: $e', type: ToastType.error);
       }
     }
   }
@@ -968,16 +923,12 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         final service = ref.read(treatmentServiceProvider);
         await service.cancelSession(session.id);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Session ${session.sessionNumber} cancelled.'), backgroundColor: context.colors.success),
-          );
+          AppToast.show('Session ${session.sessionNumber} cancelled.', type: ToastType.success);
           _loadExistingData();
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed: $e'), backgroundColor: context.colors.error),
-          );
+          AppToast.show('Failed: $e', type: ToastType.error);
         }
       }
     }

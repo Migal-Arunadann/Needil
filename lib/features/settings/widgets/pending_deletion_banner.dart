@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
@@ -83,10 +84,7 @@ class _PendingDeletionBannerState
           ElevatedButton(
             onPressed: () {
               if (reasonCtrl.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                  content: Text('Please provide a reason'),
-                  backgroundColor: Color(0xFFEF4444),
-                ));
+                AppToast.show('Please provide a reason');
                 return;
               }
               Navigator.pop(context, true);
@@ -123,17 +121,9 @@ class _PendingDeletionBannerState
       );
       if (!mounted) return;
       if (error != null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(error),
-          backgroundColor: const Color(0xFFEF4444),
-        ));
+        AppToast.show(error, type: ToastType.error);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-              '✓ Reactivation request submitted. You will be notified once reviewed.'),
-          backgroundColor: Color(0xFF10B981),
-          behavior: SnackBarBehavior.floating,
-        ));
+        AppToast.show('✓ Reactivation request submitted. You will be notified once reviewed.');
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

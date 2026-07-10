@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pms_app/core/constants/app_colors.dart';
 import 'package:pms_app/core/constants/app_text_styles.dart';
@@ -63,12 +64,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen>
     if (!mounted) return;
     final authState = ref.read(authProvider);
     if (authState.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(authState.error!),
-        backgroundColor: context.colors.error,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ));
+      AppToast.show(authState.error!, type: ToastType.error);
       ref.read(authProvider.notifier).clearError();
       return;
     }

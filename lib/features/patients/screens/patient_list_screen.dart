@@ -224,7 +224,7 @@ class _WebPatientScreen extends ConsumerWidget {
             children: [
               // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
               Padding(
-                padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 20, 20, isDesktop ? 36 : 20, 0),
+                padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 24, 20, isDesktop ? 36 : 24, 0),
                 child: isDesktop
                     ? Row(
                         crossAxisAlignment: CrossAxisAlignment.center,
@@ -548,7 +548,7 @@ class _WebDesktopTable extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width >= 900;
     return Padding(
-      padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 20, 0, isDesktop ? 36 : 20, 8),
+      padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 24, 0, isDesktop ? 36 : 24, 8),
       child: WebGlassCard(
         borderRadius: 24,
         child: Column(
@@ -862,8 +862,9 @@ class _WebPaginationBar extends StatelessWidget {
         .where((i) => (i - currentPage).abs() <= 2 || i == 0 || i == totalPages - 1)
         .toList();
 
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+      padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 24, 8, isDesktop ? 36 : 24, 12),
       child: Row(
         children: [
           Text(
@@ -1376,7 +1377,7 @@ class _AppPatientScreen extends ConsumerWidget {
             slivers: [
               // Header & Controls
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
                     Text(
@@ -1488,7 +1489,7 @@ class _AppPatientScreen extends ConsumerWidget {
                 )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {

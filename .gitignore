@@ -49,3 +49,11 @@ app.*.map.json
 # Local scratch and shorebird files
 scratch/
 Shorebird/
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/

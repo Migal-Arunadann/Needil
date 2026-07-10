@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -59,15 +60,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     await prefs.setBool('notif_appointment_cancelled', _appointmentCancelled);
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Notification preferences saved ✓'),
-          backgroundColor: context.colors.success,
-          behavior: SnackBarBehavior.floating,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
-      );
+      AppToast.show('Notification preferences saved ✓', type: ToastType.success);
     }
   }
 

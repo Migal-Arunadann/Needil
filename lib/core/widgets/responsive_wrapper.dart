@@ -7,7 +7,7 @@ class ResponsiveWrapper extends StatelessWidget {
   const ResponsiveWrapper({
     super.key,
     required this.child,
-    this.maxWidth = 1100,
+    this.maxWidth = 1240,
   });
 
   @override

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketbase/pocketbase.dart';
@@ -40,12 +41,7 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
 
   void _snack(String msg, {bool error = false}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: TextStyle(color: context.colors.textPrimary)),
-      backgroundColor: error ? SAColors.error : SAColors.success,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
+    AppToast.show(msg, type: ToastType.error);
   }
 
   Future<void> _resetPassword(String collection, String recordId, String label) async {
@@ -190,10 +186,7 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
           if (ctrl.text.trim() == name) {
             Navigator.pop(context, true);
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Name does not match'),
-              backgroundColor: SAColors.error,
-            ));
+            AppToast.show('Name does not match', type: ToastType.error);
           }
         },
         onCancel: () => Navigator.pop(context, false),
@@ -401,15 +394,9 @@ class _InfoTabState extends ConsumerState<_InfoTab> {
         'verified': _verified,
       });
       ref.invalidate(_clinicDetailProvider(widget.clinicId));
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: const Text('Saved!'), backgroundColor: SAColors.success,
-        behavior: SnackBarBehavior.floating,
-      ));
+      if (mounted) AppToast.show('Saved!', type: ToastType.success);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Error: $e'), backgroundColor: SAColors.error,
-        behavior: SnackBarBehavior.floating,
-      ));
+      if (mounted) AppToast.show('Error: $e', type: ToastType.error);
     } finally {
       if (mounted) setState(() => _saving = false);
     }

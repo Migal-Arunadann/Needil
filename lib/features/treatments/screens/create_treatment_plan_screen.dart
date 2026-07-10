@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -351,12 +352,7 @@ class _CreateTreatmentPlanScreenState
     final slots = _generateSlots();
 
     if (slots.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('No slots available — ensure a treatment is selected and doctor has a schedule'),
-          backgroundColor: context.colors.warning,
-        ),
-      );
+      AppToast.show('No slots available — ensure a treatment is selected and doctor has a schedule', type: ToastType.warning);
       return;
     }
 
@@ -382,9 +378,7 @@ class _CreateTreatmentPlanScreenState
     final navigator = Navigator.of(context);
 
     if (_selectedTreatment == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please select a treatment type'), backgroundColor: context.colors.error),
-      );
+      AppToast.show('Please select a treatment type', type: ToastType.error);
       return;
     }
 
@@ -438,16 +432,9 @@ class _CreateTreatmentPlanScreenState
       await _clearDraft();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(widget.isMaintenance
+        AppToast.show(widget.isMaintenance
                 ? 'Maintenance Plan & Sessions Scheduled!'
-                : 'Treatment Plan & Sessions Auto-Scheduled!'),
-            backgroundColor: context.colors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+                : 'Treatment Plan & Sessions Auto-Scheduled!', type: ToastType.success);
         navigator.pop({
           'success': true,
           'firstSessionToday': !widget.isMaintenance && _firstSessionCompletedToday,
@@ -455,9 +442,7 @@ class _CreateTreatmentPlanScreenState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to schedule plan: $e'), backgroundColor: context.colors.error),
-        );
+        AppToast.show('Failed to schedule plan: $e', type: ToastType.error);
       }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);

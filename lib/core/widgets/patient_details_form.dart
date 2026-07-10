@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:pms_app/core/widgets/app_text_field.dart';
 import 'package:pms_app/core/widgets/location_fields.dart';
@@ -200,10 +201,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Failed to pick image: $e'),
-          backgroundColor: context.colors.error,
-        ));
+        AppToast.show('Failed to pick image: $e', type: ToastType.error);
       }
     }
   }
@@ -785,12 +783,7 @@ class _ConsentCheckboxCardState extends State<_ConsentCheckboxCard> {
     // Dynamically use url_launcher if it's in the project
     // We show a simple dialog as fallback
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Opening ${uri.host}…'),
-          duration: const Duration(seconds: 1),
-        ),
-      );
+      AppToast.show('Opening ${uri.host}…', duration: const Duration(seconds: 1));
     }
   }
 

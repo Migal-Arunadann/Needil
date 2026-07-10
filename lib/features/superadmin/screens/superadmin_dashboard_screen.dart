@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pocketbase/pocketbase.dart';
@@ -278,19 +279,11 @@ class _SuperadminDashboardScreenState
                         request.id, clinicId);
                     ref.invalidate(_reactivationRequestsProvider);
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Request rejected'),
-                          backgroundColor: Color(0xFFEF4444),
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
+                      AppToast.show('Request rejected');
                     }
                   } catch (e) {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: $e')),
-                      );
+                      AppToast.show('Error: $e', type: ToastType.error);
                     }
                   }
                 },
@@ -315,19 +308,11 @@ class _SuperadminDashboardScreenState
                     ref.invalidate(_reactivationRequestsProvider);
                     ref.invalidate(_recentClinicsProvider);
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('✓ Clinic reactivated successfully'),
-                          backgroundColor: SAColors.success,
-                          behavior: SnackBarBehavior.floating,
-                        ),
-                      );
+                      AppToast.show('✓ Clinic reactivated successfully', type: ToastType.success);
                     }
                   } catch (e) {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: $e')),
-                      );
+                      AppToast.show('Error: $e', type: ToastType.error);
                     }
                   }
                 },

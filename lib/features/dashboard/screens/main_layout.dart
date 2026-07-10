@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'dart:math';
 
 import 'package:pms_app/core/services/auth_service.dart';
 import 'package:pms_app/features/dashboard/screens/clinic_dashboard_screen.dart';
@@ -131,6 +132,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     // Desktop layout
     if (isDesktop) {
       return Scaffold(
+        backgroundColor: const Color(0xFF0F5D4F), // Match sidebar color behind the rounded cream card
         body: Stack(
           children: [
             const AmbientBackground(),
@@ -138,22 +140,28 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               children: [
                 _buildSidebar(context, tabs),
                 Expanded(
-                  child: Column(
-                    children: [
-                      const PendingDeletionBanner(),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(
-                              left: 16, right: 24, top: 24, bottom: 24),
-                          child: IndexedStack(
-                            index: _currentIndex,
-                            children: pages,
-                          ),
-                        ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: context.colors.background,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(32),
+                        bottomLeft: Radius.circular(32),
                       ),
-                    ],
+                    ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        children: [
+                          const PendingDeletionBanner(),
+                          Expanded(
+                            child: IndexedStack(
+                              index: _currentIndex,
+                              children: pages,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
               ],
             ),
           ],
@@ -230,40 +238,66 @@ class MainLayoutState extends ConsumerState<MainLayout> {
 
     return Container(
       width: 240, // Simple and trendy docked width
-      decoration: BoxDecoration(
-        color: const Color(0xFF0F5D4F), // Same color as new appointment button
-        border: Border(
-          right: BorderSide(
-            color: Colors.white.withValues(alpha: 0.12),
-            width: 1.0,
-          ),
-        ),
+      clipBehavior: Clip.antiAlias, // Clean clipping for custom watermark
+      decoration: const BoxDecoration(
+        color: Color(0xFF0F5D4F), // Same color as new appointment button
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          // ── Branding / Header ──
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.only(top: 36, bottom: 24, left: 16, right: 16),
-            alignment: Alignment.center,
-            child: Image.asset(
-              'assets/images/needil-whitebg logo.png',
-              height: 44, // Perfectly sized for the sidebar
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return Text(
-                  'Needil',
-                  style: context.textStyles.h2.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
-                );
-              },
+          // ── Transparent Custom Vector Leaves Background ──
+          Positioned.fill(
+            child: CustomPaint(
+              painter: GenericLeavesBackgroundPainter(),
             ),
           ),
-          
-          const SizedBox(height: 8),
+          // ── Sidebar Content ──
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Branding / Header ──
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.only(top: 36, bottom: 20, left: 16, right: 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset(
+                      'assets/images/needil_whitebg_logo.png',
+                      height: 38,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Image.asset(
+                          'assets/images/needil-whitebg logo.png',
+                          height: 38,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Text(
+                              'needil',
+                              style: context.textStyles.h2.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '— CLINIC MANAGEMENT —',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 7.5,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 2.0,
+                        color: Colors.white.withValues(alpha: 0.65),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 8),
 
           // ── Navigation Tabs ──
           Expanded(
@@ -436,6 +470,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               ),
             ),
           ),
+            ],
+          ),
         ],
       ),
     );
@@ -510,10 +546,10 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
   @override
   Widget build(BuildContext context) {
     final hoverBgColor = Colors.white.withValues(alpha: 0.06);
-    final activeBgColor = Colors.white.withValues(alpha: 0.12);
+    final activeBgColor = Colors.white; // Solid white active pill
 
     final color = widget.isSelected 
-        ? Colors.white 
+        ? const Color(0xFF0F5D4F) // Deep brand teal when selected
         : (_isHovered ? Colors.white : Colors.white.withValues(alpha: 0.65));
         
     final bgColor = widget.isSelected 
@@ -551,7 +587,7 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
               width: 3,
               height: 16,
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: const Color(0xFF0F5D4F), // Brand teal indicator
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -590,11 +626,11 @@ class AmbientBackground extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // ── Light mode: pure white canvas, barely-visible cool orbs ──
+    // ── Light mode: brand green-teal, barely-visible cool orbs ──
     // ── Dark mode: deep navy with vivid blue glow orbs ──
     final baseColor = isDark
         ? const Color(0xFF0C0E15)
-        : const Color(0xFFFFFFFF); // pure white — not blue-gray
+        : const Color(0xFF0F5D4F); // brand green-teal
 
     return Stack(
       children: [
@@ -676,4 +712,165 @@ class AmbientBackground extends StatelessWidget {
     );
   }
 }
+
+class GenericLeavesBackgroundPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fillPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.04) // Very transparent white shade
+      ..style = PaintingStyle.fill;
+
+    final strokePaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.018) // Even more subtle outline/stem
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.0;
+
+    // Draw pinnate branch from the bottom-left edge (larger and framing)
+    _drawPinnateBranch(
+      canvas,
+      base: Offset(-20, size.height * 1.02),
+      length: size.width * 1.25,
+      baseAngle: -pi / 2.7, // Sweep up along the left edge
+      fillPaint: fillPaint,
+      strokePaint: strokePaint,
+      seed: 1.23,
+    );
+
+    // Draw pinnate branch from the right edge (larger and framing)
+    _drawPinnateBranch(
+      canvas,
+      base: Offset(size.width + 20, size.height * 0.88),
+      length: size.width * 1.15,
+      baseAngle: -pi * 0.65, // Sweep up along the right edge
+      fillPaint: fillPaint,
+      strokePaint: strokePaint,
+      seed: 4.56,
+    );
+  }
+
+  void _drawPinnateBranch(
+    Canvas canvas, {
+    required Offset base,
+    required double length,
+    required double baseAngle,
+    required Paint fillPaint,
+    required Paint strokePaint,
+    required double seed,
+  }) {
+    // 1. Draw central stem (rachis) using a bezier curve for a natural bend
+    final stemPath = Path();
+    stemPath.moveTo(base.dx, base.dy);
+    
+    // Calculate control point and tip point
+    final tipX = base.dx + cos(baseAngle) * length;
+    final bendAngle = baseAngle - 0.28 * sin(seed);
+    final ctrlX = base.dx + cos(bendAngle) * length * 0.55;
+    final ctrlY = base.dy + sin(bendAngle) * length * 0.55;
+    final tipY = base.dy + sin(baseAngle) * length;
+    final tip = Offset(tipX, tipY);
+
+    stemPath.quadraticBezierTo(ctrlX, ctrlY, tip.dx, tip.dy);
+    canvas.drawPath(stemPath, strokePaint);
+
+    // 2. Draw leaflets with alternating offsets (sub-opposite) and angle variations
+    const int leafletsCount = 9; // Spaced out for clear zigzag
+    const double startRatio = 0.15;
+    const double endRatio = 0.88;
+    
+    // Evaluate points along the quadratic bezier curve using De Casteljau's algorithm
+    Offset getPointOnStem(double t) {
+      final double mt = 1.0 - t;
+      final double x = mt * mt * base.dx + 2.0 * mt * t * ctrlX + t * t * tip.dx;
+      final double y = mt * mt * base.dy + 2.0 * mt * t * ctrlY + t * t * tip.dy;
+      return Offset(x, y);
+    }
+
+    // Evaluate tangent angle along the curve to orient leaflets correctly
+    double getAngleOnStem(double t) {
+      final double mt = 1.0 - t;
+      final double dx = 2.0 * mt * (ctrlX - base.dx) + 2.0 * t * (tip.dx - ctrlX);
+      final double dy = 2.0 * mt * (ctrlY - base.dy) + 2.0 * t * (tip.dy - ctrlY);
+      return atan2(dy, dx);
+    }
+
+    for (int i = 0; i < leafletsCount; i++) {
+      final double t = startRatio + (endRatio - startRatio) * (i / (leafletsCount - 1));
+      
+      // Alternate left and right side leaflets along the stem
+      final bool isLeft = i % 2 == 0;
+      
+      // Let's position them in a true zigzag
+      final origin = getPointOnStem(t);
+      final stemAngle = getAngleOnStem(t);
+
+      // Organic leaflet size: starts large, shrinks towards the tip
+      final double organicNoise = 0.95 + 0.1 * sin(i * 2.0 + seed);
+      final double sizeFactor = (1.0 - t * 0.55) * (length * 0.18) * organicNoise;
+
+      // Organic angle deviation: leaflets point slightly upwards along the stem
+      final double angleNoise = 0.05 * cos(i * 1.5 + seed);
+      final double leafAngle = isLeft 
+          ? stemAngle - pi / 3.5 + angleNoise 
+          : stemAngle + pi / 3.5 + angleNoise;
+
+      _drawLeaflet(canvas, origin, leafAngle, sizeFactor, fillPaint, strokePaint, isLeft);
+    }
+
+    // Terminal single leaf at the absolute tip
+    final terminalAngle = getAngleOnStem(endRatio);
+    final terminalOrigin = getPointOnStem(endRatio);
+    _drawLeaflet(canvas, terminalOrigin, terminalAngle, length * 0.08, fillPaint, strokePaint, true);
+  }
+
+  void _drawLeaflet(
+    Canvas canvas,
+    Offset origin,
+    double angle,
+    double length,
+    Paint fillPaint,
+    Paint strokePaint,
+    bool curveLeft,
+  ) {
+    final path = Path();
+    final tip = Offset(
+      origin.dx + cos(angle) * length,
+      origin.dy + sin(angle) * length,
+    );
+
+    // Bending control points with organic asymmetry
+    final double leftCurvature = curveLeft ? 0.42 : 0.35;
+    final double rightCurvature = curveLeft ? 0.35 : 0.42;
+
+    final ctrlLeft = Offset(
+      origin.dx + cos(angle - leftCurvature) * length * 0.55,
+      origin.dy + sin(angle - leftCurvature) * length * 0.55,
+    );
+    final ctrlRight = Offset(
+      origin.dx + cos(angle + rightCurvature) * length * 0.55,
+      origin.dy + sin(angle + rightCurvature) * length * 0.55,
+    );
+
+    path.moveTo(origin.dx, origin.dy);
+    path.quadraticBezierTo(ctrlLeft.dx, ctrlLeft.dy, tip.dx, tip.dy);
+    path.quadraticBezierTo(ctrlRight.dx, ctrlRight.dy, origin.dx, origin.dy);
+    path.close();
+
+    canvas.drawPath(path, fillPaint);
+    canvas.drawPath(path, strokePaint);
+
+    // Draw slightly curved central vein
+    final veinPath = Path();
+    veinPath.moveTo(origin.dx, origin.dy);
+    final midVein = Offset(
+      origin.dx + cos(angle + (curveLeft ? -0.05 : 0.05)) * length * 0.5,
+      origin.dy + sin(angle + (curveLeft ? -0.05 : 0.05)) * length * 0.5,
+    );
+    veinPath.quadraticBezierTo(midVein.dx, midVein.dy, tip.dx, tip.dy);
+    canvas.drawPath(veinPath, strokePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
 

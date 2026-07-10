@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
@@ -104,12 +105,7 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
 
   void _showError(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: TextStyle(color: context.colors.textPrimary)),
-      backgroundColor: _SA.error,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
+    AppToast.show(msg, type: ToastType.error);
   }
 
   Future<void> _submitCredentials() async {
@@ -189,12 +185,7 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
     for (final c in _otpCtrls) c.clear();
     if (mounted) _otpFocus[0].requestFocus();
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: const Text('New OTP sent to your email'),
-      backgroundColor: _SA.success,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ));
+    AppToast.show('New OTP sent to your email', type: ToastType.success);
   }
 
   @override

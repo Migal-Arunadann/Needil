@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:pms_app/core/constants/app_colors.dart';
 import 'package:pms_app/core/constants/app_text_styles.dart';
@@ -155,13 +156,7 @@ class AboutScreen extends StatelessWidget {
                 GestureDetector(
                   onTap: () {
                     Clipboard.setData(ClipboardData(text: 'Needil v$_appVersion (Build $_buildNumber)'));
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: const Text('Build info copied'),
-                      backgroundColor: context.colors.primary,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      duration: const Duration(seconds: 1),
-                    ));
+                    AppToast.show('Build info copied', duration: const Duration(seconds: 1));
                   },
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12),

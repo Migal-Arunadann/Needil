@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
@@ -150,14 +151,7 @@ class _WhatsAppSheetState extends State<_WhatsAppSheet> {
     if (mounted) {
       setState(() => _launching = false);
       if (!ok) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Could not open WhatsApp. Is it installed?'),
-            backgroundColor: context.colors.error,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
+        AppToast.show('Could not open WhatsApp. Is it installed?', type: ToastType.error);
       } else {
         Navigator.pop(context);
       }
