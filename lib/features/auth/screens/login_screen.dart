@@ -23,18 +23,13 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen>
-    with SingleTickerProviderStateMixin {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final GlobalKey<NavigatorState> _nestedNavKey = GlobalKey<NavigatorState>();
   final _emailCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   bool _obscure = true;
   String? _focusedField;
-
-  late AnimationController _animCtrl;
-  late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
 
   static const _bg = Color(0xFFF8F0EA);
   static const _surface = Color(0xFFFFFFFF);
@@ -46,25 +41,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   @override
   void initState() {
     super.initState();
-    _animCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 550),
-    );
-    _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.05),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut));
-    Future.delayed(const Duration(milliseconds: 200), () {
-      if (mounted) _animCtrl.forward();
-    });
   }
 
   @override
   void dispose() {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
-    _animCtrl.dispose();
     super.dispose();
   }
 
@@ -197,16 +179,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     return Container(
       color: _surface,
       child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: SlideTransition(
-              position: _slideAnim,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: _buildForm(authState),
-              ),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: _buildForm(authState),
             ),
           ),
         ),
@@ -221,44 +199,38 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: FadeTransition(
-              opacity: _fadeAnim,
-              child: SlideTransition(
-                position: _slideAnim,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 420),
-                  child: Card(
-                    color: _surface,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      side: const BorderSide(color: _border),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(32),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Image.asset(
-                            'assets/images/needil_logo_cropped.png',
-                            height: 28,
-                            fit: BoxFit.contain,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '— CLINIC MANAGEMENT —',
-                            style: GoogleFonts.inter(
-                              fontSize: 8,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 2,
-                              color: _textMuted,
-                            ),
-                          ),
-                          const SizedBox(height: 32),
-                          _buildForm(authState),
-                        ],
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Card(
+                color: _surface,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: const BorderSide(color: _border),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Image.asset(
+                        'assets/images/needil_logo_cropped.png',
+                        height: 28,
+                        fit: BoxFit.contain,
                       ),
-                    ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '— CLINIC MANAGEMENT —',
+                        style: GoogleFonts.inter(
+                          fontSize: 8,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 2,
+                          color: _textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      _buildForm(authState),
+                    ],
                   ),
                 ),
               ),

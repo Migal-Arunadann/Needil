@@ -206,20 +206,20 @@ class AnalyticsNotifier extends StateNotifier<AnalyticsData> {
       // sessions
       safeCount(
         PBCollections.sessions,
-        '$ownerField = "$userId" && status = "completed"',
+        '$planOwnerFilter && status = "completed"',
       ), // 10
       safeCount(
         PBCollections.sessions,
-        '$ownerField = "$userId" && status = "missed"',
+        '$planOwnerFilter && status = "missed"',
       ), // 11
       safeCount(
         PBCollections.sessions,
-        '$ownerField = "$userId" && status = "cancelled"',
+        '$planOwnerFilter && status = "cancelled"',
       ), // 12
       // consultations
       safeCount(
         PBCollections.consultations,
-        '$ownerField = "$userId"',
+        planOwnerFilter,
       ), // 13 total consultations
       safeCount(
         PBCollections.treatmentPlans,

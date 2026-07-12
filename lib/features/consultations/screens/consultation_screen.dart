@@ -15,6 +15,7 @@ import 'package:pms_app/core/constants/pb_collections.dart';
 import 'package:pms_app/core/widgets/app_button.dart';
 import 'package:pms_app/core/widgets/app_text_field.dart';
 import 'package:pms_app/features/appointments/providers/appointment_provider.dart';
+import 'package:pms_app/features/appointments/models/appointment_model.dart';
 import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/features/consultations/models/consultation_model.dart';
@@ -186,22 +187,60 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   /// SharedPreferences key for draft caching.
   String get _draftKey => 'consultation_draft_${widget.appointmentId ?? widget.consultationId ?? "new"}';
 
+  String? _consultationId;
+
   @override
   void initState() {
     super.initState();
     _isViewing = widget.isViewMode;
-    if (widget.consultationId == null) {
+    _consultationId = widget.consultationId;
+    if (_consultationId == null) {
       _charged = true;
     }
+    
+    _initData();
+  }
+
+  Future<void> _initData() async {
     _fetchPatientGender();
-    if (widget.consultationId != null) {
-      _loadExistingData();
-    } else {
-      // New consultation — try restoring a saved draft
-      _loadDraft();
+    if (_consultationId == null) {
+      if (mounted) setState(() => _isLoadingView = true);
+      try {
+        final service = ref.read(appointmentServiceProvider);
+        if (widget.appointmentId != null) {
+          AppointmentModel? apt;
+          try {
+            apt = ref.read(appointmentListProvider).appointments.firstWhere((a) => a.id == widget.appointmentId);
+          } catch (_) {}
+          if (apt == null) {
+            final record = await ref.read(pocketbaseProvider).collection(PBCollections.appointments).getOne(widget.appointmentId!);
+            apt = AppointmentModel.fromRecord(record);
+          }
+          final (id, isNew) = await service.getOrCreateConsultationForAppointment(apt);
+          _consultationId = id;
+          if (isNew || apt.consultationStartTime == null) {
+            await service.setConsultationStartTime(apt.id);
+          }
+        } else {
+          final newC = await service.createConsultation(
+            widget.patientId,
+            widget.doctorId,
+          );
+          _consultationId = newC.id;
+        }
+      } catch (e) {
+        debugPrint('Error getting/creating consultation: $e');
+      }
     }
+
+    if (_consultationId != null) {
+      await _loadExistingData();
+    } else {
+      await _loadDraft();
+    }
+
     // Start idle tracking for this consultation
-    final trackingId = widget.consultationId ?? widget.appointmentId ?? 'consultation_${widget.patientId}';
+    final trackingId = _consultationId ?? widget.appointmentId ?? 'consultation_${widget.patientId}';
     if (!_isViewing) {
       IdleReminderService.instance.startTracking(
         id: trackingId,
@@ -394,7 +433,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     setState(() => _isLoadingView = true);
     try {
       final pb = ref.read(pocketbaseProvider);
-      final record = await pb.collection(PBCollections.consultations).getOne(widget.consultationId!);
+      final record = await pb.collection(PBCollections.consultations).getOne(_consultationId!);
       _existingRecord = record;
       _existingConsultation = ConsultationModel.fromRecord(record);
 
@@ -473,7 +512,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       final List<SessionModel> allSessions = [];
       try {
         final plansRes = await pb.collection(PBCollections.treatmentPlans).getList(
-          filter: 'consultation = "${widget.consultationId}"',
+          filter: 'consultation = "$_consultationId"',
           perPage: 20,
         );
         for (final plan in plansRes.items) {
@@ -684,10 +723,10 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       ),
     );
 
-    if (confirm == true && widget.consultationId != null && mounted) {
+    if (confirm == true && _consultationId != null && mounted) {
       try {
         final service = ref.read(treatmentServiceProvider);
-        await service.endTreatment(widget.consultationId!);
+        await service.endTreatment(_consultationId!);
         if (mounted) {
           AppToast.show('Treatment ended. All pending sessions cancelled.', type: ToastType.success);
           navigator.pop();
@@ -750,7 +789,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       final service = ref.read(treatmentServiceProvider);
 
       ConsultationModel consultation;
-      String resolvedId = widget.consultationId ?? '';
+      String resolvedId = _consultationId ?? '';
 
       // If no ID was passed (shouldn't happen, but safety net): look up ongoing first
       if (resolvedId.isEmpty) {
@@ -942,6 +981,15 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final isDesktop = constraints.maxWidth >= 900;
+
+            if (_isLoadingView) {
+              return Center(
+                child: CircularProgressIndicator(
+                  color: context.colors.primary,
+                  strokeWidth: 3,
+                ),
+              );
+            }
 
             final mainBody = Form(
               key: _formKey,

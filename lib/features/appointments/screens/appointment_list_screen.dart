@@ -1091,22 +1091,22 @@ class _AppointmentListScreenState
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.add, color: context.colors.textPrimary, size: 18),
+            const Icon(Icons.add, color: Colors.white, size: 18),
             if (!compact) ...[
               const SizedBox(width: 8),
               Text(
                 'New Appointment',
-                style: context.textStyles.buttonMedium.copyWith(color: context.colors.textPrimary),
+                style: context.textStyles.buttonMedium.copyWith(color: Colors.white),
               ),
               const SizedBox(width: 8),
               VerticalDivider(
-                color: context.colors.textMuted,
+                color: Colors.white.withValues(alpha: 0.5),
                 width: 1,
                 indent: 10,
                 endIndent: 10,
               ),
               const SizedBox(width: 8),
-              Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textPrimary, size: 18),
+              const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
             ],
           ],
         ),
@@ -1525,14 +1525,28 @@ class _AppointmentListScreenState
                                     ],
                                   ),
                                   const SizedBox(height: 20),
-                                  Row(
-                                    children: [
-                                      _filterTabItem('All', 'all', consultations.length + sessions.length),
-                                      const SizedBox(width: 6),
-                                      _filterTabItem('Consultations', 'consultations', consultations.length, color: context.colors.info),
-                                      const SizedBox(width: 6),
-                                      _filterTabItem('Sessions', 'sessions', sessions.length, color: context.colors.primary),
-                                    ],
+                                  Builder(
+                                    builder: (context) {
+                                      final arrivedCount = (consultations.where((a) => a.status == AppointmentStatus.waiting || a.status == AppointmentStatus.inProgress).length) +
+                                          (sessions.where((a) => a.status == AppointmentStatus.waiting || a.status == AppointmentStatus.inProgress).length);
+                                      final completedCount = (consultations.where((a) => a.status == AppointmentStatus.completed).length) +
+                                          (sessions.where((a) => a.status == AppointmentStatus.completed).length);
+                                      final missedCount = (consultations.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length) +
+                                          (sessions.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length);
+                                          
+                                      return Wrap(
+                                        spacing: 6,
+                                        runSpacing: 8,
+                                        children: [
+                                          _filterTabItem('All', 'all', consultations.length + sessions.length),
+                                          _filterTabItem('Consultations', 'consultations', consultations.length, color: context.colors.info),
+                                          _filterTabItem('Sessions', 'sessions', sessions.length, color: context.colors.primary),
+                                          _filterTabItem('Arrived', 'arrived', arrivedCount, color: context.colors.warning),
+                                          _filterTabItem('Completed', 'completed', completedCount, color: context.colors.success),
+                                          _filterTabItem('Missed', 'missed', missedCount, color: context.colors.error),
+                                        ],
+                                      );
+                                    },
                                   ),
                                   const SizedBox(height: 16),
                                   Expanded(
@@ -2022,8 +2036,19 @@ class _AppointmentListScreenState
     String? clinicLocation, {
     EdgeInsetsGeometry padding = const EdgeInsets.fromLTRB(24, 8, 24, 100),
   }) {
-    final showConsults = _selectedListFilter == 'all' || _selectedListFilter == 'consultations';
-    final showSessions = _selectedListFilter == 'all' || _selectedListFilter == 'sessions';
+    if (_selectedListFilter == 'arrived') {
+      consultations = consultations.where((a) => a.status == AppointmentStatus.waiting || a.status == AppointmentStatus.inProgress).toList();
+      sessions = sessions.where((a) => a.status == AppointmentStatus.waiting || a.status == AppointmentStatus.inProgress).toList();
+    } else if (_selectedListFilter == 'completed') {
+      consultations = consultations.where((a) => a.status == AppointmentStatus.completed).toList();
+      sessions = sessions.where((a) => a.status == AppointmentStatus.completed).toList();
+    } else if (_selectedListFilter == 'missed') {
+      consultations = consultations.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).toList();
+      sessions = sessions.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).toList();
+    }
+
+    final showConsults = _selectedListFilter != 'sessions';
+    final showSessions = _selectedListFilter != 'consultations';
 
     return ListView(
       padding: padding,
@@ -2361,13 +2386,46 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
       );
     } else {
       final checkedIn = apt.checkInTime != null;
+      
+      if (checkedIn) {
+        final isCallBy = apt.type == AppointmentType.callBy;
+        final hasPatientLinked = apt.patientId != null && apt.patientId!.isNotEmpty;
+        final effectivePatientDetailsSaved = apt.patientDetailsSaved || (!isCallBy && hasPatientLinked);
+
+        if (effectivePatientDetailsSaved) {
+          return _indicatorItem(
+            context: context,
+            icon: Icons.check_circle_rounded,
+            iconColor: context.colors.success,
+            title: 'Details Filled',
+            subtitle: 'Completed',
+          );
+        } else if (apt.patientDetailsPartial) {
+          return _indicatorItem(
+            context: context,
+            icon: Icons.sync_rounded,
+            iconColor: context.colors.warning,
+            title: 'Details Pending',
+            subtitle: 'In Progress',
+          );
+        } else {
+          return _indicatorItem(
+            context: context,
+            icon: Icons.radio_button_unchecked,
+            iconColor: context.colors.warning,
+            title: 'Details Pending',
+            subtitle: 'Not Started',
+          );
+        }
+      }
+
       return _indicatorItem(
         context: context,
-        icon: Icons.circle,
-        iconColor: context.colors.success,
-        title: 'On time',
-        subtitle: checkedIn ? 'Arrived' : 'Arrived on time',
-        isDot: true,
+        icon: Icons.radio_button_unchecked,
+        iconColor: context.colors.textSecondary,
+        title: 'Pending',
+        subtitle: widget.isFutureDate ? 'Upcoming' : 'Hasn\'t arrived yet',
+        isDot: false,
       );
     }
   }
@@ -2482,6 +2540,154 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
     );
   }
 
+  Widget _buildConsultationStatus(BuildContext context, AppointmentModel apt, bool isCompleted) {
+    if (isCompleted && apt.consultationFormSaved) {
+      String timeStr = '';
+      if (apt.consultationEndTime != null) {
+        try {
+          final dt = apt.consultationEndTime!.toLocal();
+          timeStr = 'at ${DateFormat('h:mm a').format(dt)}';
+        } catch (_) {}
+      }
+      return _indicatorItem(
+        context: context,
+        icon: Icons.check_circle_outline_rounded,
+        iconColor: context.colors.success,
+        title: 'Consultation Ended',
+        subtitle: timeStr,
+      );
+    } else if (apt.status == AppointmentStatus.inProgress) {
+      return _indicatorItem(
+        context: context,
+        icon: Icons.sync_rounded,
+        iconColor: context.colors.warning,
+        title: 'In Progress',
+        subtitle: 'Consultation ongoing',
+      );
+    } else {
+      return _indicatorItem(
+        context: context,
+        icon: Icons.horizontal_rule_rounded,
+        iconColor: context.colors.textSecondary,
+        title: 'Not Started',
+        subtitle: 'Consultation pending',
+      );
+    }
+  }
+
+  Widget _buildDesktopSecondaryActions({
+    required BuildContext context,
+    required bool showRescheduleBtn,
+    required bool showCancelBtn,
+    required bool showUndoArrivalBtn,
+  }) {
+    final items = <PopupMenuEntry<String>>[];
+    if (showRescheduleBtn) items.add(const PopupMenuItem(value: 'reschedule', child: Text('Reschedule')));
+    if (showUndoArrivalBtn) items.add(const PopupMenuItem(value: 'undo', child: Text('Undo Arrival')));
+    if (showCancelBtn) items.add(const PopupMenuItem(value: 'cancel', child: Text('Cancel Appointment', style: TextStyle(color: Colors.red))));
+
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    return PopupMenuButton<String>(
+      padding: EdgeInsets.zero,
+      icon: Icon(Icons.more_vert_rounded, color: context.colors.textSecondary),
+      onSelected: (value) {
+        if (value == 'reschedule') widget.onReschedule();
+        else if (value == 'undo') widget.onUndoArrived();
+        else if (value == 'cancel') widget.onLongPress();
+      },
+      itemBuilder: (context) => items,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: context.colors.surface,
+    );
+  }
+
+  Widget _buildDesktopPrimaryAction({
+    required BuildContext context,
+    required bool effectiveShowPlanSection,
+    required bool isCompleted,
+    required bool showEndedBtn,
+    required bool effectiveShowStartConsultation,
+    required bool showFillDetailsBtn,
+    required bool showArrivedBtn,
+    required String planLabel,
+    required IconData planIcon,
+    required String consultationLabel,
+    required IconData consultationIcon,
+    required String fillDetailsLabel,
+    required IconData fillDetailsIcon,
+    required String? consultationId,
+  }) {
+    final buttons = <Widget>[];
+
+    if (effectiveShowPlanSection && !isCompleted) {
+      buttons.add(_ActionButton(
+        label: planLabel,
+        icon: planIcon,
+        color: context.colors.primary,
+        onTap: () async {
+          await Future.microtask(() => widget.onCreatePlan(consultationId ?? ''));
+          if (mounted) {
+            setState(() {
+              _planInfoLoaded = false;
+              _hasPlan = false;
+            });
+            _loadPlanInfo();
+          }
+        },
+        isSolid: true,
+      ));
+    }
+    
+    if (showEndedBtn) {
+      buttons.add(_ActionButton(
+        label: 'End Session',
+        icon: Icons.check_circle_outline_rounded,
+        color: context.colors.success,
+        onTap: widget.onEnded,
+      ));
+    }
+    
+    if (effectiveShowStartConsultation) {
+      buttons.add(_ActionButton(
+        label: consultationLabel,
+        icon: consultationIcon,
+        color: context.colors.primary,
+        onTap: widget.onStartConsultation,
+        isSolid: true,
+      ));
+    } else if (showFillDetailsBtn) {
+      buttons.add(_ActionButton(
+        label: fillDetailsLabel,
+        icon: fillDetailsIcon,
+        color: context.colors.primary,
+        onTap: widget.onFillDetails,
+        isSolid: true,
+      ));
+    } else if (showArrivedBtn) {
+      buttons.add(_ActionButton(
+        label: 'Patient Arrived',
+        icon: Icons.how_to_reg_rounded,
+        color: context.colors.success,
+        onTap: widget.onArrived,
+      ));
+    }
+
+    if (buttons.isEmpty) return const SizedBox.shrink();
+
+    final children = <Widget>[];
+    for (int i = 0; i < buttons.length; i++) {
+      children.add(buttons[i]);
+      if (i < buttons.length - 1) children.add(const SizedBox(height: 8));
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: children,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final apt = widget.apt;
@@ -2567,6 +2773,8 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
     final showEndedLabel = isCompleted && apt.consultationFormSaved && !isReceptionist;
     final hasActions = showArrivedBtn || showRescheduleBtn || showFillDetailsBtn ||
         effectiveShowStartConsultation || effectiveShowPlanSection || showEndedBtn || showEndedLabel;
+    
+    final hasPrimaryActions = effectiveShowPlanSection || showEndedBtn || effectiveShowStartConsultation || showFillDetailsBtn || showArrivedBtn;
 
     final width = MediaQuery.of(context).size.width;
     final isDesktop = width >= 900.0;
@@ -2580,7 +2788,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
           child: Container(
             decoration: isDesktop
                 ? BoxDecoration(
-                    color: context.colors.border.withValues(alpha: 0.4),
+                    color: context.colors.surface,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
                       color: context.colors.border.withValues(alpha: 0.4),
@@ -2614,8 +2822,8 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
               borderRadius: BorderRadius.circular(isDesktop ? 24 : 18),
               child: BackdropFilter(
                 filter: ImageFilter.blur(
-                  sigmaX: isDesktop ? 10 : 0,
-                  sigmaY: isDesktop ? 10 : 0,
+                  sigmaX: 0,
+                  sigmaY: 0,
                 ),
                 child: IntrinsicHeight(
                 child: Row(
@@ -2653,125 +2861,153 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
                               child: isDesktop
-                                  ? Row(
-                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                  ? Stack(
                                       children: [
-                                        // Column 0: Circular Index Badge
-                                        Container(
-                                          width: 36,
-                                          height: 36,
-                                          decoration: BoxDecoration(
-                                            color: statusColor,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          alignment: Alignment.center,
-                                          child: Text(
-                                            '${widget.index + 1}',
-                                            style: TextStyle(
-                                              color: context.colors.textPrimary,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 16),
-
-                                        // Column 1: Patient details (Name, Doctor, Pills)
-                                        Expanded(
-                                          flex: 3,
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            mainAxisAlignment: MainAxisAlignment.center,
+                                        IntrinsicHeight(
+                                          child: Row(
+                                            crossAxisAlignment: CrossAxisAlignment.stretch,
                                             children: [
-                                              Text(
-                                                apt.displayName,
-                                                style: context.textStyles.h3.copyWith(fontSize: 16, ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                              if (widget.showDoctorName && apt.doctorName != null && apt.doctorName!.isNotEmpty) ...[
-                                                const SizedBox(height: 4),
-                                                Row(
-                                                  children: [
-                                                    Icon(Icons.person_outline_rounded, size: 12, color: context.colors.textHint),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      'Dr. ${apt.doctorName}',
-                                                      style: context.textStyles.caption.copyWith(fontSize: 11, color: context.colors.textSecondary),
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
-                                                  ],
-                                                ),
-                                              ],
-                                              const SizedBox(height: 6),
-                                              Wrap(
-                                                spacing: 6,
-                                                runSpacing: 4,
+                                          // Column 1: Time
+                                          Expanded(
+                                            flex: 2,
+                                            child: Center(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  _Pill(
-                                                    label: statusStr,
-                                                    icon: statusIcon,
-                                                    color: statusColor,
+                                                  Text(
+                                                    TimeUtils.formatStringTime(apt.time).split(' ')[0],
+                                                    style: context.textStyles.h2.copyWith(color: accentColor, fontWeight: FontWeight.bold, fontSize: 24, height: 1.1),
                                                   ),
-                                                  _Pill(
-                                                    label: typeLabel,
-                                                    icon: typeIcon,
-                                                    color: typeColor,
-                                                  ),
-                                                  if (apt.isRescheduled)
-                                                    _Pill(
-                                                      label: 'Rescheduled',
-                                                      icon: Icons.event_repeat_rounded,
-                                                      color: const Color(0xFFF59E0B),
+                                                  if (TimeUtils.formatStringTime(apt.time).split(' ').length > 1)
+                                                    Text(
+                                                      TimeUtils.formatStringTime(apt.time).split(' ')[1],
+                                                      style: context.textStyles.h3.copyWith(color: accentColor, fontWeight: FontWeight.bold, fontSize: 16, height: 1.1),
                                                     ),
                                                 ],
                                               ),
-                                            ],
-                                          ),
+                                            ),
                                         ),
-
-                                        // Column 2: Status/Warning Indicators
+                                        VerticalDivider(color: context.colors.border.withValues(alpha: 0.3), width: 1),
+                                        // Column 2: Patient details (Name, Doctor, Pills)
                                         Expanded(
                                           flex: 3,
-                                          child: _buildMiddleIndicator(context, apt, statusColor),
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  apt.displayName,
+                                                  style: context.textStyles.h3.copyWith(fontSize: 16),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                if (widget.showDoctorName && apt.doctorName != null && apt.doctorName!.isNotEmpty) ...[
+                                                  const SizedBox(height: 4),
+                                                  Row(
+                                                    children: [
+                                                      Icon(Icons.person_outline_rounded, size: 12, color: context.colors.textHint),
+                                                      const SizedBox(width: 4),
+                                                      Text(
+                                                        'Dr. ${apt.doctorName}',
+                                                        style: context.textStyles.caption.copyWith(fontSize: 11, color: context.colors.textSecondary),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ],
+                                                const SizedBox(height: 6),
+                                                Wrap(
+                                                  spacing: 6,
+                                                  runSpacing: 4,
+                                                  children: [
+                                                    _Pill(label: statusStr, icon: statusIcon, color: statusColor),
+                                                    _Pill(label: typeLabel, icon: typeIcon, color: typeColor),
+                                                    if (apt.isRescheduled)
+                                                      _Pill(label: 'Rescheduled', icon: Icons.event_repeat_rounded, color: const Color(0xFFF59E0B)),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
                                         ),
-
-                                        // Column 3: Time badge + Call/Message buttons
+                                        VerticalDivider(color: context.colors.border.withValues(alpha: 0.3), width: 1),
+                                        // Column 3: Arrival Status
                                         Expanded(
                                           flex: 2,
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.end,
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                                decoration: BoxDecoration(
-                                                  color: accentColor.withValues(alpha: 0.1),
-                                                  borderRadius: BorderRadius.circular(10),
-                                                ),
-                                                child: Text(
-                                                  TimeUtils.formatStringTime(apt.time),
-                                                  style: TextStyle(
-                                                    color: accentColor,
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: -0.2,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                                            child: _buildMiddleIndicator(context, apt, statusColor),
+                                          ),
+                                        ),
+                                        VerticalDivider(color: context.colors.border.withValues(alpha: 0.3), width: 1),
+                                        // Column 4: Consultation Status
+                                        Expanded(
+                                          flex: 3,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                                            child: _buildConsultationStatus(context, apt, apt.status == AppointmentStatus.completed),
+                                          ),
+                                        ),
+                                        VerticalDivider(color: context.colors.border.withValues(alpha: 0.3), width: 1),
+                                        // Column 5: Actions
+                                        Expanded(
+                                          flex: 3,
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(left: 12, right: 44, top: 12, bottom: 12),
+                                            child: Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty && !isActive)
+                                                  Row(
+                                                    mainAxisAlignment: MainAxisAlignment.end,
+                                                    children: [
+                                                      _buildContactButtons(context, apt),
+                                                    ],
                                                   ),
-                                                ),
-                                              ),
-                                              if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty &&
-                                                  !(isActive && apt.checkInTime != null && apt.consultationStartTime != null && !apt.consultationFormSaved)) ...[
-                                                const SizedBox(height: 8),
-                                                _buildContactButtons(context, apt),
+                                                if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty && !isActive && hasPrimaryActions)
+                                                  const SizedBox(height: 12),
+                                                // Bottom Row (Primary Action)
+                                                if (hasPrimaryActions)
+                                                  _buildDesktopPrimaryAction(
+                                                    context: context,
+                                                    effectiveShowPlanSection: effectiveShowPlanSection,
+                                                    isCompleted: apt.status == AppointmentStatus.completed,
+                                                    showEndedBtn: showEndedBtn,
+                                                    effectiveShowStartConsultation: effectiveShowStartConsultation,
+                                                    showFillDetailsBtn: showFillDetailsBtn,
+                                                    showArrivedBtn: showArrivedBtn,
+                                                    planLabel: planLabel,
+                                                    planIcon: planIcon,
+                                                    consultationLabel: consultationLabel,
+                                                    consultationIcon: consultationIcon,
+                                                    fillDetailsLabel: fillDetailsLabel,
+                                                    fillDetailsIcon: fillDetailsIcon,
+                                                    consultationId: _consultationId,
+                                                  ),
                                               ],
-                                            ],
+                                            ),
                                           ),
                                         ),
                                       ],
-                                    )
-                                  : Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 4,
+                                    right: -4,
+                                    child: _buildDesktopSecondaryActions(
+                                      context: context,
+                                      showRescheduleBtn: showRescheduleBtn,
+                                      showCancelBtn: !widget.isMissed && apt.status != AppointmentStatus.cancelled,
+                                      showUndoArrivalBtn: isCallBy && isActive && apt.checkInTime != null && !apt.patientDetailsSaved && !apt.consultationFormSaved,
+                                    ),
+                                  ),
+                                ],
+                              )
+                              : Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
                                         Container(
                                           width: 46,
@@ -2854,8 +3090,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                                 ),
                                               ),
                                             ),
-                                            if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty &&
-                                                !(isActive && apt.checkInTime != null && apt.consultationStartTime != null && !apt.consultationFormSaved)) ...[
+                                            if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty && !isActive) ...[
                                               const SizedBox(height: 8),
                                               _buildContactButtons(context, apt),
                                             ],
@@ -2877,7 +3112,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                           ],
 
                           // Actions section
-                          if (hasActions) ...[
+                          if (!isDesktop && hasActions) ...[
                             Divider(
                               color: context.colors.border.withValues(alpha: 0.6),
                               height: 1,
@@ -2987,38 +3222,35 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                   if (effectiveShowPlanSection || showEndedBtn) ...[
                                     if (showArrivedBtn || showRescheduleBtn || showFillDetailsBtn || effectiveShowStartConsultation)
                                       const SizedBox(height: 8),
-                                    Row(
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
                                       children: [
                                         if (effectiveShowPlanSection) ...[
-                                          Expanded(
-                                            child: _ActionButton(
-                                              label: planLabel,
-                                              icon: planIcon,
-                                              color: context.colors.primary,
-                                              onTap: () async {
-                                                await Future.microtask(() => widget.onCreatePlan(_consultationId ?? ''));
-                                                if (mounted) {
-                                                  setState(() {
-                                                    _planInfoLoaded = false;
-                                                    _hasPlan = false;
-                                                  });
-                                                  _loadPlanInfo();
-                                                }
-                                              },
-                                              isSolid: true,
-                                              showTrailingChevron: true,
-                                            ),
+                                          _ActionButton(
+                                            label: planLabel,
+                                            icon: planIcon,
+                                            color: context.colors.primary,
+                                            onTap: () async {
+                                              await Future.microtask(() => widget.onCreatePlan(_consultationId ?? ''));
+                                              if (mounted) {
+                                                setState(() {
+                                                  _planInfoLoaded = false;
+                                                  _hasPlan = false;
+                                                });
+                                                _loadPlanInfo();
+                                              }
+                                            },
+                                            isSolid: true,
+                                            showTrailingChevron: true,
                                           ),
-                                          if (showEndedBtn) const SizedBox(width: 8),
+                                          if (showEndedBtn) const SizedBox(height: 8),
                                         ],
                                         if (showEndedBtn)
-                                          Expanded(
-                                            child: _ActionButton(
-                                              label: 'End Appointment',
-                                              icon: Icons.check_circle_outline_rounded,
-                                              color: context.colors.success,
-                                              onTap: widget.onEnded,
-                                            ),
+                                          _ActionButton(
+                                            label: 'End Appointment',
+                                            icon: Icons.check_circle_outline_rounded,
+                                            color: context.colors.success,
+                                            onTap: widget.onEnded,
                                           ),
                                       ],
                                     ),
@@ -3187,28 +3419,12 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
         title: 'Cancelled',
         subtitle: 'Session cancelled',
       );
-    } else if (apt.status == AppointmentStatus.completed) {
+    } else if (apt.checkInTime != null) {
       return _indicatorItem(
         context: context,
-        icon: Icons.check_circle_rounded,
+        icon: Icons.how_to_reg_rounded,
         iconColor: context.colors.success,
-        title: 'Completed',
-        subtitle: 'Session completed',
-      );
-    } else if (apt.status == AppointmentStatus.inProgress) {
-      return _indicatorItem(
-        context: context,
-        icon: Icons.sync_rounded,
-        iconColor: context.colors.warning,
-        title: 'In Progress',
-        subtitle: 'Session started',
-      );
-    } else if (apt.status == AppointmentStatus.waiting) {
-      return _indicatorItem(
-        context: context,
-        icon: Icons.hourglass_empty_rounded,
-        iconColor: const Color(0xFFF59E0B),
-        title: 'Waiting',
+        title: 'Arrived',
         subtitle: 'Checked in',
       );
     } else if (widget.isLate && apt.status == AppointmentStatus.scheduled) {
@@ -3216,17 +3432,76 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
         context: context,
         icon: Icons.warning_amber_rounded,
         iconColor: context.colors.warning,
-        title: 'Patient is late',
+        title: 'Pending',
         subtitle: 'Haven\'t arrived yet',
       );
     } else {
       return _indicatorItem(
         context: context,
-        icon: Icons.circle,
+        icon: Icons.pending_actions_rounded,
+        iconColor: context.colors.textSecondary,
+        title: 'Pending',
+        subtitle: 'Haven\'t arrived yet',
+      );
+    }
+  }
+
+  Widget _buildSessionStatus(BuildContext context, AppointmentModel apt, bool isCompleted) {
+    if (isCompleted) {
+      String timeStr = '';
+      if (apt.consultationEndTime != null) {
+        timeStr = 'at ${DateFormat('h:mm a').format(apt.consultationEndTime!.toLocal())}';
+      }
+      return _indicatorItem(
+        context: context,
+        icon: Icons.check_circle_outline_rounded,
         iconColor: context.colors.success,
-        title: 'On time',
-        subtitle: 'Arrived on time',
-        isDot: true,
+        title: 'Session Ended',
+        subtitle: timeStr,
+      );
+    } else if (apt.status == AppointmentStatus.inProgress) {
+      return _indicatorItem(
+        context: context,
+        icon: Icons.sync_rounded,
+        iconColor: context.colors.warning,
+        title: 'In Progress',
+        subtitle: 'Session ongoing',
+      );
+    } else {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 12,
+            height: 1.5,
+            color: context.colors.border.withValues(alpha: 0.8),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  'Not Started',
+                  style: context.textStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: context.colors.textPrimary.withValues(alpha: 0.8),
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Session pending',
+                  style: context.textStyles.caption.copyWith(
+                    color: context.colors.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       );
     }
   }
@@ -3346,31 +3621,17 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     final isScheduled = apt.status == AppointmentStatus.scheduled;
     final isWaiting = apt.status == AppointmentStatus.waiting;
     final isInProgress = apt.status == AppointmentStatus.inProgress;
-    final isCancelled = apt.status == AppointmentStatus.cancelled;
-    final isCompleted = apt.status == AppointmentStatus.completed;
 
     final showArrivedBtn = isScheduled && !widget.isFutureDate && !widget.isMissed;
     final showStartBtn   = isWaiting && !widget.isFutureDate;
     final showResumeBtn  = isInProgress; 
     final showEndedBtn   = isInProgress;
-    final showRescheduleBtn = isScheduled && (widget.isFutureDate || !widget.isMissed) || widget.isMissed && !isInProgress;
-    final showUndoArrived = isWaiting && apt.checkInTime != null;
-    final showCancelBtn = !isCancelled && !isCompleted && !widget.isMissed;
 
     final List<Widget> buttons = [];
 
-    if (showCancelBtn) {
-      buttons.add(_ActionButton(
-        label: 'Cancel',
-        icon: Icons.cancel_outlined,
-        color: context.colors.error,
-        onTap: widget.onLongPress,
-      ));
-    }
-
     if (showArrivedBtn) {
       buttons.add(_ActionButton(
-        label: 'Arrived',
+        label: 'Patient Arrived',
         icon: Icons.how_to_reg_rounded,
         color: context.colors.success,
         onTap: widget.onArrived,
@@ -3385,15 +3646,6 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
         onTap: () => widget.onStartSession(_sessionId),
         isSolid: true,
         showTrailingChevron: true,
-      ));
-    }
-
-    if (showUndoArrived) {
-      buttons.add(_ActionButton(
-        label: 'Undo Arrival',
-        icon: Icons.undo_rounded,
-        color: context.colors.textSecondary,
-        onTap: widget.onUndoArrived,
       ));
     }
 
@@ -3417,80 +3669,21 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
       ));
     }
 
-    if (showRescheduleBtn) {
-      buttons.add(_ActionButton(
-        label: 'Reschedule',
-        icon: Icons.event_repeat_rounded,
-        color: context.colors.info,
-        onTap: widget.onReschedule,
-      ));
-    }
-
     if (buttons.isEmpty) return const SizedBox.shrink();
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: buttons,
-    );
-  }
-
-  Widget _buildDesktopTimelineInfo(BuildContext context) {
-    final apt = widget.apt;
-    final isCancelled = apt.status == AppointmentStatus.cancelled;
-    final isCompleted = apt.status == AppointmentStatus.completed;
-
-    if (widget.isMissed || isCancelled || isCompleted) return const SizedBox.shrink();
-
-    final List<Widget> items = [];
-
-    Widget tagItem(String text, IconData icon, Color color) {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: context.textStyles.caption.copyWith(
-              fontSize: 10,
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < buttons.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          buttons[i],
         ],
-      );
-    }
-
-    if (apt.checkInTime != null) {
-      items.add(tagItem(
-        'Arrived: ${DateFormat('h:mm a').format(apt.checkInTime!.toLocal())}',
-        Icons.how_to_reg_rounded,
-        context.colors.success,
-      ));
-    }
-    if (apt.consultationStartTime != null) {
-      items.add(tagItem(
-        'Started: ${DateFormat('h:mm a').format(apt.consultationStartTime!.toLocal())}',
-        Icons.play_circle_outline_rounded,
-        context.colors.primary,
-      ));
-    }
-
-    if (items.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 2,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: items,
-      ),
+      ],
     );
   }
+
+
 
   Widget _buildDesktopTimer(BuildContext context) {
     if (widget.isFutureDate) return const SizedBox.shrink();
@@ -3519,26 +3712,55 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
 
     final mins = timerEntry.remainingSeconds ~/ 60;
     final secs = timerEntry.remainingSeconds % 60;
-    final timeStr = timerEntry.isPaused
-        ? '${mins}m ${secs.toString().padLeft(2, '0')}s (Paused)'
-        : '${mins}m ${secs.toString().padLeft(2, '0')}s remaining';
 
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.timer_rounded, size: 12, color: context.colors.warning),
-          const SizedBox(width: 4),
-          Text(
-            timeStr,
-            style: context.textStyles.caption.copyWith(
-              color: context.colors.warning,
-              fontWeight: FontWeight.w700,
-              fontSize: 10,
+    return Center(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        decoration: BoxDecoration(
+          color: context.colors.warning.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'SESSION TIMER',
+              style: context.textStyles.caption.copyWith(
+                color: context.colors.textSecondary,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.2,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}',
+              style: TextStyle(
+                color: context.colors.warning,
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (timerEntry.isPaused)
+              Text(
+                'Paused',
+                style: context.textStyles.caption.copyWith(
+                  color: context.colors.warning,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              )
+            else
+              Text(
+                'remaining',
+                style: context.textStyles.caption.copyWith(
+                  color: context.colors.warning,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -3662,7 +3884,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
           child: Container(
             decoration: isDesktop
                 ? BoxDecoration(
-                    color: context.colors.border.withValues(alpha: 0.4),
+                    color: context.colors.surface,
                     borderRadius: BorderRadius.circular(24),
                     border: Border.all(
                       color: context.colors.border.withValues(alpha: 0.4),
@@ -3670,12 +3892,12 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: context.colors.shadowColor.withValues(alpha: 0.1),
-                        blurRadius: 20,
+                        color: context.colors.shadowColor.withValues(alpha: 0.05),
+                        blurRadius: 24,
                         offset: const Offset(0, 8),
                       ),
                       BoxShadow(
-                        color: accentColor.withValues(alpha: 0.05),
+                        color: accentColor.withValues(alpha: 0.03),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
                       ),
@@ -3694,15 +3916,10 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                   ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(isDesktop ? 24 : 18),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(
-                  sigmaX: isDesktop ? 10 : 0,
-                  sigmaY: isDesktop ? 10 : 0,
-                ),
-                child: IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                       // Left accent strip
                       Container(
                         width: 5,
@@ -3718,172 +3935,188 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                       // Card body
                       Expanded(
                         child: isDesktop
-                            ? Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                            ? Stack(
                                 children: [
-                                  // Left section: Patient Details & Status indicators (flex 7)
-                                  Expanded(
-                                    flex: 7,
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      onTap: () => widget.onTap(_sessionId),
-                                      child: Padding(
-                                        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-                                        child: Row(
-                                          crossAxisAlignment: CrossAxisAlignment.center,
-                                          children: [
-                                            // Column 0: Circular Index Badge
-                                            Container(
-                                              width: 36,
-                                              height: 36,
-                                              decoration: BoxDecoration(
-                                                color: statusColor,
-                                                shape: BoxShape.circle,
-                                              ),
-                                              alignment: Alignment.center,
-                                              child: Text(
-                                                '${widget.index + 1}',
-                                                style: TextStyle(
-                                                  color: context.colors.textPrimary,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 14,
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      // Col 1: Time (flex 2) - Hidden if in progress
+                                      if (!isInProgress) ...[
+                                        Expanded(
+                                          flex: 2,
+                                          child: Center(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  TimeUtils.formatStringTime(apt.time).replaceAll(' AM', '').replaceAll(' PM', ''),
+                                                  style: TextStyle(
+                                                    color: accentColor,
+                                                    fontSize: 22,
+                                                    fontWeight: FontWeight.w800,
+                                                    letterSpacing: -0.5,
+                                                  ),
                                                 ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 16),
-
-                                            // Column 1: Patient details (Name, Doctor, Pills)
-                                            Expanded(
-                                              flex: 3,
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  Text(
-                                                    apt.displayName,
-                                                    style: context.textStyles.h3.copyWith(fontSize: 16, ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                Text(
+                                                  TimeUtils.formatStringTime(apt.time).contains('AM') ? 'AM' : 'PM',
+                                                  style: TextStyle(
+                                                    color: accentColor,
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.w600,
                                                   ),
-                                                  if (widget.showDoctorName && apt.doctorName != null && apt.doctorName!.isNotEmpty) ...[
-                                                    const SizedBox(height: 4),
-                                                    Row(
-                                                      children: [
-                                                        Icon(Icons.person_outline_rounded, size: 12, color: context.colors.textHint),
-                                                        const SizedBox(width: 4),
-                                                        Text(
-                                                          'Dr. ${apt.doctorName}',
-                                                          style: context.textStyles.caption.copyWith(fontSize: 11, color: context.colors.textSecondary),
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow.ellipsis,
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ],
-                                                  const SizedBox(height: 6),
-                                                  Wrap(
-                                                    spacing: 6,
-                                                    runSpacing: 4,
-                                                    children: [
-                                                      _Pill(
-                                                        label: statusStr,
-                                                        icon: statusIcon,
-                                                        color: statusColor,
-                                                      ),
-                                                      if (_sessionNumLoaded)
-                                                        _Pill(
-                                                          label: _sessionType == 'maintenance'
-                                                              ? 'Maintenance $_sessionNumber'
-                                                              : 'Session $_sessionNumber',
-                                                          icon: _sessionType == 'maintenance'
-                                                              ? Icons.settings_suggest_rounded
-                                                              : Icons.healing_rounded,
-                                                          color: _sessionType == 'maintenance'
-                                                              ? context.colors.success
-                                                              : sessionAccent,
-                                                        ),
-                                                      if (apt.isRescheduled)
-                                                        _Pill(
-                                                          label: 'Rescheduled',
-                                                          icon: Icons.event_repeat_rounded,
-                                                          color: const Color(0xFFF59E0B),
-                                                        ),
-                                                    ],
-                                                  ),
-                                                ],
-                                              ),
+                                                ),
+                                              ],
                                             ),
-
-                                            // Column 2: Status/Warning Indicator + Timeline info + Timer
-                                            Expanded(
-                                              flex: 3,
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                children: [
-                                                  _buildMiddleIndicator(context, apt, statusColor),
-                                                  _buildDesktopTimelineInfo(context),
-                                                  _buildDesktopTimer(context),
-                                                ],
-                                              ),
-                                            ),
-                                          ],
+                                          ),
                                         ),
-                                      ),
-                                    ),
-                                  ),
-
-                                  // Vertical Divider
-                                  VerticalDivider(
-                                    width: 1,
-                                    thickness: 1,
-                                    color: context.colors.border.withValues(alpha: 0.6),
-                                  ),
-
-                                  // Right section: Time, contact, and action buttons (flex 5)
-                                  Expanded(
-                                    flex: 5,
-                                    child: Padding(
-                                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.center,
-                                        children: [
-                                          Column(
+                                        VerticalDivider(color: context.colors.border.withValues(alpha: 0.3), width: 1),
+                                      ],
+                                      
+                                      // Col 2: Patient details
+                                      Expanded(
+                                        flex: 3,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                                          child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             mainAxisAlignment: MainAxisAlignment.center,
                                             children: [
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                                decoration: BoxDecoration(
-                                                  color: accentColor.withValues(alpha: 0.1),
-                                                  borderRadius: BorderRadius.circular(10),
-                                                ),
-                                                child: Text(
-                                                  TimeUtils.formatStringTime(apt.time),
-                                                  style: TextStyle(
-                                                    color: accentColor,
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: -0.2,
-                                                  ),
-                                                ),
+                                              Text(
+                                                apt.displayName,
+                                                style: context.textStyles.h3.copyWith(fontSize: 16),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
-                                              if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty &&
-                                                  !(isInProgress && apt.checkInTime != null)) ...[
-                                                const SizedBox(height: 8),
-                                                _buildContactButtons(context, apt),
+                                              if (widget.showDoctorName && apt.doctorName != null && apt.doctorName!.isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                Row(
+                                                  children: [
+                                                    Icon(Icons.person_outline_rounded, size: 12, color: context.colors.textHint),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      'Dr. ${apt.doctorName}',
+                                                      style: context.textStyles.caption.copyWith(fontSize: 11, color: context.colors.textSecondary),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ],
+                                                ),
                                               ],
+                                              const SizedBox(height: 6),
+                                              Wrap(
+                                                spacing: 6,
+                                                runSpacing: 4,
+                                                children: [
+                                                  _Pill(
+                                                    label: statusStr,
+                                                    icon: statusIcon,
+                                                    color: statusColor,
+                                                  ),
+                                                  if (_sessionNumLoaded)
+                                                    _Pill(
+                                                      label: _sessionType == 'maintenance'
+                                                          ? 'Maintenance $_sessionNumber'
+                                                          : 'Session $_sessionNumber',
+                                                      icon: _sessionType == 'maintenance'
+                                                          ? Icons.settings_suggest_rounded
+                                                          : Icons.healing_rounded,
+                                                      color: _sessionType == 'maintenance'
+                                                          ? context.colors.success
+                                                          : sessionAccent,
+                                                    ),
+                                                  if (apt.isRescheduled)
+                                                    _Pill(
+                                                      label: 'Rescheduled',
+                                                      icon: Icons.event_repeat_rounded,
+                                                      color: const Color(0xFFF59E0B),
+                                                    ),
+                                                ],
+                                              ),
                                             ],
                                           ),
-                                          const SizedBox(width: 16),
-                                          Expanded(
-                                            child: Align(
-                                              alignment: Alignment.centerRight,
-                                              child: _buildDesktopActions(context),
-                                            ),
-                                          ),
-                                        ],
+                                        ),
                                       ),
+                                      VerticalDivider(color: context.colors.border.withValues(alpha: 0.3), width: 1),
+                                      
+                                      // Col 3: Session Status
+                                      Expanded(
+                                        flex: 2,
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              _buildSessionStatus(context, apt, isCompleted),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      VerticalDivider(color: context.colors.border.withValues(alpha: 0.3), width: 1),
+                                      
+                                      // Col 4: Timer (Only if in progress)
+                                      if (isInProgress) ...[
+                                        Expanded(
+                                          flex: 3,
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                                            child: _buildDesktopTimer(context),
+                                          ),
+                                        ),
+                                        VerticalDivider(color: context.colors.border.withValues(alpha: 0.3), width: 1),
+                                      ],
+                                      
+                                      // Col 5: Actions
+                                      Expanded(
+                                        flex: isInProgress ? 2 : 3,
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(left: 16, right: 44, top: 16, bottom: 16),
+                                          child: Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: [
+                                              if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty && !isInProgress)
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    _buildContactButtons(context, apt),
+                                                  ],
+                                                ),
+                                              if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty && !isInProgress && hasActions)
+                                                const SizedBox(height: 12),
+                                              if (hasActions)
+                                                _buildDesktopActions(context),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  Positioned(
+                                    top: 4,
+                                    right: -4,
+                                    child: PopupMenuButton<String>(
+                                      padding: EdgeInsets.zero,
+                                      icon: Icon(Icons.more_vert_rounded, color: context.colors.textSecondary),
+                                      onSelected: (value) {
+                                        if (value == 'reschedule') widget.onReschedule();
+                                        else if (value == 'undo') widget.onUndoArrived();
+                                        else if (value == 'cancel') widget.onLongPress();
+                                      },
+                                      itemBuilder: (BuildContext context) {
+                                        final items = <PopupMenuEntry<String>>[];
+                                        if (showRescheduleBtn) {
+                                          items.add(const PopupMenuItem<String>(value: 'reschedule', child: Text('Reschedule')));
+                                        }
+                                        final showUndoArrivedBtn = isWaiting && apt.checkInTime != null;
+                                        if (showUndoArrivedBtn) {
+                                          items.add(const PopupMenuItem<String>(value: 'undo', child: Text('Undo Arrival')));
+                                        }
+                                        final showCancelBtn = !isCancelled && !isCompleted && !widget.isMissed;
+                                        if (showCancelBtn) {
+                                          items.add(const PopupMenuItem<String>(value: 'cancel', child: Text('Cancel Session')));
+                                        }
+                                        return items;
+                                      },
                                     ),
                                   ),
                                 ],
@@ -4000,8 +4233,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                                   ),
                                                 ),
                                               ),
-                                              if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty &&
-                                                  !(isInProgress && apt.checkInTime != null)) ...[
+                                              if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty && !isInProgress) ...[
                                                 const SizedBox(height: 8),
                                                 _buildContactButtons(context, apt),
                                               ],
@@ -4161,7 +4393,6 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
             ),
           ),
         ),
-      ),
     );
   }
 

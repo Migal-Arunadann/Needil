@@ -1064,8 +1064,12 @@ class PatientsWaitingList extends StatelessWidget {
                   final diff = DateTime.now().difference(appt.checkInTime!).inMinutes;
                   if (diff <= 0) {
                     waitText = 'Waiting < 1 min';
-                  } else {
+                  } else if (diff < 60) {
                     waitText = 'Waiting for $diff mins';
+                  } else {
+                    final hours = diff ~/ 60;
+                    final mins = diff % 60;
+                    waitText = mins > 0 ? 'Waiting for ${hours}h ${mins}m' : 'Waiting for ${hours}h';
                   }
                 }
 

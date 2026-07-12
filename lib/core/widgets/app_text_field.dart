@@ -252,7 +252,7 @@ class _WebTextFieldState extends State<_WebTextField> {
         if (widget.label.isNotEmpty) ...[
           Text(
             widget.label,
-            style: GoogleFonts.inter(
+            style: context.textStyles.bodyMedium.copyWith(
               fontSize: 14,
               fontWeight: FontWeight.w500,
               color: textDark,
@@ -294,7 +294,7 @@ class _WebTextFieldState extends State<_WebTextField> {
             onChanged: widget.onChanged,
             textInputAction: widget.textInputAction,
             inputFormatters: widget.inputFormatters,
-            style: GoogleFonts.inter(
+            style: context.textStyles.bodyLarge.copyWith(
               fontSize: 15,
               fontWeight: FontWeight.w400,
               color: textDark,
@@ -302,7 +302,7 @@ class _WebTextFieldState extends State<_WebTextField> {
             decoration: InputDecoration(
               errorText: widget.errorText,
               hintText: widget.hint,
-              hintStyle: GoogleFonts.inter(
+              hintStyle: context.textStyles.bodyLarge.copyWith(
                 fontSize: 15,
                 fontWeight: FontWeight.w400,
                 color: const Color(0xFFA0A0A0),

@@ -93,125 +93,72 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
     if (isDesktop) {
       return Scaffold(
-        // No AppBar — we paint our own header row inside the body to keep the
-        // gradient background fully visible edge-to-edge (AppBar would paint
-        // a white/surface strip on top of the Stack).
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          children: [
-            // ── Dark gradient background ──────────────────────────────────────
-            Positioned.fill(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Color(0xFF0D101C),
-                      Color(0xFF07080F),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            // ── Ambient glows ─────────────────────────────────────────────────
-            Positioned(
-              top: -100,
-              right: -100,
-              child: Container(
-                width: 300,
-                height: 300,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF3B82F6).withValues(alpha: 0.08),
-                ),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-                  child: const SizedBox.shrink(),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: -100,
-              left: -100,
-              child: Container(
-                width: 300,
-                height: 300,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF10B981).withValues(alpha: 0.05),
-                ),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-                  child: const SizedBox.shrink(),
-                ),
-              ),
-            ),
-            // ── Full-page content column ──────────────────────────────────────
-            Positioned.fill(
-              child: SafeArea(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+        backgroundColor: context.colors.background,
+        body: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Inline header row (replaces AppBar)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(36, 16, 36, 0),
+                child: Row(
                   children: [
-                    // Inline header row (replaces AppBar)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 36, 0),
-                      child: Row(
-                        children: [
-                          // Back button
-                          Material(
-                            color: context.colors.border,
-                            borderRadius: BorderRadius.circular(12),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: () => Navigator.pop(context),
-                              child: Padding(
-                                padding: EdgeInsets.all(8),
-                                child: Icon(Icons.arrow_back_rounded, color: context.colors.textSecondary, size: 20),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Text(
-                            'Patient Profile',
-                            style: TextStyle(
-                              color: context.colors.textPrimary,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                        ],
+                    // Back button
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: context.colors.border),
+                      ),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: () => Navigator.pop(context),
+                        child: Center(
+                          child: Icon(Icons.arrow_back_rounded,
+                              size: 20, color: context.colors.textPrimary),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    // Split-pane body — stretch so both panes fill remaining height
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(36, 0, 36, 20),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            // Left details pane (flex 3)
-                            Expanded(
-                              flex: 3,
-                              child: _buildDesktopDetailsPane(),
-                            ),
-                            const SizedBox(width: 24),
-                            // Right tabs pane (flex 7)
-                            Expanded(
-                              flex: 7,
-                              child: _buildDesktopTabsSection(),
-                            ),
-                          ],
-                        ),
+                    const SizedBox(width: 16),
+                    Text(
+                      'Patient Profile',
+                      style: TextStyle(
+                        color: context.colors.textPrimary,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.3,
                       ),
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+              // Split-pane body — stretch so both panes fill remaining height
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(36, 0, 36, 20),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Left details pane (flex 3)
+                      Expanded(
+                        flex: 3,
+                        child: _buildDesktopDetailsPane(),
+                      ),
+                      const SizedBox(width: 24),
+                      // Right tabs pane (flex 7)
+                      Expanded(
+                        flex: 7,
+                        child: _buildDesktopTabsSection(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -270,19 +217,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   }
 
   Future<void> _startConsultation() async {
-    final aptService = ref.read(appointmentServiceProvider);
     try {
-      String consultationId;
-      if (widget.appointment != null) {
-        final (id, _) = await aptService.getOrCreateConsultationForAppointment(widget.appointment!);
-        consultationId = id;
-      } else {
-        final newC = await aptService.createConsultation(
-          _patient.id,
-          _patient.doctorId,
-        );
-        consultationId = newC.id;
-      }
       if (!mounted) return;
       await Navigator.push(
         context,
@@ -291,7 +226,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
             patientId: _patient.id,
             patientName: _patient.fullName,
             doctorId: _patient.doctorId,
-            consultationId: consultationId,
+            consultationId: widget.appointment?.linkedConsultationId,
             appointmentId: widget.appointment?.id,
           ),
         ),
@@ -332,11 +267,20 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     
     final hasOngoing = _ongoingConsultationId != null && _ongoingConsultationId!.isNotEmpty;
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: SingleChildScrollView(
-      child: WebGlassCard(
-        borderRadius: 28,
+    return SingleChildScrollView(
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.colors.cardBackground,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: context.colors.border),
+          boxShadow: [
+            BoxShadow(
+              color: context.colors.shadowColor.withValues(alpha: 0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
         padding: const EdgeInsets.all(28),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -355,15 +299,15 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
               child: Container(
                 width: 96, height: 96,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF60A5FA), Color(0xFF1D4ED8)],
+                  gradient: LinearGradient(
+                    colors: [context.colors.primaryLight, context.colors.primary],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF3B82F6).withValues(alpha: 0.3),
+                      color: context.colors.primary.withValues(alpha: 0.2),
                       blurRadius: 20,
                       offset: const Offset(0, 6),
                     ),
@@ -372,7 +316,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                 child: Center(
                   child: Text(
                     initials.isNotEmpty ? initials : '?',
-                    style: TextStyle(color: context.colors.textPrimary, fontSize: 36, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
@@ -383,7 +327,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.phone_rounded, size: 14, color: context.colors.textMuted),
+                Icon(Icons.phone_rounded, size: 14, color: context.colors.textSecondary),
                 const SizedBox(width: 6),
                 Text(p.phone, style: TextStyle(color: context.colors.textSecondary, fontSize: 14)),
               ],
@@ -424,16 +368,15 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
           ],
         ),
       ),
-      ),
     );
   }
 
   Widget _buildDesktopSectionHeader(String title, IconData icon) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: const Color(0xFF60A5FA)),
+        Icon(icon, size: 16, color: context.colors.primary),
         const SizedBox(width: 8),
-        Text(title, style: const TextStyle(color: Color(0xFF60A5FA), fontSize: 13, fontWeight: FontWeight.bold)),
+        Text(title, style: TextStyle(color: context.colors.primary, fontSize: 13, fontWeight: FontWeight.bold)),
       ],
     );
   }
@@ -445,11 +388,11 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
-            child: Text(label, style: TextStyle(color: context.colors.textMuted, fontSize: 12)),
+            width: 120,
+            child: Text(label, style: TextStyle(color: context.colors.textSecondary, fontSize: 13)),
           ),
           Expanded(
-            child: Text(value, style: TextStyle(color: context.colors.textSecondary, fontSize: 13, fontWeight: FontWeight.w500)),
+            child: Text(value, style: TextStyle(color: context.colors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -464,53 +407,11 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       );
     }
 
-    if (hasOngoing) {
-      return Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFD97706).withValues(alpha: 0.25),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: ElevatedButton.icon(
-          onPressed: () async {
-            await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ConsultationScreen(
-                  patientId: _patient.id,
-                  patientName: _patient.fullName,
-                  doctorId: _patient.doctorId,
-                  consultationId: _ongoingConsultationId!,
-                  appointmentId: widget.appointment?.id,
-                ),
-              ),
-            );
-            await _checkOngoingConsultation();
-            setState(() {
-              _refreshKey++;
-            });
-          },
-          icon: Icon(Icons.play_arrow_rounded, color: context.colors.textPrimary),
-          label: Text('Resume Consult', style: TextStyle(color: context.colors.textPrimary, fontWeight: FontWeight.bold)),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFD97706),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            elevation: 0,
-          ),
-        ),
-      );
-    }
-
     return Container(
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF3B82F6).withValues(alpha: 0.25),
+            color: context.colors.primary.withValues(alpha: 0.15),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -518,10 +419,10 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       ),
       child: ElevatedButton.icon(
         onPressed: _startConsultation,
-        icon: Icon(Icons.add_comment_rounded, color: context.colors.textPrimary),
-        label: Text('Start Consult', style: TextStyle(color: context.colors.textPrimary, fontWeight: FontWeight.bold)),
+        icon: Icon(hasOngoing ? Icons.play_arrow_rounded : Icons.add_comment_rounded, color: Colors.white),
+        label: Text(hasOngoing ? 'Resume Consult' : 'Start Consult', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF3B82F6),
+          backgroundColor: context.colors.primary,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 0,
@@ -531,65 +432,49 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   }
 
   Widget _buildDesktopTabsSection() {
-    // Outer glass container with sticky tab bar at top and scrollable content below.
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            color: context.colors.cardBackgroundAlt,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(
-              color: context.colors.border,
-              width: 1.0,
+    return Container(
+      decoration: BoxDecoration(
+        color: context.colors.cardBackgroundAlt,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: context.colors.border),
+        boxShadow: [
+          BoxShadow(
+            color: context.colors.shadowColor.withValues(alpha: 0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Tab bar header ────────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: context.colors.border,
+                  width: 1,
+                ),
+              ),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: context.colors.textPrimary.withValues(alpha: 0.35),
-                blurRadius: 36,
-                offset: const Offset(0, 16),
-              ),
-              BoxShadow(
-                color: context.colors.shadowColor.withValues(alpha: 0.15),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            child: Row(
+              children: [
+                _buildDesktopTabHeader('Treatments', 0),
+                const SizedBox(width: 4),
+                _buildDesktopTabHeader('History', 1),
+                const Spacer(),
+              ],
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // ── Tab bar header ────────────────────────────────────────────
-              Container(
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: context.colors.textPrimary.withValues(alpha: 0.07),
-                      width: 1,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    _buildDesktopTabHeader('Treatments', 0),
-                    const SizedBox(width: 4),
-                    _buildDesktopTabHeader('History', 1),
-                    const Spacer(),
-                  ],
-                ),
-              ),
-              // ── Tab content ───────────────────────────────────────────────
-              Expanded(
-                child: _desktopTabIndex == 0
-                    ? _buildTreatmentsTab()
-                    : _buildHistoryTab(),
-              ),
-            ],
+          // ── Tab content ───────────────────────────────────────────────
+          Expanded(
+            child: _desktopTabIndex == 0
+                ? _buildTreatmentsTab()
+                : _buildHistoryTab(),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -602,11 +487,11 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
         decoration: BoxDecoration(
-          color: active ? context.colors.border.withValues(alpha: 0.4) : Colors.transparent,
+          color: active ? context.colors.primary.withValues(alpha: 0.08) : Colors.transparent,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           border: Border(
             bottom: BorderSide(
-              color: active ? const Color(0xFF60A5FA) : Colors.transparent,
+              color: active ? context.colors.primary : Colors.transparent,
               width: 2,
             ),
           ),
@@ -614,10 +499,9 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         child: Text(
           text,
           style: TextStyle(
-            color: active ? Colors.white : context.colors.textMuted,
-            fontWeight: active ? FontWeight.bold : FontWeight.normal,
-            fontSize: 13.5,
-            letterSpacing: active ? -0.1 : 0,
+            color: active ? context.colors.primary : context.colors.textSecondary,
+            fontWeight: active ? FontWeight.bold : FontWeight.w500,
+            fontSize: 14,
           ),
         ),
       ),
@@ -1174,9 +1058,26 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     
     if (isDesktop) {
       final activeColor = _cardColor;
-      return WebGlassCard(
-        borderRadius: 24,
-        glowColor: activeColor,
+      return Container(
+        decoration: BoxDecoration(
+          color: context.colors.cardBackground,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: !_formFilled && _isOngoing
+                ? context.colors.warning.withValues(alpha: 0.5)
+                : _formFilled && _isOngoing
+                    ? context.colors.primary.withValues(alpha: 0.5)
+                    : context.colors.border,
+            width: _isOngoing ? 1.5 : 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: context.colors.shadowColor.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
         child: Column(
           children: [
             // Tappable header
@@ -1224,7 +1125,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                             c.created != null
                                 ? DateFormat('MMM d, yyyy · h:mm a').format(c.created!.toLocal())
                                 : '—',
-                            style: TextStyle(color: context.colors.textMuted, fontSize: 11),
+                            style: TextStyle(color: context.colors.textSecondary, fontSize: 12),
                           ),
                           if (_planLoaded && _treatmentPlan != null) ...[
                             const SizedBox(height: 4),
@@ -1236,7 +1137,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                               return Text(
                                 '$doneCount/${activeSessions.length} treatment sessions done'
                                 '${_maintenancePlan != null ? ' · $mDoneCount/${mActiveSessions.length} maintenance' : ''}',
-                                style: const TextStyle(color: Color(0xFF60A5FA), fontSize: 11, fontWeight: FontWeight.w600),
+                                style: TextStyle(color: context.colors.primary, fontSize: 11, fontWeight: FontWeight.w600),
                               );
                             }),
                           ],
@@ -1245,7 +1146,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                     ),
                     Icon(
                       _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                      color: context.colors.textMuted,
+                      color: context.colors.textSecondary,
                     ),
                   ],
                 ),
@@ -1534,6 +1435,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                               doctorId: patient.doctorId,
                               consultationId: c.id,
                               appointmentId: widget.entry.appointment.id,
+                              appointmentDate: DateTime.tryParse(widget.entry.appointment.date),
                             ),
                           ),
                         );
@@ -1700,6 +1602,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                           doctorId: patient.doctorId,
                           consultationId: c.id,
                           appointmentId: widget.entry.appointment.id,
+                          appointmentDate: DateTime.tryParse(widget.entry.appointment.date),
                           isMaintenance: true,
                           parentPlanId: _treatmentPlan!.id,
                           defaultTreatmentType: _treatmentPlan!.treatmentType,

@@ -11,7 +11,7 @@ import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/services/notification_service.dart';
 import 'package:flutter/foundation.dart';
-import 'package:pms_app/core/widgets/splash_screen.dart';
+import 'package:pms_app/core/widgets/desktop_loading_wrapper.dart';
 
 /// Global navigator key so the timer service can push dialogs from anywhere.
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
@@ -24,8 +24,7 @@ class PmsApp extends ConsumerStatefulWidget {
 }
 
 class _PmsAppState extends ConsumerState<PmsApp> {
-  /// True once the startup animation has finished playing. Skips on web.
-  bool _splashDone = kIsWeb;
+  bool _manuallyLoggedIn = false;
 
   @override
   void initState() {
@@ -35,10 +34,6 @@ class _PmsAppState extends ConsumerState<PmsApp> {
         () => ref.read(authProvider.notifier).restoreSession());
   }
 
-  void _onSplashComplete() {
-    if (mounted) setState(() => _splashDone = true);
-  }
-
   @override
   Widget build(BuildContext context) {
     // Keep notification service alive across the entire app session
@@ -46,10 +41,13 @@ class _PmsAppState extends ConsumerState<PmsApp> {
 
     final authState = ref.watch(authProvider);
 
-    // Show splash until BOTH conditions are met:
-    //  • auth has finished initializing (restoreSession complete)
-    //  • the splash animation has played through
-    final showSplash = authState.isInitializing || !_splashDone;
+    ref.listen<AuthState>(authProvider, (prev, next) {
+      if (prev != null && !prev.isAuthenticated && next.isAuthenticated && !prev.isInitializing) {
+        setState(() {
+          _manuallyLoggedIn = true;
+        });
+      }
+    });
 
     return MaterialApp(
       navigatorKey: appNavigatorKey,
@@ -72,10 +70,32 @@ class _PmsAppState extends ConsumerState<PmsApp> {
           child: child!,
         );
       },
-      home: showSplash
-          ? NeedilSplashScreen(onComplete: _onSplashComplete)
+      home: authState.isInitializing
+          ? const Scaffold(
+              backgroundColor: Color(0xFFFAF8F5),
+              body: Center(
+                child: CircularProgressIndicator(
+                  color: Color(0xFF0F5D4F),
+                ),
+              ),
+            )
           : authState.isAuthenticated
-              ? _getHomeForAuth(authState)
+              ? Builder(
+                  builder: (context) {
+                    final isDesktop = MediaQuery.of(context).size.width >= 900.0;
+                    if (isDesktop && _manuallyLoggedIn) {
+                      return DesktopLoadingWrapper(
+                        child: _getHomeForAuth(authState),
+                        onComplete: () {
+                          setState(() {
+                            _manuallyLoggedIn = false;
+                          });
+                        },
+                      );
+                    }
+                    return _getHomeForAuth(authState);
+                  },
+                )
               : LoginScreen(),
       onGenerateRoute: generateRoute,
     );

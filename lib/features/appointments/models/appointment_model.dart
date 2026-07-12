@@ -2,7 +2,7 @@ import 'package:pocketbase/pocketbase.dart';
 
 enum AppointmentType { callBy, walkIn, session }
 
-enum AppointmentStatus { scheduled, waiting, inProgress, completed, cancelled }
+enum AppointmentStatus { scheduled, waiting, inProgress, completed, cancelled, missed }
 
 class AppointmentModel {
   final String id;
@@ -26,6 +26,10 @@ class AppointmentModel {
   final String? linkedTreatmentPlanId;       // ID of created treatment plan (prevents duplicates)
   final String? linkedConsultationId;        // ID of linked consultation stub (avoids list queries)
   final bool isRescheduled;                   // true when appointment has been rescheduled
+  final String? previousStatus;               // status before auto-reconciliation
+  final String? reconciliationReason;
+  final DateTime? reconciledAt;
+  final String? reconciledBy;
   final DateTime? created;
   final DateTime? updated;
 
@@ -56,6 +60,10 @@ class AppointmentModel {
     this.linkedTreatmentPlanId,
     this.linkedConsultationId,
     this.isRescheduled = false,
+    this.previousStatus,
+    this.reconciliationReason,
+    this.reconciledAt,
+    this.reconciledBy,
     this.created,
     this.updated,
     this.doctorName,
@@ -116,6 +124,13 @@ class AppointmentModel {
           ? record.getStringValue('linked_consultation_id')
           : null,
       isRescheduled: record.getBoolValue('is_rescheduled'),
+      previousStatus: record.getStringValue('previous_status').isNotEmpty 
+          ? record.getStringValue('previous_status') : null,
+      reconciliationReason: record.getStringValue('reconciliation_reason').isNotEmpty 
+          ? record.getStringValue('reconciliation_reason') : null,
+      reconciledAt: _parseDateTimeOrNull(record.getStringValue('reconciled_at')),
+      reconciledBy: record.getStringValue('reconciled_by').isNotEmpty 
+          ? record.getStringValue('reconciled_by') : null,
       created: DateTime.tryParse(record.get<String>('created')),
       updated: DateTime.tryParse(record.get<String>('updated')),
       doctorName: doctorName,
@@ -153,6 +168,10 @@ class AppointmentModel {
       if (linkedConsultationId != null && linkedConsultationId!.isNotEmpty)
         'linked_consultation_id': linkedConsultationId,
       if (isRescheduled) 'is_rescheduled': true,
+      if (previousStatus != null) 'previous_status': previousStatus,
+      if (reconciliationReason != null) 'reconciliation_reason': reconciliationReason,
+      if (reconciledAt != null) 'reconciled_at': reconciledAt!.toUtc().toIso8601String(),
+      if (reconciledBy != null) 'reconciled_by': reconciledBy,
     };
   }
 
@@ -185,6 +204,8 @@ class AppointmentModel {
         return AppointmentStatus.completed;
       case 'cancelled':
         return AppointmentStatus.cancelled;
+      case 'missed':
+        return AppointmentStatus.missed;
       default:
         return AppointmentStatus.scheduled;
     }
@@ -200,6 +221,8 @@ class AppointmentModel {
         return 'completed';
       case AppointmentStatus.cancelled:
         return 'cancelled';
+      case AppointmentStatus.missed:
+        return 'missed';
       case AppointmentStatus.scheduled:
         return 'scheduled';
     }

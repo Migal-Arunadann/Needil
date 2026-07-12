@@ -20,6 +20,8 @@ import 'package:pms_app/features/patients/models/patient_model.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/services/audit_service.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/utils/whatsapp_helper.dart';
+import 'package:pms_app/core/widgets/responsive_wrapper.dart';
 
 
 class CreateAppointmentScreen extends ConsumerStatefulWidget {
@@ -511,8 +513,9 @@ class _CreateAppointmentScreenState
     return Scaffold(
       backgroundColor: context.colors.background,
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
+        child: ResponsiveWrapper(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
             final isDesktop = constraints.maxWidth >= 900;
 
             final header = Row(
@@ -857,22 +860,25 @@ class _CreateAppointmentScreenState
                   const SizedBox(height: 14),
 
                   // Call-by vs Walk-in Form content
-                  if (_isCallBy) ...[
-                    if (isDesktop) ...[
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: phoneSection),
-                          const SizedBox(width: 16),
-                          Expanded(child: nameField),
-                        ],
-                      ),
-                    ] else ...[
-                      phoneSection,
-                      const SizedBox(height: 14),
-                      nameField,
-                    ],
-                  ] else ...[
+                  if (_isCallBy)
+                    isDesktop
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(child: phoneSection),
+                              const SizedBox(width: 16),
+                              Expanded(child: nameField),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              phoneSection,
+                              const SizedBox(height: 14),
+                              nameField,
+                            ],
+                          )
+                  else
                     PatientDetailsForm(
                       nameCtrl: _nameCtrl,
                       phoneCtrl: _phoneCtrl,
@@ -901,7 +907,6 @@ class _CreateAppointmentScreenState
                       isCheckingPhone: _isCheckingPhone,
                       nameLocked: _isRegisteredPatient,
                     ),
-                  ],
                   const SizedBox(height: 28),
 
                   AppButton(
@@ -949,6 +954,7 @@ class _CreateAppointmentScreenState
               );
             }
           },
+        ),
         ),
       ),
     );

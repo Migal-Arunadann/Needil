@@ -766,11 +766,12 @@ class AppointmentService {
     return ConsultationModel.fromRecord(record);
   }
 
-  /// Set the consultation_start_time on an appointment.
+  /// Set the consultation_start_time on an appointment and move status to in_progress.
   Future<void> setConsultationStartTime(String appointmentId) async {
     await pb.collection(PBCollections.appointments).update(
       appointmentId,
       body: {
+        'status': 'in_progress',
         'consultation_start_time': DateTime.now().toUtc().toIso8601String(),
       },
     );

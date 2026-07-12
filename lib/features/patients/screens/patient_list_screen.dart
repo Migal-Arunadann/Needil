@@ -23,10 +23,13 @@ class PatientListScreen extends ConsumerStatefulWidget {
 class _PatientListScreenState extends ConsumerState<PatientListScreen> {
   String _searchQuery = '';
   String _sortMode = 'recent';
+  String _lastVisitFilter = 'all'; // 'all', 'month', '30days', '90days'
+  String _statusFilter = 'all';    // 'all', 'active', 'new'
+  String _kpiFilter = 'all';       // 'all', 'visited_this_month', 'due_follow_up', 'new_this_month'
   final _searchCtrl = TextEditingController();
 
-  // Only used on web
-  static const int _pageSize = 10;
+  // Only used on web (matches mockup 7 rows)
+  static const int _pageSize = 7;
   int _currentPage = 0;
 
   @override
@@ -34,6 +37,8 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
     _searchCtrl.dispose();
     super.dispose();
   }
+
+  Map<String, DateTime> _lastVisitDates = const {};
 
   List<PatientModel> _filtered(List<PatientModel> all) {
     List<PatientModel> result = all;
@@ -44,6 +49,63 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
               p.fullName.toLowerCase().contains(q) || p.phone.contains(q))
           .toList();
     }
+
+    // Filter by Last Visit
+    if (_lastVisitFilter != 'all') {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      result = result.where((p) {
+        final lastVisit = _lastVisitDates[p.id];
+        if (lastVisit == null) return false;
+        final diffDays = today.difference(DateTime(lastVisit.year, lastVisit.month, lastVisit.day)).inDays;
+
+        if (_lastVisitFilter == 'month') {
+          return lastVisit.year == now.year && lastVisit.month == now.month;
+        } else if (_lastVisitFilter == '30days') {
+          return diffDays <= 30;
+        } else if (_lastVisitFilter == '90days') {
+          return diffDays <= 90;
+        }
+        return true;
+      }).toList();
+    }
+
+    // Filter by Status
+    if (_statusFilter != 'all') {
+      result = result.where((p) {
+        final lastVisit = _lastVisitDates[p.id];
+        if (_statusFilter == 'active') {
+          return lastVisit != null;
+        } else if (_statusFilter == 'new') {
+          return lastVisit == null;
+        }
+        return true;
+      }).toList();
+    }
+
+    // Filter by KPI
+    if (_kpiFilter != 'all') {
+      final now = DateTime.now();
+      result = result.where((p) {
+        if (_kpiFilter == 'visited_this_month') {
+          final lastVisit = _lastVisitDates[p.id];
+          if (lastVisit == null) return false;
+          return lastVisit.year == now.year && lastVisit.month == now.month;
+        } else if (_kpiFilter == 'due_follow_up') {
+          final lastVisit = _lastVisitDates[p.id];
+          if (lastVisit == null) return false;
+          final today = DateTime(now.year, now.month, now.day);
+          final diff = today.difference(DateTime(lastVisit.year, lastVisit.month, lastVisit.day)).inDays;
+          return diff >= 30;
+        } else if (_kpiFilter == 'new_this_month') {
+          final created = p.created;
+          if (created == null) return false;
+          return created.year == now.year && created.month == now.month;
+        }
+        return true;
+      }).toList();
+    }
+
     switch (_sortMode) {
       case 'a-z':
         result = List.of(result)
@@ -59,6 +121,16 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
         result = List.of(result)
           ..sort((a, b) => a.phone.compareTo(b.phone));
         break;
+      case 'last_visit_desc':
+        result = List.of(result)
+          ..sort((a, b) => (_lastVisitDates[b.id] ?? DateTime(2000))
+              .compareTo(_lastVisitDates[a.id] ?? DateTime(2000)));
+        break;
+      case 'last_visit_asc':
+        result = List.of(result)
+          ..sort((a, b) => (_lastVisitDates[a.id] ?? DateTime(2000))
+              .compareTo(_lastVisitDates[b.id] ?? DateTime(2000)));
+        break;
       default:
         result = List.of(result)
           ..sort((a, b) => (b.created ?? DateTime(2000))
@@ -69,20 +141,47 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final state = ref.watch(patientListProvider);
+    _lastVisitDates = state.lastVisitDates;
+    final filteredList = _filtered(state.patients);
+
     if (kIsWeb) {
       return _WebPatientScreen(
         searchCtrl: _searchCtrl,
         searchQuery: _searchQuery,
         sortMode: _sortMode,
+        lastVisitFilter: _lastVisitFilter,
+        statusFilter: _statusFilter,
         currentPage: _currentPage,
         pageSize: _pageSize,
-        filtered: _filtered,
+        filteredList: filteredList,
+        kpiFilter: _kpiFilter,
+        onKpiFilterChanged: (v) => setState(() {
+          _kpiFilter = v;
+          _currentPage = 0;
+        }),
         onSearchChanged: (v) => setState(() {
           _searchQuery = v;
           _currentPage = 0;
         }),
         onSortChanged: (m) => setState(() {
           _sortMode = m;
+          _currentPage = 0;
+        }),
+        onLastVisitFilterChanged: (v) => setState(() {
+          _lastVisitFilter = v;
+          _currentPage = 0;
+        }),
+        onStatusFilterChanged: (v) => setState(() {
+          _statusFilter = v;
+          _currentPage = 0;
+        }),
+        onClearFilters: () => setState(() {
+          _searchQuery = '';
+          _searchCtrl.clear();
+          _sortMode = 'recent';
+          _lastVisitFilter = 'all';
+          _statusFilter = 'all';
           _currentPage = 0;
         }),
         onPageChanged: (p) => setState(() => _currentPage = p),
@@ -142,11 +241,18 @@ class _WebPatientScreen extends ConsumerWidget {
   final TextEditingController searchCtrl;
   final String searchQuery;
   final String sortMode;
+  final String lastVisitFilter;
+  final String statusFilter;
+  final String kpiFilter;
   final int currentPage;
   final int pageSize;
-  final List<PatientModel> Function(List<PatientModel>) filtered;
+  final List<PatientModel> filteredList;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<String> onSortChanged;
+  final ValueChanged<String> onLastVisitFilterChanged;
+  final ValueChanged<String> onStatusFilterChanged;
+  final ValueChanged<String> onKpiFilterChanged;
+  final VoidCallback onClearFilters;
   final ValueChanged<int> onPageChanged;
   final ValueChanged<bool> onNavigateToAppointment;
   final VoidCallback onRetry;
@@ -157,11 +263,18 @@ class _WebPatientScreen extends ConsumerWidget {
     required this.searchCtrl,
     required this.searchQuery,
     required this.sortMode,
+    required this.lastVisitFilter,
+    required this.statusFilter,
+    required this.kpiFilter,
     required this.currentPage,
     required this.pageSize,
-    required this.filtered,
+    required this.filteredList,
     required this.onSearchChanged,
     required this.onSortChanged,
+    required this.onLastVisitFilterChanged,
+    required this.onStatusFilterChanged,
+    required this.onKpiFilterChanged,
+    required this.onClearFilters,
     required this.onPageChanged,
     required this.onNavigateToAppointment,
     required this.onRetry,
@@ -174,13 +287,13 @@ class _WebPatientScreen extends ConsumerWidget {
       onSelected: onNavigateToAppointment,
       offset: const Offset(0, 44),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      color: context.colors.surface,
+      color: Colors.white,
       itemBuilder: (ctx) => [
         PopupMenuItem(
           value: true,
           child: Row(
             children: [
-              Icon(Icons.event_note_rounded, color: context.colors.info, size: 18),
+              Icon(Icons.event_note_rounded, color: const Color(0xFF0F5D4F), size: 18),
               const SizedBox(width: 10),
               Text('Call-By Appointment', style: context.textStyles.bodyMedium),
             ],
@@ -190,22 +303,294 @@ class _WebPatientScreen extends ConsumerWidget {
           value: false,
           child: Row(
             children: [
-              Icon(Icons.directions_walk_rounded, color: context.colors.accent, size: 18),
+              Icon(Icons.directions_walk_rounded, color: const Color(0xFF10B981), size: 18),
               const SizedBox(width: 10),
               Text('Walk-In Appointment', style: context.textStyles.bodyMedium),
             ],
           ),
         ),
       ],
-      child: const _NewAppointmentCTAButton(),
+      child: Container(
+        height: 42,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F5D4F),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              'New Appointment',
+              style: context.textStyles.buttonMedium.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Container(
+              height: 20,
+              width: 1,
+              color: Colors.white24,
+            ),
+            const SizedBox(width: 8),
+            const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 18),
+          ],
+        ),
+      ),
     );
   }
 
+  Widget _buildFilterSidebar(BuildContext context) {
+    final sortOptions = [
+      {'value': 'recent', 'label': 'Recent', 'icon': Icons.schedule_rounded},
+      {'value': 'a-z', 'label': 'A - Z', 'icon': Icons.sort_by_alpha_rounded},
+      {'value': 'z-a', 'label': 'Z - A', 'icon': Icons.sort_by_alpha_rounded},
+      {'value': 'phone', 'label': 'Phone', 'icon': Icons.dialpad_rounded},
+    ];
+
+    final Map<String, String> lastVisitLabels = {
+      'all': 'All Time',
+      'month': 'This Month',
+      '30days': 'Last 30 Days',
+      '90days': 'Last 90 Days',
+    };
+
+    final Map<String, String> statusLabels = {
+      'all': 'All Patients',
+      'active': 'Active / Returning',
+      'new': 'New (No visit yet)',
+    };
+
+    return Container(
+      width: 280,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Filter & Sort',
+                    style: context.textStyles.bodyMedium.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: context.colors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // Sort By
+                  Text(
+                    'Sort By',
+                    style: context.textStyles.caption.copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: context.colors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ...sortOptions.map((opt) {
+                    final isSelected = sortMode == opt['value'];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: InkWell(
+                        onTap: () => onSortChanged(opt['value'] as String),
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? const Color(0xFF0F5D4F).withOpacity(0.08)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                opt['icon'] as IconData,
+                                size: 16,
+                                color: isSelected ? const Color(0xFF0F5D4F) : context.colors.textMuted,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  opt['label'] as String,
+                                  style: context.textStyles.bodyMedium.copyWith(
+                                    fontSize: 13,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                    color: isSelected ? const Color(0xFF0F5D4F) : context.colors.textSecondary,
+                                  ),
+                                ),
+                              ),
+                              if (isSelected)
+                                const Icon(
+                                  Icons.check_rounded,
+                                  size: 16,
+                                  color: Color(0xFF0F5D4F),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  
+                  const SizedBox(height: 20),
+                  
+                  // Last Visit Dropdown
+                  Text(
+                    'Last Visit',
+                    style: context.textStyles.caption.copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: context.colors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  PopupMenuButton<String>(
+                    onSelected: onLastVisitFilterChanged,
+                    offset: const Offset(0, 44),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    color: Colors.white,
+                    itemBuilder: (ctx) => lastVisitLabels.entries.map((e) => PopupMenuItem(
+                      value: e.key,
+                      child: Text(e.value, style: context.textStyles.bodyMedium),
+                    )).toList(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              lastVisitLabels[lastVisitFilter] ?? 'All Time',
+                              style: context.textStyles.bodyMedium.copyWith(fontSize: 13, color: context.colors.textSecondary),
+                            ),
+                          ),
+                          Icon(Icons.calendar_today_rounded, size: 14, color: context.colors.textMuted),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Status Dropdown
+                  Text(
+                    'Status',
+                    style: context.textStyles.caption.copyWith(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                      color: context.colors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  PopupMenuButton<String>(
+                    onSelected: onStatusFilterChanged,
+                    offset: const Offset(0, 44),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    color: Colors.white,
+                    itemBuilder: (ctx) => statusLabels.entries.map((e) => PopupMenuItem(
+                      value: e.key,
+                      child: Text(e.value, style: context.textStyles.bodyMedium),
+                    )).toList(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              statusLabels[statusFilter] ?? 'All Patients',
+                              style: context.textStyles.bodyMedium.copyWith(fontSize: 13, color: context.colors.textSecondary),
+                            ),
+                          ),
+                          Icon(Icons.keyboard_arrow_down_rounded, size: 16, color: context.colors.textMuted),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Clear Filters Button
+          SizedBox(
+            width: double.infinity,
+            child: TextButton.icon(
+              onPressed: onClearFilters,
+              icon: const Icon(Icons.filter_alt_off_outlined, size: 16, color: Color(0xFF0F5D4F)),
+              label: Text(
+                'Clear Filters',
+                style: context.textStyles.buttonMedium.copyWith(
+                  color: const Color(0xFF0F5D4F),
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              style: TextButton.styleFrom(
+                backgroundColor: const Color(0xFF0F5D4F).withOpacity(0.06),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(patientListProvider);
-    final filteredList = filtered(state.patients);
     final isDesktop = MediaQuery.of(context).size.width >= 900;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    // Dynamic KPI stats calculations
+    final totalPatients = state.patients.length;
+    final visitedThisMonth = state.lastVisitDates.values
+        .where((d) => d.year == now.year && d.month == now.month)
+        .length;
+    final dueFollowUp = state.patients.where((p) {
+      final lastVisit = state.lastVisitDates[p.id];
+      if (lastVisit == null) return false;
+      final diff = today.difference(DateTime(lastVisit.year, lastVisit.month, lastVisit.day)).inDays;
+      return diff >= 30; // 30+ days ago is due for follow-up
+    }).length;
+    final newThisMonth = state.patients.where((p) {
+      final created = p.created;
+      if (created == null) return false;
+      return created.year == now.year && created.month == now.month;
+    }).length;
 
     // Pagination
     final totalPages = filteredList.isEmpty ? 1 : (filteredList.length / pageSize).ceil();
@@ -218,202 +603,358 @@ class _WebPatientScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: isDesktop ? Colors.transparent : context.colors.background,
       body: SafeArea(
-        child: ResponsiveWrapper(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              Padding(
-                padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 24, 20, isDesktop ? 36 : 24, 0),
-                child: isDesktop
-                    ? Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Patients',
-                                style: context.textStyles.h1,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Header ──
+            Padding(
+              padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 24, 20, isDesktop ? 36 : 24, 0),
+              child: isDesktop
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Patients',
+                              style: context.textStyles.h1.copyWith(
+                                color: context.colors.textPrimary,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 28,
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '${state.patients.length} total registered patients',
-                                style: context.textStyles.bodyMedium.copyWith(
-                                  color: context.colors.textSecondary,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Manage your patients and their information',
+                              style: context.textStyles.bodyMedium.copyWith(
+                                color: context.colors.textSecondary,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        _WebSearchBar(
+                          controller: searchCtrl,
+                          onChanged: onSearchChanged,
+                        ),
+                        const SizedBox(width: 12),
+                        _buildNewAppointmentButton(context),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Patients',
+                                    style: context.textStyles.h1
+                                        .copyWith(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Manage your patients',
+                                  style: context.textStyles.bodyMedium.copyWith(
+                                      color: context.colors.textSecondary),
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            PopupMenuButton<bool>(
+                              onSelected: onNavigateToAppointment,
+                              offset: const Offset(0, 44),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              color: context.colors.surface,
+                              itemBuilder: (ctx) => [
+                                PopupMenuItem(
+                                  value: true,
+                                  child: Row(children: [
+                                    Icon(Icons.event_note_rounded,
+                                        color: context.colors.info, size: 18),
+                                    const SizedBox(width: 10),
+                                    Text('Call-By',
+                                        style: context.textStyles.bodyMedium),
+                                  ]),
+                                ),
+                                PopupMenuItem(
+                                  value: false,
+                                  child: Row(children: [
+                                    Icon(Icons.directions_walk_rounded,
+                                        color: context.colors.accent, size: 18),
+                                    const SizedBox(width: 10),
+                                    Text('Walk-In',
+                                        style: context.textStyles.bodyMedium),
+                                  ]),
+                                ),
+                              ],
+                              child: Container(
+                                height: 40,
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
+                                decoration: BoxDecoration(
+                                  color: context.colors.primary,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.add,
+                                        color: context.colors.textPrimary, size: 18),
+                                  ],
                                 ),
                               ),
-                            ],
-                          ),
-                          const Spacer(),
-                          _WebSearchBar(
-                            controller: searchCtrl,
-                            onChanged: onSearchChanged,
-                          ),
-                          const SizedBox(width: 12),
-                          _buildNewAppointmentButton(context),
-                        ],
-                      )
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Patients',
-                                      style: context.textStyles.h1
-                                          .copyWith(fontWeight: FontWeight.bold)),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${state.patients.length} total registered',
-                                    style: context.textStyles.bodyMedium.copyWith(
-                                        color: context.colors.textSecondary),
-                                  ),
-                                ],
-                              ),
-                              const Spacer(),
-                              // Compact button on narrow web
-                              PopupMenuButton<bool>(
-                                onSelected: onNavigateToAppointment,
-                                offset: const Offset(0, 44),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12)),
-                                color: context.colors.surface,
-                                itemBuilder: (ctx) => [
-                                  PopupMenuItem(
-                                    value: true,
-                                    child: Row(children: [
-                                      Icon(Icons.event_note_rounded,
-                                          color: context.colors.info, size: 18),
-                                      const SizedBox(width: 10),
-                                      Text('Call-By',
-                                          style: context.textStyles.bodyMedium),
-                                    ]),
-                                  ),
-                                  PopupMenuItem(
-                                    value: false,
-                                    child: Row(children: [
-                                      Icon(Icons.directions_walk_rounded,
-                                          color: context.colors.accent, size: 18),
-                                      const SizedBox(width: 10),
-                                      Text('Walk-In',
-                                          style: context.textStyles.bodyMedium),
-                                    ]),
-                                  ),
-                                ],
-                                child: Container(
-                                  height: 40,
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 12),
-                                  decoration: BoxDecoration(
-                                    color: context.colors.primary,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.add,
-                                          color: context.colors.textPrimary, size: 18),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          _WebSearchBar(
-                            controller: searchCtrl,
-                            onChanged: onSearchChanged,
-                            fullWidth: true,
-                          ),
-                        ],
-                      ),
-              ),
-              const SizedBox(height: 16),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _WebSearchBar(
+                          controller: searchCtrl,
+                          onChanged: onSearchChanged,
+                          fullWidth: true,
+                        ),
+                      ],
+                    ),
+            ),
+            const SizedBox(height: 20),
 
-              // â”€â”€ Sort chips â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── KPI Stats Cards (Desktop Only) ──
+            if (isDesktop) ...[
               Padding(
-                padding: EdgeInsets.symmetric(horizontal: isDesktop ? 36 : 20),
+                padding: const EdgeInsets.symmetric(horizontal: 36),
                 child: Row(
                   children: [
-                    _WebSortChip(
-                      label: 'Recent',
-                      icon: Icons.schedule_rounded,
-                      isActive: sortMode == 'recent',
-                      onTap: () => onSortChanged('recent'),
+                    _StatCard(
+                      label: 'Total Patients',
+                      value: '$totalPatients',
+                      subLabel: 'Registered',
+                      icon: Icons.people_alt_outlined,
+                      iconColor: const Color(0xFF0F5D4F),
+                      iconBgColor: const Color(0xFFEEF7F4),
+                      isSelected: kpiFilter == 'all',
+                      onTap: () => onKpiFilterChanged('all'),
                     ),
-                    const SizedBox(width: 8),
-                    _WebSortChip(
-                      label: 'A-Z',
-                      icon: Icons.sort_by_alpha_rounded,
-                      isActive: sortMode == 'a-z',
-                      onTap: () => onSortChanged('a-z'),
+                    const SizedBox(width: 16),
+                    _StatCard(
+                      label: 'Visited This Month',
+                      value: '$visitedThisMonth',
+                      subLabel: 'Patients',
+                      icon: Icons.calendar_today_outlined,
+                      iconColor: const Color(0xFF7C3AED),
+                      iconBgColor: const Color(0xFFF3E8FF),
+                      isSelected: kpiFilter == 'visited_this_month',
+                      onTap: () => onKpiFilterChanged('visited_this_month'),
                     ),
-                    const SizedBox(width: 8),
-                    _WebSortChip(
-                      label: 'Z-A',
-                      icon: Icons.sort_rounded,
-                      isActive: sortMode == 'z-a',
-                      onTap: () => onSortChanged('z-a'),
+                    const SizedBox(width: 16),
+                    _StatCard(
+                      label: 'Due for Follow Up',
+                      value: '$dueFollowUp',
+                      subLabel: 'Patients',
+                      icon: Icons.history_rounded,
+                      iconColor: const Color(0xFFD97706),
+                      iconBgColor: const Color(0xFFFEF3C7),
+                      isSelected: kpiFilter == 'due_follow_up',
+                      onTap: () => onKpiFilterChanged('due_follow_up'),
                     ),
-                    const SizedBox(width: 8),
-                    _WebSortChip(
-                      label: 'Phone',
-                      icon: Icons.dialpad_rounded,
-                      isActive: sortMode == 'phone',
-                      onTap: () => onSortChanged('phone'),
+                    const SizedBox(width: 16),
+                    _StatCard(
+                      label: 'New This Month',
+                      value: '$newThisMonth',
+                      subLabel: 'Patients',
+                      icon: Icons.person_add_alt_1_outlined,
+                      iconColor: const Color(0xFF0284C7),
+                      iconBgColor: const Color(0xFFE0F2FE),
+                      isSelected: kpiFilter == 'new_this_month',
+                      onTap: () => onKpiFilterChanged('new_this_month'),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
-
-              // â”€â”€ Body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-              Expanded(
-                child: state.isLoading
-                    ? Center(
-                        child: CircularProgressIndicator(
-                          color: context.colors.primary,
-                          strokeWidth: 3,
-                        ),
-                      )
-                    : state.error != null
-                        ? _WebErrorView(error: state.error!, onRetry: onRetry)
-                        : filteredList.isEmpty
-                            ? _WebEmptyView(hasQuery: searchQuery.isNotEmpty)
-                            : Column(
-                                children: [
-                                  Expanded(
-                                    child: RefreshIndicator(
-                                      color: context.colors.primary,
-                                      onRefresh: onRefresh,
-                                      child: isDesktop
-                                          ? _WebDesktopTable(
-                                              patients: pageItems,
-                                              onPatientTap: onOpenProfile,
-                                            )
-                                          : _WebMobileList(
+            ],
+            const SizedBox(height: 24),
+            // ── Main Content Area ──
+            Expanded(
+              child: state.isLoading
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        color: context.colors.primary,
+                        strokeWidth: 3,
+                      ),
+                    )
+                  : state.error != null
+                      ? _WebErrorView(error: state.error!, onRetry: onRetry)
+                      : filteredList.isEmpty
+                          ? _WebEmptyView(hasQuery: searchQuery.isNotEmpty)
+                          : Padding(
+                              padding: EdgeInsets.symmetric(horizontal: isDesktop ? 36 : 24),
+                              child: isDesktop
+                                  ? Row(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        _buildFilterSidebar(context),
+                                        const SizedBox(width: 24),
+                                        Expanded(
+                                          child: Column(
+                                            children: [
+                                              Expanded(
+                                                child: RefreshIndicator(
+                                                  color: context.colors.primary,
+                                                  onRefresh: onRefresh,
+                                                  child: _WebDesktopTable(
+                                                    patients: pageItems,
+                                                    onPatientTap: onOpenProfile,
+                                                    sortMode: sortMode,
+                                                    onSortChanged: onSortChanged,
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              _WebPaginationBar(
+                                                currentPage: currentPage,
+                                                totalPages: totalPages,
+                                                totalItems: filteredList.length,
+                                                pageStart: pageStart,
+                                                pageEnd: pageEnd,
+                                                onPageChanged: onPageChanged,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : Column(
+                                      children: [
+                                        Expanded(
+                                          child: RefreshIndicator(
+                                            color: context.colors.primary,
+                                            onRefresh: onRefresh,
+                                            child: _WebMobileList(
                                               patients: pageItems,
                                               onPatientTap: onOpenProfile,
                                             ),
+                                          ),
+                                        ),
+                                        if (filteredList.length > pageSize)
+                                          _WebPaginationBar(
+                                            currentPage: currentPage,
+                                            totalPages: totalPages,
+                                            totalItems: filteredList.length,
+                                            pageStart: pageStart,
+                                            pageEnd: pageEnd,
+                                            onPageChanged: onPageChanged,
+                                          ),
+                                      ],
                                     ),
-                                  ),
-                                  if (filteredList.length > pageSize)
-                                    _WebPaginationBar(
-                                      currentPage: currentPage,
-                                      totalPages: totalPages,
-                                      totalItems: filteredList.length,
-                                      pageStart: pageStart,
-                                      pageEnd: pageEnd,
-                                      onPageChanged: onPageChanged,
-                                    ),
-                                ],
-                              ),
+                            ),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final String subLabel;
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBgColor;
+  final VoidCallback? onTap;
+  final bool isSelected;
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.subLabel,
+    required this.icon,
+    required this.iconColor,
+    required this.iconBgColor,
+    this.onTap,
+    this.isSelected = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isSelected ? context.colors.primary.withValues(alpha: 0.05) : Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isSelected 
+                    ? context.colors.primary 
+                    : context.colors.border.withValues(alpha: 0.4),
+                width: isSelected ? 2 : 1,
               ),
-            ],
-          ),
+              boxShadow: [
+                if (!isSelected)
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+              ],
+            ),
+            child: Row(
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: iconBgColor,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: iconColor, size: 22),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: context.textStyles.caption.copyWith(
+                      color: context.colors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: context.textStyles.h2.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 22,
+                      color: context.colors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subLabel,
+                    style: context.textStyles.caption.copyWith(
+                      color: context.colors.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
         ),
       ),
     );
@@ -481,129 +1022,119 @@ class _WebSearchBar extends StatelessWidget {
     );
   }
 }
-
-class _WebSortChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final bool isActive;
-  final VoidCallback onTap;
-  const _WebSortChip({
-    required this.label,
-    required this.icon,
-    required this.isActive,
-    required this.onTap,
+class _WebDesktopTable extends StatelessWidget {
+  final List<PatientModel> patients;
+  final ValueChanged<PatientModel> onPatientTap;
+  final String sortMode;
+  final ValueChanged<String> onSortChanged;
+  const _WebDesktopTable({
+    required this.patients,
+    required this.onPatientTap,
+    required this.sortMode,
+    required this.onSortChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive
-              ? context.colors.primary.withValues(alpha: 0.12)
-              : context.colors.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isActive
-                ? context.colors.primary.withValues(alpha: 0.5)
-                : context.colors.border,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon,
-                size: 14,
-                color:
-                    isActive ? context.colors.primary : context.colors.textHint),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: context.textStyles.caption.copyWith(
-                fontSize: 12,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive
-                    ? context.colors.primary
-                    : context.colors.textSecondary,
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
-    );
-  }
-}
-
-// â”€â”€ Desktop table â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-
-class _WebDesktopTable extends StatelessWidget {
-  final List<PatientModel> patients;
-  final ValueChanged<PatientModel> onPatientTap;
-  const _WebDesktopTable({required this.patients, required this.onPatientTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width >= 900;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 24, 0, isDesktop ? 36 : 24, 8),
-      child: WebGlassCard(
-        borderRadius: 24,
-        child: Column(
-          children: [
-            // Header row
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              decoration: BoxDecoration(
-                color: isDesktop ? context.colors.divider : context.colors.background.withValues(alpha: 0.6),
-                border: Border(
-                  bottom: BorderSide(
-                      color: isDesktop ? context.colors.border : context.colors.border.withValues(alpha: 0.5)),
-                ),
-              ),
-              child: Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Container(
+              width: constraints.maxWidth > 700 ? constraints.maxWidth : 700,
+              child: Column(
                 children: [
-                  Expanded(
-                    flex: 3,
-                    child: _tableHeader(context, 'Patient'),
+                  // Header row
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: context.colors.border.withValues(alpha: 0.3)),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: _tableHeader(context, 'Patient'),
+                        ),
+                        Expanded(flex: 2, child: _tableHeader(context, 'Phone')),
+                        Expanded(
+                          flex: 2, 
+                          child: _tableHeader(
+                            context, 
+                            'Last Visit',
+                            isSortable: sortMode.startsWith('last_visit'),
+                            isAscending: sortMode == 'last_visit_asc',
+                            onTap: () {
+                              if (sortMode == 'last_visit_desc') {
+                                onSortChanged('last_visit_asc');
+                              } else {
+                                onSortChanged('last_visit_desc');
+                              }
+                            },
+                          ),
+                        ),
+                        const SizedBox(
+                          width: 120,
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              'Actions',
+                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                    ),
                   ),
-                  Expanded(flex: 2, child: _tableHeader(context, 'Phone')),
+                  // Rows
                   Expanded(
-                      flex: 2, child: _tableHeader(context, 'Last Visit')),
-                  SizedBox(
-                      width: 80,
-                      child: _tableHeader(context, 'Actions')),
-                  const SizedBox(width: 24),
+                    child: ListView.builder(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      itemCount: patients.length,
+                      itemBuilder: (context, index) {
+                        return _WebAnimatedRow(
+                          index: index,
+                          child: _WebDesktopTableRow(
+                            patient: patients[index],
+                            onTap: () => onPatientTap(patients[index]),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
                 ],
               ),
             ),
-            // Rows
-            Expanded(
-              child: ListView.builder(
-                physics: const AlwaysScrollableScrollPhysics(),
-                itemCount: patients.length,
-                itemBuilder: (context, index) {
-                  return _WebAnimatedRow(
-                    index: index,
-                    child: _WebDesktopTableRow(
-                      patient: patients[index],
-                      onTap: () => onPatientTap(patients[index]),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
 
-  Widget _tableHeader(BuildContext context, String label) {
-    return Text(
+  Widget _tableHeader(
+    BuildContext context,
+    String label, {
+    bool isSortable = false,
+    bool isAscending = false,
+    VoidCallback? onTap,
+  }) {
+    Widget content = Text(
       label,
       style: context.textStyles.caption.copyWith(
         color: context.colors.textSecondary,
@@ -612,6 +1143,43 @@ class _WebDesktopTable extends StatelessWidget {
         letterSpacing: 0.3,
       ),
     );
+
+    if (isSortable || onTap != null) {
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          content,
+          if (isSortable) ...[
+            const SizedBox(width: 4),
+            Icon(
+              isAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              size: 14,
+              color: context.colors.primary,
+            ),
+          ] else if (onTap != null) ...[
+            const SizedBox(width: 4),
+            Icon(
+              Icons.unfold_more_rounded,
+              size: 14,
+              color: context.colors.textHint,
+            ),
+          ],
+        ],
+      );
+    }
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+          child: content,
+        ),
+      );
+    }
+
+    return content;
   }
 }
 
@@ -627,16 +1195,75 @@ class _WebDesktopTableRow extends ConsumerStatefulWidget {
 class _WebDesktopTableRowState extends ConsumerState<_WebDesktopTableRow> {
   bool _hovered = false;
 
+  Widget _buildLastVisitColumn(BuildContext context, DateTime? date) {
+    if (date == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            '—',
+            style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'No visit yet',
+            style: context.textStyles.caption.copyWith(color: context.colors.textMuted, fontSize: 11),
+          ),
+        ],
+      );
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final visitDay = DateTime(date.year, date.month, date.day);
+    final diffDays = today.difference(visitDay).inDays;
+
+    String relativeText;
+    Color relativeColor = const Color(0xFF10B981); // default green
+    bool isToday = diffDays == 0;
+
+    if (isToday) {
+      relativeText = 'Today';
+    } else if (diffDays == 1) {
+      relativeText = 'Yesterday';
+      relativeColor = context.colors.textSecondary;
+    } else {
+      relativeText = '$diffDays days ago';
+      relativeColor = context.colors.textSecondary;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          DateFormat('MMM d, yyyy').format(date),
+          style: context.textStyles.bodyMedium.copyWith(
+            color: context.colors.textPrimary,
+            fontWeight: FontWeight.w500,
+            fontSize: 13,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          relativeText,
+          style: context.textStyles.caption.copyWith(
+            color: relativeColor,
+            fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width >= 900;
     final patient = widget.patient;
     
     final lastVisitDates = ref.watch(patientListProvider.select((s) => s.lastVisitDates));
     final lastVisitDate = lastVisitDates[patient.id];
-    final lastVisit = lastVisitDate != null
-        ? DateFormat('MMM d, yyyy').format(lastVisitDate)
-        : '\u2014';
     final initials =
         patient.fullName.isNotEmpty ? patient.fullName[0].toUpperCase() : '?';
 
@@ -647,14 +1274,14 @@ class _WebDesktopTableRowState extends ConsumerState<_WebDesktopTableRow> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           decoration: BoxDecoration(
             color: _hovered
-                ? (isDesktop ? context.colors.divider : context.colors.primary.withValues(alpha: 0.04))
+                ? context.colors.primary.withOpacity(0.02)
                 : Colors.transparent,
             border: Border(
               bottom: BorderSide(
-                  color: isDesktop ? context.colors.divider : context.colors.border.withValues(alpha: 0.3)),
+                  color: context.colors.border.withValues(alpha: 0.2)),
             ),
           ),
           child: Row(
@@ -698,28 +1325,54 @@ class _WebDesktopTableRowState extends ConsumerState<_WebDesktopTableRow> {
               ),
               Expanded(
                 flex: 2,
-                child: Text(
-                  lastVisit,
-                  style: context.textStyles.bodyMedium.copyWith(
-                    color: context.colors.textSecondary,
-                    fontSize: 13,
-                  ),
+                child: _buildLastVisitColumn(context, lastVisitDate),
+              ),
+              SizedBox(
+                width: 120,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (patient.phone.isNotEmpty)
+                      GestureDetector(
+                        onTap: () => WhatsAppHelper.openChat(patient.phone),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F5D4F).withOpacity(0.06),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF0F5D4F), size: 16),
+                        ),
+                      ),
+                    const SizedBox(width: 8),
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_horiz_rounded, color: context.colors.textMuted),
+                      offset: const Offset(0, 36),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      color: Colors.white,
+                      itemBuilder: (ctx) => [
+                        PopupMenuItem(
+                          value: 'profile',
+                          child: Row(
+                            children: [
+                              Icon(Icons.person_outline_rounded, size: 16, color: context.colors.textSecondary),
+                              const SizedBox(width: 8),
+                              Text('Open Profile', style: context.textStyles.bodyMedium),
+                            ],
+                          ),
+                        ),
+                      ],
+                      onSelected: (val) {
+                        if (val == 'profile') {
+                          widget.onTap();
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ),
-              // Web â€” WhatsApp ONLY, no call button
-              SizedBox(
-                width: 80,
-                child: patient.phone.isNotEmpty
-                    ? _WebActionBtn(
-                        icon: Icons.chat_rounded,
-                        color: const Color(0xFF25D366),
-                        tooltip: 'WhatsApp',
-                        onTap: () => WhatsAppHelper.openChat(patient.phone),
-                      )
-                    : const SizedBox.shrink(),
-              ),
-              Icon(Icons.chevron_right_rounded,
-                  color: context.colors.textHint, size: 20),
+              const SizedBox(width: 8),
             ],
           ),
         ),
@@ -728,7 +1381,8 @@ class _WebDesktopTableRowState extends ConsumerState<_WebDesktopTableRow> {
   }
 }
 
-// â”€â”€ Mobile web list â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+// ── Mobile web list ─────────────────────────────────────────────────────────
 
 class _WebMobileList extends StatelessWidget {
   final List<PatientModel> patients;

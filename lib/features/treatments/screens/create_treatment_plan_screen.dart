@@ -24,6 +24,7 @@ class CreateTreatmentPlanScreen extends ConsumerStatefulWidget {
   final String doctorId;
   final String? consultationId;
   final String? appointmentId;
+  final DateTime? appointmentDate;
 
   // Maintenance-mode params
   final bool isMaintenance;
@@ -38,6 +39,7 @@ class CreateTreatmentPlanScreen extends ConsumerStatefulWidget {
     required this.doctorId,
     this.consultationId,
     this.appointmentId,
+    this.appointmentDate,
     this.isMaintenance = false,
     this.parentPlanId,
     this.defaultTreatmentType,
@@ -111,6 +113,16 @@ class _CreateTreatmentPlanScreenState
         } catch (_) {}
         await _loadDraft();
       });
+    }
+
+    if (widget.appointmentDate != null) {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final target = DateTime(
+          widget.appointmentDate!.year, widget.appointmentDate!.month, widget.appointmentDate!.day);
+      if (target.isBefore(today)) {
+        _firstSessionCompletedToday = false;
+      }
     }
   }
 

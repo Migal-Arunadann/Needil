@@ -184,10 +184,19 @@ class ClinicDashboardScreen extends ConsumerWidget {
                           width: 48,
                           height: 48,
                           decoration: BoxDecoration(
-                            color: context.colors.border.withValues(alpha: 0.3),
                             shape: BoxShape.circle,
+                            image: clinic?.logoUrl != null
+                                ? DecorationImage(
+                                    image: NetworkImage(ImageHelper.getSecureUrl(clinic!.logoUrl!)),
+                                    fit: BoxFit.cover,
+                                  )
+                                : null,
+                            border: Border.all(color: context.colors.border.withValues(alpha: 0.8)),
+                            color: context.colors.border.withValues(alpha: 0.3),
                           ),
-                          child: Icon(Icons.business_rounded, color: context.colors.textPrimary, size: 22),
+                          child: clinic?.logoUrl == null
+                              ? Icon(Icons.person_rounded, color: context.colors.textSecondary, size: 24)
+                              : null,
                         ),
                         const SizedBox(width: 14),
                         Expanded(
@@ -231,25 +240,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                               ),
                               child: Icon(Icons.notifications_none_rounded, color: context.colors.textPrimary, size: 20),
                             ),
-                            const SizedBox(width: 16),
-                            // User avatar
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                image: clinic?.logoUrl != null
-                                    ? DecorationImage(
-                                        image: NetworkImage(ImageHelper.getSecureUrl(clinic!.logoUrl!)),
-                                        fit: BoxFit.cover,
-                                      )
-                                    : null,
-                                border: Border.all(color: context.colors.border.withValues(alpha: 0.8)),
-                              ),
-                              child: clinic?.logoUrl == null
-                                  ? Icon(Icons.person_rounded, color: context.colors.textSecondary, size: 20)
-                                  : null,
-                            ),
+
                           ],
                         ),
                       ],

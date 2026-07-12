@@ -30,8 +30,7 @@ class AnalyticsScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: isDesktop ? Colors.transparent : context.colors.background,
       body: SafeArea(
-        child: ResponsiveWrapper(
-          child: data.isLoading
+        child: data.isLoading
               ? const _LoadingView()
               : RefreshIndicator(
                   color: context.colors.primary,
@@ -223,7 +222,6 @@ class AnalyticsScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-        ),
       ),
     );
   }
@@ -329,12 +327,12 @@ class _AnalyticsHeader extends ConsumerWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.file_download_rounded, color: context.colors.textPrimary, size: 18),
+                const Icon(Icons.file_download_rounded, color: Colors.white, size: 18),
                 const SizedBox(width: 8),
                 Text(
                   'Export Report',
                   style: context.textStyles.buttonMedium.copyWith(
-                    color: context.colors.textPrimary,
+                    color: Colors.white,
                     fontSize: 13,
                   ),
                 ),
