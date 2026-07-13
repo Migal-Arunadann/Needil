@@ -1293,6 +1293,7 @@ class _AppointmentListScreenState
       floatingActionButton: isDesktop
           ? null
           : FloatingActionButton(
+              heroTag: null,
               shape: const CircleBorder(),
               backgroundColor: context.colors.primary,
               onPressed: () => _showAppointmentTypeSelector(context),

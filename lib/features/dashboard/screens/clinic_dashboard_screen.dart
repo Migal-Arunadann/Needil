@@ -155,11 +155,13 @@ class ClinicDashboardScreen extends ConsumerWidget {
       backgroundColor: isDesktop ? Colors.transparent : context.colors.background,
       floatingActionButton: !isDesktop
           ? FloatingActionButton.extended(
+              heroTag: null,
               onPressed: () => _showNewAppointmentTypeSelector(context),
               label: const Text('New Appointment',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-              icon: const Icon(Icons.add_rounded, color: Colors.white), // white-on-primary is always white
-              backgroundColor: const Color(0xFF3B82F6),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.2)),
+              icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+              backgroundColor: context.colors.primary,
+              elevation: 4,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
             )
           : null,
@@ -171,7 +173,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
             onRefresh: () => ref.read(dashboardStatsProvider.notifier).load(),
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 24, 20, isDesktop ? 36 : 24, 100),
+              padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 20, 20, isDesktop ? 36 : 20, 120),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -250,11 +252,12 @@ class ClinicDashboardScreen extends ConsumerWidget {
                     Row(
                       children: [
                         Container(
-                          width: 44,
-                          height: 44,
+                          width: 48,
+                          height: 48,
                           decoration: BoxDecoration(
                             color: context.colors.primary.withValues(alpha: 0.08),
                             shape: BoxShape.circle,
+                            border: Border.all(color: context.colors.primary.withValues(alpha: 0.15)),
                             image: clinic?.logoUrl != null
                                 ? DecorationImage(
                                     image: NetworkImage(ImageHelper.getSecureUrl(clinic!.logoUrl!)),
@@ -263,41 +266,41 @@ class ClinicDashboardScreen extends ConsumerWidget {
                                 : null,
                           ),
                           child: clinic?.logoUrl == null
-                              ? Icon(Icons.business_rounded, color: context.colors.primary, size: 20)
+                              ? Icon(Icons.business_rounded, color: context.colors.primary, size: 22)
                               : null,
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 14),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 clinic?.name ?? 'Clinic',
-                                style: context.textStyles.h2,
+                                style: context.textStyles.h2.copyWith(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: -0.5,
+                                  height: 1.1,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 2),
+                              const SizedBox(height: 4),
                               Text(
-                                DateFormat('EEE, d MMM').format(DateTime.now()),
-                                style: context.textStyles.caption,
+                                DateFormat('EEEE, d MMMM').format(DateTime.now()),
+                                style: context.textStyles.caption.copyWith(
+                                  fontSize: 13,
+                                  color: context.colors.textSecondary,
+                                ),
                               ),
                             ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    Text(
-                      DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now()),
-                      style: context.textStyles.caption.copyWith(
-                        color: context.colors.textMuted,
-                        fontSize: 13,
-                      ),
-                    ),
                   ],
                   
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 32),
 
                   if (stats.isLoading)
                     const Center(
@@ -411,9 +414,12 @@ class ClinicDashboardScreen extends ConsumerWidget {
                       "Today's Overview",
                       style: context.textStyles.h3.copyWith(
                         color: context.colors.textPrimary,
-                        ),
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.4,
+                      ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     DashboardOverviewSection(stats: stats),
                     const SizedBox(height: 24),
                     Text(

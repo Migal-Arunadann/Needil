@@ -249,6 +249,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     if (hasOngoing) return null;
 
     return FloatingActionButton.extended(
+      heroTag: null,
       onPressed: _startConsultation,
       backgroundColor: context.colors.primary,
       icon: Icon(Icons.add_comment_rounded, color: context.colors.textPrimary),

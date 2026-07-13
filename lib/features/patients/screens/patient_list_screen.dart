@@ -39,6 +39,7 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
   }
 
   Map<String, DateTime> _lastVisitDates = const {};
+  Set<String> _arrivedPatientIds = const {};
 
   List<PatientModel> _filtered(List<PatientModel> all) {
     List<PatientModel> result = all;
@@ -78,6 +79,8 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
           return lastVisit != null;
         } else if (_statusFilter == 'new') {
           return lastVisit == null;
+        } else if (_statusFilter == 'arrived') {
+          return _arrivedPatientIds.contains(p.id);
         }
         return true;
       }).toList();
@@ -143,6 +146,7 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(patientListProvider);
     _lastVisitDates = state.lastVisitDates;
+    _arrivedPatientIds = state.arrivedPatientIds;
     final filteredList = _filtered(state.patients);
 
     if (kIsWeb) {
@@ -363,6 +367,7 @@ class _WebPatientScreen extends ConsumerWidget {
       'all': 'All Patients',
       'active': 'Active / Returning',
       'new': 'New (No visit yet)',
+      'arrived': 'Arrived (Today)',
     };
 
     return Container(
@@ -2017,6 +2022,7 @@ class _AppPatientScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: context.colors.background,
       floatingActionButton: FloatingActionButton(
+        heroTag: null,
         shape: const CircleBorder(),
         backgroundColor: context.colors.primary,
         onPressed: () => _showAppointmentTypeSelector(context),
@@ -2409,20 +2415,20 @@ class _NewAppointmentCTAButtonState extends State<_NewAppointmentCTAButton> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.add_rounded, color: context.colors.textPrimary, size: 18),
+                  Icon(Icons.add_rounded, color: Colors.white, size: 18),
                   const SizedBox(width: 8),
                   Text(
                     'New Appointment',
                     style: context.textStyles.buttonMedium.copyWith(
-                      color: context.colors.textPrimary,
+                      color: Colors.white,
                       fontWeight: FontWeight.bold,
                       fontSize: 13,
                     ),
                   ),
                   const SizedBox(width: 8),
-                  VerticalDivider(color: context.colors.textHint, width: 1, indent: 10, endIndent: 10),
+                  VerticalDivider(color: Colors.white54, width: 1, indent: 10, endIndent: 10),
                   const SizedBox(width: 8),
-                  Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textSecondary, size: 18),
+                  Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 18),
                 ],
               ),
             ),

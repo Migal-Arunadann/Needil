@@ -27,6 +27,27 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
   bool _obscureNew = true;
   bool _obscureConfirm = true;
   bool _isChanging = false;
+  bool _isGoogleLinked = false;
+  bool _isLoadingGoogle = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkGoogleLinked();
+  }
+
+  Future<void> _checkGoogleLinked() async {
+    final auth = ref.read(authProvider);
+    if (auth.userId == null) return;
+    
+    final isLinked = await ref.read(authProvider.notifier).authService.hasGoogleAccount(auth.userId!);
+    if (mounted) {
+      setState(() {
+        _isGoogleLinked = isLinked;
+        _isLoadingGoogle = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -86,6 +107,109 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
       _showError('Failed to change password. Check your current password and try again.');
     } finally {
       if (mounted) setState(() => _isChanging = false);
+    }
+  }
+
+  Future<void> _toggleGoogleLink(bool newValue) async {
+    final auth = ref.read(authProvider);
+    if (auth.userId == null) return;
+    final pb = ref.read(pocketbaseProvider);
+
+    if (newValue) {
+      // Link Google Account
+      setState(() => _isLoadingGoogle = true);
+      final result = await ref.read(authProvider.notifier).authService.linkGoogleAccount();
+      if (result.success) {
+        if (mounted) {
+          AppToast.show('Google Account successfully linked.', type: ToastType.success);
+          setState(() => _isGoogleLinked = true);
+        }
+      } else {
+        if (mounted) {
+          _showError('Failed to link Google account.');
+        }
+      }
+      if (mounted) setState(() => _isLoadingGoogle = false);
+    } else {
+      // Unlink Google Account - check if password exists
+      setState(() => _isLoadingGoogle = true);
+      
+      // Ask for password to confirm unlinking
+      final passwordCtrl = TextEditingController();
+      bool obscureConfirmPassword = true;
+
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (context, setStateDialog) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text('Disconnect Google Account?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'To ensure you do not lose access to your account, please enter your password to confirm.',
+                ),
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: passwordCtrl,
+                  label: 'Password',
+                  hint: 'Enter your password',
+                  obscureText: obscureConfirmPassword,
+                  prefixIcon: Icon(Icons.lock_rounded, color: context.colors.textHint),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: context.colors.textHint,
+                    ),
+                    onPressed: () => setStateDialog(() => obscureConfirmPassword = !obscureConfirmPassword),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('Cancel', style: TextStyle(color: context.colors.textHint)),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: Text('Disconnect', style: TextStyle(color: context.colors.error)),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      if (confirm == true && passwordCtrl.text.isNotEmpty) {
+        // Validate password first by trying to re-authenticate
+        try {
+          final isClinic = auth.role == UserRole.clinic;
+          final username = isClinic ? auth.clinic!.username : auth.doctor!.username;
+          final collection = isClinic ? PBCollections.clinics : PBCollections.doctors;
+          await pb.collection(collection).authWithPassword(username, passwordCtrl.text);
+          
+          final success = await ref.read(authProvider.notifier).authService.unlinkGoogleAccount(auth.userId!);
+          if (success) {
+            if (mounted) {
+              AppToast.show('Google Account disconnected.', type: ToastType.success);
+              setState(() => _isGoogleLinked = false);
+            }
+          } else {
+            if (mounted) {
+              _showError('Failed to disconnect Google account.');
+            }
+          }
+        } catch (e) {
+          if (mounted) {
+            _showError('Incorrect password or failed to disconnect.');
+          }
+        }
+      } else if (confirm == true) {
+         if (mounted) _showError('Password is required to disconnect.');
+      }
+      if (mounted) setState(() => _isLoadingGoogle = false);
     }
   }
 
@@ -155,6 +279,62 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
                 ),
               ),
               const SizedBox(height: 24),
+
+              // Connected Accounts (Clinics Only)
+              if (isClinic) ...[
+                _sectionHeader('Connected Accounts', Icons.link_rounded),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: context.colors.surface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: context.colors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: context.colors.background,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Image.network(
+                          'https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg',
+                          width: 24,
+                          height: 24,
+                          errorBuilder: (context, error, stackTrace) =>
+                              Icon(Icons.g_mobiledata_rounded, size: 24, color: context.colors.primary),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Google', style: context.textStyles.h4.copyWith(fontSize: 15)),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Sign in quickly using your Google account',
+                              style: context.textStyles.caption.copyWith(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      if (_isLoadingGoogle)
+                        const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+                      else
+                        Switch(
+                          value: _isGoogleLinked,
+                          activeColor: context.colors.primary,
+                          onChanged: _toggleGoogleLink,
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
 
               // Change password
               _sectionHeader('Change Password', Icons.lock_reset_rounded),

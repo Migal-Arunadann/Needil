@@ -1326,31 +1326,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: context.colors.surface,
+        backgroundColor: ctx.colors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            Icon(Icons.logout_rounded, color: context.colors.error, size: 22),
+            Icon(Icons.logout_rounded, color: ctx.colors.error, size: 22),
             const SizedBox(width: 10),
-            Text('Sign Out', style: TextStyle(color: context.colors.textPrimary)),
+            Text('Sign Out', style: TextStyle(color: ctx.colors.textPrimary)),
           ],
         ),
         content: Text(
           'Are you sure you want to sign out? You will need to log in again to access your account.',
-          style: TextStyle(color: context.colors.textSecondary, height: 1.5),
+          style: TextStyle(color: ctx.colors.textSecondary, height: 1.5),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel', style: TextStyle(color: context.colors.textSecondary)),
+            child: Text('Cancel', style: TextStyle(color: ctx.colors.textSecondary)),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(
-              backgroundColor: context.colors.error.withValues(alpha: 0.1),
+              backgroundColor: ctx.colors.error.withValues(alpha: 0.1),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
-            child: Text('Sign Out', style: TextStyle(color: context.colors.error)),
+            child: Text('Sign Out', style: TextStyle(color: ctx.colors.error)),
           ),
         ],
       ),
@@ -1885,10 +1885,11 @@ class _AvatarGlowRingState extends State<_AvatarGlowRing>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return AnimatedBuilder(
       animation: _ctrl,
       builder: (_, child) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
         final pulse = isDark
             ? 0.15 + (_ctrl.value * 0.10)  // subtler in dark
             : 0.08 + (_ctrl.value * 0.06); // very subtle in light

@@ -152,6 +152,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
       backgroundColor: isDesktop ? Colors.transparent : context.colors.background,
       floatingActionButton: !isDesktop
           ? FloatingActionButton.extended(
+              heroTag: null,
               onPressed: () => _showNewAppointmentTypeSelector(context),
               label: const Text('New Appointment',
                   style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),

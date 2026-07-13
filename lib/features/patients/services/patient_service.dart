@@ -85,4 +85,42 @@ class PatientService {
 
     return lastVisits;
   }
+
+  /// Fetch patients who have an appointment with 'arrived' status today.
+  Future<Set<String>> getArrivedPatientIds(List<String> patientIds) async {
+    if (patientIds.isEmpty) return {};
+
+    final Set<String> arrivedIds = {};
+    const chunkSize = 50;
+
+    for (var i = 0; i < patientIds.length; i += chunkSize) {
+      final chunk = patientIds.sublist(i, (i + chunkSize).clamp(0, patientIds.length));
+      final idsFilter = chunk.map((id) => 'patient = "$id"').join(' || ');
+      final filter = 'status = "arrived" && ($idsFilter)';
+
+      try {
+        final records = await pb.collection(PBCollections.appointments).getFullList(
+          filter: filter,
+          fields: 'patient,date',
+        );
+
+        final now = DateTime.now();
+        for (final r in records) {
+          final pId = r.getStringValue('patient');
+          final dateStr = r.getStringValue('date');
+          if (pId.isNotEmpty && dateStr.isNotEmpty) {
+            final dt = DateTime.tryParse(dateStr);
+            // Consider it arrived if the appointment is today
+            if (dt != null && dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+              arrivedIds.add(pId);
+            }
+          }
+        }
+      } catch (_) {
+        // Continue to next chunk
+      }
+    }
+
+    return arrivedIds;
+  }
 }

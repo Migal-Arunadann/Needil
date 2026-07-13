@@ -166,21 +166,40 @@ class _ClinicStep5ScreenState extends ConsumerState<ClinicStep5Screen> {
       if (additionalDoctors != null) 'additional_doctors': additionalDoctors,
       if (receptionistData != null) 'receptionist_data': receptionistData,
     };
+    final isGoogle = widget.clinicData['is_google'] == true;
+
     setState(() => _isSubmitting = true);
-    await ref.read(authProvider.notifier).completeClinicRegistration(
-      clinicName: widget.clinicData['clinic_name'],
-      username: widget.clinicData['username'],
-      password: widget.clinicData['password'],
-      bedCount: widget.clinicData['bed_count'],
-      primaryDoctorData: primaryDoctorData,
-      doctorPhotoFile: !kIsWeb && photoPath != null ? File(photoPath) : null,
-      additionalDoctors: additionalDoctors,
-      receptionistData: receptionistData,
-      city: widget.clinicData['city'],
-      area: widget.clinicData['area'],
-      stateField: widget.clinicData['state'],
-      pincode: widget.clinicData['pincode'],
-    );
+    
+    if (isGoogle) {
+      await ref.read(authProvider.notifier).completeGoogleRegistration(
+        clinicName: widget.clinicData['clinic_name'],
+        username: widget.clinicData['username'],
+        bedCount: widget.clinicData['bed_count'],
+        primaryDoctorData: primaryDoctorData,
+        doctorPhotoFile: !kIsWeb && photoPath != null ? File(photoPath) : null,
+        additionalDoctors: additionalDoctors,
+        receptionistData: receptionistData,
+        city: widget.clinicData['city'],
+        area: widget.clinicData['area'],
+        stateField: widget.clinicData['state'],
+        pincode: widget.clinicData['pincode'],
+      );
+    } else {
+      await ref.read(authProvider.notifier).completeClinicRegistration(
+        clinicName: widget.clinicData['clinic_name'],
+        username: widget.clinicData['username'],
+        password: widget.clinicData['password'],
+        bedCount: widget.clinicData['bed_count'],
+        primaryDoctorData: primaryDoctorData,
+        doctorPhotoFile: !kIsWeb && photoPath != null ? File(photoPath) : null,
+        additionalDoctors: additionalDoctors,
+        receptionistData: receptionistData,
+        city: widget.clinicData['city'],
+        area: widget.clinicData['area'],
+        stateField: widget.clinicData['state'],
+        pincode: widget.clinicData['pincode'],
+      );
+    }
     if (mounted) {
       setState(() => _isSubmitting = false);
       final finalState = ref.read(authProvider);

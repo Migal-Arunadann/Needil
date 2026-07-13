@@ -15,7 +15,8 @@ import 'package:pms_app/core/theme/app_theme.dart';
 
 /// Clinic Registration — Step 1: Clinic details (name, username, password).
 class ClinicStep1Screen extends ConsumerStatefulWidget {
-  const ClinicStep1Screen({super.key});
+  final bool isGoogleRegistration;
+  const ClinicStep1Screen({super.key, this.isGoogleRegistration = false});
 
   @override
   ConsumerState<ClinicStep1Screen> createState() => _ClinicStep1ScreenState();
@@ -126,9 +127,10 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
     Navigator.of(context).pushNamed(
       '/register/clinic/step2',
       arguments: {
+        'is_google': widget.isGoogleRegistration,
         'clinic_name': _nameController.text.trim(),
         'username': _usernameController.text.trim(),
-        'password': _passwordController.text,
+        'password': widget.isGoogleRegistration ? '' : _passwordController.text,
         'email': _lockedEmail ?? '',
         'pincode': _pincodeController.text.trim(),
         'country': _countryController.text.trim(),
@@ -283,49 +285,51 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 16),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: AppTextField(
-                                    label: 'Set Password',
-                                    hint: 'Min. 8 characters',
-                                    controller: _passwordController,
-                                    obscureText: _obscurePassword,
-                                    validator: Validators.password,
-                                    prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint),
-                                    suffixIcon: IconButton(
-                                      icon: Icon(
-                                        _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                                        color: context.colors.textHint,
+                            if (!widget.isGoogleRegistration) ...[
+                              const SizedBox(height: 16),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: AppTextField(
+                                      label: 'Set Password',
+                                      hint: 'Min. 8 characters',
+                                      controller: _passwordController,
+                                      obscureText: _obscurePassword,
+                                      validator: Validators.password,
+                                      prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint),
+                                      suffixIcon: IconButton(
+                                        icon: Icon(
+                                          _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                          color: context.colors.textHint,
+                                        ),
+                                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                       ),
-                                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                      textInputAction: TextInputAction.next,
                                     ),
-                                    textInputAction: TextInputAction.next,
                                   ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: AppTextField(
-                                    label: 'Confirm Password',
-                                    hint: 'Re-enter password',
-                                    controller: _confirmPasswordController,
-                                    obscureText: _obscureConfirm,
-                                    validator: (v) => Validators.confirmPassword(v, _passwordController.text),
-                                    prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint),
-                                    suffixIcon: IconButton(
-                                      icon: Icon(
-                                        _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                                        color: context.colors.textHint,
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: AppTextField(
+                                      label: 'Confirm Password',
+                                      hint: 'Re-enter password',
+                                      controller: _confirmPasswordController,
+                                      obscureText: _obscureConfirm,
+                                      validator: (v) => Validators.confirmPassword(v, _passwordController.text),
+                                      prefixIcon: Icon(Icons.lock_outline_rounded, color: context.colors.textHint),
+                                      suffixIcon: IconButton(
+                                        icon: Icon(
+                                          _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                          color: context.colors.textHint,
+                                        ),
+                                        onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                                       ),
-                                      onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
+                                      textInputAction: TextInputAction.done,
                                     ),
-                                    textInputAction: TextInputAction.done,
                                   ),
-                                ),
-                              ],
-                            ),
+                                ],
+                              ),
+                            ],
                             const SizedBox(height: 36),
                             Text(
                               'Clinic Location',

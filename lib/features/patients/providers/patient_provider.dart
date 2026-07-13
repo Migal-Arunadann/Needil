@@ -14,12 +14,14 @@ class PatientListState {
   final bool isLoading;
   final List<PatientModel> patients;
   final Map<String, DateTime> lastVisitDates;
+  final Set<String> arrivedPatientIds;
   final String? error;
 
   const PatientListState({
     this.isLoading = false,
     this.patients = const [],
     this.lastVisitDates = const {},
+    this.arrivedPatientIds = const {},
     this.error,
   });
 
@@ -27,12 +29,14 @@ class PatientListState {
     bool? isLoading,
     List<PatientModel>? patients,
     Map<String, DateTime>? lastVisitDates,
+    Set<String>? arrivedPatientIds,
     String? error,
   }) {
     return PatientListState(
       isLoading: isLoading ?? this.isLoading,
       patients: patients ?? this.patients,
       lastVisitDates: lastVisitDates ?? this.lastVisitDates,
+      arrivedPatientIds: arrivedPatientIds ?? this.arrivedPatientIds,
       error: error,
     );
   }
@@ -71,11 +75,13 @@ class PatientListNotifier extends StateNotifier<PatientListState> {
       // Fetch last completed appointment dates for all patients in batch
       final patientIds = result.map((p) => p.id).toList();
       final lastVisits = await _service.getLastVisitDates(patientIds);
+      final arrivedIds = await _service.getArrivedPatientIds(patientIds);
 
       state = state.copyWith(
         isLoading: false,
         patients: result,
         lastVisitDates: lastVisits,
+        arrivedPatientIds: arrivedIds,
       );
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());

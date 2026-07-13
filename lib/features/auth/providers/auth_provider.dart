@@ -22,6 +22,7 @@ class AuthState {
   final DoctorModel? doctor;
   final ReceptionistModel? receptionist;
   final String? error;
+  final bool requiresGoogleRegistration;
 
   // ── OTP pending state ──────────────────────────────────────────────
   final String? pendingOtpId;
@@ -49,6 +50,7 @@ class AuthState {
     this.pendingMfaId,
     this.isPendingDeletion = false,
     this.purgeAt,
+    this.requiresGoogleRegistration = false,
   });
 
   AuthState copyWith({
@@ -66,6 +68,7 @@ class AuthState {
     String? pendingMfaId,
     bool? isPendingDeletion,
     DateTime? purgeAt,
+    bool? requiresGoogleRegistration,
   }) {
     return AuthState(
       isInitializing: isInitializing ?? this.isInitializing,
@@ -82,6 +85,7 @@ class AuthState {
       pendingMfaId: pendingMfaId ?? this.pendingMfaId,
       isPendingDeletion: isPendingDeletion ?? this.isPendingDeletion,
       purgeAt: purgeAt ?? this.purgeAt,
+      requiresGoogleRegistration: requiresGoogleRegistration ?? this.requiresGoogleRegistration,
     );
   }
 
@@ -176,6 +180,44 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
     } else {
       state = state.copyWith(isLoading: false, error: result.error);
+    }
+  }
+
+  /// Login with Google
+  Future<void> loginWithGoogle() async {
+    state = state.copyWith(isLoading: true, error: null, requiresGoogleRegistration: false);
+    final clinicResult = await _authService.loginWithGoogle();
+    
+    if (clinicResult.success) {
+       final user = clinicResult.user as ClinicModel;
+       
+       if (user.name.isEmpty) {
+          // New account created via Google OAuth, needs to complete registration
+          state = AuthState(
+            isInitializing: false,
+            isAuthenticated: false,
+            requiresGoogleRegistration: true,
+            role: UserRole.clinic,
+            clinic: user,
+          );
+       } else {
+         state = AuthState(
+           isInitializing: false,
+           isAuthenticated: true,
+           role: UserRole.clinic,
+           clinic: user,
+           isPendingDeletion: clinicResult.isPendingDeletion,
+           purgeAt: clinicResult.purgeAt,
+         );
+       }
+    } else {
+       final errorStr = clinicResult.error ?? '';
+       if (errorStr.contains('already registered') || errorStr.contains('Failed to authenticate')) {
+           // We need to show the exact abort dialog
+           state = state.copyWith(isLoading: false, error: 'google_account_exists_unlinked');
+       } else {
+           state = state.copyWith(isLoading: false, error: errorStr);
+       }
     }
   }
 
@@ -323,6 +365,63 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
     } else {
       state = state.copyWith(isLoading: false, error: result.error);
+    }
+  }
+
+  /// Complete clinic registration for Google OAuth user.
+  Future<void> completeGoogleRegistration({
+    required String clinicName,
+    required String username,
+    required int bedCount,
+    required Map<String, dynamic> primaryDoctorData,
+    File? doctorPhotoFile,
+    List<Map<String, dynamic>>? additionalDoctors,
+    Map<String, dynamic>? receptionistData,
+    String? city,
+    String? area,
+    String? stateField,
+    String? pincode,
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+
+    try {
+      final clinicId = state.clinic?.id;
+      if (clinicId == null) {
+        state = state.copyWith(isLoading: false, error: 'Unauthorized to complete registration.');
+        return;
+      }
+
+      final result = await _authService.completeGoogleRegistrationPatch(
+        recordId: clinicId,
+        clinicName: clinicName,
+        username: username,
+        bedCount: bedCount,
+        primaryDoctorData: primaryDoctorData,
+        doctorPhotoFile: doctorPhotoFile,
+        additionalDoctors: additionalDoctors,
+        receptionistData: receptionistData,
+        city: city,
+        area: area,
+        state: stateField,
+        pincode: pincode,
+      );
+
+      if (result.success) {
+        state = AuthState(
+          isInitializing: false,
+          isAuthenticated: true,
+          requiresGoogleRegistration: false,
+          role: UserRole.clinic,
+          clinic: result.user as ClinicModel,
+        );
+      } else {
+        state = state.copyWith(isLoading: false, error: result.error);
+      }
+    } catch (e) {
+      state = state.copyWith(
+        isLoading: false,
+        error: 'Complete Google registration failed: ${e.toString()}',
+      );
     }
   }
 

@@ -1,3 +1,5 @@
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -156,6 +158,380 @@ class AuthService {
   }
 
   /// Login as clinic.
+
+  Future<Map<String, String>?> _runLocalOAuthServer() async {
+    HttpServer? server;
+    try {
+      final authMethods = await pb.collection(PBCollections.clinics).listAuthMethods();
+      final provider = authMethods.oauth2.providers.firstWhere((p) => p.name == 'google');
+
+      server = await HttpServer.bind(InternetAddress.anyIPv4, 8080, shared: true);
+      final redirectUrl = 'http://localhost:8080/callback';
+      final state = _generateUniqueId(16);
+
+      final authUrl = Uri.parse(provider.authURL + redirectUrl);
+      final queryParams = Map<String, String>.from(authUrl.queryParameters);
+      queryParams['state'] = state;
+      final finalAuthUrl = authUrl.replace(queryParameters: queryParams);
+
+      await launchUrl(finalAuthUrl, mode: LaunchMode.externalApplication);
+
+      final request = await server.first;
+      final query = request.uri.queryParameters;
+
+      request.response
+        ..statusCode = 200
+        ..headers.contentType = ContentType.html
+        ..write('''
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Auth Successful</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #f8f9fa; color: #333; }
+        h1 { font-size: 1.5rem; color: #4caf50; }
+        p { color: #666; }
+    </style>
+</head>
+<body>
+    <h1>Authentication Successful!</h1>
+    <p>You can safely close this browser and return to the app.</p>
+</body>
+</html>
+''');
+      await request.response.close();
+      await server.close();
+
+      if (query['state'] != state || query['code'] == null) {
+        return null;
+      }
+
+      return {
+        'code': query['code']!,
+        'codeVerifier': provider.codeVerifier,
+        'redirectUrl': redirectUrl,
+      };
+    } catch (e) {
+      await server?.close(force: true);
+      debugPrint('Local OAuth server error: $e');
+      return null;
+    }
+  }
+
+  /// Start Google OAuth login flow
+  Future<AuthResult> loginWithGoogle() async {
+    try {
+      RecordAuth loginResult;
+      
+      if (kIsWeb) {
+        loginResult = await pb
+            .collection(PBCollections.clinics)
+            .authWithOAuth2('google', (url) async {
+          final uri = Uri.parse(url.toString());
+          try {
+            await launchUrl(uri, mode: LaunchMode.platformDefault);
+          } catch (e) {
+            debugPrint('Could not launch URL: $e');
+          }
+        });
+      } else {
+        final oauthData = await _runLocalOAuthServer();
+        if (oauthData == null) {
+          return AuthResult(success: false, error: 'Google login was cancelled or failed.');
+        }
+
+        // The OS often aborts network connections immediately after returning from an external browser.
+        // We retry up to 3 times with a delay to allow the network layer to wake up.
+        int retries = 3;
+        while (true) {
+          try {
+            await Future.delayed(const Duration(milliseconds: 800));
+            loginResult = await pb.collection(PBCollections.clinics).authWithOAuth2Code(
+              'google',
+              oauthData['code']!,
+              oauthData['codeVerifier']!,
+              oauthData['redirectUrl']!,
+            );
+            break; // Success
+          } on ClientException catch (e) {
+            if ((e.isAbort || e.statusCode == 0) && retries > 0) {
+              retries--;
+              debugPrint('Network abort caught, retrying... ($retries left)');
+              continue;
+            }
+            rethrow;
+          }
+        }
+      }
+      
+      await _saveSession('clinic', loginResult.token, loginResult.record.id);
+      
+      return AuthResult(
+        success: true,
+        role: UserRole.clinic,
+        user: ClinicModel.fromRecord(loginResult.record),
+      );
+    } on ClientException catch (e) {
+      debugPrint('ClientException in loginWithGoogle: ${e.response}');
+      if (e.response['message']?.toString().contains('Failed to authenticate') == true) {
+        return AuthResult(success: false, error: 'google_account_exists_unlinked');
+      }
+      if (e.statusCode == 400) {
+        final data = e.response['data'] as Map<String, dynamic>?;
+        if (data != null && data['email'] != null) {
+            final emailError = data['email']['message']?.toString().toLowerCase() ?? '';
+            if (emailError.contains('unique') || emailError.contains('already in use')) {
+                 return AuthResult(success: false, error: 'google_account_exists_unlinked');
+            }
+        }
+        return AuthResult(success: false, error: _parseError(e));
+      }
+      return AuthResult(success: false, error: _parseError(e));
+    } catch (e) {
+      debugPrint('Generic exception in loginWithGoogle: $e');
+      return AuthResult(success: false, error: e.toString());
+    }
+  }
+
+  /// Link Google account to existing user
+  Future<AuthResult> linkGoogleAccount() async {
+    try {
+      final originalToken = pb.authStore.token;
+      final originalModel = pb.authStore.model;
+      final originalId = originalModel?.id;
+
+      RecordAuth loginResult;
+
+      if (kIsWeb) {
+        loginResult = await pb
+            .collection(PBCollections.clinics)
+            .authWithOAuth2('google', (url) async {
+          final uri = Uri.parse(url.toString());
+          try {
+            await launchUrl(uri, mode: LaunchMode.platformDefault);
+          } catch (e) {
+            debugPrint('Could not launch URL: $e');
+          }
+        });
+      } else {
+        final oauthData = await _runLocalOAuthServer();
+        if (oauthData == null) {
+          return AuthResult(success: false, error: 'Google link was cancelled or failed.');
+        }
+
+        int retries = 3;
+        while (true) {
+          try {
+            await Future.delayed(const Duration(milliseconds: 800));
+            loginResult = await pb.collection(PBCollections.clinics).authWithOAuth2Code(
+              'google',
+              oauthData['code']!,
+              oauthData['codeVerifier']!,
+              oauthData['redirectUrl']!,
+            );
+            break;
+          } on ClientException catch (e) {
+            if ((e.isAbort || e.statusCode == 0) && retries > 0) {
+              retries--;
+              debugPrint('Network abort caught, retrying... ($retries left)');
+              continue;
+            }
+            rethrow;
+          }
+        }
+      }
+      
+      if (loginResult.record.id != originalId) {
+        pb.authStore.save(originalToken, originalModel);
+        return AuthResult(success: false, error: 'This Google account is already linked to another clinic.');
+      }
+      
+      await _saveSession('clinic', loginResult.token, loginResult.record.id);
+      return AuthResult(success: true, role: UserRole.clinic, user: ClinicModel.fromRecord(loginResult.record));
+      
+    } catch (e) {
+      debugPrint('Error linking Google account: $e');
+      return AuthResult(success: false, error: e.toString());
+    }
+  }
+
+  /// Complete the clinic registration for a Google OAuth user.
+  Future<AuthResult> completeGoogleRegistrationPatch({
+    required String recordId,
+    required String clinicName,
+    required String username,
+    required int bedCount,
+    required Map<String, dynamic> primaryDoctorData,
+    File? doctorPhotoFile,
+    List<Map<String, dynamic>>? additionalDoctors,
+    Map<String, dynamic>? receptionistData,
+    String? city,
+    String? area,
+    String? state,
+    String? pincode,
+  }) async {
+    try {
+      final clinicCode = _generateUniqueId(6);
+
+      final profileBody = {
+        'name': clinicName,
+        'username': username,
+        'bed_count': bedCount,
+        'clinic_id': clinicCode,
+        'subscription_tier': 'base',
+        'photo_limit': 2000,
+        'photos_used': 0,
+        'max_doctors': 1,
+        if (city != null && city.isNotEmpty) 'city': city,
+        if (area != null && area.isNotEmpty) 'area': area,
+        if (state != null && state.isNotEmpty) 'state': state,
+        if (pincode != null && pincode.isNotEmpty) 'pincode': pincode,
+      };
+
+      final updatedClinic = await pb
+          .collection(PBCollections.clinics)
+          .update(recordId, body: profileBody);
+
+      final primaryDoctorId = _generateUniqueId(8, prefix: 'DR');
+      final internalUsername = 'dr_$clinicCode'.toLowerCase();
+      final internalPassword = '${_generateUniqueId(8)}_dr_$clinicCode';
+
+      final existingPrimary = await pb
+          .collection(PBCollections.doctors)
+          .getList(
+            page: 1,
+            perPage: 1,
+            filter: 'clinic = "$recordId" && is_primary = true',
+          );
+
+      if (existingPrimary.items.isEmpty) {
+        final doctorBody = {
+          ...primaryDoctorData,
+          'username': internalUsername,
+          'email': _fakeEmail(internalUsername),
+          'emailVisibility': false,
+          'password': internalPassword,
+          'passwordConfirm': internalPassword,
+          'clinic': recordId,
+          'is_primary': true,
+          'is_active': true,
+          'doctor_id': primaryDoctorId,
+        };
+
+        if (doctorPhotoFile != null) {
+          final mPart = await http.MultipartFile.fromPath(
+            'photo',
+            doctorPhotoFile.path,
+          );
+          await pb
+              .collection(PBCollections.doctors)
+              .create(body: doctorBody, files: [mPart]);
+        } else {
+          await pb.collection(PBCollections.doctors).create(body: doctorBody);
+        }
+      }
+
+      // ── 4. Additional Doctors ──
+      if (additionalDoctors != null) {
+        for (final docData in additionalDoctors) {
+          final docId = _generateUniqueId(8, prefix: 'DR');
+          final photoPath = docData['photo_path'] as String?;
+          final docUsername =
+              (docData['username'] as String?)?.trim().isNotEmpty == true
+              ? docData['username'].toString().toLowerCase()
+              : 'dr_${clinicCode.toLowerCase()}_$docId'.toLowerCase();
+          final body = {
+            ...docData,
+            'username': docUsername,
+            'email': _fakeEmail(docUsername),
+            'emailVisibility': false,
+            'passwordConfirm': docData['password'],
+            'clinic': recordId,
+            'is_primary': false,
+            'is_active': true,
+            'doctor_id': docId,
+          };
+          body.remove('photo_path');
+
+          if (photoPath != null) {
+            final files = [
+              await http.MultipartFile.fromPath('photo', photoPath),
+            ];
+            await pb
+                .collection(PBCollections.doctors)
+                .create(body: body, files: files);
+          } else {
+            await pb.collection(PBCollections.doctors).create(body: body);
+          }
+        }
+      }
+
+      // ── 5. Receptionist ──
+      if (receptionistData != null) {
+        final recId = _generateUniqueId(8, prefix: 'RC');
+        final recUsername =
+            (receptionistData['username'] as String?)?.trim() ?? '';
+        final recPassword =
+            (receptionistData['password'] as String?)?.trim() ?? '';
+        final recBody = {
+          'name': receptionistData['name'],
+          'username': recUsername,
+          'email': _fakeEmail(recUsername),
+          'emailVisibility': false,
+          'password': recPassword,
+          'passwordConfirm': recPassword,
+          'clinic': recordId,
+          'is_active': true,
+          'receptionist_id': recId,
+          if ((receptionistData['phone'] as String?)?.isNotEmpty == true)
+            'phone': receptionistData['phone'],
+        };
+        await pb.collection(PBCollections.receptionists).create(body: recBody);
+      }
+
+      return AuthResult(
+        success: true,
+        role: UserRole.clinic,
+        user: ClinicModel.fromRecord(updatedClinic),
+      );
+    } on ClientException catch (e) {
+      return AuthResult(success: false, error: _parseError(e));
+    } catch (e) {
+      return AuthResult(
+        success: false,
+        error: 'Complete Google registration failed: $e',
+      );
+    }
+  }
+
+  Future<bool> hasGoogleAccount(String userId) async {
+    try {
+      final records = await pb.collection('_externalAuths').getFullList(
+        filter: 'recordId = "$userId" && provider = "google"',
+      );
+      return records.isNotEmpty;
+    } catch (e) {
+      debugPrint('Error checking google account: $e');
+      return false;
+    }
+  }
+
+  Future<bool> unlinkGoogleAccount(String userId) async {
+    try {
+      final records = await pb.collection('_externalAuths').getFullList(
+        filter: 'recordId = "$userId" && provider = "google"',
+      );
+      for (final record in records) {
+        await pb.collection('_externalAuths').delete(record.id);
+      }
+      return true;
+    } catch (e) {
+      debugPrint('Error unlinking google account: $e');
+      return false;
+    }
+  }
+
   Future<AuthResult> loginClinic(String username, String password) async {
     try {
       final result = await pb
@@ -1041,7 +1417,6 @@ class AuthService {
       if (response.containsKey('data')) {
         final data = response['data'];
         if (data is Map && data.isNotEmpty) {
-          // Check for specific field errors and map to friendly messages
           if (data.containsKey('username')) {
             final msg = (data['username'] as Map?)?['message']?.toString() ?? '';
             if (msg.toLowerCase().contains('unique')) {
@@ -1051,8 +1426,6 @@ class AuthService {
           if (data.containsKey('email')) {
             final msg = (data['email'] as Map?)?['message']?.toString() ?? '';
             if (msg.toLowerCase().contains('unique')) {
-              // This happens when the internal dummy email derived from username clashes.
-              // Root cause: username is already used — surface a friendly message.
               return 'This username is already registered. Please choose a different username.';
             }
           }
@@ -1062,25 +1435,21 @@ class AuthService {
                     entry.value is Map &&
                     (entry.value as Map).containsKey('message'),
               )
-              .map(
-                (entry) => '${entry.key}: ${(entry.value as Map)['message']}',
-              )
+              .map((entry) => (entry.value as Map)['message'])
               .join('\n');
-          if (fieldErrors.isNotEmpty) return fieldErrors;
+          if (fieldErrors.isNotEmpty) {
+            return fieldErrors;
+          }
         }
       }
 
       if (response.containsKey('message')) {
-        final msg = response['message'].toString();
-        if (msg.contains('Failed to authenticate')) {
-          return 'Invalid username or password';
-        }
-        if (msg.toLowerCase().contains('unique')) {
-          return 'This username or email is already registered.';
-        }
-        return msg;
+        return response['message'].toString();
       }
-    } catch (_) {}
-    return 'Something went wrong. Please try again.';
+
+      return 'Something went wrong. Please try again.';
+    } catch (_) {
+      return 'Something went wrong. Please try again.';
+    }
   }
 }

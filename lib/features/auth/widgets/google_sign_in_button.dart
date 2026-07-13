@@ -9,7 +9,12 @@ import 'package:pms_app/features/auth/theme/needil_auth_theme.dart';
 /// Tapping it shows a [SnackBar] explaining the feature is not yet available.
 /// Uses the official Google brand colours for the 'G' indicator.
 class GoogleSignInButton extends StatelessWidget {
-  const GoogleSignInButton({super.key});
+  final VoidCallback? onPressed;
+
+  const GoogleSignInButton({
+    super.key,
+    this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +26,7 @@ class GoogleSignInButton extends StatelessWidget {
       width: double.infinity,
       height: 48,
       child: OutlinedButton(
-        onPressed: () {
-          AppToast.show('Google Sign-In will be available in a future update.', duration: const Duration(seconds: 3));
-        },
+        onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: borderColor),
           shape: RoundedRectangleBorder(
@@ -53,24 +56,6 @@ class GoogleSignInButton extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(width: 10),
-
-            // ── Coming soon badge — green ─────────────────────────────
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(6),
-                color: primary.withValues(alpha: 0.08),
-              ),
-              child: Text(
-                'Coming Soon',
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w500,
-                  color: primary,
-                ),
-              ),
-            ),
           ],
         ),
       ),

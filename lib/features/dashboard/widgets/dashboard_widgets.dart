@@ -370,7 +370,7 @@ class DashboardOverviewSection extends StatelessWidget {
       color: const Color(0xFF0F5D4F),
       children: [
         DashboardOverviewItem(
-          label: "Total Scheduled",
+          label: "Scheduled",
           value: '${stats.sessionsTotalToday}',
           color: const Color(0xFF0F5D4F),
         ),
@@ -395,7 +395,7 @@ class DashboardOverviewSection extends StatelessWidget {
       color: const Color(0xFF4F46E5),
       children: [
         DashboardOverviewItem(
-          label: "Unique Patients Checked-In / Visited Today",
+          label: "Unique patients visited",
           value: '${stats.patientsSeenToday}',
           color: const Color(0xFF4F46E5),
         ),
@@ -454,8 +454,11 @@ class DashboardOverviewSection extends StatelessWidget {
     return Column(
       children: [
         card1,
+        const SizedBox(height: 16),
         card2,
+        const SizedBox(height: 16),
         card3,
+        const SizedBox(height: 16),
         card4,
       ],
     );
@@ -485,19 +488,19 @@ class _DashboardOverviewCardState extends State<DashboardOverviewCard> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
       decoration: BoxDecoration(
-        color: context.colors.cardBackground,
-        borderRadius: BorderRadius.circular(16),
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: context.colors.border.withValues(alpha: 0.6),
+          color: context.colors.border.withValues(alpha: 0.5),
           width: 1.0,
         ),
         boxShadow: [
           BoxShadow(
-            color: context.colors.shadowColor.withValues(alpha: 0.02),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: context.colors.shadowColor.withValues(alpha: 0.04),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -565,9 +568,10 @@ class DashboardOverviewItem extends StatelessWidget {
           Text(
             label,
             style: GoogleFonts.inter(
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: context.colors.textSecondary,
+              color: const Color(0xFF71717A), // Slightly darker gray for readability
+              height: 1.3,
             ),
             textAlign: TextAlign.center,
             maxLines: 2,

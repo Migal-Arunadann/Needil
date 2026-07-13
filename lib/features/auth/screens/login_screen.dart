@@ -59,6 +59,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         );
   }
 
+  void _loginWithGoogle() {
+    FocusScope.of(context).unfocus();
+    ref.read(authProvider.notifier).loginWithGoogle();
+  }
+
+  void _showAccountExistsDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'This account already exists.',
+          style: GoogleFonts.inter(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'We found an existing Needil account for this email.\n\nTo keep your account secure, please sign in using your password first. You can then connect your Google account anytime from Profile → Security.',
+          style: GoogleFonts.inter(color: _textMuted, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(
+              'Got it',
+              style: GoogleFonts.inter(color: _primary, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
@@ -67,7 +98,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     ref.listen<AuthState>(authProvider, (prev, next) {
       if (next.error != null && next.error != prev?.error) {
-        AppToast.show(next.error!, type: ToastType.error);
+        if (next.error == 'google_account_exists_unlinked') {
+          _showAccountExistsDialog();
+        } else {
+          AppToast.show(next.error!, type: ToastType.error);
+        }
+      }
+      
+      if (next.requiresGoogleRegistration && !(prev?.requiresGoogleRegistration ?? false)) {
+         final navigator = _nestedNavKey.currentState;
+         if (navigator != null) {
+            navigator.pushNamed('/register/clinic/step1', arguments: {'is_google': true});
+         } else {
+            Navigator.of(context).pushNamed('/register/clinic/step1', arguments: {'is_google': true});
+         }
       }
     });
 
@@ -112,7 +156,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     case '/register/clinic/step0':
                                       return const ClinicStep0OtpScreen();
                                     case '/register/clinic/step1':
-                                      return const ClinicStep1Screen();
+                                        final args = settings.arguments as Map<String, dynamic>?;
+                                        final isGoogle = args?['is_google'] as bool? ?? false;
+                                        return ClinicStep1Screen(isGoogleRegistration: isGoogle);
                                     case '/register/clinic/step2':
                                       final args = settings.arguments as Map<String, dynamic>;
                                       return ClinicStep2Screen(clinicData: args);
@@ -198,18 +244,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         color: _bg,
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: Card(
                 color: _surface,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(20),
                   side: const BorderSide(color: _border),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(32),
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -253,38 +299,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Text(
               'Welcome Back',
               style: GoogleFonts.cormorantGaramond(
-                fontSize: 56,
+                fontSize: 52,
                 fontWeight: FontWeight.w700,
                 color: _textDark,
-                height: 1.1,
+                height: 0.95,
+                letterSpacing: -0.5,
               ),
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 12),
           Text(
             'Sign in to continue managing your clinic',
             style: GoogleFonts.inter(
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.w400,
-              color: _textMuted,
+              color: const Color(0xFF555555), // slightly darker for better contrast
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 36),
           _label('Email or Username'),
           const SizedBox(height: 8),
           _input(
             controller: _emailCtrl,
-            hint: 'Enter your email or username',
+            hint: 'Email or username',
             field: 'email',
             icon: Icons.person_outline_rounded,
             validator: (v) => Validators.required(v, 'Username'),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           _label('Password'),
           const SizedBox(height: 8),
           _input(
             controller: _passwordCtrl,
-            hint: 'Enter your password',
+            hint: 'Password',
             field: 'password',
             icon: Icons.lock_outline_rounded,
             isPassword: true,
@@ -308,7 +355,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           const SizedBox(height: 20),
           SizedBox(
             width: double.infinity,
-            height: 56,
+            height: 54,
             child: ElevatedButton(
               onPressed: authState.isLoading ? null : _login,
               style: ElevatedButton.styleFrom(
@@ -316,10 +363,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 disabledBackgroundColor: _primary.withValues(alpha: 0.7),
                 foregroundColor: Colors.white,
                 elevation: 0,
-                shadowColor: Colors.black.withValues(alpha: 0.08),
+                shadowColor: _primary.withValues(alpha: 0.25),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+              ).copyWith(
+                elevation: WidgetStateProperty.resolveWith<double>((states) {
+                  if (states.contains(WidgetState.hovered) || states.contains(WidgetState.pressed)) return 4;
+                  return 0;
+                }),
               ),
               child: authState.isLoading
                   ? const SizedBox(
@@ -360,46 +412,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
           const SizedBox(height: 20),
           SizedBox(
-            height: 56,
+            height: 54,
             child: OutlinedButton(
-              onPressed: () {},
+              onPressed: authState.isLoading ? null : _loginWithGoogle,
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Color(0xFFD1D1D1)),
+                side: const BorderSide(color: Color(0xFFE2E0D9)),
+                backgroundColor: Colors.white,
+                foregroundColor: _textDark,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
                 padding: const EdgeInsets.symmetric(horizontal: 20),
               ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   SizedBox(
-                    width: 16,
-                    height: 16,
+                    width: 18,
+                    height: 18,
                     child: CustomPaint(painter: _GoogleLogoPainter()),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 12),
                   Text(
                     'Continue with Google',
                     style: GoogleFonts.inter(
                       fontSize: 15,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                       color: _textDark,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEEF4EA),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'Coming Soon',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _primary,
-                      ),
                     ),
                   ),
                 ],
@@ -408,8 +447,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
           const SizedBox(height: 24),
           Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
                   "Don't have an account? ",
@@ -427,7 +467,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         'Register Clinic',
                         style: GoogleFonts.inter(
                           fontSize: 15,
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                           color: _primary,
                         ),
                       ),
@@ -472,20 +512,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       onFocusChange: (f) => setState(() => _focusedField = f ? field : null),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        height: 54,
+        height: 52,
         decoration: BoxDecoration(
+          color: isFocused ? Colors.white : const Color(0xFFFAFAFA),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isFocused ? _primary : _border,
+            color: isFocused ? _primary : const Color(0xFFE2E0D9),
             width: isFocused ? 1.5 : 1,
           ),
           boxShadow: isFocused
               ? [
                   BoxShadow(
-                    color: _primary.withValues(alpha: 0.08),
-                    blurRadius: 45,
-                    spreadRadius: 18,
-                    offset: const Offset(0, 18),
+                    color: _primary.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    spreadRadius: 2,
+                    offset: const Offset(0, 4),
                   ),
                 ]
               : null,
@@ -506,11 +547,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             hintStyle: GoogleFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w400,
-              color: const Color(0xFFA0A0A0),
+              color: const Color(0xFFB0B0B0),
             ),
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 18,
-              vertical: 15,
+              horizontal: 16,
+              vertical: 14,
             ),
             prefixIcon: Icon(
               icon,
