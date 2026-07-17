@@ -6,6 +6,7 @@ import 'package:pms_app/core/providers/pocketbase_provider.dart';
 import 'package:pms_app/core/services/session_lifecycle_service.dart';
 import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AutoSchedulingDashboard extends ConsumerStatefulWidget {
   final List<TreatmentPlanModel> initialPlans;
@@ -57,12 +58,10 @@ class _AutoSchedulingDashboardState extends ConsumerState<AutoSchedulingDashboar
     try {
       final pb = ref.read(pocketbaseProvider);
       final lifecycle = SessionLifecycleService(pb);
-      final results = await lifecycle.autoRescheduleForPlan(plan.id);
+      await lifecycle.autoRescheduleForPlan(plan.id);
 
       if (mounted) {
-        AppToast.show(results.isNotEmpty
-                ? 'Rescheduled: ${results.length} session(s) moved to new slots.'
-                : 'Session auto-rescheduled successfully.', type: ToastType.success);
+        AppToast.show('Session(s) auto-rescheduled successfully.', type: ToastType.success);
 
         setState(() {
           _plans.removeWhere((p) => p.id == plan.id);
@@ -332,6 +331,37 @@ class _AutoSchedulingDashboardState extends ConsumerState<AutoSchedulingDashboar
                                             fontWeight: FontWeight.w500,
                                           ),
                                         ),
+                                        if (plan.patientPhone != null && plan.patientPhone!.isNotEmpty)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 4),
+                                            child: InkWell(
+                                              onTap: () async {
+                                                final uri = Uri(scheme: 'tel', path: plan.patientPhone);
+                                                if (await canLaunchUrl(uri)) {
+                                                  await launchUrl(uri);
+                                                }
+                                              },
+                                              borderRadius: BorderRadius.circular(6),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    Icons.phone_rounded,
+                                                    size: 13,
+                                                    color: context.colors.success,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    plan.patientPhone!,
+                                                    style: context.textStyles.caption.copyWith(
+                                                      color: context.colors.success,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
                                       ],
                                     ),
                                   ),

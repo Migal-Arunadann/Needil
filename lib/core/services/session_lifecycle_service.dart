@@ -16,28 +16,25 @@ class SessionLifecycleService {
   // ─── Auto-Miss Detection ──────────────────────────────────────────────────
 
   /// Checks for any `upcoming` sessions whose scheduled_date < today
-  /// and marks them as `missed`. Also triggers auto-rescheduling.
+  /// and marks them as `missed`. Also triggers auto-rescheduling for plans
+  /// with fewer than 3 consecutive misses.
   ///
-  /// Returns a list of human-readable summaries of rescheduled sessions
-  /// so the caller can show a notification.
-  /// 
-  /// If a plan hits the 3-miss limit, the summary will contain a special
-  /// entry starting with `PAUSE_PROMPT:` followed by the plan ID.
-  Future<List<String>> checkAndMarkMissedSessions(String doctorId) async {
+  /// Plans with 3+ misses are skipped here — they will surface in the
+  /// Auto-Scheduling Dashboard via [getPendingMissedPlans].
+  Future<void> checkAndMarkMissedSessions(String doctorId) async {
     final today = _formatDate(DateTime.now());
-    final summaries = <String>[];
 
     try {
-      // Find all sessions for this doctor that are still 'upcoming' but
+      // Find all sessions for this doctor that are unresolved but
       // whose scheduled_date is strictly in the past.
       final result = await pb.collection(PBCollections.sessions).getList(
         filter:
-            'doctor = "$doctorId" && status = "upcoming" && scheduled_date < "$today"',
+            'doctor = "$doctorId" && (status = "upcoming" || status = "waiting" || status = "in_progress") && scheduled_date < "$today"',
         sort: 'scheduled_date,session_number',
         perPage: 200,
       );
 
-      if (result.items.isEmpty) return summaries;
+      if (result.items.isEmpty) return;
 
       // Group by treatment plan so we reschedule once per plan
       final Map<String, List<SessionModel>> byPlan = {};
@@ -48,7 +45,7 @@ class SessionLifecycleService {
 
       for (final entry in byPlan.entries) {
         final planId = entry.key;
-        final missedSessions = entry.value;
+        final staleSessions = entry.value;
 
         // Load plan to check consecutive misses
         TreatmentPlanModel plan;
@@ -62,14 +59,39 @@ class SessionLifecycleService {
         // Skip if plan is already paused
         if (plan.isPaused) continue;
 
-        // Mark each as missed + update linked appointment
-        for (final s in missedSessions) {
+        final missedSessions = <SessionModel>[];
+
+        // Process each stale session
+        for (final s in staleSessions) {
+          if (s.status == SessionStatus.inProgress) {
+            // Check if any data was saved for the session
+            bool hasData = (s.notes != null && s.notes!.trim().isNotEmpty) ||
+                (s.remarks != null && s.remarks!.trim().isNotEmpty) ||
+                (s.bpLevel != null && s.bpLevel!.trim().isNotEmpty) ||
+                (s.pulse != null && s.pulse! > 0) ||
+                (s.photos.isNotEmpty);
+
+            if (hasData) {
+              // Auto-complete the session since work was done but user forgot to end it
+              await pb.collection(PBCollections.sessions).update(
+                s.id,
+                body: {'status': 'completed'},
+              );
+              await _syncAppointmentStatus(s, 'completed');
+              continue; // Do NOT add to missedSessions
+            }
+          }
+
+          // Otherwise (upcoming, waiting, or in_progress with no data): Auto-miss
           await pb.collection(PBCollections.sessions).update(
             s.id,
             body: {'status': 'missed'},
           );
           await _syncAppointmentStatus(s, 'cancelled');
+          missedSessions.add(s);
         }
+
+        if (missedSessions.isEmpty) continue;
 
         // Increment consecutive miss count
         final newMissCount = plan.consecutiveMisses + missedSessions.length;
@@ -77,30 +99,22 @@ class SessionLifecycleService {
           'consecutive_misses': newMissCount,
         });
 
-        // If 3+ consecutive misses, signal pause prompt instead of rescheduling
-        if (newMissCount >= 3) {
-          // Fetch patient name for the prompt
-          String patientName = 'Patient';
-          try {
-            final patRec = await pb.collection('patients').getOne(plan.patientId);
-            patientName = patRec.getStringValue('full_name');
-          } catch (_) {}
-          summaries.add('PAUSE_PROMPT:$planId:$patientName:$newMissCount');
-          continue;
-        }
+        // If 3+ consecutive misses, skip auto-rescheduling.
+        // The Auto-Scheduling Dashboard will surface these plans via
+        // getPendingMissedPlans().
+        if (newMissCount >= 3) continue;
 
         // Auto-reschedule the missed session(s) and cascade subsequent ones
-        final rescheduled = await _autoRescheduleForPlan(
+        // from today forward.
+        await _autoRescheduleForPlan(
           planId,
           missedSessions,
+          anchorDate: DateTime.now(),
         );
-        summaries.addAll(rescheduled);
       }
     } catch (e) {
       debugPrint('[SessionLifecycle] checkAndMarkMissed error: $e');
     }
-
-    return summaries;
   }
 
   // ─── Auto-Rescheduling ────────────────────────────────────────────────────
@@ -110,12 +124,14 @@ class SessionLifecycleService {
   ///   – Doctor's working days
   ///   – Bed capacity (no double-booking)
   ///   – interval >= plan's original interval_days
-  Future<List<String>> _autoRescheduleForPlan(
+  ///
+  /// [anchorDate] sets the starting point for rescheduling. Defaults to
+  /// the missed session's original date + 1 day.
+  Future<void> _autoRescheduleForPlan(
     String planId,
-    List<SessionModel> missedSessions,
-  ) async {
-    final summaries = <String>[];
-
+    List<SessionModel> missedSessions, {
+    DateTime? anchorDate,
+  }) async {
     try {
       // Load plan
       final planRec =
@@ -126,13 +142,14 @@ class SessionLifecycleService {
       final docRec = await pb.collection('doctors').getOne(plan.doctorId);
       final doctor = DoctorModel.fromRecord(docRec);
       final validDays = doctor.workingDays;
+      final clinicId = doctor.clinicId;
 
       // Bed capacity
       int maxBeds = 3;
-      if (doctor.clinicId != null && doctor.clinicId!.isNotEmpty) {
+      if (clinicId != null && clinicId.isNotEmpty) {
         try {
           final clinicRec =
-              await pb.collection('clinics').getOne(doctor.clinicId!);
+              await pb.collection('clinics').getOne(clinicId);
           maxBeds = clinicRec.getIntValue('bed_count');
           if (maxBeds <= 0) maxBeds = 3;
         } catch (_) {}
@@ -172,12 +189,17 @@ class SessionLifecycleService {
       }).toList()
         ..sort((a, b) => a.sessionNumber.compareTo(b.sessionNumber));
 
-      if (toReschedule.isEmpty) return summaries;
+      if (toReschedule.isEmpty) return;
 
-      // Calculate the anchor: the missed session's original date + 1 day
-      final firstMissed = toReschedule.first;
-      final originalDate = DateTime.parse(firstMissed.scheduledDate);
-      DateTime cursor = originalDate.add(const Duration(days: 1));
+      // Determine anchor: use provided date, or missed session's original date + 1 day
+      DateTime cursor;
+      if (anchorDate != null) {
+        cursor = anchorDate;
+      } else {
+        final firstMissed = toReschedule.first;
+        final originalDate = DateTime.parse(firstMissed.scheduledDate);
+        cursor = originalDate.add(const Duration(days: 1));
+      }
 
       for (int i = 0; i < toReschedule.length; i++) {
         final session = toReschedule[i];
@@ -203,36 +225,29 @@ class SessionLifecycleService {
         final newTime = slotResult.time;
         cursor = slotResult.date; // update cursor to actual scheduled date
 
-        // Update session
+        // Update session record
         await pb.collection(PBCollections.sessions).update(session.id, body: {
           'scheduled_date': newDate,
           'scheduled_time': newTime,
           'is_rescheduled': true,
           'original_date': session.scheduledDate,
-          // If it was missed, keep it missed. If upcoming, keep upcoming.
+          // If it was missed, restore it to upcoming
           if (session.status == SessionStatus.missed) 'status': 'upcoming',
         });
 
-        // Update linked appointment
-        await _updateLinkedAppointment(session, newDate, newTime);
-
-        // Fetch patient name for summary
-        String patientName = 'Patient';
-        try {
-          final patRec =
-              await pb.collection('patients').getOne(session.patientId);
-          patientName = patRec.getStringValue('full_name');
-        } catch (_) {}
-
-        summaries.add(
-          'Session #${session.sessionNumber} for $patientName → $newDate at $newTime',
+        // Replace old linked appointment with a fresh one that has the
+        // correct date, time, and clinic ID (fixes invisible session bug).
+        await _replaceLinkedAppointment(
+          session: session,
+          newDate: newDate,
+          newTime: newTime,
+          clinicId: clinicId,
+          sessionType: plan.treatmentType,
         );
       }
     } catch (e) {
       debugPrint('[SessionLifecycle] autoReschedule error: $e');
     }
-
-    return summaries;
   }
 
   // ─── Slot Finding (reuses smart scheduling logic) ─────────────────────────
@@ -308,19 +323,26 @@ class SessionLifecycleService {
 
   // ─── Appointment Helpers ──────────────────────────────────────────────────
 
+  /// Sync a session's linked appointment to [newStatus].
+  ///
+  /// Uses plain `date = "YYYY-MM-DD"` (not a timestamp range) because the
+  /// date field stores plain date strings, not datetimes. The old approach
+  /// using `date >= "... 00:00:00.000Z"` was broken due to lexicographic
+  /// comparison failures.
   Future<void> _syncAppointmentStatus(
       SessionModel session, String newStatus) async {
     try {
+      // Normalise to YYYY-MM-DD
       String datePart = session.scheduledDate;
       try {
         final dt = DateTime.parse(session.scheduledDate);
-        datePart = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+        datePart = _formatDate(dt);
       } catch (_) {}
 
       final appts = await pb.collection(PBCollections.appointments).getList(
         filter:
             'patient = "${session.patientId}" && doctor = "${session.doctorId}" '
-            '&& date >= "$datePart 00:00:00.000Z" && date <= "$datePart 23:59:59.999Z" && time = "${session.scheduledTime}" '
+            '&& date = "$datePart" && time = "${session.scheduledTime}" '
             '&& type = "session" && status != "cancelled"',
       );
       for (final appt in appts.items) {
@@ -332,30 +354,56 @@ class SessionLifecycleService {
     } catch (_) {}
   }
 
-  /// Update the linked appointment's date/time when a session is rescheduled.
-  Future<void> _updateLinkedAppointment(
-      SessionModel session, String newDate, String newTime) async {
+  /// Cancel the old linked appointment and create a fresh one with the
+  /// correct date, time, and clinic ID.
+  ///
+  /// This is safer than updating the old record because:
+  ///   1. The old record may already be `cancelled`
+  ///   2. A fresh record always has the correct `clinic` field, ensuring
+  ///      the appointment is visible to clinic-role users.
+  Future<void> _replaceLinkedAppointment({
+    required SessionModel session,
+    required String newDate,
+    required String newTime,
+    required String? clinicId,
+    required String sessionType,
+  }) async {
     try {
-      String datePart = session.scheduledDate;
+      // Normalise old date to YYYY-MM-DD
+      String oldDatePart = session.scheduledDate;
       try {
         final dt = DateTime.parse(session.scheduledDate);
-        datePart = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+        oldDatePart = _formatDate(dt);
       } catch (_) {}
 
-      final appts = await pb.collection(PBCollections.appointments).getList(
+      // Cancel the old appointment (regardless of current status)
+      final oldAppts = await pb.collection(PBCollections.appointments).getList(
         filter:
             'patient = "${session.patientId}" && doctor = "${session.doctorId}" '
-            '&& date >= "$datePart 00:00:00.000Z" && date <= "$datePart 23:59:59.999Z" && time = "${session.scheduledTime}" '
+            '&& date = "$oldDatePart" && time = "${session.scheduledTime}" '
             '&& type = "session"',
       );
-      for (final appt in appts.items) {
-        await pb.collection(PBCollections.appointments).update(appt.id, body: {
-          'date': newDate,
-          'time': newTime,
-          'status': 'scheduled',
-        });
+      for (final appt in oldAppts.items) {
+        await pb.collection(PBCollections.appointments).update(
+          appt.id,
+          body: {'status': 'cancelled'},
+        );
       }
-    } catch (_) {}
+
+      // Create a fresh appointment with all required fields
+      await pb.collection(PBCollections.appointments).create(body: {
+        'patient': session.patientId,
+        'doctor': session.doctorId,
+        if (clinicId != null && clinicId.isNotEmpty) 'clinic': clinicId,
+        'type': 'session',
+        'date': newDate,
+        'time': newTime,
+        'status': 'scheduled',
+        'session_type': sessionType,
+      });
+    } catch (e) {
+      debugPrint('[SessionLifecycle] _replaceLinkedAppointment error: $e');
+    }
   }
 
   /// Retrieves all active treatment plans that have 3+ consecutive misses
@@ -390,7 +438,8 @@ class SessionLifecycleService {
 
   /// Public entry point to explicitly run auto-rescheduling for a plan
   /// that was held back due to hitting the miss limit.
-  Future<List<String>> autoRescheduleForPlan(String planId) async {
+  /// Rescheduling starts from today.
+  Future<void> autoRescheduleForPlan(String planId) async {
     try {
       // Fetch all sessions for this plan with status = 'missed'
       final sessRes = await pb.collection(PBCollections.sessions).getList(
@@ -400,20 +449,32 @@ class SessionLifecycleService {
       );
 
       final missedSessions = sessRes.items.map((r) => SessionModel.fromRecord(r)).toList();
-      if (missedSessions.isEmpty) return [];
+      if (missedSessions.isEmpty) return;
 
-      final results = await _autoRescheduleForPlan(planId, missedSessions);
+      await _autoRescheduleForPlan(
+        planId,
+        missedSessions,
+        anchorDate: DateTime.now(),
+      );
 
       // Reset consecutive misses to 0 since we have rescheduled them
       await pb.collection(PBCollections.treatmentPlans).update(planId, body: {
         'consecutive_misses': 0,
       });
-
-      return results;
     } catch (e) {
       debugPrint('[SessionLifecycle] autoRescheduleForPlan error: $e');
-      return [];
     }
+  }
+
+  /// Called by [TreatmentService.markSessionMissed] to reschedule a
+  /// manually-missed session and cascade subsequent ones from today,
+  /// when the plan has fewer than 3 consecutive misses.
+  Future<void> rescheduleFromToday(String planId, List<SessionModel> missedSessions) async {
+    await _autoRescheduleForPlan(
+      planId,
+      missedSessions,
+      anchorDate: DateTime.now(),
+    );
   }
 
   String _formatDate(DateTime d) =>

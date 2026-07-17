@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform, File;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -24,7 +25,212 @@ import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import '../../../core/services/auth_service.dart' show UserRole;
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
+class AcupointUsage {
+  String point;
+  String side;
+  String depth;
+  String angle;
+  String method;
 
+  AcupointUsage({
+    required this.point,
+    this.side = 'Bilateral',
+    this.depth = '1.0 cun',
+    this.angle = 'Perpendicular',
+    this.method = 'Manual',
+  });
+
+  Map<String, dynamic> toJson() => {
+    'point': point,
+    'side': side,
+    'depth': depth,
+    'angle': angle,
+    'method': method,
+  };
+
+  factory AcupointUsage.fromJson(Map<String, dynamic> json) => AcupointUsage(
+    point: json['point'] ?? '',
+    side: json['side'] ?? 'Bilateral',
+    depth: json['depth'] ?? '1.0 cun',
+    angle: json['angle'] ?? 'Perpendicular',
+    method: json['method'] ?? 'Manual',
+  );
+}
+
+const List<Map<String, String>> _acupointsLibrary = [
+  {'point': 'LU7', 'name': 'Lieque', 'meridian': 'Lung'},
+  {'point': 'LU9', 'name': 'Taiyuan', 'meridian': 'Lung'},
+  {'point': 'LI4', 'name': 'Hegu', 'meridian': 'Large Intestine'},
+  {'point': 'LI11', 'name': 'Quchi', 'meridian': 'Large Intestine'},
+  {'point': 'ST25', 'name': 'Tianshu', 'meridian': 'Stomach'},
+  {'point': 'ST36', 'name': 'Zusanli', 'meridian': 'Stomach'},
+  {'point': 'ST44', 'name': 'Neiting', 'meridian': 'Stomach'},
+  {'point': 'SP6', 'name': 'Sanyinjiao', 'meridian': 'Spleen'},
+  {'point': 'SP9', 'name': 'Yinlingquan', 'meridian': 'Spleen'},
+  {'point': 'SP10', 'name': 'Xuehai', 'meridian': 'Spleen'},
+  {'point': 'HT7', 'name': 'Shenmen', 'meridian': 'Heart'},
+  {'point': 'SI3', 'name': 'Houxi', 'meridian': 'Small Intestine'},
+  {'point': 'BL23', 'name': 'Shenshu', 'meridian': 'Bladder'},
+  {'point': 'BL60', 'name': 'Kunlun', 'meridian': 'Bladder'},
+  {'point': 'BL62', 'name': 'Shenmai', 'meridian': 'Bladder'},
+  {'point': 'KI3', 'name': 'Taixi', 'meridian': 'Kidney'},
+  {'point': 'KI6', 'name': 'Zhaohai', 'meridian': 'Kidney'},
+  {'point': 'PC6', 'name': 'Neiguan', 'meridian': 'Pericardium'},
+  {'point': 'TE5', 'name': 'Waiguan', 'meridian': 'Triple Energizer'},
+  {'point': 'GB20', 'name': 'Fengchi', 'meridian': 'Gallbladder'},
+  {'point': 'GB30', 'name': 'Huantiao', 'meridian': 'Gallbladder'},
+  {'point': 'GB34', 'name': 'Yanglingquan', 'meridian': 'Gallbladder'},
+  {'point': 'LR3', 'name': 'Taichong', 'meridian': 'Liver'},
+  {'point': 'LR14', 'name': 'Qimen', 'meridian': 'Liver'},
+  {'point': 'GV14', 'name': 'Dazhui', 'meridian': 'Du Mai'},
+  {'point': 'GV20', 'name': 'Baihui', 'meridian': 'Du Mai'},
+  {'point': 'CV4', 'name': 'Guanyuan', 'meridian': 'Ren Mai'},
+  {'point': 'CV6', 'name': 'Qihai', 'meridian': 'Ren Mai'},
+  {'point': 'CV12', 'name': 'Zhongwan', 'meridian': 'Ren Mai'},
+];
+
+// ── Treatment types supported by the app ──
+const List<String> _treatmentTypes = [
+  'Acupuncture',
+  'Acupressure',
+  'Cupping Therapy',
+  'Physiotherapy',
+  'Foot Reflexology',
+];
+
+// ── Cupping Therapy data model ──
+class CuppingData {
+  String cupType;                // 'Dry', 'Wet', 'Fire'
+  List<String> placementZones;   // 'Upper Back', 'Lower Back', etc.
+  int numberOfCups;
+  int durationMinutes;
+
+  CuppingData({
+    this.cupType = 'Dry',
+    List<String>? placementZones,
+    this.numberOfCups = 4,
+    this.durationMinutes = 10,
+  }) : placementZones = placementZones ?? [];
+
+  Map<String, dynamic> toJson() => {
+    'cupType': cupType,
+    'placementZones': placementZones,
+    'numberOfCups': numberOfCups,
+    'durationMinutes': durationMinutes,
+  };
+
+  factory CuppingData.fromJson(Map<String, dynamic> json) => CuppingData(
+    cupType: json['cupType'] ?? 'Dry',
+    placementZones: (json['placementZones'] as List?)?.cast<String>() ?? [],
+    numberOfCups: json['numberOfCups'] ?? 4,
+    durationMinutes: json['durationMinutes'] ?? 10,
+  );
+
+  String toHumanReadable() {
+    final zones = placementZones.isNotEmpty ? placementZones.join(', ') : 'None';
+    return '• Type: $cupType\n• Zones: $zones\n• Cups: $numberOfCups\n• Duration: $durationMinutes min';
+  }
+}
+
+const List<String> _cuppingZones = [
+  'Upper Back', 'Lower Back', 'Shoulder', 'Neck',
+  'Abdomen', 'Thigh', 'Calf', 'Other',
+];
+
+// ── Physiotherapy data model ──
+class PhysioExercise {
+  String name;
+  int sets;
+  int reps;
+  String resistance;   // 'None', 'Light', 'Medium', 'Heavy'
+  String? romDegrees;   // optional range of motion
+
+  PhysioExercise({
+    required this.name,
+    this.sets = 3,
+    this.reps = 10,
+    this.resistance = 'None',
+    this.romDegrees,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'sets': sets,
+    'reps': reps,
+    'resistance': resistance,
+    if (romDegrees != null && romDegrees!.isNotEmpty) 'romDegrees': romDegrees,
+  };
+
+  factory PhysioExercise.fromJson(Map<String, dynamic> json) => PhysioExercise(
+    name: json['name'] ?? '',
+    sets: json['sets'] ?? 3,
+    reps: json['reps'] ?? 10,
+    resistance: json['resistance'] ?? 'None',
+    romDegrees: json['romDegrees'],
+  );
+}
+
+class PhysioData {
+  List<PhysioExercise> exercises;
+
+  PhysioData({List<PhysioExercise>? exercises}) : exercises = exercises ?? [];
+
+  Map<String, dynamic> toJson() => {
+    'exercises': exercises.map((e) => e.toJson()).toList(),
+  };
+
+  factory PhysioData.fromJson(Map<String, dynamic> json) => PhysioData(
+    exercises: (json['exercises'] as List?)
+        ?.map((e) => PhysioExercise.fromJson(e))
+        .toList() ?? [],
+  );
+
+  String toHumanReadable() {
+    if (exercises.isEmpty) return '• No exercises recorded';
+    return exercises.map((e) {
+      final rom = (e.romDegrees != null && e.romDegrees!.isNotEmpty) ? ', ROM: ${e.romDegrees}°' : '';
+      return '• ${e.name}: ${e.sets}×${e.reps} (${e.resistance}$rom)';
+    }).join('\n');
+  }
+}
+
+// ── Foot Reflexology data model ──
+class ReflexologyData {
+  String footSelection;          // 'Left', 'Right', 'Both'
+  List<String> pressureZones;    // 'Toes', 'Ball', 'Arch', etc.
+  String technique;              // 'Thumb Walk', 'Finger Walk', etc.
+  int durationMinutes;
+
+  ReflexologyData({
+    this.footSelection = 'Both',
+    List<String>? pressureZones,
+    this.technique = 'Thumb Walk',
+    this.durationMinutes = 15,
+  }) : pressureZones = pressureZones ?? [];
+
+  Map<String, dynamic> toJson() => {
+    'footSelection': footSelection,
+    'pressureZones': pressureZones,
+    'technique': technique,
+    'durationMinutes': durationMinutes,
+  };
+
+  factory ReflexologyData.fromJson(Map<String, dynamic> json) => ReflexologyData(
+    footSelection: json['footSelection'] ?? 'Both',
+    pressureZones: (json['pressureZones'] as List?)?.cast<String>() ?? [],
+    technique: json['technique'] ?? 'Thumb Walk',
+    durationMinutes: json['durationMinutes'] ?? 15,
+  );
+
+  String toHumanReadable() {
+    final zones = pressureZones.isNotEmpty ? pressureZones.join(', ') : 'None';
+    return '• Foot: $footSelection\n• Zones: $zones\n• Technique: $technique\n• Duration: $durationMinutes min';
+  }
+}
+
+const List<String> _reflexologyZones = [
+  'Toes', 'Ball', 'Arch', 'Heel', 'Inner Edge', 'Outer Edge',
+];
 
 class RecordSessionScreen extends ConsumerStatefulWidget {
   final SessionModel session;
@@ -56,6 +262,17 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
   bool _isViewMode = false;
   Timer? _autoSaveTimer;
 
+  // Acupoint state variables
+  final List<AcupointUsage> _selectedPoints = [];
+  final _searchCtrl = TextEditingController();
+  List<Map<String, String>> _searchSuggestions = [];
+
+  // ── Treatment type & type-specific data ──
+  String _selectedTreatmentType = '';
+  CuppingData _cuppingData = CuppingData();
+  PhysioData _physioData = PhysioData();
+  ReflexologyData _reflexologyData = ReflexologyData();
+
   /// Timer visible for any active (not completed/missed) session.
   bool get _canUseTimer =>
       _liveSession.status == SessionStatus.inProgress ||
@@ -71,6 +288,135 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
     _loadFreshSession();
   }
 
+  void _parseSessionNotesAndPoints(String? rawNotes) {
+    _selectedPoints.clear();
+    _cuppingData = CuppingData();
+    _physioData = PhysioData();
+    _reflexologyData = ReflexologyData();
+    if (rawNotes == null || rawNotes.trim().isEmpty) return;
+    
+    String cleanNotes = rawNotes;
+    
+    // 1. Parse [Acupoints: ...] JSON block
+    final acuMatch = RegExp(r'\[Acupoints:\s*(.*?)\]$').firstMatch(cleanNotes.trim());
+    if (acuMatch != null) {
+      try {
+        final List<dynamic> decoded = jsonDecode(acuMatch.group(1)!);
+        _selectedPoints.addAll(decoded.map((item) => AcupointUsage.fromJson(item)));
+      } catch (e) {
+        debugPrint('Error parsing acupoints: $e');
+      }
+      cleanNotes = cleanNotes.replaceAll(RegExp(r'\n\n\[Acupoints:\s*(.*?)\]$'), '');
+    }
+    
+    // 2. Parse [CuppingData: ...] JSON block
+    final cupMatch = RegExp(r'\[CuppingData:\s*(\{.*?\})\]').firstMatch(cleanNotes.trim());
+    if (cupMatch != null) {
+      try {
+        _cuppingData = CuppingData.fromJson(jsonDecode(cupMatch.group(1)!));
+      } catch (e) {
+        debugPrint('Error parsing cupping data: $e');
+      }
+      cleanNotes = cleanNotes.replaceAll(RegExp(r'\n\n\[CuppingData:\s*\{.*?\}\]'), '');
+    }
+    
+    // 3. Parse [PhysioData: ...] JSON block
+    final physioMatch = RegExp(r'\[PhysioData:\s*(\{.*?\})\]').firstMatch(cleanNotes.trim());
+    if (physioMatch != null) {
+      try {
+        _physioData = PhysioData.fromJson(jsonDecode(physioMatch.group(1)!));
+      } catch (e) {
+        debugPrint('Error parsing physio data: $e');
+      }
+      cleanNotes = cleanNotes.replaceAll(RegExp(r'\n\n\[PhysioData:\s*\{.*?\}\]'), '');
+    }
+    
+    // 4. Parse [ReflexologyData: ...] JSON block
+    final reflexMatch = RegExp(r'\[ReflexologyData:\s*(\{.*?\})\]').firstMatch(cleanNotes.trim());
+    if (reflexMatch != null) {
+      try {
+        _reflexologyData = ReflexologyData.fromJson(jsonDecode(reflexMatch.group(1)!));
+      } catch (e) {
+        debugPrint('Error parsing reflexology data: $e');
+      }
+      cleanNotes = cleanNotes.replaceAll(RegExp(r'\n\n\[ReflexologyData:\s*\{.*?\}\]'), '');
+    }
+    
+    // 5. Strip human-readable summary blocks
+    cleanNotes = cleanNotes.replaceAll(RegExp(r'\n\n=== Acupuncture Treatment ===\n[\s\S]*$'), '');
+    cleanNotes = cleanNotes.replaceAll(RegExp(r'\n\n=== Cupping Therapy ===\n[\s\S]*$'), '');
+    cleanNotes = cleanNotes.replaceAll(RegExp(r'\n\n=== Physiotherapy ===\n[\s\S]*$'), '');
+    cleanNotes = cleanNotes.replaceAll(RegExp(r'\n\n=== Foot Reflexology ===\n[\s\S]*$'), '');
+    
+    if (_notesCtrl.text.isEmpty && cleanNotes.trim().isNotEmpty) {
+      _notesCtrl.text = cleanNotes.trim();
+    }
+  }
+
+  String _buildFullNotes() {
+    String fullNotes = _notesCtrl.text.trim();
+    
+    // Acupuncture / Acupressure points
+    if (_selectedPoints.isNotEmpty &&
+        (_selectedTreatmentType == 'Acupuncture' || _selectedTreatmentType == 'Acupressure')) {
+      final humanSummary = _selectedPoints.map((p) => '• ${p.point} (${p.side}, ${p.depth}, ${p.angle}, ${p.method})').join('\n');
+      final jsonStr = jsonEncode(_selectedPoints.map((p) => p.toJson()).toList());
+      fullNotes += '\n\n=== Acupuncture Treatment ===\n$humanSummary\n\n[Acupoints: $jsonStr]';
+    }
+    
+    // Cupping Therapy
+    if (_selectedTreatmentType == 'Cupping Therapy' && _cuppingData.placementZones.isNotEmpty) {
+      final jsonStr = jsonEncode(_cuppingData.toJson());
+      fullNotes += '\n\n=== Cupping Therapy ===\n${_cuppingData.toHumanReadable()}\n\n[CuppingData: $jsonStr]';
+    }
+    
+    // Physiotherapy
+    if (_selectedTreatmentType == 'Physiotherapy' && _physioData.exercises.isNotEmpty) {
+      final jsonStr = jsonEncode(_physioData.toJson());
+      fullNotes += '\n\n=== Physiotherapy ===\n${_physioData.toHumanReadable()}\n\n[PhysioData: $jsonStr]';
+    }
+    
+    // Foot Reflexology
+    if (_selectedTreatmentType == 'Foot Reflexology' && _reflexologyData.pressureZones.isNotEmpty) {
+      final jsonStr = jsonEncode(_reflexologyData.toJson());
+      fullNotes += '\n\n=== Foot Reflexology ===\n${_reflexologyData.toHumanReadable()}\n\n[ReflexologyData: $jsonStr]';
+    }
+    
+    return fullNotes;
+  }
+
+  void _onAcupointsChanged() {
+    setState(() {});
+    _onFieldChanged();
+  }
+
+  void _onSearchChanged(String query) {
+    if (query.trim().isEmpty) {
+      setState(() => _searchSuggestions = []);
+      return;
+    }
+    final lowercaseQuery = query.toLowerCase();
+    final results = _acupointsLibrary.where((item) {
+      final code = item['point']!.toLowerCase();
+      final name = item['name']!.toLowerCase();
+      final meridian = item['meridian']!.toLowerCase();
+      return code.contains(lowercaseQuery) ||
+             name.contains(lowercaseQuery) ||
+             meridian.contains(lowercaseQuery);
+    }).toList();
+    
+    final hasExactMatch = _acupointsLibrary.any((item) => item['point']!.toLowerCase() == query.trim().toLowerCase());
+    if (!hasExactMatch && query.trim().isNotEmpty) {
+      results.add({
+        'point': query.trim(),
+        'name': 'Custom Point',
+        'meridian': 'User Defined',
+      });
+    }
+    
+    setState(() => _searchSuggestions = results);
+  }
+
   /// Load the session fresh from PocketBase so we always have up-to-date
   /// status + saved notes (fixes stale widget.session snapshot issue).
   Future<void> _loadFreshSession() async {
@@ -84,17 +430,22 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         _isViewMode = fresh.status == SessionStatus.completed ||
                       fresh.status == SessionStatus.missed ||
                       fresh.status == SessionStatus.cancelled;
-        // Pre-fill from saved data (only if controllers are still empty)
-        if (_notesCtrl.text.isEmpty && fresh.notes?.isNotEmpty == true)
-          _notesCtrl.text = fresh.notes!;
+        _parseSessionNotesAndPoints(fresh.notes);
         if (_bpCtrl.text.isEmpty && fresh.bpLevel?.isNotEmpty == true)
           _bpCtrl.text = fresh.bpLevel!;
         if (_pulseCtrl.text.isEmpty && fresh.pulse != null && fresh.pulse! > 0)
           _pulseCtrl.text = fresh.pulse.toString();
         if (_remarksCtrl.text.isEmpty && fresh.remarks?.isNotEmpty == true)
           _remarksCtrl.text = fresh.remarks!;
+        if (fresh.treatmentModality.isNotEmpty) {
+          _selectedTreatmentType = fresh.treatmentModality;
+        }
         _isLoadingSession = false;
       });
+      // If session doesn't have a treatment modality, load from its plan
+      if (_selectedTreatmentType.isEmpty) {
+        _loadTreatmentTypeFromPlan(fresh.treatmentPlanId);
+      }
     } catch (_) {
       if (!mounted) return;
       // Fallback to the widget snapshot
@@ -102,16 +453,21 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         _isViewMode = widget.session.status == SessionStatus.completed ||
                       widget.session.status == SessionStatus.missed ||
                       widget.session.status == SessionStatus.cancelled;
-        if (_notesCtrl.text.isEmpty && widget.session.notes?.isNotEmpty == true)
-          _notesCtrl.text = widget.session.notes!;
+        _parseSessionNotesAndPoints(widget.session.notes);
         if (_bpCtrl.text.isEmpty && widget.session.bpLevel?.isNotEmpty == true)
           _bpCtrl.text = widget.session.bpLevel!;
         if (_pulseCtrl.text.isEmpty && widget.session.pulse != null && widget.session.pulse! > 0)
           _pulseCtrl.text = widget.session.pulse.toString();
         if (_remarksCtrl.text.isEmpty && widget.session.remarks?.isNotEmpty == true)
           _remarksCtrl.text = widget.session.remarks!;
+        if (widget.session.treatmentModality.isNotEmpty) {
+          _selectedTreatmentType = widget.session.treatmentModality;
+        }
         _isLoadingSession = false;
       });
+      if (_selectedTreatmentType.isEmpty) {
+        _loadTreatmentTypeFromPlan(widget.session.treatmentPlanId);
+      }
     }
 
     _notesCtrl.addListener(_onFieldChanged);
@@ -127,6 +483,64 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         displayName: widget.patientName ?? 'Patient',
       );
     }
+  }
+
+  /// Loads the treatment type from the parent plan if the session record
+  /// doesn't have its own treatment_type set (backward compatibility).
+  Future<void> _loadTreatmentTypeFromPlan(String planId) async {
+    if (planId.isEmpty) return;
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final planRec = await pb.collection(PBCollections.treatmentPlans).getOne(planId);
+      final planType = planRec.getStringValue('treatment_type');
+      if (mounted && planType.isNotEmpty && _selectedTreatmentType.isEmpty) {
+        setState(() => _selectedTreatmentType = planType);
+      }
+    } catch (_) {
+      // Silently fail — treatment type will just be empty
+    }
+  }
+
+  /// Shows a confirmation dialog when the user switches treatment type mid-form.
+  Future<void> _confirmTreatmentTypeSwitch(String newType) async {
+    if (_selectedTreatmentType == newType) return;
+    final hasData = _selectedPoints.isNotEmpty ||
+        _cuppingData.placementZones.isNotEmpty ||
+        _physioData.exercises.isNotEmpty ||
+        _reflexologyData.pressureZones.isNotEmpty;
+
+    if (hasData) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Text('Switch Treatment Type?'),
+          content: const Text(
+            'Changing the treatment type will clear the current type-specific data (points, exercises, zones, etc.). Continue?',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: Text('Switch', style: TextStyle(color: context.colors.error)),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
+    setState(() {
+      _selectedTreatmentType = newType;
+      // Clear all type-specific data
+      _selectedPoints.clear();
+      _searchCtrl.clear();
+      _searchSuggestions.clear();
+      _cuppingData = CuppingData();
+      _physioData = PhysioData();
+      _reflexologyData = ReflexologyData();
+    });
+    _onFieldChanged();
   }
 
   void _onFieldChanged() {
@@ -146,12 +560,13 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
       final photoPaths = List<String>.from(_photos.map((p) => p.path));
       final saved = await service.recordSession(
         sessionId: sessionId,
-        notes: _notesCtrl.text.trim(),
+        notes: _buildFullNotes(),
         bpLevel: _bpCtrl.text.trim(),
         pulse: _pulseCtrl.text.isNotEmpty ? int.tryParse(_pulseCtrl.text.trim()) : null,
         remarks: _remarksCtrl.text.trim(),
         photoPaths: photoPaths,
         isCompleted: false,
+        treatmentModality: _selectedTreatmentType,
       );
       if (mounted && saved.notes != null) {
         setState(() {
@@ -175,6 +590,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
     _bpCtrl.dispose();
     _pulseCtrl.dispose();
     _remarksCtrl.dispose();
+    _searchCtrl.dispose();
     // Stop idle tracking
     IdleReminderService.instance.stopTracking(_liveSession.id);
     super.dispose();
@@ -285,7 +701,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
       final service = ref.read(treatmentServiceProvider);
       final result = await service.recordSession(
         sessionId: _liveSession.id,
-        notes: _notesCtrl.text.trim(),
+        notes: _buildFullNotes(),
         bpLevel: _bpCtrl.text.trim(),
         pulse: _pulseCtrl.text.isNotEmpty ? int.tryParse(_pulseCtrl.text.trim()) : null,
         remarks: _remarksCtrl.text.trim(),
@@ -293,6 +709,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         // Save button never completes the session — only End Session on the
         // schedule card does that. Preserve existing status.
         isCompleted: isAlreadyCompleted,
+        treatmentModality: _selectedTreatmentType,
       );
       setState(() {
         _isSubmitting = false;
@@ -426,21 +843,22 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                           ],
                         ),
                       ),
-                      if (!_isViewMode)
-                        GestureDetector(
-                          onTap: _markMissed,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(color: context.colors.error.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-                            child: Text('Mark Missed', style: context.textStyles.caption.copyWith(color: context.colors.error)),
-                          ),
-                        ),
                     ],
                   ),
                   const SizedBox(height: 24),
 
                   // ── VIEW MODE ──
                   if (_isViewMode) ...[
+                    // Treatment type label
+                    if (_selectedTreatmentType.isNotEmpty) ...[
+                      _readOnlyCard(
+                        _treatmentTypeIcon(_selectedTreatmentType),
+                        'Treatment Type',
+                        _selectedTreatmentType,
+                        context.colors.primary,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     // Vitals row
                     if ((_bpCtrl.text.trim().isNotEmpty) || (_pulseCtrl.text.trim().isNotEmpty)) ...[
                       Text('Vitals', style: context.textStyles.label),
@@ -456,6 +874,37 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                       const SizedBox(height: 16),
                     ],
                     _readOnlyField('Session Notes', _notesCtrl.text),
+                    // Acupuncture/Acupressure points (view)
+                    if (_selectedPoints.isNotEmpty) ...[
+                      Text(
+                        _selectedTreatmentType == 'Acupressure' ? 'Acupressure Charting' : 'Acupuncture Charting',
+                        style: context.textStyles.label,
+                      ),
+                      const SizedBox(height: 8),
+                      _buildReadOnlyAcupointsList(),
+                      const SizedBox(height: 16),
+                    ],
+                    // Cupping Therapy (view)
+                    if (_cuppingData.placementZones.isNotEmpty) ...[
+                      Text('Cupping Therapy Details', style: context.textStyles.label),
+                      const SizedBox(height: 8),
+                      _buildReadOnlyCuppingSection(),
+                      const SizedBox(height: 16),
+                    ],
+                    // Physiotherapy (view)
+                    if (_physioData.exercises.isNotEmpty) ...[
+                      Text('Physiotherapy Details', style: context.textStyles.label),
+                      const SizedBox(height: 8),
+                      _buildReadOnlyPhysioSection(),
+                      const SizedBox(height: 16),
+                    ],
+                    // Foot Reflexology (view)
+                    if (_reflexologyData.pressureZones.isNotEmpty) ...[
+                      Text('Foot Reflexology Details', style: context.textStyles.label),
+                      const SizedBox(height: 8),
+                      _buildReadOnlyReflexologySection(),
+                      const SizedBox(height: 16),
+                    ],
                     _readOnlyField('Remarks', _remarksCtrl.text),
 
                     // Photos from PocketBase
@@ -529,6 +978,41 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
 
                   // ── EDIT MODE ──
                   if (!_isViewMode) ...[
+                    // ── Treatment Type Selector ──
+                    Text('Treatment Type', style: context.textStyles.label),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: context.colors.border),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedTreatmentType.isNotEmpty ? _selectedTreatmentType : null,
+                          hint: Text('Select treatment type...', style: TextStyle(color: context.colors.textHint)),
+                          isExpanded: true,
+                          icon: Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textSecondary),
+                          items: _treatmentTypes.map((type) => DropdownMenuItem(
+                            value: type,
+                            child: Row(
+                              children: [
+                                Icon(_treatmentTypeIcon(type), size: 18, color: context.colors.primary),
+                                const SizedBox(width: 10),
+                                Text(type),
+                              ],
+                            ),
+                          )).toList(),
+                          onChanged: (val) {
+                            if (val != null) _confirmTreatmentTypeSwitch(val);
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
                     // ── Timer — visible for all active sessions ──
                     _SessionTimerWidget(
                       sessionId: session.id,
@@ -544,6 +1028,17 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                     ),
                     const SizedBox(height: 8),
                     AppTextField(controller: _notesCtrl, label: '', hint: 'Observations, treatment applied...', maxLines: null, minLines: 4),
+                    const SizedBox(height: 16),
+
+                    // ── Type-specific sections ──
+                    if (_selectedTreatmentType == 'Acupuncture' || _selectedTreatmentType == 'Acupressure')
+                      _buildEditableAcupointsSection(),
+                    if (_selectedTreatmentType == 'Cupping Therapy')
+                      _buildEditableCuppingSection(),
+                    if (_selectedTreatmentType == 'Physiotherapy')
+                      _buildEditablePhysioSection(),
+                    if (_selectedTreatmentType == 'Foot Reflexology')
+                      _buildEditableReflexologySection(),
                     const SizedBox(height: 16),
                     Text('Vitals (Optional)', style: context.textStyles.label),
                     const SizedBox(height: 8),
@@ -777,11 +1272,891 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
       ),
     );
   }
+
+  Widget _buildReadOnlyAcupointsList() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _selectedPoints.map((point) {
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: context.colors.primary.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: context.colors.primary.withValues(alpha: 0.15)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.adjust_rounded, size: 14, color: context.colors.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    point.point,
+                    style: TextStyle(
+                      color: context.colors.textPrimary,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: context.colors.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      point.side,
+                      style: TextStyle(
+                        color: context.colors.primary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${point.depth} · ${point.angle} · ${point.method}',
+                style: TextStyle(
+                  color: context.colors.textSecondary,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildEditableAcupointsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Acupuncture Points Applied',
+              style: context.textStyles.label,
+            ),
+            if (_selectedPoints.isNotEmpty)
+              Text(
+                '${_selectedPoints.length} points active',
+                style: TextStyle(
+                  color: context.colors.primary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Search Bar
+        AppTextField(
+          controller: _searchCtrl,
+          label: '',
+          hint: 'Search standard points (e.g. LI4, Hegu, Stomach)...',
+          prefixIcon: Icon(Icons.search_rounded, color: context.colors.textSecondary),
+          onChanged: _onSearchChanged,
+        ),
+
+        // Suggestions Box
+        if (_searchSuggestions.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: context.colors.border),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _searchSuggestions.length,
+              separatorBuilder: (_, __) => Divider(height: 1, color: context.colors.border),
+              itemBuilder: (context, idx) {
+                final item = _searchSuggestions[idx];
+                final pointCode = item['point']!;
+                final pointName = item['name']!;
+                final meridian = item['meridian']!;
+                final isCustom = pointName == 'Custom Point';
+                
+                return ListTile(
+                  dense: true,
+                  leading: Icon(
+                    isCustom ? Icons.add_circle_outline_rounded : Icons.adjust_rounded,
+                    color: isCustom ? context.colors.accent : context.colors.primary,
+                    size: 18,
+                  ),
+                  title: Text(
+                    isCustom ? 'Add custom: "$pointCode"' : '$pointCode ($pointName)',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: context.colors.textPrimary,
+                    ),
+                  ),
+                  subtitle: Text(
+                    meridian,
+                    style: TextStyle(color: context.colors.textSecondary, fontSize: 11),
+                  ),
+                  onTap: () {
+                    final exists = _selectedPoints.any((p) => p.point.toLowerCase() == pointCode.toLowerCase());
+                    if (exists) {
+                      AppToast.show('Point $pointCode is already added.', type: ToastType.warning);
+                    } else {
+                      setState(() {
+                        _selectedPoints.add(AcupointUsage(point: pointCode));
+                        _searchCtrl.clear();
+                        _searchSuggestions.clear();
+                      });
+                      _onAcupointsChanged();
+                    }
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+
+        // Selected Points list
+        if (_selectedPoints.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            decoration: BoxDecoration(
+              color: context.colors.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.colors.border, style: BorderStyle.solid),
+            ),
+            child: Column(
+              children: [
+                Icon(Icons.healing_outlined, size: 28, color: context.colors.textSecondary),
+                const SizedBox(height: 8),
+                Text(
+                  'No acupuncture points added to this session yet.',
+                  style: TextStyle(color: context.colors.textSecondary, fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          )
+        else
+          // Desktop view: Table
+          MediaQuery.of(context).size.width >= 700
+              ? _buildDesktopAcupointsTable()
+              : _buildMobileAcupointsList(),
+      ],
+    );
+  }
+
+  Widget _buildDesktopAcupointsTable() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.colors.border),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(15),
+        child: Table(
+          columnWidths: const {
+            0: FlexColumnWidth(1.2), // Point
+            1: FlexColumnWidth(1.5), // Side
+            2: FlexColumnWidth(1.5), // Depth
+            3: FlexColumnWidth(1.8), // Angle
+            4: FlexColumnWidth(1.8), // Method
+            5: FixedColumnWidth(50), // Actions
+          },
+          defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+          children: [
+            // Table Header
+            TableRow(
+              decoration: BoxDecoration(
+                color: context.colors.background,
+                border: Border(bottom: BorderSide(color: context.colors.border)),
+              ),
+              children: [
+                _tableHeaderCell('Point'),
+                _tableHeaderCell('Side'),
+                _tableHeaderCell('Depth'),
+                _tableHeaderCell('Angle'),
+                _tableHeaderCell('Method'),
+                _tableHeaderCell(''),
+              ],
+            ),
+            // Table Rows
+            ..._selectedPoints.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final point = entry.value;
+              return TableRow(
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: context.colors.border.withValues(alpha: 0.5))),
+                ),
+                children: [
+                  // Point Code
+                  Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Text(
+                      point.point,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: context.colors.textPrimary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  // Side Dropdown
+                  _buildDropdownCell(
+                    value: point.side,
+                    items: ['Bilateral', 'Left', 'Right'],
+                    onChanged: (val) {
+                      if (val != null) {
+                        point.side = val;
+                        _onAcupointsChanged();
+                      }
+                    },
+                  ),
+                  // Depth Dropdown
+                  _buildDropdownCell(
+                    value: point.depth,
+                    items: ['0.3 cun', '0.5 cun', '0.8 cun', '1.0 cun', '1.2 cun', '1.5 cun', '2.0 cun', '3.0 cun'],
+                    onChanged: (val) {
+                      if (val != null) {
+                        point.depth = val;
+                        _onAcupointsChanged();
+                      }
+                    },
+                  ),
+                  // Angle Dropdown
+                  _buildDropdownCell(
+                    value: point.angle,
+                    items: ['Perpendicular', 'Oblique', 'Transverse'],
+                    onChanged: (val) {
+                      if (val != null) {
+                        point.angle = val;
+                        _onAcupointsChanged();
+                      }
+                    },
+                  ),
+                  // Method Dropdown
+                  _buildDropdownCell(
+                    value: point.method,
+                    items: ['Manual', 'Electro', 'Moxibustion', 'None'],
+                    onChanged: (val) {
+                      if (val != null) {
+                        point.method = val;
+                        _onAcupointsChanged();
+                      }
+                    },
+                  ),
+                  // Delete Button
+                  IconButton(
+                    icon: Icon(Icons.delete_outline_rounded, color: context.colors.error, size: 20),
+                    onPressed: () {
+                      setState(() => _selectedPoints.removeAt(idx));
+                      _onAcupointsChanged();
+                    },
+                  ),
+                ],
+              );
+            }).toList(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tableHeaderCell(String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: context.colors.textSecondary,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdownCell({
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.colors.border),
+          color: Colors.white,
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: value,
+            items: items.map((item) => DropdownMenuItem(
+              value: item,
+              child: Text(
+                item,
+                style: TextStyle(color: context.colors.textPrimary, fontSize: 13),
+              ),
+            )).toList(),
+            onChanged: onChanged,
+            isExpanded: true,
+            icon: Icon(Icons.arrow_drop_down_rounded, color: context.colors.textSecondary),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMobileAcupointsList() {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _selectedPoints.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
+      itemBuilder: (context, idx) {
+        final point = _selectedPoints[idx];
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: context.colors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.adjust_rounded, size: 16, color: context.colors.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        point.point,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: context.colors.textPrimary,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.delete_outline_rounded, color: context.colors.error, size: 20),
+                    constraints: const BoxConstraints(),
+                    padding: EdgeInsets.zero,
+                    onPressed: () {
+                      setState(() => _selectedPoints.removeAt(idx));
+                      _onAcupointsChanged();
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              // Dropdowns Grid
+              GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                childAspectRatio: 2.8,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                children: [
+                  _buildMobileFieldLabel('Side', _buildMobileDropdown(
+                    value: point.side,
+                    items: ['Bilateral', 'Left', 'Right'],
+                    onChanged: (val) {
+                      if (val != null) {
+                        point.side = val;
+                        _onAcupointsChanged();
+                      }
+                    },
+                  )),
+                  _buildMobileFieldLabel('Depth', _buildMobileDropdown(
+                    value: point.depth,
+                    items: ['0.3 cun', '0.5 cun', '0.8 cun', '1.0 cun', '1.2 cun', '1.5 cun', '2.0 cun', '3.0 cun'],
+                    onChanged: (val) {
+                      if (val != null) {
+                        point.depth = val;
+                        _onAcupointsChanged();
+                      }
+                    },
+                  )),
+                  _buildMobileFieldLabel('Angle', _buildMobileDropdown(
+                    value: point.angle,
+                    items: ['Perpendicular', 'Oblique', 'Transverse'],
+                    onChanged: (val) {
+                      if (val != null) {
+                        point.angle = val;
+                        _onAcupointsChanged();
+                      }
+                    },
+                  )),
+                  _buildMobileFieldLabel('Method', _buildMobileDropdown(
+                    value: point.method,
+                    items: ['Manual', 'Electro', 'Moxibustion', 'None'],
+                    onChanged: (val) {
+                      if (val != null) {
+                        point.method = val;
+                        _onAcupointsChanged();
+                      }
+                    },
+                  )),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMobileFieldLabel(String label, Widget child) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(color: context.colors.textSecondary, fontSize: 10, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 4),
+        Expanded(child: child),
+      ],
+    );
+  }
+
+  Widget _buildMobileDropdown({
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: context.colors.border),
+        color: Colors.white,
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: value,
+          items: items.map((item) => DropdownMenuItem(
+            value: item,
+            child: Text(
+              item,
+              style: TextStyle(color: context.colors.textPrimary, fontSize: 12),
+            ),
+          )).toList(),
+          onChanged: onChanged,
+          isExpanded: true,
+          icon: Icon(Icons.arrow_drop_down_rounded, color: context.colors.textSecondary),
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Treatment Type Icon Helper
+  // ═══════════════════════════════════════════════════════════════════════
+
+  IconData _treatmentTypeIcon(String type) {
+    switch (type) {
+      case 'Acupuncture':
+        return Icons.medical_information_outlined;
+      case 'Acupressure':
+        return Icons.touch_app_rounded;
+      case 'Cupping Therapy':
+        return Icons.spa_outlined;
+      case 'Physiotherapy':
+        return Icons.accessibility_new_rounded;
+      case 'Foot Reflexology':
+        return Icons.directions_walk_rounded;
+      default:
+        return Icons.healing_outlined;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Cupping Therapy — Editable Section
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Widget _buildEditableCuppingSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Cupping Therapy Details', style: context.textStyles.label),
+        const SizedBox(height: 12),
+        // Cup Type
+        Text('Cup Type', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Wrap(spacing: 8, children: ['Dry', 'Wet', 'Fire'].map((type) {
+          final selected = _cuppingData.cupType == type;
+          return ChoiceChip(
+            label: Text(type),
+            selected: selected,
+            selectedColor: context.colors.primary.withValues(alpha: 0.15),
+            labelStyle: TextStyle(
+              color: selected ? context.colors.primary : context.colors.textPrimary,
+              fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+            ),
+            onSelected: (_) {
+              setState(() => _cuppingData.cupType = type);
+              _onFieldChanged();
+            },
+          );
+        }).toList()),
+        const SizedBox(height: 16),
+        // Placement Zones
+        Text('Placement Zones', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Wrap(spacing: 8, runSpacing: 6, children: _cuppingZones.map((zone) {
+          final selected = _cuppingData.placementZones.contains(zone);
+          return FilterChip(
+            label: Text(zone, style: const TextStyle(fontSize: 12)),
+            selected: selected,
+            selectedColor: context.colors.primary.withValues(alpha: 0.15),
+            checkmarkColor: context.colors.primary,
+            onSelected: (val) {
+              setState(() {
+                if (val) { _cuppingData.placementZones.add(zone); }
+                else { _cuppingData.placementZones.remove(zone); }
+              });
+              _onFieldChanged();
+            },
+          );
+        }).toList()),
+        const SizedBox(height: 16),
+        // Number of Cups + Duration
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Number of Cups', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            Row(children: [
+              _counterBtn(Icons.remove_rounded, () { if (_cuppingData.numberOfCups > 1) { setState(() => _cuppingData.numberOfCups--); _onFieldChanged(); } }),
+              Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('${_cuppingData.numberOfCups}', style: context.textStyles.h3)),
+              _counterBtn(Icons.add_rounded, () { setState(() => _cuppingData.numberOfCups++); _onFieldChanged(); }),
+            ]),
+          ])),
+          const SizedBox(width: 16),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Duration (min)', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(height: 6),
+            Row(children: [
+              _counterBtn(Icons.remove_rounded, () { if (_cuppingData.durationMinutes > 1) { setState(() => _cuppingData.durationMinutes--); _onFieldChanged(); } }),
+              Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('${_cuppingData.durationMinutes}', style: context.textStyles.h3)),
+              _counterBtn(Icons.add_rounded, () { setState(() => _cuppingData.durationMinutes++); _onFieldChanged(); }),
+            ]),
+          ])),
+        ]),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _counterBtn(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36, height: 36,
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: context.colors.border),
+        ),
+        child: Icon(icon, size: 18, color: context.colors.primary),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Cupping Therapy — Read-Only Section
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Widget _buildReadOnlyCuppingSection() {
+    return Container(
+      width: double.infinity, padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.colors.primary.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.colors.primary.withValues(alpha: 0.12)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _readOnlyRow('Cup Type', _cuppingData.cupType),
+        const SizedBox(height: 8),
+        Text('Placement Zones', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600, color: context.colors.textSecondary)),
+        const SizedBox(height: 4),
+        Wrap(spacing: 6, runSpacing: 4, children: _cuppingData.placementZones.map((z) => _chipBadge(z)).toList()),
+        const SizedBox(height: 8),
+        Row(children: [
+          Expanded(child: _readOnlyRow('Cups', '${_cuppingData.numberOfCups}')),
+          Expanded(child: _readOnlyRow('Duration', '${_cuppingData.durationMinutes} min')),
+        ]),
+      ]),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Physiotherapy — Editable Section
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Widget _buildEditablePhysioSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text('Physiotherapy Exercises', style: context.textStyles.label),
+          if (_physioData.exercises.isNotEmpty)
+            Text('${_physioData.exercises.length} exercise(s)',
+              style: TextStyle(color: context.colors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
+        ]),
+        const SizedBox(height: 12),
+        ..._physioData.exercises.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final ex = entry.value;
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: context.colors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: context.colors.border),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Expanded(child: AppTextField(label: 'Exercise Name', hint: 'e.g. Shoulder Flexion',
+                  controller: TextEditingController(text: ex.name),
+                  onChanged: (val) { ex.name = val; _onFieldChanged(); })),
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () { setState(() => _physioData.exercises.removeAt(idx)); _onFieldChanged(); },
+                  child: Icon(Icons.close_rounded, size: 20, color: context.colors.error),
+                ),
+              ]),
+              const SizedBox(height: 10),
+              Row(children: [
+                Expanded(child: _miniNumberField('Sets', ex.sets, (v) { ex.sets = v; _onFieldChanged(); })),
+                const SizedBox(width: 8),
+                Expanded(child: _miniNumberField('Reps', ex.reps, (v) { ex.reps = v; _onFieldChanged(); })),
+                const SizedBox(width: 8),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Resistance', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600, fontSize: 10)),
+                  const SizedBox(height: 4),
+                  _buildMobileDropdown(value: ex.resistance, items: ['None', 'Light', 'Medium', 'Heavy'],
+                    onChanged: (val) { if (val != null) setState(() => ex.resistance = val); _onFieldChanged(); }),
+                ])),
+              ]),
+              const SizedBox(height: 10),
+              AppTextField(label: 'ROM (degrees, optional)', hint: 'e.g. 90',
+                controller: TextEditingController(text: ex.romDegrees ?? ''),
+                keyboardType: TextInputType.number,
+                onChanged: (val) { ex.romDegrees = val; _onFieldChanged(); }),
+            ]),
+          );
+        }),
+        // Add Exercise button
+        GestureDetector(
+          onTap: () { setState(() => _physioData.exercises.add(PhysioExercise(name: ''))); _onFieldChanged(); },
+          child: Container(
+            width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 14),
+            decoration: BoxDecoration(
+              color: context.colors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: context.colors.primary.withValues(alpha: 0.3)),
+            ),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(Icons.add_rounded, size: 18, color: context.colors.primary),
+              const SizedBox(width: 6),
+              Text('Add Exercise', style: TextStyle(color: context.colors.primary, fontWeight: FontWeight.w600, fontSize: 13)),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _miniNumberField(String label, int value, ValueChanged<int> onChanged) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600, fontSize: 10)),
+      const SizedBox(height: 4),
+      Row(children: [
+        _counterBtn(Icons.remove_rounded, () { if (value > 1) { onChanged(value - 1); setState(() {}); } }),
+        Expanded(child: Center(child: Text('$value', style: context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)))),
+        _counterBtn(Icons.add_rounded, () { onChanged(value + 1); setState(() {}); }),
+      ]),
+    ]);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Physiotherapy — Read-Only Section
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Widget _buildReadOnlyPhysioSection() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: _physioData.exercises.map((ex) {
+      final rom = (ex.romDegrees != null && ex.romDegrees!.isNotEmpty) ? ' · ROM: ${ex.romDegrees}°' : '';
+      return Container(
+        width: double.infinity, margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: context.colors.primary.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.colors.primary.withValues(alpha: 0.12)),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(ex.name, style: context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text('${ex.sets} sets × ${ex.reps} reps · ${ex.resistance}$rom',
+            style: context.textStyles.caption.copyWith(color: context.colors.textSecondary)),
+        ]),
+      );
+    }).toList());
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Foot Reflexology — Editable Section
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Widget _buildEditableReflexologySection() {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('Foot Reflexology Details', style: context.textStyles.label),
+      const SizedBox(height: 12),
+      // Foot Selection
+      Text('Foot', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      Wrap(spacing: 8, children: ['Left', 'Right', 'Both'].map((foot) {
+        final selected = _reflexologyData.footSelection == foot;
+        return ChoiceChip(
+          label: Text(foot), selected: selected,
+          selectedColor: context.colors.primary.withValues(alpha: 0.15),
+          labelStyle: TextStyle(
+            color: selected ? context.colors.primary : context.colors.textPrimary,
+            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+          ),
+          onSelected: (_) { setState(() => _reflexologyData.footSelection = foot); _onFieldChanged(); },
+        );
+      }).toList()),
+      const SizedBox(height: 16),
+      // Pressure Zones
+      Text('Pressure Zones', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      Wrap(spacing: 8, runSpacing: 6, children: _reflexologyZones.map((zone) {
+        final selected = _reflexologyData.pressureZones.contains(zone);
+        return FilterChip(
+          label: Text(zone, style: const TextStyle(fontSize: 12)),
+          selected: selected,
+          selectedColor: context.colors.primary.withValues(alpha: 0.15),
+          checkmarkColor: context.colors.primary,
+          onSelected: (val) {
+            setState(() {
+              if (val) { _reflexologyData.pressureZones.add(zone); }
+              else { _reflexologyData.pressureZones.remove(zone); }
+            });
+            _onFieldChanged();
+          },
+        );
+      }).toList()),
+      const SizedBox(height: 16),
+      // Technique
+      Text('Technique', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      Wrap(spacing: 8, children: ['Thumb Walk', 'Finger Walk', 'Hook & Backup', 'Rotation'].map((tech) {
+        final selected = _reflexologyData.technique == tech;
+        return ChoiceChip(
+          label: Text(tech, style: const TextStyle(fontSize: 12)), selected: selected,
+          selectedColor: context.colors.primary.withValues(alpha: 0.15),
+          labelStyle: TextStyle(
+            color: selected ? context.colors.primary : context.colors.textPrimary,
+            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+          ),
+          onSelected: (_) { setState(() => _reflexologyData.technique = tech); _onFieldChanged(); },
+        );
+      }).toList()),
+      const SizedBox(height: 16),
+      // Duration
+      Text('Duration (min)', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600)),
+      const SizedBox(height: 6),
+      Row(children: [
+        _counterBtn(Icons.remove_rounded, () { if (_reflexologyData.durationMinutes > 1) { setState(() => _reflexologyData.durationMinutes--); _onFieldChanged(); } }),
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text('${_reflexologyData.durationMinutes}', style: context.textStyles.h3)),
+        _counterBtn(Icons.add_rounded, () { setState(() => _reflexologyData.durationMinutes++); _onFieldChanged(); }),
+      ]),
+      const SizedBox(height: 8),
+    ]);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Foot Reflexology — Read-Only Section
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Widget _buildReadOnlyReflexologySection() {
+    return Container(
+      width: double.infinity, padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.colors.primary.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.colors.primary.withValues(alpha: 0.12)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _readOnlyRow('Foot', _reflexologyData.footSelection),
+        const SizedBox(height: 8),
+        Text('Pressure Zones', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600, color: context.colors.textSecondary)),
+        const SizedBox(height: 4),
+        Wrap(spacing: 6, runSpacing: 4, children: _reflexologyData.pressureZones.map((z) => _chipBadge(z)).toList()),
+        const SizedBox(height: 8),
+        _readOnlyRow('Technique', _reflexologyData.technique),
+        const SizedBox(height: 8),
+        _readOnlyRow('Duration', '${_reflexologyData.durationMinutes} min'),
+      ]),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Shared read-only helpers
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Widget _readOnlyRow(String label, String value) {
+    return Row(children: [
+      Text('$label: ', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600, color: context.colors.textSecondary)),
+      Text(value, style: context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+    ]);
+  }
+
+  Widget _chipBadge(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: context.colors.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(text, style: TextStyle(color: context.colors.primary, fontSize: 11, fontWeight: FontWeight.bold)),
+    );
+  }
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// Timer Log Row — compact usage info shown inside the form
-// ═══════════════════════════════════════════════════════════════════════
+
 
 class _TimerLogRow extends StatefulWidget {
   final String sessionId;

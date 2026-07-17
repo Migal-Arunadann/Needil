@@ -13,6 +13,12 @@ import 'package:pms_app/features/appointments/models/appointment_model.dart';
 import 'package:pms_app/features/patients/models/patient_model.dart';
 import 'package:pms_app/features/patients/providers/patient_provider.dart';
 import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/services/session_lifecycle_service.dart';
+import 'package:pms_app/features/appointments/screens/auto_scheduling_dashboard.dart';
+import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
+import 'package:pms_app/core/services/auth_service.dart';
+
 
 class ClinicDashboardScreen extends ConsumerWidget {
   const ClinicDashboardScreen({super.key});
@@ -403,6 +409,8 @@ class ClinicDashboardScreen extends ConsumerWidget {
                               ),
                               const SizedBox(height: 12),
                               PatientsWaitingList(appointments: stats.todayAppointments),
+                              const SizedBox(height: 24),
+                              _ConsecutiveMissesAlertCard(),
                             ],
                           ),
                         ),
@@ -470,6 +478,8 @@ class ClinicDashboardScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 8),
                     PatientsWaitingList(appointments: stats.todayAppointments),
+                    const SizedBox(height: 24),
+                    _ConsecutiveMissesAlertCard(),
                   ],
                 ],
               ),
@@ -1043,4 +1053,112 @@ class _RecentPatientItem {
     required this.lastVisit,
     this.patientModel,
   });
+}
+
+/// Dashboard card that shows the count of treatment plans with 3+ consecutive
+/// misses. Tapping opens the Auto-Scheduling Dashboard dialog.
+class _ConsecutiveMissesAlertCard extends ConsumerStatefulWidget {
+  const _ConsecutiveMissesAlertCard();
+
+  @override
+  ConsumerState<_ConsecutiveMissesAlertCard> createState() =>
+      _ConsecutiveMissesAlertCardState();
+}
+
+class _ConsecutiveMissesAlertCardState
+    extends ConsumerState<_ConsecutiveMissesAlertCard> {
+  List<TreatmentPlanModel>? _plans;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final auth = ref.read(authProvider);
+      final lifecycle = SessionLifecycleService(pb);
+      final isClinic = auth.role == UserRole.clinic || auth.role == UserRole.receptionist;
+      final id = isClinic ? (auth.clinicId ?? auth.userId ?? '') : (auth.userId ?? '');
+      final plans = await lifecycle.getPendingMissedPlans(id, isClinic: isClinic);
+      if (mounted) setState(() { _plans = plans; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() { _loading = false; _plans = []; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const SizedBox.shrink();
+    final plans = _plans ?? [];
+    if (plans.isEmpty) return const SizedBox.shrink();
+
+    return InkWell(
+      onTap: () => AutoSchedulingDashboard.show(
+        context,
+        plans: plans,
+        onRefresh: _load,
+      ),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: context.colors.error.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: context.colors.error.withValues(alpha: 0.35),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: context.colors.error.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.warning_amber_rounded,
+                color: context.colors.error,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Consecutive Misses Alert',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: context.colors.error,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${plans.length} patient${plans.length == 1 ? '' : 's'} with 3+ consecutive missed sessions',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.colors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: context.colors.error,
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -353,6 +353,15 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
                     style: context.textStyles.label.copyWith(fontSize: 14),
                   ),
                   const SizedBox(height: 2),
+                  Text(
+                    session.treatmentModality.isNotEmpty
+                        ? session.treatmentModality
+                        : widget.plan.treatmentType,
+                    style: context.textStyles.caption.copyWith(
+                      color: context.colors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
                   Text(dateLabel, style: context.textStyles.caption),
                 ],
               ),

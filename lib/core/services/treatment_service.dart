@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:http/http.dart' as http;
 import 'package:pms_app/core/constants/pb_collections.dart';
@@ -7,6 +8,7 @@ import 'package:pms_app/features/consultations/models/consultation_model.dart';
 import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/features/auth/models/doctor_model.dart';
+import 'package:pms_app/core/services/session_lifecycle_service.dart';
 
 class TreatmentService {
   final PocketBase pb;
@@ -347,6 +349,7 @@ class TreatmentService {
           'scheduled_time': timeStr,
           'status': 'upcoming',
           'session_type': planType,
+          'treatment_type': treatmentType,
           'check_in_time': now.toUtc().toIso8601String(),
         };
         await pb.collection(PBCollections.sessions).create(body: sessionBody);
@@ -425,6 +428,7 @@ class TreatmentService {
         'scheduled_time': resolvedTimeStr,
         'status': 'upcoming',
         'session_type': planType,
+        'treatment_type': treatmentType,
       };
       await pb.collection(PBCollections.sessions).create(body: sessionBody);
 
@@ -487,6 +491,97 @@ class TreatmentService {
     return result.items.map((r) => SessionModel.fromRecord(r)).toList();
   }
 
+  /// Add a single session to an existing treatment or maintenance plan.
+  /// Creates the session record, a linked appointment, and increments
+  /// the plan's `total_sessions` counter.
+  Future<SessionModel> addSessionToPlan({
+    required String planId,
+    required String patientId,
+    required String doctorId,
+    required String scheduledDate,   // 'YYYY-MM-DD'
+    required String scheduledTime,   // 'HH:mm'
+    required String sessionType,     // 'treatment' or 'maintenance'
+    String? clinicId,
+    String? consultationId,
+    String? treatmentType,
+    bool startImmediately = false,
+  }) async {
+    // 1. Resolve clinicId from doctor if null or empty
+    String? resolvedClinicId = clinicId;
+    if (resolvedClinicId == null || resolvedClinicId.isEmpty) {
+      try {
+        final docRec = await pb.collection('doctors').getOne(doctorId);
+        resolvedClinicId = docRec.getStringValue('clinic');
+      } catch (_) {}
+    }
+
+    // 2. Determine next session number
+    final existing = await pb.collection(PBCollections.sessions).getList(
+      filter: 'treatment_plan = "$planId"',
+      sort: '-session_number',
+      perPage: 1,
+    );
+    final nextNumber = existing.items.isNotEmpty
+        ? (existing.items.first.getIntValue('session_number') + 1)
+        : 1;
+
+    // 3. Create session record
+    final sessionStatus = startImmediately ? 'waiting' : 'upcoming';
+    final sessionBody = <String, dynamic>{
+      'treatment_plan': planId,
+      'patient': patientId,
+      'doctor': doctorId,
+      if (resolvedClinicId != null && resolvedClinicId.isNotEmpty) 'clinic': resolvedClinicId,
+      if (consultationId != null && consultationId.isNotEmpty)
+        'consultation': consultationId,
+      'session_number': nextNumber,
+      'scheduled_date': scheduledDate,
+      'scheduled_time': scheduledTime,
+      'status': sessionStatus,
+      'session_type': sessionType,
+      if (treatmentType != null && treatmentType.isNotEmpty)
+        'treatment_type': treatmentType,
+      if (startImmediately)
+        'check_in_time': DateTime.now().toUtc().toIso8601String(),
+    };
+    final sessionRec =
+        await pb.collection(PBCollections.sessions).create(body: sessionBody);
+    final session = SessionModel.fromRecord(sessionRec);
+
+    // 4. Create linked appointment
+    try {
+      await pb.collection('appointments').create(body: {
+        'patient': patientId,
+        'doctor': doctorId,
+        if (resolvedClinicId != null && resolvedClinicId.isNotEmpty) 'clinic': resolvedClinicId,
+        'type': 'session',
+        'date': scheduledDate,
+        'time': scheduledTime,
+        'status': startImmediately ? 'waiting' : 'scheduled',
+        'session_type': sessionType,
+        if (startImmediately)
+          'check_in_time': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (_) {
+      // Appointment creation failure is non-fatal
+    }
+
+    // 4. Increment total_sessions on the plan
+    try {
+      final planRec =
+          await pb.collection(PBCollections.treatmentPlans).getOne(planId);
+      final currentTotal = planRec.getIntValue('total_sessions');
+      await pb.collection(PBCollections.treatmentPlans).update(
+        planId,
+        body: {'total_sessions': currentTotal + 1},
+      );
+    } catch (_) {
+      // Plan update failure is non-fatal
+    }
+
+    return session;
+  }
+
   /// Get today's sessions for a doctor.
   Future<List<SessionModel>> getDoctorTodaySessions(String doctorId) async {
     final today = _formatDate(DateTime.now());
@@ -506,13 +601,19 @@ class TreatmentService {
     String? remarks,
     List<String> photoPaths = const [],
     bool isCompleted = true,
+    String? treatmentModality,
   }) async {
     final body = <String, dynamic>{
       if (isCompleted) 'status': 'completed',
       'session_notes_': notes ?? '',
       'vitals_bp': bpLevel ?? '',
       if (pulse != null) 'vitals_pulse': pulse,
+      if (remarks != null) 'remarks': remarks,
       if (remarks != null) 'session_remarks': remarks,
+      if (remarks != null) 'session_remarks_': remarks,
+      if (remarks != null) 'remark': remarks,
+      if (treatmentModality != null && treatmentModality.isNotEmpty)
+        'treatment_type': treatmentModality,
     };
 
     final files = <http.MultipartFile>[];
@@ -638,7 +739,8 @@ class TreatmentService {
     return null;
   }
 
-  /// Mark session as missed.
+  /// Mark session as missed. Increments the plan's consecutive_misses counter
+  /// and triggers auto-rescheduling if the count is still below 3.
   Future<void> markSessionMissed(String sessionId) async {
     final record = await pb.collection(PBCollections.sessions).update(
       sessionId,
@@ -648,6 +750,36 @@ class TreatmentService {
 
     // Also mark the linked appointment as cancelled
     await _syncAppointmentStatus(session, 'cancelled');
+
+    // Increment the plan's consecutive miss counter
+    try {
+      final planRec = await pb.collection(PBCollections.treatmentPlans).getOne(
+        session.treatmentPlanId,
+      );
+      final plan = TreatmentPlanModel.fromRecord(planRec);
+
+      // Skip if plan is already paused
+      if (plan.isPaused) return;
+
+      final newMissCount = plan.consecutiveMisses + 1;
+      await pb.collection(PBCollections.treatmentPlans).update(
+        plan.id,
+        body: {'consecutive_misses': newMissCount},
+      );
+
+      // If < 3 misses, auto-reschedule from today
+      if (newMissCount < 3) {
+        try {
+          final lifecycle = SessionLifecycleService(pb);
+          await lifecycle.rescheduleFromToday(plan.id, [session]);
+        } catch (e) {
+          debugPrint('[TreatmentService] markSessionMissed reschedule error: $e');
+        }
+      }
+      // If >= 3, the Auto-Scheduling Dashboard will surface this plan.
+    } catch (e) {
+      debugPrint('[TreatmentService] markSessionMissed counter error: $e');
+    }
   }
 
   /// Cancel a session and its synced appointment.
@@ -692,7 +824,7 @@ class TreatmentService {
         final notes = sess.getStringValue('session_notes_');
         final bp = sess.getStringValue('vitals_bp');
         final pulse = sess.getIntValue('vitals_pulse');
-        final remarks = sess.getStringValue('session_remarks');
+        final remarks = sess.getStringValue('remarks').isNotEmpty ? sess.getStringValue('remarks') : sess.getStringValue('session_remarks');
         final photos = sess.getListValue<String>('photos');
 
         final hasClinicalData = notes.trim().isNotEmpty ||
@@ -1033,6 +1165,7 @@ class TreatmentService {
           'date': newDate,
           'time': resolvedTime,
           'status': 'scheduled',
+          'session_type': plan.treatmentType,
         });
       } catch (_) {}
     }
@@ -1047,18 +1180,21 @@ class TreatmentService {
   }
 
   /// Sync a session's status change to its linked appointment record.
+  ///
+  /// Uses plain `date = "YYYY-MM-DD"` (not timestamp range) because the
+  /// date field stores plain date strings, not datetimes.
   Future<void> _syncAppointmentStatus(SessionModel session, String newStatus) async {
     try {
       String datePart = session.scheduledDate;
       try {
         final dt = DateTime.parse(session.scheduledDate);
-        datePart = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+        datePart = _formatDate(dt);
       } catch (_) {}
 
       final appts = await pb.collection(PBCollections.appointments).getList(
         filter:
             'patient = "${session.patientId}" && doctor = "${session.doctorId}" '
-            '&& date >= "$datePart 00:00:00.000Z" && date <= "$datePart 23:59:59.999Z" && time = "${session.scheduledTime}" '
+            '&& date = "$datePart" && time = "${session.scheduledTime}" '
             '&& type = "session" && status != "cancelled"',
       );
       final now = DateTime.now().toUtc().toIso8601String();

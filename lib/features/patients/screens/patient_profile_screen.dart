@@ -18,6 +18,10 @@ import 'package:pms_app/features/dashboard/widgets/dashboard_widgets.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 import 'package:pms_app/core/widgets/app_text_field.dart';
 import 'package:pms_app/features/patients/providers/patient_provider.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/core/services/auth_service.dart';
+import 'package:pms_app/features/scheduling/screens/available_slots_screen.dart';
+import 'package:pms_app/core/utils/time_utils.dart';
 
 
 class PatientProfileScreen extends ConsumerStatefulWidget {
@@ -931,6 +935,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   TreatmentPlanModel? _maintenancePlan;
   List<SessionModel> _maintenanceSessions = [];
   bool _planLoaded = false;
+  List<Map<String, String>> _clinicDoctors = [];
 
   ConsultationModel get c => widget.entry.consultation;
   PatientModel get patient => widget.patient;
@@ -939,6 +944,22 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   void initState() {
     super.initState();
     _loadPlans();
+    _loadClinicDoctors();
+  }
+
+  Future<void> _loadClinicDoctors() async {
+    try {
+      final auth = ref.read(authProvider);
+      if (auth.role == UserRole.clinic && auth.userId != null) {
+        final service = ref.read(appointmentServiceProvider);
+        final docs = await service.getClinicDoctors(auth.userId!);
+        if (mounted) {
+          setState(() {
+            _clinicDoctors = docs;
+          });
+        }
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadPlans() async {
@@ -1548,6 +1569,15 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 icon: Icons.healing_rounded,
               ),
               const SizedBox(height: 8),
+
+              // ── Consecutive miss banner ──────────────────────────────────
+              if (_treatmentPlan!.consecutiveMisses > 0)
+                _consecutiveMissBanner(_treatmentPlan!),
+
+              // ── Pause / Resume row ───────────────────────────────────────
+              if (_treatmentPlan!.status != TreatmentPlanStatus.completed)
+                _pauseResumeRow(_treatmentPlan!),
+
               if (_treatmentSessions.isEmpty)
                 Text('No sessions found.',
                     style: TextStyle(color: isDesktop ? context.colors.textMuted : context.colors.textSecondary, fontSize: 12))
@@ -1555,6 +1585,15 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 ...List.generate(
                   _treatmentSessions.length,
                   (index) => _sessionTile(_treatmentSessions[index], index, _treatmentSessions.length),
+                ),
+
+              // Add Session button (only when plan is active)
+              if (_treatmentPlan!.status == TreatmentPlanStatus.active)
+                _addSessionButton(
+                  label: 'Add Session',
+                  isMaintenance: false,
+                  plan: _treatmentPlan!,
+                  color: isDesktop ? const Color(0xFF60A5FA) : context.colors.primary,
                 ),
               const SizedBox(height: 12),
 
@@ -1650,6 +1689,16 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 icon: Icons.autorenew_rounded,
               ),
               const SizedBox(height: 8),
+
+              // ── Consecutive miss banner ──────────────────────────────────
+              if (_maintenancePlan!.consecutiveMisses > 0)
+                _consecutiveMissBanner(_maintenancePlan!),
+
+              // ── Pause / Resume row ───────────────────────────────────────
+              if (_maintenancePlan!.status != TreatmentPlanStatus.completed)
+                _pauseResumeRow(_maintenancePlan!),
+
+
               if (_maintenanceSessions.isEmpty)
                 Text('No maintenance sessions found.',
                     style: TextStyle(color: isDesktop ? context.colors.textMuted : context.colors.textSecondary, fontSize: 12))
@@ -1657,6 +1706,15 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 ...List.generate(
                   _maintenanceSessions.length,
                   (index) => _sessionTile(_maintenanceSessions[index], index, _maintenanceSessions.length),
+                ),
+
+              // Add Maintenance Session button (only when plan is active)
+              if (_maintenancePlan!.status == TreatmentPlanStatus.active)
+                _addSessionButton(
+                  label: 'Add Maintenance Session',
+                  isMaintenance: true,
+                  plan: _maintenancePlan!,
+                  color: isDesktop ? const Color(0xFF34D399) : context.colors.success,
                 ),
             ],
           ],
@@ -1694,6 +1752,162 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     );
   }
 
+  /// Warning banner shown when a plan has consecutive missed sessions.
+  Widget _consecutiveMissBanner(TreatmentPlanModel plan) {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final isHighAlert = plan.consecutiveMisses >= 3;
+    final bannerColor = isHighAlert ? context.colors.error : context.colors.warning;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: bannerColor.withValues(alpha: isDesktop ? 0.08 : 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: bannerColor.withValues(alpha: 0.35),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isHighAlert ? Icons.error_outline_rounded : Icons.warning_amber_rounded,
+            size: 15,
+            color: bannerColor,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              isHighAlert
+                  ? '${plan.consecutiveMisses} consecutive missed sessions — auto-scheduling is on hold.'
+                  : '${plan.consecutiveMisses} consecutive missed session(s).',
+              style: TextStyle(
+                fontSize: 11,
+                color: bannerColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Pause / Resume toggle row shown below the plan header on the patient profile.
+  Widget _pauseResumeRow(TreatmentPlanModel plan) {
+    final isPaused = plan.isPaused;
+    final color = isPaused ? context.colors.success : context.colors.warning;
+    final icon = isPaused ? Icons.play_circle_outline_rounded : Icons.pause_circle_outline_rounded;
+    final label = isPaused ? 'Resume Plan' : 'Pause Plan';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () async {
+            if (isPaused) {
+              await _showResumeDialog(plan);
+            } else {
+              await _showPauseConfirmation(plan);
+            }
+          },
+          icon: Icon(icon, size: 15),
+          label: Text(label),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: color,
+            side: BorderSide(color: color.withValues(alpha: 0.5)),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPauseConfirmation(TreatmentPlanModel plan) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Pause Sessions?'),
+        content: const Text(
+          'All upcoming sessions will be paused and removed from the schedule. You can resume them at any time.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: context.colors.warning),
+            child: const Text('Pause', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final svc = ref.read(treatmentServiceProvider);
+      await svc.pauseSessions(plan.id);
+      AppToast.show('Sessions paused \u23f8', type: ToastType.info);
+      setState(() { _planLoaded = false; });
+      await _loadPlans();
+      widget.onReturn();
+    } catch (e) {
+      AppToast.show('Failed to pause: $e', type: ToastType.error);
+    }
+  }
+
+  Future<void> _showResumeDialog(TreatmentPlanModel plan) async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Resume Sessions'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('How would you like to resume?'),
+            SizedBox(height: 8),
+            Text(
+              'Completed sessions are never redone.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, 'first'),
+            child: const Text('Start from First'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, 'continue'),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return;
+    try {
+      final svc = ref.read(treatmentServiceProvider);
+      await svc.resumeSessions(plan.id, startFromFirst: result == 'first');
+      AppToast.show('Sessions resumed \u25b6', type: ToastType.success);
+      setState(() { _planLoaded = false; });
+      await _loadPlans();
+      widget.onReturn();
+    } catch (e) {
+      AppToast.show('Failed to resume: $e', type: ToastType.error);
+    }
+  }
+
   Widget _sessionTile(SessionModel session, int index, int totalCount) {
     final isDesktop = MediaQuery.of(context).size.width >= 900;
     final isMaintenance = session.isMaintenance;
@@ -1717,6 +1931,9 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
         ? DateTime(date.toLocal().year, date.toLocal().month, date.toLocal().day)
         : null;
     final isToday = sessionDay != null && sessionDay.isAtSameMomentAs(today);
+    final modality = session.treatmentModality.isNotEmpty
+        ? session.treatmentModality
+        : (isMaintenance ? _maintenancePlan?.treatmentType : _treatmentPlan?.treatmentType) ?? '';
 
     // Timeline dots styling
     final isCompleted = effectiveStatus == SessionStatus.completed;
@@ -1917,6 +2134,16 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                               ],
                             ],
                           ),
+                          if (modality.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                modality,
+                                style: context.textStyles.caption.copyWith(
+                                  color: context.colors.textSecondary,
+                                ),
+                              ),
+                            ),
                           const SizedBox(height: 2),
                           Text(
                             dateLabel,
@@ -2290,6 +2517,366 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       return 'Upcoming';
     }
     return 'Upcoming';
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // + Add Session Button
+  // ═══════════════════════════════════════════════════════════════════════
+
+  Widget _addSessionButton({
+    required String label,
+    required bool isMaintenance,
+    required TreatmentPlanModel plan,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: GestureDetector(
+        onTap: () => _showAddSessionSheet(
+          isMaintenance: isMaintenance,
+          plan: plan,
+        ),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: color.withValues(alpha: 0.4),
+              style: BorderStyle.solid,
+            ),
+            color: color.withValues(alpha: 0.05),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_rounded, size: 18, color: color),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Add Session Bottom Sheet
+  // ═══════════════════════════════════════════════════════════════════════
+
+  void _showAddSessionSheet({
+    required bool isMaintenance,
+    required TreatmentPlanModel plan,
+  }) {
+    final auth = ref.read(authProvider);
+    final isClinic = auth.role == UserRole.clinic;
+
+    DateTime? selectedDate;
+    String? selectedTimeStr;
+    String selectedDoctor = plan.doctorId;
+    String selectedTreatmentType = plan.treatmentType;
+    bool startImmediately = false;
+    bool isSubmitting = false;
+
+    // Default to the first clinic doctor if current doctor is not found
+    final hasDoc = _clinicDoctors.any((d) => d['id'] == selectedDoctor);
+    if (isClinic && !hasDoc && _clinicDoctors.isNotEmpty) {
+      selectedDoctor = _clinicDoctors.first['id']!;
+    }
+
+    final treatmentTypes = [
+      'Acupuncture',
+      'Acupressure',
+      'Cupping Therapy',
+      'Physiotherapy',
+      'Foot Reflexology',
+    ];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            final canSubmit = startImmediately || (selectedDate != null && selectedTimeStr != null);
+
+            return Container(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              decoration: BoxDecoration(
+                color: context.colors.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Drag handle
+                    Center(
+                      child: Container(
+                        width: 40, height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: context.colors.border,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+
+                    // Title
+                    Text(
+                      isMaintenance ? 'Add Maintenance Session' : 'Add Session',
+                      style: context.textStyles.h3,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Add an extra session to the existing ${isMaintenance ? "maintenance" : "treatment"} plan.',
+                      style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Doctor Selector (if Clinic)
+                    if (isClinic && _clinicDoctors.isNotEmpty) ...[
+                      Text('Doctor', style: context.textStyles.label),
+                      const SizedBox(height: 6),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: context.colors.background,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: context.colors.border),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: selectedDoctor,
+                            isExpanded: true,
+                            items: _clinicDoctors.map((d) => DropdownMenuItem(
+                              value: d['id'],
+                              child: Text(d['name'] ?? '', style: const TextStyle(fontSize: 14)),
+                            )).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setSheetState(() {
+                                  selectedDoctor = val;
+                                  selectedDate = null;
+                                  selectedTimeStr = null;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+
+                    // Start Immediately toggle
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: context.colors.background,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: context.colors.border),
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.play_circle_outline_rounded, size: 20,
+                            color: startImmediately ? context.colors.success : context.colors.textSecondary),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Start Immediately', style: context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600)),
+                              Text('Mark patient as waiting right away',
+                                style: context.textStyles.caption.copyWith(color: context.colors.textSecondary, fontSize: 11)),
+                            ],
+                          ),
+                        ),
+                        Switch.adaptive(
+                          value: startImmediately,
+                          activeThumbColor: context.colors.success,
+                          onChanged: (val) => setSheetState(() => startImmediately = val),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Doctor Slot selector field (only if NOT start immediately)
+                    if (!startImmediately) ...[
+                      Text('Doctor Slot', style: context.textStyles.label),
+                      const SizedBox(height: 6),
+                      GestureDetector(
+                        onTap: () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AvailableSlotsScreen(
+                                doctorId: selectedDoctor,
+                                clinicId: patient.clinicId ?? (auth.role == UserRole.clinic ? auth.userId : auth.clinic?.id),
+                                treatmentDuration: 30,
+                                allowFutureDates: true,
+                                initialDate: DateTime.now(),
+                              ),
+                            ),
+                          );
+                          if (result != null && result is Map<String, dynamic>) {
+                            setSheetState(() {
+                              selectedDate = result['date'] as DateTime;
+                              selectedTimeStr = result['time'] as String;
+                            });
+                          }
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: context.colors.background,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: context.colors.border),
+                          ),
+                          child: Row(children: [
+                            Icon(Icons.calendar_today_rounded, size: 16, color: context.colors.primary),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                selectedDate != null && selectedTimeStr != null
+                                    ? '${DateFormat('EEE, d MMM yyyy').format(selectedDate!)} at ${TimeUtils.formatStringTime(selectedTimeStr!)}'
+                                    : 'Tap to select doctor slot',
+                                style: context.textStyles.bodyMedium.copyWith(
+                                  color: selectedDate != null ? context.colors.textPrimary : context.colors.textHint,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Icon(Icons.arrow_drop_down_rounded, color: context.colors.textSecondary),
+                          ]),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+
+                    // Treatment Type Dropdown
+                    Text('Treatment Type', style: context.textStyles.label),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: context.colors.background,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: context.colors.border),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedTreatmentType.isNotEmpty ? selectedTreatmentType : null,
+                          hint: Text('Select type...', style: TextStyle(color: context.colors.textHint)),
+                          isExpanded: true,
+                          icon: Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textSecondary),
+                          items: treatmentTypes.map((type) => DropdownMenuItem(
+                            value: type,
+                            child: Text(type, style: const TextStyle(fontSize: 14)),
+                          )).toList(),
+                          onChanged: (val) {
+                            if (val != null) setSheetState(() => selectedTreatmentType = val);
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Submit button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        onPressed: isSubmitting || !canSubmit
+                            ? null
+                            : () async {
+                                setSheetState(() => isSubmitting = true);
+                                try {
+                                  final service = ref.read(treatmentServiceProvider);
+                                  
+                                  final dateStr = startImmediately 
+                                      ? DateFormat('yyyy-MM-dd').format(DateTime.now())
+                                      : DateFormat('yyyy-MM-dd').format(selectedDate!);
+                                      
+                                  final timeStr = startImmediately
+                                      ? '${DateTime.now().hour.toString().padLeft(2, '0')}:${DateTime.now().minute.toString().padLeft(2, '0')}'
+                                      : selectedTimeStr!;
+
+                                  await service.addSessionToPlan(
+                                    planId: plan.id,
+                                    patientId: patient.id,
+                                    doctorId: selectedDoctor,
+                                    scheduledDate: dateStr,
+                                    scheduledTime: timeStr,
+                                    sessionType: isMaintenance ? 'maintenance' : 'treatment',
+                                    clinicId: patient.clinicId ?? (auth.role == UserRole.clinic ? auth.userId : auth.clinic?.id),
+                                    consultationId: plan.consultationId,
+                                    treatmentType: selectedTreatmentType,
+                                    startImmediately: startImmediately,
+                                  );
+
+                                  if (mounted && ctx.mounted) {
+                                    Navigator.pop(ctx);
+                                    AppToast.show(
+                                      'Session added successfully!',
+                                      type: ToastType.success,
+                                    );
+                                    // Reload plans and sessions
+                                    setState(() {
+                                      _planLoaded = false;
+                                      if (isMaintenance) {
+                                        _maintenanceSessions = [];
+                                      } else {
+                                        _treatmentSessions = [];
+                                      }
+                                    });
+                                    await _loadPlans();
+                                    widget.onReturn();
+                                  }
+                                } catch (e) {
+                                  setSheetState(() => isSubmitting = false);
+                                  if (mounted) {
+                                    AppToast.show('Failed to add session: $e', type: ToastType.error);
+                                  }
+                                }
+                              },
+                        icon: isSubmitting
+                            ? const SizedBox(
+                                width: 18, height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.add_rounded, size: 18),
+                        label: Text(isSubmitting ? 'Adding...' : (isMaintenance ? 'Add Maintenance Session' : 'Add Session')),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isMaintenance ? context.colors.success : context.colors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          elevation: 0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 }
 

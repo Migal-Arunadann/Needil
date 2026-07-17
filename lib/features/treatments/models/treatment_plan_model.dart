@@ -24,6 +24,7 @@ class TreatmentPlanModel {
 
   // Expanded
   final String? patientName;
+  final String? patientPhone;
 
   TreatmentPlanModel({
     required this.id,
@@ -45,18 +46,21 @@ class TreatmentPlanModel {
     this.created,
     this.updated,
     this.patientName,
+    this.patientPhone,
   });
 
   bool get isMaintenance => planType == 'maintenance';
 
   factory TreatmentPlanModel.fromRecord(RecordModel record) {
     String? patientName;
+    String? patientPhone;
     try {
       final dynExpand = record.data['expand'];
       if (dynExpand != null && dynExpand is Map) {
         final pat = dynExpand['patient'];
         if (pat != null && pat is Map) {
           patientName = pat['full_name'] as String?;
+          patientPhone = pat['phone'] as String?;
         }
       }
     } catch (_) {}
@@ -88,6 +92,7 @@ class TreatmentPlanModel {
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
       patientName: patientName,
+      patientPhone: patientPhone,
     );
   }
 

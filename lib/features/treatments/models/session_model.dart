@@ -12,6 +12,7 @@ class SessionModel {
   final String? scheduledTime;
   final SessionStatus status;
   final String sessionType;   // 'treatment' or 'maintenance'
+  final String treatmentModality; // e.g. 'Acupuncture', 'Cupping Therapy', etc.
   final String? notes;
   final String? bpLevel;
   final int? pulse;
@@ -33,6 +34,7 @@ class SessionModel {
     this.scheduledTime,
     required this.status,
     this.sessionType = 'treatment',
+    this.treatmentModality = '',
     this.notes,
     this.bpLevel,
     this.pulse,
@@ -49,6 +51,7 @@ class SessionModel {
 
   factory SessionModel.fromRecord(RecordModel record) {
     final sessionTypeVal = record.getStringValue('session_type');
+    final treatmentTypeVal = record.getStringValue('treatment_type');
     return SessionModel(
       id: record.id,
       treatmentPlanId: record.getStringValue('treatment_plan'),
@@ -59,11 +62,15 @@ class SessionModel {
       scheduledTime: record.getStringValue('scheduled_time'),
       status: _parseStatus(record.getStringValue('status')),
       sessionType: sessionTypeVal.isNotEmpty ? sessionTypeVal : 'treatment',
+      treatmentModality: treatmentTypeVal,
       notes: record.getStringValue('session_notes_'),
       bpLevel: record.getStringValue('vitals_bp'),
       pulse: record.getIntValue('vitals_pulse'),
       photos: record.getListValue<String>('photos'),
-      remarks: record.getStringValue('session_remarks'),
+      remarks: record.getStringValue('remarks').isNotEmpty ? record.getStringValue('remarks') 
+          : record.getStringValue('session_remarks').isNotEmpty ? record.getStringValue('session_remarks')
+          : record.getStringValue('session_remarks_').isNotEmpty ? record.getStringValue('session_remarks_')
+          : record.getStringValue('remark'),
       isRescheduled: record.getBoolValue('is_rescheduled'),
       rescheduleCount: record.getIntValue('reschedule_count'),
       originalDate: record.getStringValue('original_date').isNotEmpty
@@ -84,6 +91,7 @@ class SessionModel {
       if (scheduledTime != null) 'scheduled_time': scheduledTime,
       'status': statusToString(status),
       'session_type': sessionType,
+      if (treatmentModality.isNotEmpty) 'treatment_type': treatmentModality,
       if (notes != null && notes!.isNotEmpty) 'session_notes_': notes,
       if (bpLevel != null && bpLevel!.isNotEmpty) 'vitals_bp': bpLevel,
       if (pulse != null) 'vitals_pulse': pulse,
