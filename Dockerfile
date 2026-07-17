@@ -5,8 +5,11 @@ FROM debian:latest AS build-env
 RUN apt-get update && apt-get install -y curl git unzip xz-utils zip libglu1-mesa
 
 # Install Flutter SDK
-RUN git clone https://github.com/flutter/flutter.git -b stable /usr/local/flutter
+RUN git clone https://github.com/flutter/flutter.git /usr/local/flutter && \
+    cd /usr/local/flutter && \
+    git checkout ff37bef603
 ENV PATH="/usr/local/flutter/bin:/usr/local/flutter/bin/cache/dart-sdk/bin:${PATH}"
+ENV DART_VM_OPTIONS="--max-old-space-size=1024"
 
 # Pre-download development binaries
 RUN flutter doctor
