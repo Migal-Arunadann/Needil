@@ -116,24 +116,27 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
         time: time,
       );
 
-      // ── Returning patient auto-link ──────────────────────────────────────
-      // If a patient with this phone already exists, link them immediately
+      // ── Returning patient auto-link ────────────────────────────────────────────────
+      // If EXACTLY ONE patient with this phone exists, link them immediately
       // so the "Fill Details" step is skipped for returning patients.
+      // When multiple patients share the phone (family), we do NOT auto-link
+      // — the receptionist must select the right person via "Fill Details".
       try {
-        final existing = await _service.findPatientByPhone(
+        final matches = await _service.findAllPatientsByPhone(
           patientPhone,
           doctorId,
           clinicId: clinicId,
         );
-        if (existing != null) {
+        if (matches.length == 1) {
           // setArrived:false — this is at creation time, patient hasn't arrived yet
-          await _service.linkPatient(appointment.id, existing.id, setArrived: false);
+          await _service.linkPatient(appointment.id, matches.first.id, setArrived: false);
           await _service.markPatientDetailsSaved(appointment.id);
         }
+        // If matches.length > 1: leave unlinked, receptionist will pick via Fill Details
       } catch (_) {
         // Non-fatal: if lookup fails, the receptionist can still use "Fill Details"
       }
-      // ────────────────────────────────────────────────────────────────────
+      // ───────────────────────────────────────────────────────────────────────
 
       await loadAppointments();
       return appointment;
@@ -164,7 +167,7 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     int? age,
     String? existingPatientId, // If set, skip patient creation and reuse this ID
     String? reference,
-    List<String>? familyMembers,
+    String? relationToPrimary,
     String? howDidYouHear,
     String? photoPath,
     bool consentGiven = true,
@@ -200,7 +203,7 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
           email: email,
           age: age,
           reference: reference,
-          familyMembers: familyMembers,
+          relationToPrimary: relationToPrimary,
           howDidYouHear: howDidYouHear,
           photoPath: photoPath,
           consentGiven: consentGiven,

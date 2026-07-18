@@ -271,8 +271,8 @@ class AppointmentService {
     String? email,
     int? age,
     String? reference,
-    List<String>? familyMembers,
     String? howDidYouHear,
+    String? relationToPrimary,
     String? photoPath,
     bool consentGiven = true,
     bool privacyPolicyAccepted = false,
@@ -328,10 +328,10 @@ class AppointmentService {
       if (email != null && email.isNotEmpty) 'email': email,
       if (age != null) 'age': age,
       if (reference != null && reference.isNotEmpty) 'reference': reference,
-      if (familyMembers != null && familyMembers.isNotEmpty)
-        'family_members': familyMembers,
       if (howDidYouHear != null && howDidYouHear.isNotEmpty)
         'how_did_you_hear': howDidYouHear,
+      if (relationToPrimary != null && relationToPrimary.isNotEmpty)
+        'relation_to_primary': relationToPrimary,
       'consent_given': consentGiven,
       'consent_date': _todayString(),
       'privacy_policy_accepted': privacyPolicyAccepted,
@@ -407,20 +407,29 @@ class AppointmentService {
   }
 
   /// Find an existing patient by phone number for the given doctor/clinic.
+  /// Returns the first match (primary patient). Use [findAllPatientsByPhone]
+  /// to retrieve all family members sharing the same phone.
   Future<PatientModel?> findPatientByPhone(String phone, String doctorId, {String? clinicId}) async {
+    final all = await findAllPatientsByPhone(phone, doctorId, clinicId: clinicId);
+    return all.isNotEmpty ? all.first : null;
+  }
+
+  /// Find ALL patients registered under the same phone number for the given
+  /// doctor/clinic. Returns an empty list if none found.
+  /// Used by the family-member selection flow.
+  Future<List<PatientModel>> findAllPatientsByPhone(String phone, String doctorId, {String? clinicId}) async {
     try {
       final filter = clinicId != null && clinicId.isNotEmpty
           ? 'phone = "$phone" && clinic = "$clinicId"'
           : 'phone = "$phone" && doctor = "$doctorId"';
       final result = await pb.collection(PBCollections.patients).getList(
         filter: filter,
-        perPage: 1,
+        perPage: 50,
+        sort: 'created',
       );
-      if (result.items.isNotEmpty) {
-        return PatientModel.fromRecord(result.items.first);
-      }
+      return result.items.map((r) => PatientModel.fromRecord(r)).toList();
     } catch (_) {}
-    return null;
+    return [];
   }
 
   /// Check if a scheduled appointment already exists for this phone + doctor today or in the future.

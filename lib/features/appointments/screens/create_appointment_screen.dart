@@ -22,6 +22,7 @@ import 'package:pms_app/core/services/audit_service.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 import 'package:pms_app/core/utils/whatsapp_helper.dart';
 import 'package:pms_app/core/widgets/responsive_wrapper.dart';
+import 'package:pms_app/features/patients/screens/family_member_selection_screen.dart';
 
 
 class CreateAppointmentScreen extends ConsumerStatefulWidget {
@@ -62,7 +63,6 @@ class _CreateAppointmentScreenState
   bool _dataConsentGiven = false;
   bool _privacyPolicyAccepted = false;
   File? _patientPhoto;
-  List<Map<String, String>> _familyMembers = [];
   String? _howDidYouHear;
 
   // Slot selection
@@ -74,6 +74,8 @@ class _CreateAppointmentScreenState
   // Phone lookup state
   PatientModel? _existingPatient; // non-null if phone matched a patient record
   bool _isRegisteredPatient = false; // true when walk-in phone matches existing
+  bool _isNewFamilyMember = false;  // true when adding a new family member
+  String? _selectedRelation;        // relation for new family member
 
   @override
   void initState() {
@@ -146,31 +148,86 @@ class _CreateAppointmentScreenState
     }
 
     final service = ref.read(appointmentServiceProvider);
-    final existing = await service.findPatientByPhone(
-      phone, 
-      doctorId, 
+    final allPatients = await service.findAllPatientsByPhone(
+      phone,
+      doctorId,
       clinicId: auth.clinicId,
     );
 
-    if (mounted) {
-      setState(() {
-        _existingPatient = existing;
-        _isRegisteredPatient = !_isCallBy && existing != null;
-      });
+    if (mounted) setState(() => _isCheckingPhone = false);
 
-      if (existing != null) {
-        // Always silently auto-fill shared fields
-        _nameCtrl.text = existing.fullName;
-        if (existing.dateOfBirth != null && existing.dateOfBirth!.isNotEmpty) _dobCtrl.text = existing.dateOfBirth!;
-        if (existing.city != null && existing.city!.isNotEmpty) _cityCtrl.text = existing.city!;
-        if (existing.area != null && existing.area!.isNotEmpty) _areaCtrl.text = existing.area!;
-        if (existing.occupation != null && existing.occupation!.isNotEmpty) _occupationCtrl.text = existing.occupation!;
-        if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
-        if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
-      }
+    if (!mounted) return;
+
+    if (allPatients.isEmpty) {
+      // Brand new patient — clear any previous selection
+      setState(() {
+        _existingPatient = null;
+        _isRegisteredPatient = false;
+        _isNewFamilyMember = false;
+        _selectedRelation = null;
+      });
+      return;
     }
 
-    if (mounted) setState(() => _isCheckingPhone = false);
+    // Show family member selection screen
+    final result = await Navigator.push<FamilySelectionResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FamilyMemberSelectionScreen(
+          patients: allPatients,
+          phone: phone,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (result == null) {
+      // User dismissed without selecting — treat as new patient
+      setState(() {
+        _existingPatient = null;
+        _isRegisteredPatient = false;
+        _isNewFamilyMember = false;
+        _selectedRelation = null;
+      });
+      return;
+    }
+
+    if (result.isNew) {
+      // Register a new family member under this phone
+      // Pre-fill shared household fields from the primary patient
+      final primary = allPatients.first;
+      if (primary.city != null && primary.city!.isNotEmpty) _cityCtrl.text = primary.city!;
+      if (primary.area != null && primary.area!.isNotEmpty) _areaCtrl.text = primary.area!;
+      if (primary.pincode != null && primary.pincode!.isNotEmpty) _pincodeCtrl.text = primary.pincode!;
+      // Clear personal fields
+      _nameCtrl.clear();
+      _dobCtrl.clear();
+      _occupationCtrl.clear();
+      _emailCtrl.clear();
+      setState(() {
+        _existingPatient = null;
+        _isRegisteredPatient = false;
+        _isNewFamilyMember = true;
+        _selectedRelation = null;
+        _selectedGender = null;
+      });
+    } else if (result.selected != null) {
+      final existing = result.selected!;
+      _nameCtrl.text = existing.fullName;
+      if (existing.dateOfBirth != null && existing.dateOfBirth!.isNotEmpty) _dobCtrl.text = existing.dateOfBirth!;
+      if (existing.city != null && existing.city!.isNotEmpty) _cityCtrl.text = existing.city!;
+      if (existing.area != null && existing.area!.isNotEmpty) _areaCtrl.text = existing.area!;
+      if (existing.occupation != null && existing.occupation!.isNotEmpty) _occupationCtrl.text = existing.occupation!;
+      if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
+      if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
+      setState(() {
+        _existingPatient = existing;
+        _isRegisteredPatient = !_isCallBy;
+        _isNewFamilyMember = false;
+        _selectedRelation = null;
+      });
+    }
   }
 
   String _formatDate(DateTime d) =>
@@ -470,9 +527,7 @@ class _CreateAppointmentScreenState
         age: calculatedAge,
         existingPatientId: _existingPatient?.id,
         reference: _referenceCtrl.text.isNotEmpty ? _referenceCtrl.text : null,
-        familyMembers: _familyMembers.isNotEmpty
-            ? _familyMembers.map((fm) => '${fm['name']} (${fm['relation']})').toList()
-            : null,
+        relationToPrimary: _isNewFamilyMember ? _selectedRelation : null,
         howDidYouHear: _howDidYouHear,
         photoPath: _patientPhoto?.path,
         consentGiven: _dataConsentGiven,
@@ -899,13 +954,14 @@ class _CreateAppointmentScreenState
                       onPrivacyPolicyChanged: (v) => setState(() => _privacyPolicyAccepted = v),
                       photoFile: _patientPhoto,
                       onPhotoChanged: (f) => setState(() => _patientPhoto = f),
-                      familyMembers: _familyMembers,
-                      onFamilyMembersChanged: (fm) => setState(() => _familyMembers = fm),
                       howDidYouHear: _howDidYouHear,
                       onHowDidYouHearChanged: (v) => setState(() => _howDidYouHear = v),
                       isReturningPatient: _isRegisteredPatient,
                       isCheckingPhone: _isCheckingPhone,
                       nameLocked: _isRegisteredPatient,
+                      isNewFamilyMember: _isNewFamilyMember,
+                      relationToPrimary: _selectedRelation,
+                      onRelationChanged: (v) => setState(() => _selectedRelation = v),
                     ),
                   const SizedBox(height: 28),
 

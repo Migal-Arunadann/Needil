@@ -3350,6 +3350,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
   int _sessionNumber = 0;
   String _sessionType = 'treatment'; // 'treatment' or 'maintenance'
   String? _sessionId;
+  String? _modality;
   bool _sessionNumLoaded = false;
 
   @override

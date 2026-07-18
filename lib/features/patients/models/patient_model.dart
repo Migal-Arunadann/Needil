@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:pocketbase/pocketbase.dart';
 
 class PatientModel {
@@ -25,8 +24,11 @@ class PatientModel {
   final String? email;
   final int? age;
   final String? reference;        // Referred by (doctor, friend, etc.)
-  final List<String> familyMembers; // JSON array of "Name (Relation)"
   final String? howDidYouHear;    // How do you know us
+  /// Relation of this patient to the primary phone-account holder.
+  /// Values: "Self", "Spouse", "Child", "Parent", "Sibling", "Other".
+  /// Null for legacy records or the original/primary patient.
+  final String? relationToPrimary;
   final DateTime? created;
   final DateTime? updated;
 
@@ -50,8 +52,8 @@ class PatientModel {
     this.email,
     this.age,
     this.reference,
-    this.familyMembers = const [],
     this.howDidYouHear,
+    this.relationToPrimary,
     this.consentGiven = false,
     this.consentDate,
     this.privacyPolicyAccepted = false,
@@ -67,20 +69,6 @@ class PatientModel {
   }
 
   factory PatientModel.fromRecord(RecordModel record) {
-    // Parse family_members — can be JSON string or list
-    List<String> parseFamilyMembers() {
-      try {
-        final raw = record.data['family_members'];
-        if (raw == null) return [];
-        if (raw is List) return raw.cast<String>();
-        if (raw is String && raw.isNotEmpty) {
-          final decoded = jsonDecode(raw);
-          if (decoded is List) return decoded.cast<String>();
-        }
-      } catch (_) {}
-      return [];
-    }
-
     return PatientModel(
       id: record.id,
       fullName: record.getStringValue('full_name'),
@@ -101,8 +89,10 @@ class PatientModel {
       email: record.getStringValue('email'),
       age: record.getIntValue('age'),
       reference: record.getStringValue('reference'),
-      familyMembers: parseFamilyMembers(),
       howDidYouHear: record.getStringValue('how_did_you_hear'),
+      relationToPrimary: record.getStringValue('relation_to_primary').isNotEmpty
+          ? record.getStringValue('relation_to_primary')
+          : null,
       consentGiven: record.getBoolValue('consent_given'),
       consentDate: record.getStringValue('consent_date'),
       privacyPolicyAccepted: record.getBoolValue('privacy_policy_accepted'),
@@ -135,9 +125,10 @@ class PatientModel {
       if (email != null && email!.isNotEmpty) 'email': email,
       if (age != null) 'age': age,
       if (reference != null && reference!.isNotEmpty) 'reference': reference,
-      if (familyMembers.isNotEmpty) 'family_members': jsonEncode(familyMembers),
       if (howDidYouHear != null && howDidYouHear!.isNotEmpty)
         'how_did_you_hear': howDidYouHear,
+      if (relationToPrimary != null && relationToPrimary!.isNotEmpty)
+        'relation_to_primary': relationToPrimary,
       'consent_given': consentGiven,
       if (consentDate != null && consentDate!.isNotEmpty)
         'consent_date': consentDate,

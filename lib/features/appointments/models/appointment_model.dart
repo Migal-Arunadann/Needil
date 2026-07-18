@@ -30,6 +30,7 @@ class AppointmentModel {
   final String? reconciliationReason;
   final DateTime? reconciledAt;
   final String? reconciledBy;
+  final String? sessionType;
   final DateTime? created;
   final DateTime? updated;
 
@@ -64,6 +65,7 @@ class AppointmentModel {
     this.reconciliationReason,
     this.reconciledAt,
     this.reconciledBy,
+    this.sessionType,
     this.created,
     this.updated,
     this.doctorName,
@@ -131,6 +133,8 @@ class AppointmentModel {
       reconciledAt: _parseDateTimeOrNull(record.getStringValue('reconciled_at')),
       reconciledBy: record.getStringValue('reconciled_by').isNotEmpty 
           ? record.getStringValue('reconciled_by') : null,
+      sessionType: record.getStringValue('session_type').isNotEmpty
+          ? record.getStringValue('session_type') : null,
       created: DateTime.tryParse(record.get<String>('created')),
       updated: DateTime.tryParse(record.get<String>('updated')),
       doctorName: doctorName,

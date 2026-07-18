@@ -11,6 +11,7 @@ import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/features/patients/models/patient_model.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/features/patients/screens/family_member_selection_screen.dart';
 
 
 /// Screen shown when a call-by patient arrives — uses the shared
@@ -44,8 +45,9 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
   final _emailCtrl = TextEditingController();
   final _referenceCtrl = TextEditingController();
   File? _patientPhoto;
-  List<Map<String, String>> _familyMembers = [];
   String? _howDidYouHear;
+  bool _isNewFamilyMember = false;
+  String? _selectedRelation;
 
   @override
   void initState() {
@@ -133,8 +135,8 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
         if (calculatedAge < 0) calculatedAge = null;
       }
 
-      // Dedup: reuse existing patient with same phone in this clinic
       PatientModel? existingPatient;
+      List<PatientModel> allMatches = [];
       try {
         final pb = ref.read(pocketbaseProvider);
         final clinicId = widget.appointment.clinicId;
@@ -145,11 +147,35 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
 
         final result = await pb
             .collection(PBCollections.patients)
-            .getList(filter: filter, perPage: 1);
-        if (result.items.isNotEmpty) {
-          existingPatient = PatientModel.fromRecord(result.items.first);
-        }
+            .getList(filter: filter, perPage: 50, sort: 'created');
+        allMatches = result.items.map((r) => PatientModel.fromRecord(r)).toList();
       } catch (_) {}
+
+      // If multiple family members share this phone, ask which one is arriving
+      if (allMatches.length > 1 && mounted) {
+        setState(() => _isSubmitting = false);
+        final result = await Navigator.push<FamilySelectionResult>(
+          context,
+          MaterialPageRoute(
+            builder: (_) => FamilyMemberSelectionScreen(
+              patients: allMatches,
+              phone: phone,
+            ),
+          ),
+        );
+        if (!mounted) return;
+        if (result == null || result.isNew) {
+          // User chose to add new or dismissed — continue with fresh form (fall through)
+          setState(() {
+            _isNewFamilyMember = result?.isNew ?? false;
+          });
+        } else if (result.selected != null) {
+          existingPatient = result.selected;
+        }
+        setState(() => _isSubmitting = true);
+      } else if (allMatches.length == 1) {
+        existingPatient = allMatches.first;
+      }
 
       final PatientModel patient;
       if (existingPatient != null) {
@@ -172,9 +198,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
           email: _emailCtrl.text.isNotEmpty ? _emailCtrl.text : null,
           age: calculatedAge,
           reference: _referenceCtrl.text.isNotEmpty ? _referenceCtrl.text : null,
-          familyMembers: _familyMembers.isNotEmpty
-              ? _familyMembers.map((fm) => '${fm['name']} (${fm['relation']})').toList()
-              : null,
+          relationToPrimary: _isNewFamilyMember ? _selectedRelation : null,
           howDidYouHear: _howDidYouHear,
           photoPath: _patientPhoto?.path,
           consentGiven: _dataConsentGiven,
@@ -334,12 +358,13 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                     onPrivacyPolicyChanged: (v) => setState(() => _privacyPolicyAccepted = v),
                     photoFile: _patientPhoto,
                     onPhotoChanged: (f) => setState(() => _patientPhoto = f),
-                    familyMembers: _familyMembers,
-                    onFamilyMembersChanged: (fm) => setState(() => _familyMembers = fm),
                     howDidYouHear: _howDidYouHear,
                     onHowDidYouHearChanged: (v) => setState(() => _howDidYouHear = v),
                     nameLocked: (widget.appointment.patientName ?? '').isNotEmpty,
                     phoneLocked: (widget.appointment.patientPhone ?? '').isNotEmpty,
+                    isNewFamilyMember: _isNewFamilyMember,
+                    relationToPrimary: _selectedRelation,
+                    onRelationChanged: (v) => setState(() => _selectedRelation = v),
                   ),
                   const SizedBox(height: 28),
                   AppButton(

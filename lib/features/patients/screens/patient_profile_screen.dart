@@ -22,6 +22,7 @@ import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/core/services/auth_service.dart';
 import 'package:pms_app/features/scheduling/screens/available_slots_screen.dart';
 import 'package:pms_app/core/utils/time_utils.dart';
+import 'package:pms_app/features/patients/screens/family_member_selection_screen.dart';
 
 
 class PatientProfileScreen extends ConsumerStatefulWidget {
@@ -248,6 +249,94 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     }
   }
 
+  /// Fetch all OTHER patients registered under the same phone number in the
+  /// same clinic (excludes the current patient).
+  Future<List<PatientModel>> _fetchFamilyMembers() async {
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final phone = _patient.phone;
+      final clinicId = _patient.clinicId;
+      final doctorId = _patient.doctorId;
+      final filter = clinicId != null && clinicId.isNotEmpty
+          ? 'phone = "$phone" && clinic = "$clinicId" && id != "${_patient.id}"'
+          : 'phone = "$phone" && doctor = "$doctorId" && id != "${_patient.id}"';
+      final result = await pb.collection(PBCollections.patients).getList(
+        filter: filter,
+        perPage: 20,
+        sort: 'created',
+      );
+      return result.items.map((r) => PatientModel.fromRecord(r)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Builds a compact family member row used in both mobile and desktop profile.
+  Widget _buildFamilyMemberRow(PatientModel member) {
+    final relation = member.relationToPrimary ?? 'Family';
+    final initials = member.fullName.trim().split(' ')
+        .where((s) => s.isNotEmpty)
+        .take(2)
+        .map((s) => s[0].toUpperCase())
+        .join();
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PatientProfileScreen(patient: member),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: context.colors.background,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.colors.border),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                gradient: context.colors.heroGradient,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                initials.isNotEmpty ? initials : '?',
+                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(member.fullName,
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: context.colors.textPrimary),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  Text(relation,
+                      style: TextStyle(fontSize: 11, color: context.colors.textSecondary)),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded,
+                size: 12, color: context.colors.textHint),
+          ],
+        ),
+      ),
+    );
+  }
+
+
   Widget? _buildFAB(bool hasOngoing) {
     if (_tabController.index != 0) return null;
     if (hasOngoing) return null;
@@ -370,6 +459,24 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
               if (p.emergencyContact?.isNotEmpty == true)
                 _buildDesktopDetailRow('Emergency Contact', p.emergencyContact!),
             ],
+
+            // Family Members
+            FutureBuilder<List<PatientModel>>(
+              future: _fetchFamilyMembers(),
+              builder: (ctx, snap) {
+                final members = snap.data ?? [];
+                if (members.isEmpty) return const SizedBox.shrink();
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 24),
+                    _buildDesktopSectionHeader('Family Members', Icons.people_rounded),
+                    const SizedBox(height: 12),
+                    ...members.map((m) => _buildFamilyMemberRow(m)),
+                  ],
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -829,7 +936,30 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                 _profileDetailRow('Emergency Contact', p.emergencyContact!),
             ],
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 14),
+
+          // ── Family Members Card ───────────────────────────────────────────
+          FutureBuilder<List<PatientModel>>(
+            future: _fetchFamilyMembers(),
+            builder: (ctx, snap) {
+              final members = snap.data ?? [];
+              if (members.isEmpty) return const SizedBox.shrink();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _profileInfoCard(
+                    title: 'Family Members',
+                    icon: Icons.people_rounded,
+                    children: [
+                      ...members.map((m) => _buildFamilyMemberRow(m)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 10),
         ],
       ),
     );

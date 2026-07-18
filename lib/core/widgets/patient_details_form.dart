@@ -17,8 +17,8 @@ import 'package:pms_app/core/theme/app_theme.dart';
 ///   • CreateAppointmentScreen → walk-in patient registration section
 ///
 /// Fields: Phone, Name, Photo, Gender*, DoB* (age auto-calc), Location,
-///         Occupation, Email, Reference, Family Members, How Did You Know Us,
-///         Consent.
+///         Occupation, Email, Reference, Relation (new family members),
+///         How Did You Know Us, Consent.
 /// ─────────────────────────────────────────────────────────────────────────────
 class PatientDetailsForm extends StatefulWidget {
   // ── Controllers ───────────────────────────────────────────────────────────
@@ -48,11 +48,15 @@ class PatientDetailsForm extends StatefulWidget {
   final File? photoFile;
   final ValueChanged<File?> onPhotoChanged;
 
-  final List<Map<String, String>> familyMembers; // [{name, relation}]
-  final ValueChanged<List<Map<String, String>>> onFamilyMembersChanged;
-
   final String? howDidYouHear;
   final ValueChanged<String?> onHowDidYouHearChanged;
+
+  // ── Family member registration ────────────────────────────────────────────
+  /// When true, shows a relation picker so the new patient can be linked
+  /// as a family member of the primary phone account holder.
+  final bool isNewFamilyMember;
+  final String? relationToPrimary;
+  final ValueChanged<String?>? onRelationChanged;
 
   // ── Misc ──────────────────────────────────────────────────────────────────
   final bool nameLocked;
@@ -81,10 +85,11 @@ class PatientDetailsForm extends StatefulWidget {
     required this.onPrivacyPolicyChanged,
     this.photoFile,
     required this.onPhotoChanged,
-    this.familyMembers = const [],
-    required this.onFamilyMembersChanged,
     this.howDidYouHear,
     required this.onHowDidYouHearChanged,
+    this.isNewFamilyMember = false,
+    this.relationToPrimary,
+    this.onRelationChanged,
     this.nameLocked = false,
     this.phoneLocked = false,
     this.isReturningPatient = false,
@@ -206,44 +211,6 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
     }
   }
 
-  void _addFamilyMember() {
-    final nameCtrl = TextEditingController();
-    final relationCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: context.colors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Add Family Member', style: context.textStyles.h3),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppTextField(controller: nameCtrl, label: 'Name', hint: 'e.g. John'),
-            const SizedBox(height: 12),
-            AppTextField(controller: relationCtrl, label: 'Relation', hint: 'e.g. Spouse, Parent, Child'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: context.colors.textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (nameCtrl.text.trim().isNotEmpty && relationCtrl.text.trim().isNotEmpty) {
-                final updated = List<Map<String, String>>.from(widget.familyMembers);
-                updated.add({'name': nameCtrl.text.trim(), 'relation': relationCtrl.text.trim()});
-                widget.onFamilyMembersChanged(updated);
-                Navigator.pop(ctx);
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: context.colors.primary),
-            child: Text('Add', style: TextStyle(color: context.colors.textPrimary)),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   void initState() {
@@ -531,86 +498,50 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
       ],
     );
 
-    final familyMembersSection = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(Icons.family_restroom_rounded, color: context.colors.textHint, size: 18),
-            const SizedBox(width: 8),
-            Text('Family Members (Optional)', style: context.textStyles.label),
-            const Spacer(),
-            GestureDetector(
-              onTap: _addFamilyMember,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    // Relation picker — only shown when registering a new family member
+    final relationSection = widget.isNewFamilyMember
+        ? Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Relation to Primary Account Holder',
+                  style: context.textStyles.label),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
-                  color: context.colors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
+                  color: context.colors.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: context.colors.border),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.add_rounded, color: context.colors.primary, size: 14),
-                    const SizedBox(width: 3),
-                    Text(
-                      'Add',
-                      style: context.textStyles.caption.copyWith(
-                        color: context.colors.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: widget.relationToPrimary,
+                    isExpanded: true,
+                    hint: Text('Select relation',
+                        style: context.textStyles.bodyMedium
+                            .copyWith(color: context.colors.textHint)),
+                    items: const [
+                      'Spouse',
+                      'Child',
+                      'Parent',
+                      'Sibling',
+                      'Other',
+                    ]
+                        .map((r) => DropdownMenuItem(
+                            value: r,
+                            child: Text(r,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ))))
+                        .toList(),
+                    onChanged: widget.onRelationChanged,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (widget.familyMembers.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-            decoration: BoxDecoration(
-              color: context.colors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: context.colors.border),
-            ),
-            child: Text(
-              'No family members added.',
-              style: context.textStyles.caption.copyWith(color: context.colors.textHint),
-            ),
-          ),
-        ...widget.familyMembers.asMap().entries.map((entry) {
-          final i = entry.key;
-          final fm = entry.value;
-          return Container(
-            margin: const EdgeInsets.only(bottom: 6),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: context.colors.surface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: context.colors.border),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.person_outline_rounded, size: 16, color: context.colors.textSecondary),
-                const SizedBox(width: 8),
-                Expanded(child: Text('${fm['name']} (${fm['relation']})', style: context.textStyles.bodyMedium)),
-                GestureDetector(
-                  onTap: () {
-                    final updated = List<Map<String, String>>.from(widget.familyMembers);
-                    updated.removeAt(i);
-                    widget.onFamilyMembersChanged(updated);
-                  },
-                  child: Icon(Icons.close_rounded, size: 16, color: context.colors.error),
-                ),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
+            ],
+          )
+        : const SizedBox.shrink();
 
     final consentSection = _ConsentCheckboxCard(
       key: const ValueKey('data_consent'),
@@ -716,9 +647,11 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
               areaCtrl: widget.areaCtrl,
               allRequired: true,
             ),
-            const SizedBox(height: 24),
-            familyMembersSection,
             const SizedBox(height: 16),
+            if (widget.isNewFamilyMember) ...[
+              relationSection,
+              const SizedBox(height: 16),
+            ],
             consentSection,
             const SizedBox(height: 12),
             privacySection,
