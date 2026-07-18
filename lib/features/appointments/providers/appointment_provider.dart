@@ -90,7 +90,6 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
   Future<void> changeDate(String date) async {
     await loadAppointments(date: date);
   }
-
   Future<AppointmentModel?> createCallBy({
     required String doctorId,
     String? clinicId,
@@ -98,6 +97,7 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     required String patientPhone,
     required String date,
     required String time,
+    String? existingPatientId,
   }) async {
     try {
       final schedulingService = _ref.read(schedulingServiceProvider);
@@ -117,26 +117,27 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
       );
 
       // ── Returning patient auto-link ────────────────────────────────────────────────
-      // If EXACTLY ONE patient with this phone exists, link them immediately
-      // so the "Fill Details" step is skipped for returning patients.
-      // When multiple patients share the phone (family), we do NOT auto-link
-      // — the receptionist must select the right person via "Fill Details".
+      // If existingPatientId is explicitly provided, link it immediately.
+      // Otherwise, if EXACTLY ONE patient with this phone exists, link them immediately.
       try {
-        final matches = await _service.findAllPatientsByPhone(
-          patientPhone,
-          doctorId,
-          clinicId: clinicId,
-        );
-        if (matches.length == 1) {
-          // setArrived:false — this is at creation time, patient hasn't arrived yet
-          await _service.linkPatient(appointment.id, matches.first.id, setArrived: false);
+        if (existingPatientId != null && existingPatientId.isNotEmpty) {
+          await _service.linkPatient(appointment.id, existingPatientId, setArrived: false);
           await _service.markPatientDetailsSaved(appointment.id);
+        } else {
+          final matches = await _service.findAllPatientsByPhone(
+            patientPhone,
+            doctorId,
+            clinicId: clinicId,
+          );
+          if (matches.length == 1) {
+            // setArrived:false — this is at creation time, patient hasn't arrived yet
+            await _service.linkPatient(appointment.id, matches.first.id, setArrived: false);
+            await _service.markPatientDetailsSaved(appointment.id);
+          }
         }
-        // If matches.length > 1: leave unlinked, receptionist will pick via Fill Details
       } catch (_) {
         // Non-fatal: if lookup fails, the receptionist can still use "Fill Details"
       }
-      // ───────────────────────────────────────────────────────────────────────
 
       await loadAppointments();
       return appointment;

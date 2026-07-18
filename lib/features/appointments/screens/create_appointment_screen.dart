@@ -412,6 +412,7 @@ class _CreateAppointmentScreenState
         patientPhone: _phoneCtrl.text.trim(),
         date: _formatDate(_selectedDate!),
         time: _selectedTimeStr!,
+        existingPatientId: _existingPatient?.id,
       );
       success = result != null;
     } else {

@@ -49,6 +49,9 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
   bool _isNewFamilyMember = false;
   String? _selectedRelation;
 
+  PatientModel? _existingPatient;
+  bool _isRegisteredPatient = false;
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +71,11 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
           _pincodeCtrl.text.isEmpty) {
         _pincodeCtrl.text = clinic.pin!;
       }
+
+      // Check existing patients registered under this phone number on screen load
+      await _checkExistingPatients();
+
+      if (!mounted) return;
       // Mark form as partially opened
       if (!widget.appointment.patientDetailsSaved) {
         try {
@@ -76,6 +84,73 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
         } catch (_) {}
       }
     });
+  }
+
+  Future<void> _checkExistingPatients() async {
+    final phone = _phoneCtrl.text.trim();
+    if (phone.isEmpty) return;
+
+    final service = ref.read(appointmentServiceProvider);
+    final allPatients = await service.findAllPatientsByPhone(
+      phone,
+      widget.appointment.doctorId,
+      clinicId: widget.appointment.clinicId,
+    );
+
+    if (!mounted) return;
+    if (allPatients.isEmpty) return;
+
+    // Show family member selection screen
+    final result = await Navigator.push<FamilySelectionResult>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => FamilyMemberSelectionScreen(
+          patients: allPatients,
+          phone: phone,
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (result == null) {
+      // User dismissed the dialog — close this screen to prevent inconsistent state
+      Navigator.pop(context);
+      return;
+    }
+
+    if (result.isNew) {
+      // Create new family member
+      final primary = allPatients.first;
+      if (primary.city != null && primary.city!.isNotEmpty) _cityCtrl.text = primary.city!;
+      if (primary.area != null && primary.area!.isNotEmpty) _areaCtrl.text = primary.area!;
+      if (primary.pincode != null && primary.pincode!.isNotEmpty) _pincodeCtrl.text = primary.pincode!;
+      
+      setState(() {
+        _existingPatient = null;
+        _isRegisteredPatient = false;
+        _isNewFamilyMember = true;
+        _selectedRelation = null;
+        _selectedGender = null;
+      });
+    } else if (result.selected != null) {
+      // Use existing patient details
+      final existing = result.selected!;
+      _nameCtrl.text = existing.fullName;
+      if (existing.dateOfBirth != null && existing.dateOfBirth!.isNotEmpty) _dobCtrl.text = existing.dateOfBirth!;
+      if (existing.city != null && existing.city!.isNotEmpty) _cityCtrl.text = existing.city!;
+      if (existing.area != null && existing.area!.isNotEmpty) _areaCtrl.text = existing.area!;
+      if (existing.occupation != null && existing.occupation!.isNotEmpty) _occupationCtrl.text = existing.occupation!;
+      if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
+      if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
+      
+      setState(() {
+        _existingPatient = existing;
+        _isRegisteredPatient = true;
+        _isNewFamilyMember = false;
+        _selectedRelation = null;
+      });
+    }
   }
 
   @override
@@ -135,47 +210,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
         if (calculatedAge < 0) calculatedAge = null;
       }
 
-      PatientModel? existingPatient;
-      List<PatientModel> allMatches = [];
-      try {
-        final pb = ref.read(pocketbaseProvider);
-        final clinicId = widget.appointment.clinicId;
-        final doctorId = widget.appointment.doctorId;
-        final filter = clinicId != null && clinicId.isNotEmpty
-            ? 'phone = "$phone" && clinic = "$clinicId"'
-            : 'phone = "$phone" && doctor = "$doctorId"';
-
-        final result = await pb
-            .collection(PBCollections.patients)
-            .getList(filter: filter, perPage: 50, sort: 'created');
-        allMatches = result.items.map((r) => PatientModel.fromRecord(r)).toList();
-      } catch (_) {}
-
-      // If multiple family members share this phone, ask which one is arriving
-      if (allMatches.length > 1 && mounted) {
-        setState(() => _isSubmitting = false);
-        final result = await Navigator.push<FamilySelectionResult>(
-          context,
-          MaterialPageRoute(
-            builder: (_) => FamilyMemberSelectionScreen(
-              patients: allMatches,
-              phone: phone,
-            ),
-          ),
-        );
-        if (!mounted) return;
-        if (result == null || result.isNew) {
-          // User chose to add new or dismissed — continue with fresh form (fall through)
-          setState(() {
-            _isNewFamilyMember = result?.isNew ?? false;
-          });
-        } else if (result.selected != null) {
-          existingPatient = result.selected;
-        }
-        setState(() => _isSubmitting = true);
-      } else if (allMatches.length == 1) {
-        existingPatient = allMatches.first;
-      }
+      final PatientModel? existingPatient = _existingPatient;
 
       final PatientModel patient;
       if (existingPatient != null) {
@@ -360,7 +395,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                     onPhotoChanged: (f) => setState(() => _patientPhoto = f),
                     howDidYouHear: _howDidYouHear,
                     onHowDidYouHearChanged: (v) => setState(() => _howDidYouHear = v),
-                    nameLocked: (widget.appointment.patientName ?? '').isNotEmpty,
+                    nameLocked: _isRegisteredPatient || (widget.appointment.patientName ?? '').isNotEmpty,
                     phoneLocked: (widget.appointment.patientPhone ?? '').isNotEmpty,
                     isNewFamilyMember: _isNewFamilyMember,
                     relationToPrimary: _selectedRelation,
