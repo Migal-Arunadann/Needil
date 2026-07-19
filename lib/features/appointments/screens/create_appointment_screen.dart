@@ -413,6 +413,7 @@ class _CreateAppointmentScreenState
         date: _formatDate(_selectedDate!),
         time: _selectedTimeStr!,
         existingPatientId: _existingPatient?.id,
+        isNewFamilyMember: _isNewFamilyMember,
       );
       success = result != null;
     } else {

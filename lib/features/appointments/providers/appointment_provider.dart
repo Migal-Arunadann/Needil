@@ -98,6 +98,7 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     required String date,
     required String time,
     String? existingPatientId,
+    bool isNewFamilyMember = false,
   }) async {
     try {
       final schedulingService = _ref.read(schedulingServiceProvider);
@@ -118,12 +119,13 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
 
       // ── Returning patient auto-link ────────────────────────────────────────────────
       // If existingPatientId is explicitly provided, link it immediately.
-      // Otherwise, if EXACTLY ONE patient with this phone exists, link them immediately.
+      // Otherwise, if EXACTLY ONE patient with this phone exists, and it's not a new
+      // family member, link them immediately.
       try {
         if (existingPatientId != null && existingPatientId.isNotEmpty) {
           await _service.linkPatient(appointment.id, existingPatientId, setArrived: false);
           await _service.markPatientDetailsSaved(appointment.id);
-        } else {
+        } else if (!isNewFamilyMember) {
           final matches = await _service.findAllPatientsByPhone(
             patientPhone,
             doctorId,
@@ -138,7 +140,6 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
       } catch (_) {
         // Non-fatal: if lookup fails, the receptionist can still use "Fill Details"
       }
-
       await loadAppointments();
       return appointment;
     } catch (e) {
