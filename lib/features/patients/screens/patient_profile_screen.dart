@@ -2853,7 +2853,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                             MaterialPageRoute(
                               builder: (_) => AvailableSlotsScreen(
                                 doctorId: selectedDoctor,
-                                clinicId: patient.clinicId ?? (auth.role == UserRole.clinic ? auth.userId : auth.clinic?.id),
+                                clinicId: patient.clinicId ?? auth.clinicId,
                                 treatmentDuration: 30,
                                 allowFutureDates: true,
                                 initialDate: DateTime.now(),
@@ -2952,7 +2952,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                                     scheduledDate: dateStr,
                                     scheduledTime: timeStr,
                                     sessionType: isMaintenance ? 'maintenance' : 'treatment',
-                                    clinicId: patient.clinicId ?? (auth.role == UserRole.clinic ? auth.userId : auth.clinic?.id),
+                                    clinicId: patient.clinicId ?? auth.clinicId,
                                     consultationId: plan.consultationId,
                                     treatmentType: selectedTreatmentType,
                                     startImmediately: startImmediately,

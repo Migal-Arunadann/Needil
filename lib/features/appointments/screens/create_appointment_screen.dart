@@ -252,7 +252,7 @@ class _CreateAppointmentScreenState
       MaterialPageRoute(
         builder: (_) => AvailableSlotsScreen(
           doctorId: doctorId,
-          clinicId: isClinic ? auth.userId : auth.clinic?.id,
+          clinicId: auth.clinicId,
           treatmentDuration: 30,
           allowFutureDates: _isCallBy, // call-by allows future; walk-in = today only
           initialDate: DateTime.now(),  // slot screen calendar handles date picking
@@ -400,8 +400,7 @@ class _CreateAppointmentScreenState
     setState(() => _isSubmitting = true);
 
     final notifier = ref.read(appointmentListProvider.notifier);
-    final clinicId =
-        auth.role == UserRole.clinic ? auth.userId : auth.clinic?.id;
+    final clinicId = auth.clinicId;
 
     bool success;
     if (_isCallBy) {
