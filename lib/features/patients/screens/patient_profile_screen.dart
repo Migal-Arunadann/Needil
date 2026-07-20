@@ -65,7 +65,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     try {
       final pb = ref.read(pocketbaseProvider);
       final list = await pb.collection(PBCollections.consultations).getFullList(
-        filter: 'patient = "${_patient.id}"',
+        filter: 'patient = "${_patient.id}" && is_deleted = false',
       );
       final consultations = list.map((r) => ConsultationModel.fromRecord(r)).toList();
       final hasConsultations = consultations.isNotEmpty;
@@ -184,6 +184,23 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         title: Text('Patient Profile', style: context.textStyles.h4),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_rounded),
+            tooltip: 'Recently Deleted',
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => RecentlyDeletedSheet(
+                  patientId: _patient.id,
+                  onRestore: () {
+                    setState(() {});
+                  },
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.edit_rounded),
             tooltip: 'Edit Profile',
@@ -412,13 +429,35 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Edit Profile Button (Top-Right)
+            // Edit Profile / Recently Deleted Buttons (Top-Right)
             Align(
               alignment: Alignment.topRight,
-              child: IconButton(
-                icon: Icon(Icons.edit_rounded, color: context.colors.textSecondary, size: 20),
-                tooltip: 'Edit Profile',
-                onPressed: _openEditPatientDialog,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.delete_sweep_rounded, color: context.colors.textSecondary, size: 20),
+                    tooltip: 'Recently Deleted',
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => RecentlyDeletedSheet(
+                          patientId: _patient.id,
+                          onRestore: () {
+                            setState(() {});
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.edit_rounded, color: context.colors.textSecondary, size: 20),
+                    tooltip: 'Edit Profile',
+                    onPressed: _openEditPatientDialog,
+                  ),
+                ],
               ),
             ),
             // Avatar
@@ -679,7 +718,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     final patientId = _patient.id;
 
     final list = await pb.collection(PBCollections.consultations).getFullList(
-      filter: 'patient = "$patientId"',
+      filter: 'patient = "$patientId" && is_deleted = false',
     );
 
     final entries = <_ConsultationEntry>[];
@@ -1150,7 +1189,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     try {
       final pb = ref.read(pocketbaseProvider);
       final res = await pb.collection(PBCollections.treatmentPlans).getList(
-        filter: 'consultation = "${c.id}"',
+        filter: 'consultation = "${c.id}" && is_deleted = false',
         perPage: 10,
       );
       if (!mounted) return;
@@ -1364,6 +1403,8 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               _buildConsultationDetails(),
               if (_planLoaded) _buildSessionsSection(),
               const SizedBox(height: 12),
+              _buildDeleteButton(isDesktop),
+              const SizedBox(height: 12),
             ],
           ],
         ),
@@ -1472,9 +1513,58 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
             Divider(height: 1, indent: 16, endIndent: 16, color: context.colors.border),
             _buildConsultationDetails(),
             if (_planLoaded) _buildSessionsSection(),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
+            _buildDeleteButton(false),
+            const SizedBox(height: 12),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildDeleteButton(bool isDesktop) {
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isDesktop ? 20 : 16),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: TextButton.icon(
+          onPressed: () async {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Delete Consultation?'),
+                content: const Text(
+                  'This will also delete any associated treatment plans and sessions. '
+                  'The data will be moved to Recently Deleted and kept for 30 days before permanent deletion.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    style: TextButton.styleFrom(foregroundColor: context.colors.error),
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Delete'),
+                  ),
+                ],
+              ),
+            );
+
+            if (confirm == true) {
+              if (mounted) {
+                final service = ref.read(appointmentServiceProvider);
+                await service.softDeleteConsultation(c.id);
+                widget.onReturn();
+              }
+            }
+          },
+          icon: Icon(Icons.delete_outline_rounded, color: context.colors.error, size: 18),
+          label: Text('Delete Consultation', style: TextStyle(color: context.colors.error)),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+        ),
       ),
     );
   }
@@ -3616,3 +3706,133 @@ class _EditPatientDialogState extends ConsumerState<_EditPatientDialog> {
   }
 }
 
+class RecentlyDeletedSheet extends ConsumerStatefulWidget {
+  final String patientId;
+  final VoidCallback onRestore;
+
+  const RecentlyDeletedSheet({super.key, required this.patientId, required this.onRestore});
+
+  @override
+  ConsumerState<RecentlyDeletedSheet> createState() => _RecentlyDeletedSheetState();
+}
+
+class _RecentlyDeletedSheetState extends ConsumerState<RecentlyDeletedSheet> {
+  bool _loading = true;
+  List<ConsultationModel> _deletedItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDeletedItems();
+  }
+
+  Future<void> _loadDeletedItems() async {
+    setState(() => _loading = true);
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final list = await pb.collection(PBCollections.consultations).getFullList(
+        filter: 'patient = "${widget.patientId}" && is_deleted = true',
+        sort: '-deleted_at',
+      );
+
+      final now = DateTime.now();
+      _deletedItems = list.map((r) => ConsultationModel.fromRecord(r)).where((c) {
+        if (c.deletedAt == null) return false;
+        return now.difference(c.deletedAt!).inDays <= 30;
+      }).toList();
+    } catch (_) {}
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.7,
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Recently Deleted', style: context.textStyles.h4),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _deletedItems.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No recently deleted items.',
+                          style: TextStyle(color: context.colors.textHint),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: _deletedItems.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final item = _deletedItems[index];
+                          final daysLeft = 30 - DateTime.now().difference(item.deletedAt!).inDays;
+                          return Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: context.colors.background,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: context.colors.border),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Consultation on ${DateFormat('MMM d, yyyy').format(item.created ?? DateTime.now())}',
+                                        style: TextStyle(color: context.colors.textPrimary, fontWeight: FontWeight.bold),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Permanently deletes in $daysLeft days',
+                                        style: TextStyle(color: context.colors.warning, fontSize: 12),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ElevatedButton.icon(
+                                  onPressed: () async {
+                                    final service = ref.read(appointmentServiceProvider);
+                                    await service.restoreConsultation(item.id);
+                                    widget.onRestore();
+                                    _loadDeletedItems();
+                                  },
+                                  icon: const Icon(Icons.restore_rounded, size: 16),
+                                  label: const Text('Restore'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: context.colors.primary.withValues(alpha: 0.1),
+                                    foregroundColor: context.colors.primary,
+                                    elevation: 0,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+}

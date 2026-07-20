@@ -24,6 +24,10 @@ class SessionModel {
   final DateTime? created;
   final DateTime? updated;
 
+  // Soft Delete
+  final bool isDeleted;
+  final DateTime? deletedAt;
+
   SessionModel({
     required this.id,
     required this.treatmentPlanId,
@@ -45,6 +49,8 @@ class SessionModel {
     this.originalDate,
     this.created,
     this.updated,
+    this.isDeleted = false,
+    this.deletedAt,
   });
 
   bool get isMaintenance => sessionType == 'maintenance';
@@ -78,6 +84,8 @@ class SessionModel {
           : null,
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
+      isDeleted: record.getBoolValue('is_deleted'),
+      deletedAt: DateTime.tryParse(record.getStringValue('deleted_at')),
     );
   }
 
@@ -98,6 +106,8 @@ class SessionModel {
       if (isRescheduled) 'is_rescheduled': true,
       if (rescheduleCount > 0) 'reschedule_count': rescheduleCount,
       if (originalDate != null && originalDate!.isNotEmpty) 'original_date': originalDate,
+      'is_deleted': isDeleted,
+      if (deletedAt != null) 'deleted_at': deletedAt!.toUtc().toIso8601String(),
     };
   }
 

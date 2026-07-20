@@ -53,6 +53,10 @@ class ConsultationModel {
   final DateTime? created;
   final DateTime? updated;
 
+  // Soft Delete
+  final bool isDeleted;
+  final DateTime? deletedAt;
+
   // Expanded
   final String? patientName;
 
@@ -94,6 +98,8 @@ class ConsultationModel {
     this.photos = const [],
     this.created,
     this.updated,
+    this.isDeleted = false,
+    this.deletedAt,
     this.patientName,
   });
 
@@ -149,6 +155,8 @@ class ConsultationModel {
       photos: record.getListValue<String>('photos'),
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
+      isDeleted: record.getBoolValue('is_deleted'),
+      deletedAt: DateTime.tryParse(record.getStringValue('deleted_at')),
       patientName: patientName,
     );
   }
@@ -188,6 +196,8 @@ class ConsultationModel {
       if (eyeDiagnosis != null && eyeDiagnosis!.isNotEmpty) 'eye_diagnosis': eyeDiagnosis,
       if (pulseDiagnosis != null && pulseDiagnosis!.isNotEmpty) 'pulse_diagnosis': pulseDiagnosis,
       'corona_vaccinated': coronaVaccinated,
+      'is_deleted': isDeleted,
+      if (deletedAt != null) 'deleted_at': deletedAt!.toUtc().toIso8601String(),
     };
   }
 

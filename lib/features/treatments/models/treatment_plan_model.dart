@@ -22,6 +22,10 @@ class TreatmentPlanModel {
   final DateTime? created;
   final DateTime? updated;
 
+  // Soft Delete
+  final bool isDeleted;
+  final DateTime? deletedAt;
+
   // Expanded
   final String? patientName;
   final String? patientPhone;
@@ -45,6 +49,8 @@ class TreatmentPlanModel {
     this.pausedAt,
     this.created,
     this.updated,
+    this.isDeleted = false,
+    this.deletedAt,
     this.patientName,
     this.patientPhone,
   });
@@ -91,6 +97,8 @@ class TreatmentPlanModel {
           : null,
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
+      isDeleted: record.getBoolValue('is_deleted'),
+      deletedAt: DateTime.tryParse(record.getStringValue('deleted_at')),
       patientName: patientName,
       patientPhone: patientPhone,
     );
@@ -115,6 +123,8 @@ class TreatmentPlanModel {
       'consecutive_misses': consecutiveMisses,
       'is_paused': isPaused,
       if (pausedAt != null && pausedAt!.isNotEmpty) 'paused_at': pausedAt,
+      'is_deleted': isDeleted,
+      if (deletedAt != null) 'deleted_at': deletedAt!.toUtc().toIso8601String(),
     };
   }
 

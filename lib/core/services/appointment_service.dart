@@ -784,6 +784,96 @@ class AppointmentService {
     return ConsultationModel.fromRecord(record);
   }
 
+  /// Soft deletes a consultation and its associated treatment plans and sessions.
+  Future<void> softDeleteConsultation(String consultationId) async {
+    final nowStr = DateTime.now().toUtc().toIso8601String();
+    
+    // 1. Soft delete the consultation
+    await pb.collection(PBCollections.consultations).update(
+      consultationId,
+      body: {
+        'is_deleted': true,
+        'deleted_at': nowStr,
+      },
+    );
+
+    // 2. Find and soft delete associated treatment plans
+    try {
+      final plans = await pb.collection(PBCollections.treatmentPlans).getList(
+        filter: 'consultation = "$consultationId" && is_deleted = false',
+      );
+      for (final plan in plans.items) {
+        await pb.collection(PBCollections.treatmentPlans).update(
+          plan.id,
+          body: {
+            'is_deleted': true,
+            'deleted_at': nowStr,
+          },
+        );
+
+        // 3. Find and soft delete associated sessions for each plan
+        try {
+          final sessions = await pb.collection(PBCollections.sessions).getList(
+            filter: 'treatment_plan = "${plan.id}" && is_deleted = false',
+          );
+          for (final session in sessions.items) {
+            await pb.collection(PBCollections.sessions).update(
+              session.id,
+              body: {
+                'is_deleted': true,
+                'deleted_at': nowStr,
+              },
+            );
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
+  /// Restores a soft-deleted consultation and its associated treatment plans and sessions.
+  Future<void> restoreConsultation(String consultationId) async {
+    // 1. Restore the consultation
+    await pb.collection(PBCollections.consultations).update(
+      consultationId,
+      body: {
+        'is_deleted': false,
+        'deleted_at': null,
+      },
+    );
+
+    // 2. Find and restore associated treatment plans
+    try {
+      final plans = await pb.collection(PBCollections.treatmentPlans).getList(
+        filter: 'consultation = "$consultationId" && is_deleted = true',
+      );
+      for (final plan in plans.items) {
+        await pb.collection(PBCollections.treatmentPlans).update(
+          plan.id,
+          body: {
+            'is_deleted': false,
+            'deleted_at': null,
+          },
+        );
+
+        // 3. Find and restore associated sessions for each plan
+        try {
+          final sessions = await pb.collection(PBCollections.sessions).getList(
+            filter: 'treatment_plan = "${plan.id}" && is_deleted = true',
+          );
+          for (final session in sessions.items) {
+            await pb.collection(PBCollections.sessions).update(
+              session.id,
+              body: {
+                'is_deleted': false,
+                'deleted_at': null,
+              },
+            );
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+  }
+
   /// Set the consultation_start_time on an appointment and move status to in_progress.
   Future<void> setConsultationStartTime(String appointmentId) async {
     await pb.collection(PBCollections.appointments).update(
