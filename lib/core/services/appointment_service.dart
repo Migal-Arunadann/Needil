@@ -417,19 +417,25 @@ class AppointmentService {
   /// Find ALL patients registered under the same phone number for the given
   /// doctor/clinic. Returns an empty list if none found.
   /// Used by the family-member selection flow.
+  ///
+  /// Uses getFullList (skipTotal=true) which is compatible with all PocketBase
+  /// server versions. Filters by clinic/doctor in Dart after fetching by phone.
   Future<List<PatientModel>> findAllPatientsByPhone(String phone, String doctorId, {String? clinicId}) async {
     try {
-      final filter = clinicId != null && clinicId.isNotEmpty
-          ? 'phone = "$phone" && clinic = "$clinicId"'
-          : 'phone = "$phone" && doctor = "$doctorId"';
-      final result = await pb.collection(PBCollections.patients).getList(
-        filter: filter,
-        perPage: 50,
-        sort: 'created',
+      final all = await pb.collection(PBCollections.patients).getFullList(
+        filter: 'phone = "$phone"',
       );
-      return result.items.map((r) => PatientModel.fromRecord(r)).toList();
-    } catch (_) {}
-    return [];
+      return all
+          .map((rec) => PatientModel.fromRecord(rec))
+          .where((p) {
+            final belongsToClinic = clinicId != null && clinicId.isNotEmpty && p.clinicId == clinicId;
+            final belongsToDoctor = p.doctorId == doctorId;
+            return belongsToClinic || belongsToDoctor;
+          })
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   /// Check if a scheduled appointment already exists for this phone + doctor today or in the future.
@@ -750,17 +756,20 @@ class AppointmentService {
   /// must handle the null return gracefully.
   Future<ConsultationModel?> findOngoingConsultation(String patientId, String doctorId) async {
     try {
-      final result = await pb.collection(PBCollections.consultations).getList(
-        filter: 'patient = "$patientId" && doctor = "$doctorId" && status = "ongoing"',
-        perPage: 1,
-        query: {'skipTotal': '1'},
+      final list = await pb.collection(PBCollections.consultations).getFullList(
+        filter: 'patient = "$patientId"',
       );
-      if (result.items.isNotEmpty) {
-        return ConsultationModel.fromRecord(result.items.first);
+      final ongoing = list
+          .map((r) => ConsultationModel.fromRecord(r))
+          .where((c) => c.status == ConsultationStatus.ongoing && (c.doctorId == doctorId || doctorId.isEmpty))
+          .toList();
+      if (ongoing.isNotEmpty) {
+        return ongoing.first;
       }
     } catch (_) {}
     return null;
   }
+
 
   /// Create a new consultation stub.
   Future<ConsultationModel> createConsultation(String patientId, String doctorId) async {

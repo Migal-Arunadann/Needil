@@ -818,6 +818,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
 
         consultation = await service.updateConsultation(
           consultationId: resolvedId,
+          status: 'completed',
           notes: _notesCtrl.text.trim(),
           chiefComplaint: _notesCtrl.text.trim(),
           currentMedications: _currentMedicationsCtrl.text.trim(),

@@ -43,6 +43,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
   /// null = not yet checked; '' = none found; non-empty = ongoing consultation ID.
   String? _ongoingConsultationId;
+  bool _hasAnyConsultation = false;
 
   /// Incremented to force FutureBuilder + card rebuild after plan creation.
   int _refreshKey = 0;
@@ -62,28 +63,37 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
   Future<void> _checkOngoingConsultation() async {
     try {
+      final pb = ref.read(pocketbaseProvider);
+      final list = await pb.collection(PBCollections.consultations).getFullList(
+        filter: 'patient = "${_patient.id}"',
+      );
+      final consultations = list.map((r) => ConsultationModel.fromRecord(r)).toList();
+      final hasConsultations = consultations.isNotEmpty;
+
+      String ongoingId = '';
       if (widget.appointment != null) {
         final apt = widget.appointment!;
-        if (apt.linkedConsultationId != null && apt.linkedConsultationId!.isNotEmpty) {
-          if (!apt.consultationFormSaved) {
-            if (mounted) setState(() => _ongoingConsultationId = apt.linkedConsultationId);
-            return;
-          }
+        if (apt.linkedConsultationId != null && apt.linkedConsultationId!.isNotEmpty && !apt.consultationFormSaved) {
+          ongoingId = apt.linkedConsultationId!;
         }
-        if (mounted) setState(() => _ongoingConsultationId = '');
-        return;
+      } else {
+        final ongoing = consultations.where((c) => c.status == ConsultationStatus.ongoing).toList();
+        if (ongoing.isNotEmpty) {
+          ongoingId = ongoing.first.id;
+        }
       }
 
-      final aptService = ref.read(appointmentServiceProvider);
-      final ongoing = await aptService.findOngoingConsultation(
-        _patient.id,
-        _patient.doctorId,
-      );
-      if (mounted) setState(() => _ongoingConsultationId = ongoing?.id ?? '');
+      if (mounted) {
+        setState(() {
+          _hasAnyConsultation = hasConsultations;
+          _ongoingConsultationId = ongoingId;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _ongoingConsultationId = '');
     }
   }
+
 
   @override
   void dispose() {
@@ -224,6 +234,10 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   Future<void> _startConsultation() async {
     try {
       if (!mounted) return;
+      final targetConsultationId = widget.appointment?.linkedConsultationId ??
+          (_ongoingConsultationId != null && _ongoingConsultationId!.isNotEmpty
+              ? _ongoingConsultationId
+              : null);
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -231,7 +245,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
             patientId: _patient.id,
             patientName: _patient.fullName,
             doctorId: _patient.doctorId,
-            consultationId: widget.appointment?.linkedConsultationId,
+            consultationId: targetConsultationId,
             appointmentId: widget.appointment?.id,
           ),
         ),
@@ -248,6 +262,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       }
     }
   }
+
 
   /// Fetch all OTHER patients registered under the same phone number in the
   /// same clinic (excludes the current patient).
@@ -339,17 +354,35 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
   Widget? _buildFAB(bool hasOngoing) {
     if (_tabController.index != 0) return null;
-    if (hasOngoing) return null;
+
+    bool hasCompletedCurrent = false;
+    if (widget.appointment != null) {
+      final apt = widget.appointment!;
+      if (apt.linkedConsultationId != null && apt.linkedConsultationId!.isNotEmpty && apt.consultationFormSaved) {
+        hasCompletedCurrent = true;
+      }
+    }
+
+    final buttonLabel = hasOngoing
+        ? 'Resume Consult'
+        : (hasCompletedCurrent
+            ? 'View / Edit Consult'
+            : (_hasAnyConsultation ? '+ New Consultation' : 'Start Consult'));
+    
+    final buttonIcon = hasOngoing 
+        ? Icons.play_arrow_rounded 
+        : (hasCompletedCurrent ? Icons.edit_document : Icons.add_comment_rounded);
 
     return FloatingActionButton.extended(
       heroTag: null,
       onPressed: _startConsultation,
       backgroundColor: context.colors.primary,
-      icon: Icon(Icons.add_comment_rounded, color: context.colors.textPrimary),
-      label: Text('Start Consult',
+      icon: Icon(buttonIcon, color: context.colors.textPrimary),
+      label: Text(buttonLabel,
           style: TextStyle(color: context.colors.textPrimary, fontWeight: FontWeight.bold)),
     );
   }
+
 
   Widget _buildDesktopDetailsPane() {
     final p = _patient;
@@ -519,6 +552,24 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       );
     }
 
+    bool hasCompletedCurrent = false;
+    if (widget.appointment != null) {
+      final apt = widget.appointment!;
+      if (apt.linkedConsultationId != null && apt.linkedConsultationId!.isNotEmpty && apt.consultationFormSaved) {
+        hasCompletedCurrent = true;
+      }
+    }
+
+    final buttonLabel = hasOngoing
+        ? 'Resume Consult'
+        : (hasCompletedCurrent
+            ? 'View / Edit Consult'
+            : (_hasAnyConsultation ? '+ New Consultation' : 'Start Consult'));
+    
+    final buttonIcon = hasOngoing 
+        ? Icons.play_arrow_rounded 
+        : (hasCompletedCurrent ? Icons.edit_document : Icons.add_comment_rounded);
+
     return Container(
       decoration: BoxDecoration(
         boxShadow: [
@@ -531,8 +582,8 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       ),
       child: ElevatedButton.icon(
         onPressed: _startConsultation,
-        icon: Icon(hasOngoing ? Icons.play_arrow_rounded : Icons.add_comment_rounded, color: Colors.white),
-        label: Text(hasOngoing ? 'Resume Consult' : 'Start Consult', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        icon: Icon(buttonIcon, color: Colors.white),
+        label: Text(buttonLabel, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         style: ElevatedButton.styleFrom(
           backgroundColor: context.colors.primary,
           padding: const EdgeInsets.symmetric(vertical: 14),
@@ -542,6 +593,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       ),
     );
   }
+
 
   Widget _buildDesktopTabsSection() {
     return Container(
@@ -626,26 +678,28 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     final pb = ref.read(pocketbaseProvider);
     final patientId = _patient.id;
 
-    final aptsRes = await pb.collection(PBCollections.appointments).getList(
+    final list = await pb.collection(PBCollections.consultations).getFullList(
       filter: 'patient = "$patientId"',
-      sort: '-date,-time',
-      perPage: 200,
     );
 
     final entries = <_ConsultationEntry>[];
-    for (final apt in aptsRes.items) {
-      final consultationId = apt.getStringValue('linked_consultation_id');
-      if (consultationId.isEmpty) continue;
+    for (final cRecord in list) {
+      final c = ConsultationModel.fromRecord(cRecord);
+      
+      AppointmentModel? aptModel;
       try {
-        final cRecord = await pb.collection(PBCollections.consultations).getOne(consultationId);
-        final c = ConsultationModel.fromRecord(cRecord);
-        final aptModel = AppointmentModel.fromRecord(apt);
-        entries.add(_ConsultationEntry(consultation: c, appointment: aptModel));
+        final aptsRes = await pb.collection(PBCollections.appointments).getList(
+          filter: 'linked_consultation_id = "${c.id}"',
+          perPage: 1,
+        );
+        if (aptsRes.items.isNotEmpty) {
+          aptModel = AppointmentModel.fromRecord(aptsRes.items.first);
+        }
       } catch (_) {}
+
+      entries.add(_ConsultationEntry(consultation: c, appointment: aptModel));
     }
 
-    final seen = <String>{};
-    entries.retainWhere((e) => seen.add(e.consultation.id));
     entries.sort((a, b) =>
         (b.consultation.created ?? DateTime(0)).compareTo(a.consultation.created ?? DateTime(0)));
 
@@ -1034,8 +1088,8 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
 class _ConsultationEntry {
   final ConsultationModel consultation;
-  final AppointmentModel appointment;
-  const _ConsultationEntry({required this.consultation, required this.appointment});
+  final AppointmentModel? appointment;
+  const _ConsultationEntry({required this.consultation, this.appointment});
 }
 
 // ─── Expandable Consultation Card ────────────────────────────────────────────
@@ -1114,8 +1168,8 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
 
       // Fallback: if no treatment plan found by consultation,
       // try via the appointment's linked_treatment_plan_id
-      if (_treatmentPlan == null) {
-        final aptPlanId = widget.entry.appointment.linkedTreatmentPlanId;
+      if (_treatmentPlan == null && widget.entry.appointment != null) {
+        final aptPlanId = widget.entry.appointment!.linkedTreatmentPlanId;
         if (aptPlanId != null && aptPlanId.isNotEmpty) {
           try {
             final planRec = await pb.collection(PBCollections.treatmentPlans).getOne(aptPlanId);
@@ -1510,7 +1564,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                         patientName: patient.fullName,
                         doctorId: patient.doctorId,
                         consultationId: c.id,
-                        appointmentId: widget.entry.appointment.id,
+                        appointmentId: widget.entry.appointment?.id,
                       ),
                     ),
                   );
@@ -1585,28 +1639,31 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                               patientId: patient.id,
                               patientName: patient.fullName,
                               doctorId: patient.doctorId,
+                              appointmentId: widget.entry.appointment?.id,
+                              appointmentDate: widget.entry.appointment != null ? DateTime.tryParse(widget.entry.appointment!.date) : null,
                               consultationId: c.id,
-                              appointmentId: widget.entry.appointment.id,
-                              appointmentDate: DateTime.tryParse(widget.entry.appointment.date),
                             ),
                           ),
                         );
                         
-                        if (!mounted) return;
-                        if (result is Map && result['firstSessionToday'] == true) {
-                          final aptService = ref.read(appointmentServiceProvider);
-                          await aptService.markEnded(widget.entry.appointment.id);
-                        }
+                        if (mounted) {
+                          if (result is Map && result['firstSessionToday'] == true) {
+                            if (widget.entry.appointment != null) {
+                              final aptService = ref.read(appointmentServiceProvider);
+                              await aptService.markEnded(widget.entry.appointment!.id);
+                            }
+                          }
 
-                        setState(() {
-                          _planLoaded = false;
-                          _treatmentPlan = null;
-                          _treatmentSessions = [];
-                          _maintenancePlan = null;
-                          _maintenanceSessions = [];
-                        });
-                        await _loadPlans();
-                        widget.onReturn();
+                          setState(() {
+                            _planLoaded = false;
+                            _treatmentPlan = null;
+                            _treatmentSessions = [];
+                            _maintenancePlan = null;
+                            _maintenanceSessions = [];
+                          });
+                          await _loadPlans();
+                          widget.onReturn();
+                        }
                       },
                       icon: const Icon(Icons.add_chart_rounded, size: 14),
                       label: const Text('Create Plan'),
@@ -1771,8 +1828,8 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                           patientName: patient.fullName,
                           doctorId: patient.doctorId,
                           consultationId: c.id,
-                          appointmentId: widget.entry.appointment.id,
-                          appointmentDate: DateTime.tryParse(widget.entry.appointment.date),
+                          appointmentId: widget.entry.appointment?.id,
+                          appointmentDate: widget.entry.appointment != null ? DateTime.tryParse(widget.entry.appointment!.date) : null,
                           isMaintenance: true,
                           parentPlanId: _treatmentPlan!.id,
                           defaultTreatmentType: _treatmentPlan!.treatmentType,

@@ -100,6 +100,7 @@ class TreatmentService {
 
   Future<ConsultationModel> updateConsultation({
     required String consultationId,
+    String? status,
     String? notes,
     String? chiefComplaint,
     String? medicalHistory, // legacy
@@ -131,11 +132,11 @@ class TreatmentService {
     bool? coronaVaccinated,
     List<String> newPhotoPaths = const [],
   }) async {
-    // NOTE: Status is intentionally NOT changed here.
-    // The consultation stays 'ongoing' until the doctor explicitly ends the treatment.
     final body = <String, dynamic>{
+      if (status != null) 'status': status,
       if (notes != null) 'notes': notes,
       if (chiefComplaint != null) 'chief_complaint': chiefComplaint,
+
       if (medicalHistory != null) 'medical_history': medicalHistory,
       if (previousTreatments != null) 'previous_treatments': previousTreatments,
       if (painAreas != null) 'pain_areas': painAreas,

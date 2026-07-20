@@ -76,6 +76,8 @@ class _CreateAppointmentScreenState
   bool _isRegisteredPatient = false; // true when walk-in phone matches existing
   bool _isNewFamilyMember = false;  // true when adding a new family member
   String? _selectedRelation;        // relation for new family member
+  String? _handledPhone;
+  List<PatientModel> _matchingPatients = [];
 
   @override
   void initState() {
@@ -132,12 +134,28 @@ class _CreateAppointmentScreenState
   void _onPhoneChanged() {
     _phoneDebounce?.cancel();
     final phone = _phoneCtrl.text.trim();
-    if (phone.length < 10) return;
+    if (phone == _handledPhone) return;
+
+    if (phone.length < 10) {
+      if (_handledPhone != null) {
+        setState(() {
+          _handledPhone = null;
+          _existingPatient = null;
+          _isRegisteredPatient = false;
+          _isNewFamilyMember = false;
+          _selectedRelation = null;
+          _matchingPatients = [];
+        });
+      }
+      return;
+    }
     _phoneDebounce = Timer(const Duration(milliseconds: 600), () => _checkPhone(phone));
   }
 
-  Future<void> _checkPhone(String phone) async {
+  Future<void> _checkPhone(String phone, {bool forceShowScreen = false}) async {
     if (_isCheckingPhone) return;
+    if (!forceShowScreen && phone == _handledPhone) return;
+
     setState(() => _isCheckingPhone = true);
 
     final auth = ref.read(authProvider);
@@ -155,11 +173,12 @@ class _CreateAppointmentScreenState
     );
 
     if (mounted) setState(() => _isCheckingPhone = false);
-
     if (!mounted) return;
 
+    _handledPhone = phone;
+    _matchingPatients = allPatients;
+
     if (allPatients.isEmpty) {
-      // Brand new patient — clear any previous selection
       setState(() {
         _existingPatient = null;
         _isRegisteredPatient = false;
@@ -169,7 +188,13 @@ class _CreateAppointmentScreenState
       return;
     }
 
-    // Show family member selection screen
+    // If 1 patient found and not forced, auto-select them immediately
+    if (allPatients.length == 1 && !forceShowScreen) {
+      _applySelectedPatient(allPatients.first);
+      return;
+    }
+
+    // 2+ patients OR forced: show FamilyMemberSelectionScreen modal
     final result = await Navigator.push<FamilySelectionResult>(
       context,
       MaterialPageRoute(
@@ -183,52 +208,85 @@ class _CreateAppointmentScreenState
     if (!mounted) return;
 
     if (result == null) {
-      // User dismissed without selecting — treat as new patient
-      setState(() {
-        _existingPatient = null;
-        _isRegisteredPatient = false;
-        _isNewFamilyMember = false;
-        _selectedRelation = null;
-      });
+      // Dismissed without selection — keep current state if already set, else default
       return;
     }
 
     if (result.isNew) {
-      // Register a new family member under this phone
-      // Pre-fill shared household fields from the primary patient
-      final primary = allPatients.first;
-      if (primary.city != null && primary.city!.isNotEmpty) _cityCtrl.text = primary.city!;
-      if (primary.area != null && primary.area!.isNotEmpty) _areaCtrl.text = primary.area!;
-      if (primary.pincode != null && primary.pincode!.isNotEmpty) _pincodeCtrl.text = primary.pincode!;
-      // Clear personal fields
-      _nameCtrl.clear();
-      _dobCtrl.clear();
-      _occupationCtrl.clear();
-      _emailCtrl.clear();
-      setState(() {
-        _existingPatient = null;
-        _isRegisteredPatient = false;
-        _isNewFamilyMember = true;
-        _selectedRelation = null;
-        _selectedGender = null;
-      });
+      _applyNewFamilyMemberMode(allPatients.first);
     } else if (result.selected != null) {
-      final existing = result.selected!;
-      _nameCtrl.text = existing.fullName;
-      if (existing.dateOfBirth != null && existing.dateOfBirth!.isNotEmpty) _dobCtrl.text = existing.dateOfBirth!;
-      if (existing.city != null && existing.city!.isNotEmpty) _cityCtrl.text = existing.city!;
-      if (existing.area != null && existing.area!.isNotEmpty) _areaCtrl.text = existing.area!;
-      if (existing.occupation != null && existing.occupation!.isNotEmpty) _occupationCtrl.text = existing.occupation!;
-      if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
-      if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
-      setState(() {
-        _existingPatient = existing;
-        _isRegisteredPatient = !_isCallBy;
-        _isNewFamilyMember = false;
-        _selectedRelation = null;
-      });
+      _applySelectedPatient(result.selected!);
     }
   }
+
+  void _applySelectedPatient(PatientModel existing) {
+    _nameCtrl.text = existing.fullName;
+    if (existing.dateOfBirth != null && existing.dateOfBirth!.isNotEmpty) _dobCtrl.text = existing.dateOfBirth!;
+    if (existing.city != null && existing.city!.isNotEmpty) _cityCtrl.text = existing.city!;
+    if (existing.area != null && existing.area!.isNotEmpty) _areaCtrl.text = existing.area!;
+    if (existing.occupation != null && existing.occupation!.isNotEmpty) _occupationCtrl.text = existing.occupation!;
+    if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
+    if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
+    setState(() {
+      _existingPatient = existing;
+      _isRegisteredPatient = !_isCallBy;
+      _isNewFamilyMember = false;
+      _selectedRelation = null;
+    });
+  }
+
+  void _applyNewFamilyMemberMode(PatientModel primary) {
+    if (primary.city != null && primary.city!.isNotEmpty) _cityCtrl.text = primary.city!;
+    if (primary.area != null && primary.area!.isNotEmpty) _areaCtrl.text = primary.area!;
+    if (primary.pincode != null && primary.pincode!.isNotEmpty) _pincodeCtrl.text = primary.pincode!;
+    _nameCtrl.clear();
+    _dobCtrl.clear();
+    _occupationCtrl.clear();
+    _emailCtrl.clear();
+    setState(() {
+      _existingPatient = null;
+      _isRegisteredPatient = false;
+      _isNewFamilyMember = true;
+      _selectedRelation = null;
+      _selectedGender = null;
+    });
+  }
+
+  Widget _buildRelationDropdown() {
+    final relations = ['Spouse', 'Child', 'Parent', 'Sibling', 'Other'];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Relation to Primary Patient', style: context.textStyles.label),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: context.colors.border),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedRelation,
+              isExpanded: true,
+              hint: Text('Select relation (e.g. Spouse, Child)',
+                  style: context.textStyles.bodyMedium
+                      .copyWith(color: context.colors.textHint)),
+              items: relations
+                  .map((r) => DropdownMenuItem(
+                        value: r,
+                        child: Text(r, style: context.textStyles.bodyMedium),
+                      ))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedRelation = v),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
 
   String _formatDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -829,20 +887,97 @@ class _CreateAppointmentScreenState
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.person_rounded, color: context.colors.success, size: 18),
+                        Icon(Icons.check_circle_rounded, color: context.colors.success, size: 18),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Returning patient — name auto-filled.',
-                            style: context.textStyles.caption.copyWith(color: context.colors.success),
+                            'Returning Patient: ${_existingPatient!.fullName} '
+                            '(${_existingPatient!.relationToPrimary ?? 'Self'}'
+                            '${_existingPatient!.gender != null ? ' • ${_existingPatient!.gender}' : ''}'
+                            '${_existingPatient!.age != null ? ' • ${_existingPatient!.age} yrs' : ''})',
+                            style: context.textStyles.caption.copyWith(
+                              color: context.colors.success,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        InkWell(
+                          onTap: () {
+                            if (_matchingPatients.length > 1) {
+                              _checkPhone(_phoneCtrl.text.trim(), forceShowScreen: true);
+                            } else if (_matchingPatients.isNotEmpty) {
+                              _applyNewFamilyMemberMode(_matchingPatients.first);
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            child: Text(
+                              _matchingPatients.length > 1 ? 'Change' : '+ Add Family Member',
+                              style: context.textStyles.caption.copyWith(
+                                color: context.colors.primary,
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
+                ] else if (_isNewFamilyMember) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: context.colors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: context.colors.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.family_restroom_rounded, color: context.colors.primary, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Adding New Family Member under ${_phoneCtrl.text.trim()}',
+                            style: context.textStyles.caption.copyWith(
+                              color: context.colors.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (_matchingPatients.isNotEmpty)
+                          InkWell(
+                            onTap: () {
+                              if (_matchingPatients.length > 1) {
+                                _checkPhone(_phoneCtrl.text.trim(), forceShowScreen: true);
+                              } else {
+                                _applySelectedPatient(_matchingPatients.first);
+                              }
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              child: Text(
+                                _matchingPatients.length > 1
+                                    ? 'Change'
+                                    : 'Switch Back to ${_matchingPatients.first.fullName}',
+                                style: context.textStyles.caption.copyWith(
+                                  color: context.colors.primary,
+                                  fontWeight: FontWeight.bold,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildRelationDropdown(),
                 ],
               ],
             );
+
 
             final nameField = AppTextField(
               controller: _nameCtrl,
@@ -852,130 +987,20 @@ class _CreateAppointmentScreenState
               readOnly: _existingPatient != null,
             );
 
-            final formContent = Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  header,
-                  const SizedBox(height: 28),
 
-                  // Toggles row on desktop
-                  if (isDesktop && !_isCallBy) ...[
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(flex: 3, child: typeToggle),
-                        const SizedBox(width: 16),
-                        Expanded(flex: 2, child: forceWalkInToggle),
-                      ],
-                    ),
-                  ] else ...[
-                    typeToggle,
-                    if (!_isCallBy) ...[
-                      const SizedBox(height: 24),
-                      forceWalkInToggle,
-                    ],
-                  ],
-                  const SizedBox(height: 24),
-
-                  descriptionBanner,
-                  const SizedBox(height: 24),
-
-                  // Doctor Selector & Slot Picker Grid on desktop
-                  if (isDesktop) ...[
-                    if (showDoctor) ...[
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: doctorSelector),
-                          const SizedBox(width: 16),
-                          Expanded(child: slotPickerOrImmediate),
-                        ],
-                      ),
-                    ] else ...[
-                      slotPickerOrImmediate,
-                    ],
-                  ] else ...[
-                    if (showDoctor) ...[
-                      doctorSelector,
-                      const SizedBox(height: 20),
-                    ],
-                    slotPickerOrImmediate,
-                  ],
-                  const SizedBox(height: 24),
-
-                  Text('Patient Info', style: context.textStyles.h3),
-                  const SizedBox(height: 4),
-                  Text(
-                    _isCallBy
-                        ? 'Quick placeholder — full details collected on arrival.'
-                        : 'Enter the walk-in patient\'s details.',
-                    style: context.textStyles.caption,
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Call-by vs Walk-in Form content
-                  if (_isCallBy)
-                    isDesktop
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: phoneSection),
-                              const SizedBox(width: 16),
-                              Expanded(child: nameField),
-                            ],
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              phoneSection,
-                              const SizedBox(height: 14),
-                              nameField,
-                            ],
-                          )
-                  else
-                    PatientDetailsForm(
-                      nameCtrl: _nameCtrl,
-                      phoneCtrl: _phoneCtrl,
-                      dobCtrl: _dobCtrl,
-                      pincodeCtrl: _pincodeCtrl,
-                      countryCtrl: _countryCtrl,
-                      stateCtrl: _stateCtrl,
-                      cityCtrl: _cityCtrl,
-                      areaCtrl: _areaCtrl,
-                      occupationCtrl: _occupationCtrl,
-                      emailCtrl: _emailCtrl,
-                      referenceCtrl: _referenceCtrl,
-                      selectedGender: _selectedGender,
-                      onGenderChanged: (v) => setState(() => _selectedGender = v),
-                      consentGiven: _dataConsentGiven,
-                      onConsentChanged: (v) => setState(() => _dataConsentGiven = v),
-                      privacyPolicyAccepted: _privacyPolicyAccepted,
-                      onPrivacyPolicyChanged: (v) => setState(() => _privacyPolicyAccepted = v),
-                      photoFile: _patientPhoto,
-                      onPhotoChanged: (f) => setState(() => _patientPhoto = f),
-                      howDidYouHear: _howDidYouHear,
-                      onHowDidYouHearChanged: (v) => setState(() => _howDidYouHear = v),
-                      isReturningPatient: _isRegisteredPatient,
-                      isCheckingPhone: _isCheckingPhone,
-                      nameLocked: _isRegisteredPatient,
-                      isNewFamilyMember: _isNewFamilyMember,
-                      relationToPrimary: _selectedRelation,
-                      onRelationChanged: (v) => setState(() => _selectedRelation = v),
-                    ),
-                  const SizedBox(height: 28),
-
-                  AppButton(
-                    label: _isCallBy ? 'Book Appointment' : 'Register',
-                    isLoading: _isSubmitting,
-                    icon: _isCallBy
-                        ? Icons.event_available_rounded
-                        : Icons.how_to_reg_rounded,
-                    onPressed: _submit,
-                  ),
-                ],
-              ),
+            final formContent = _buildFormContent(
+              context: context,
+              isDesktop: isDesktop,
+              isClinic: isClinic,
+              header: header,
+              typeToggle: typeToggle,
+              forceWalkInToggle: forceWalkInToggle,
+              descriptionBanner: descriptionBanner,
+              showDoctor: showDoctor,
+              doctorSelector: doctorSelector,
+              slotPickerOrImmediate: slotPickerOrImmediate,
+              phoneSection: phoneSection,
+              nameField: nameField,
             );
 
             if (isDesktop) {
@@ -1016,6 +1041,148 @@ class _CreateAppointmentScreenState
       ),
     );
   }
+
+  Widget _buildFormContent({
+    required BuildContext context,
+    required bool isDesktop,
+    required bool isClinic,
+    required Widget header,
+    required Widget typeToggle,
+    required Widget forceWalkInToggle,
+    required Widget descriptionBanner,
+    required bool showDoctor,
+    required Widget doctorSelector,
+    required Widget slotPickerOrImmediate,
+    required Widget phoneSection,
+    required Widget nameField,
+  }) {
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          header,
+          const SizedBox(height: 28),
+
+          // Toggles row on desktop
+          if (isDesktop && !_isCallBy) ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(flex: 3, child: typeToggle),
+                const SizedBox(width: 16),
+                Expanded(flex: 2, child: forceWalkInToggle),
+              ],
+            ),
+          ] else ...[
+            typeToggle,
+            if (!_isCallBy) ...[
+              const SizedBox(height: 24),
+              forceWalkInToggle,
+            ],
+          ],
+          const SizedBox(height: 24),
+
+          descriptionBanner,
+          const SizedBox(height: 24),
+
+          // Doctor Selector & Slot Picker Grid on desktop
+          if (isDesktop) ...[
+            if (showDoctor) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: doctorSelector),
+                  const SizedBox(width: 16),
+                  Expanded(child: slotPickerOrImmediate),
+                ],
+              ),
+            ] else ...[
+              slotPickerOrImmediate,
+            ],
+          ] else ...[
+            if (showDoctor) ...[
+              doctorSelector,
+              const SizedBox(height: 20),
+            ],
+            slotPickerOrImmediate,
+          ],
+          const SizedBox(height: 24),
+
+          Text('Patient Info', style: context.textStyles.h3),
+          const SizedBox(height: 4),
+          Text(
+            _isCallBy
+                ? 'Quick placeholder — full details collected on arrival.'
+                : 'Enter the walk-in patient\'s details.',
+            style: context.textStyles.caption,
+          ),
+          const SizedBox(height: 14),
+
+          // Call-by vs Walk-in Form content
+          if (_isCallBy)
+            isDesktop
+                ? Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: phoneSection),
+                      const SizedBox(width: 16),
+                      Expanded(child: nameField),
+                    ],
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      phoneSection,
+                      const SizedBox(height: 14),
+                      nameField,
+                    ],
+                  )
+          else
+            PatientDetailsForm(
+              nameCtrl: _nameCtrl,
+              phoneCtrl: _phoneCtrl,
+              dobCtrl: _dobCtrl,
+              pincodeCtrl: _pincodeCtrl,
+              countryCtrl: _countryCtrl,
+              stateCtrl: _stateCtrl,
+              cityCtrl: _cityCtrl,
+              areaCtrl: _areaCtrl,
+              occupationCtrl: _occupationCtrl,
+              emailCtrl: _emailCtrl,
+              referenceCtrl: _referenceCtrl,
+              selectedGender: _selectedGender,
+              onGenderChanged: (v) => setState(() => _selectedGender = v),
+              consentGiven: _dataConsentGiven,
+              onConsentChanged: (v) => setState(() => _dataConsentGiven = v),
+              privacyPolicyAccepted: _privacyPolicyAccepted,
+              onPrivacyPolicyChanged: (v) => setState(() => _privacyPolicyAccepted = v),
+              photoFile: _patientPhoto,
+              onPhotoChanged: (f) => setState(() => _patientPhoto = f),
+              howDidYouHear: _howDidYouHear,
+              onHowDidYouHearChanged: (v) => setState(() => _howDidYouHear = v),
+              isReturningPatient: _isRegisteredPatient,
+              isCheckingPhone: _isCheckingPhone,
+              nameLocked: _isRegisteredPatient,
+              isNewFamilyMember: _isNewFamilyMember,
+              relationToPrimary: _selectedRelation,
+              onRelationChanged: (v) => setState(() => _selectedRelation = v),
+            ),
+          const SizedBox(height: 28),
+
+          AppButton(
+            label: _isCallBy ? 'Book Appointment' : 'Register',
+            isLoading: _isSubmitting,
+            icon: _isCallBy
+                ? Icons.event_available_rounded
+                : Icons.how_to_reg_rounded,
+            onPressed: _submit,
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _typeTab(
       String label, IconData icon, bool selected, VoidCallback onTap) {
