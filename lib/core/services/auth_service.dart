@@ -224,6 +224,9 @@ class AuthService {
     try {
       RecordAuth loginResult;
       
+      // Generate a unique username to avoid PocketBase username collision on first-time OAuth registration
+      final tempUsername = _generateUniqueId(10, prefix: 'clinic_');
+      
       if (kIsWeb) {
         loginResult = await pb
             .collection(PBCollections.clinics)
@@ -234,6 +237,8 @@ class AuthService {
           } catch (e) {
             debugPrint('Could not launch URL: $e');
           }
+        }, createData: {
+          'username': tempUsername,
         });
       } else {
         final oauthData = await _runLocalOAuthServer();
@@ -252,6 +257,9 @@ class AuthService {
               oauthData['code']!,
               oauthData['codeVerifier']!,
               oauthData['redirectUrl']!,
+              createData: {
+                'username': tempUsername,
+              },
             );
             break; // Success
           } on ClientException catch (e) {

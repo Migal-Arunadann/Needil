@@ -12,6 +12,7 @@ import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/services/notification_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pms_app/core/widgets/desktop_loading_wrapper.dart';
+import 'package:pms_app/core/widgets/app_splash_screen.dart';
 
 /// Global navigator key so the timer service can push dialogs from anywhere.
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
@@ -70,33 +71,26 @@ class _PmsAppState extends ConsumerState<PmsApp> {
           child: child!,
         );
       },
-      home: authState.isInitializing
-          ? const Scaffold(
-              backgroundColor: Color(0xFFFAF8F5),
-              body: Center(
-                child: CircularProgressIndicator(
-                  color: Color(0xFF0F5D4F),
-                ),
-              ),
-            )
-          : authState.isAuthenticated
-              ? Builder(
-                  builder: (context) {
-                    final isDesktop = MediaQuery.of(context).size.width >= 900.0;
-                    if (isDesktop && _manuallyLoggedIn) {
-                      return DesktopLoadingWrapper(
-                        child: _getHomeForAuth(authState),
-                        onComplete: () {
-                          setState(() {
-                            _manuallyLoggedIn = false;
-                          });
-                        },
-                      );
-                    }
-                    return _getHomeForAuth(authState);
-                  },
-                )
-              : LoginScreen(),
+      home: AppSplashScreen(
+        child: authState.isAuthenticated
+            ? Builder(
+                builder: (context) {
+                  final isDesktop = MediaQuery.of(context).size.width >= 900.0;
+                  if (isDesktop && _manuallyLoggedIn) {
+                    return DesktopLoadingWrapper(
+                      child: _getHomeForAuth(authState),
+                      onComplete: () {
+                        setState(() {
+                          _manuallyLoggedIn = false;
+                        });
+                      },
+                    );
+                  }
+                  return _getHomeForAuth(authState);
+                },
+              )
+            : LoginScreen(),
+      ),
       onGenerateRoute: generateRoute,
     );
   }
