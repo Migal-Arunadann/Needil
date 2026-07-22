@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -20,7 +20,6 @@ import 'package:pms_app/features/patients/models/patient_model.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/services/audit_service.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
-import 'package:pms_app/core/utils/whatsapp_helper.dart';
 import 'package:pms_app/core/widgets/responsive_wrapper.dart';
 import 'package:pms_app/features/patients/screens/family_member_selection_screen.dart';
 
@@ -62,7 +61,7 @@ class _CreateAppointmentScreenState
   String? _selectedGender;
   bool _dataConsentGiven = false;
   bool _privacyPolicyAccepted = false;
-  File? _patientPhoto;
+
   String? _howDidYouHear;
 
   // Slot selection
@@ -78,6 +77,7 @@ class _CreateAppointmentScreenState
   String? _selectedRelation;        // relation for new family member
   String? _handledPhone;
   List<PatientModel> _matchingPatients = [];
+  String _selectedPhoneCode = '+91';
 
   @override
   void initState() {
@@ -134,9 +134,13 @@ class _CreateAppointmentScreenState
   void _onPhoneChanged() {
     _phoneDebounce?.cancel();
     final phone = _phoneCtrl.text.trim();
-    if (phone == _handledPhone) return;
+    final expectedLength = Validators.countryPhoneCodes[_selectedPhoneCode] ?? 10;
+    
+    // Concatenate code + national number for comparison & lookup
+    final combined = '$_selectedPhoneCode$phone';
+    if (combined == _handledPhone) return;
 
-    if (phone.length < 10) {
+    if (phone.length < expectedLength) {
       if (_handledPhone != null) {
         setState(() {
           _handledPhone = null;
@@ -149,7 +153,7 @@ class _CreateAppointmentScreenState
       }
       return;
     }
-    _phoneDebounce = Timer(const Duration(milliseconds: 600), () => _checkPhone(phone));
+    _phoneDebounce = Timer(const Duration(milliseconds: 600), () => _checkPhone(combined));
   }
 
   Future<void> _checkPhone(String phone, {bool forceShowScreen = false}) async {
@@ -221,6 +225,9 @@ class _CreateAppointmentScreenState
 
   void _applySelectedPatient(PatientModel existing) {
     _nameCtrl.text = existing.fullName;
+    final parsed = PhoneParser.parse(existing.phone);
+    _selectedPhoneCode = parsed.$1;
+    _phoneCtrl.text = parsed.$2;
     if (existing.dateOfBirth != null && existing.dateOfBirth!.isNotEmpty) _dobCtrl.text = existing.dateOfBirth!;
     if (existing.city != null && existing.city!.isNotEmpty) _cityCtrl.text = existing.city!;
     if (existing.area != null && existing.area!.isNotEmpty) _areaCtrl.text = existing.area!;
@@ -365,7 +372,7 @@ class _CreateAppointmentScreenState
 
     // --- Duplicate Appointment Check (same-date scheduled) ---
     final service = ref.read(appointmentServiceProvider);
-    final phone = _phoneCtrl.text.trim();
+    final phone = '$_selectedPhoneCode${_phoneCtrl.text.trim()}';
     final checkDate = _formatDate(_selectedDate ?? DateTime.now());
 
     // For walk-ins: block if same phone already has any active appointment today (prevents
@@ -588,7 +595,7 @@ class _CreateAppointmentScreenState
         reference: _referenceCtrl.text.isNotEmpty ? _referenceCtrl.text : null,
         relationToPrimary: _isNewFamilyMember ? _selectedRelation : null,
         howDidYouHear: _howDidYouHear,
-        photoPath: _patientPhoto?.path,
+        photoPath: null,
         consentGiven: _dataConsentGiven,
         privacyPolicyAccepted: _privacyPolicyAccepted,
       );
@@ -846,28 +853,84 @@ class _CreateAppointmentScreenState
                     ],
                   );
 
-            final phoneField = Stack(
+            final phoneField = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                AppTextField(
-                  controller: _phoneCtrl,
-                  label: 'Phone Number',
-                  prefixIcon: Icon(Icons.phone_outlined, color: context.colors.textHint),
-                  keyboardType: TextInputType.phone,
-                  validator: Validators.phone,
-                ),
-                if (_isCheckingPhone)
-                  const Positioned(
-                    right: 14,
-                    top: 0,
-                    bottom: 0,
-                    child: Center(
-                      child: SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                Text('Phone Number', style: context.textStyles.label),
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      height: 52,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: context.colors.divider,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: context.colors.border.withValues(alpha: 0.5), width: 0.8),
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: _selectedPhoneCode,
+                          icon: const Icon(Icons.arrow_drop_down, size: 18),
+                          items: Validators.countryPhoneCodes.keys.map((code) {
+                            return DropdownMenuItem(
+                              value: code,
+                              child: Text(
+                                ' $code',
+                                style: context.textStyles.bodyLarge.copyWith(
+                                  color: context.colors.textPrimary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) {
+                              setState(() {
+                                _selectedPhoneCode = val;
+                              });
+                              _onPhoneChanged();
+                            }
+                          },
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          AppTextField(
+                            label: '',
+                            controller: _phoneCtrl,
+                            keyboardType: TextInputType.phone,
+                            validator: (v) => Validators.phone(v, countryCode: _selectedPhoneCode),
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(
+                                Validators.countryPhoneCodes[_selectedPhoneCode] ?? 15,
+                              ),
+                            ],
+                          ),
+                          if (_isCheckingPhone)
+                            const Positioned(
+                              right: 14,
+                              top: 0,
+                              bottom: 0,
+                              child: Center(
+                                child: SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ],
             );
 
@@ -1157,8 +1220,7 @@ class _CreateAppointmentScreenState
               onConsentChanged: (v) => setState(() => _dataConsentGiven = v),
               privacyPolicyAccepted: _privacyPolicyAccepted,
               onPrivacyPolicyChanged: (v) => setState(() => _privacyPolicyAccepted = v),
-              photoFile: _patientPhoto,
-              onPhotoChanged: (f) => setState(() => _patientPhoto = f),
+
               howDidYouHear: _howDidYouHear,
               onHowDidYouHearChanged: (v) => setState(() => _howDidYouHear = v),
               isReturningPatient: _isRegisteredPatient,
@@ -1167,6 +1229,14 @@ class _CreateAppointmentScreenState
               isNewFamilyMember: _isNewFamilyMember,
               relationToPrimary: _selectedRelation,
               onRelationChanged: (v) => setState(() => _selectedRelation = v),
+              selectedPhoneCode: _selectedPhoneCode,
+              onPhoneCodeChanged: (v) => setState(() => _selectedPhoneCode = v),
+              existingPatient: _existingPatient,
+              matchingPatients: _matchingPatients,
+              onAddFamilyMember: _matchingPatients.isNotEmpty
+                  ? () => _applyNewFamilyMemberMode(_matchingPatients.first)
+                  : null,
+              onChangeFamilyMember: () => _checkPhone('$_selectedPhoneCode${_phoneCtrl.text.trim()}', forceShowScreen: true),
             ),
           const SizedBox(height: 28),
 

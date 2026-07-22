@@ -15,6 +15,7 @@ import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/core/services/auth_service.dart';
 import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/utils/date_picker_helper.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 
@@ -299,7 +300,7 @@ class _CreateTreatmentPlanScreenState
   Future<void> _pickStartDate() async {
     FocusScope.of(context).unfocus();
     await Future.delayed(const Duration(milliseconds: 50));
-    final d = await showDatePicker(
+    final d = await showAppDatePicker(
       context: context,
       initialDate: _startDate,
       firstDate: DateTime.now(),
@@ -1128,46 +1129,50 @@ class _SlotPickerSheet extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 20),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              childAspectRatio: 2.2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-            ),
-            itemCount: slots.length,
-            itemBuilder: (context, i) {
-              final s = slots[i];
-              final isSelected = s == selectedSlot;
-              return GestureDetector(
-                onTap: () => onSelected(s),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  decoration: BoxDecoration(
-                    color: isSelected ? context.colors.primary : context.colors.surface,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isSelected ? context.colors.primary : context.colors.border,
-                      width: isSelected ? 0 : 0.8,
-                    ),
-                    boxShadow: isSelected
-                        ? [BoxShadow(color: context.colors.primary.withValues(alpha: 0.30), blurRadius: 8, offset: const Offset(0, 3))]
-                        : null,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    _fmt(s),
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : context.colors.textPrimary,
-                      fontSize: 13,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                  ),
+          Flexible(
+            child: SingleChildScrollView(
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  childAspectRatio: 2.2,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
                 ),
-              );
-            },
+                itemCount: slots.length,
+                itemBuilder: (context, i) {
+                  final s = slots[i];
+                  final isSelected = s == selectedSlot;
+                  return GestureDetector(
+                    onTap: () => onSelected(s),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      decoration: BoxDecoration(
+                        color: isSelected ? context.colors.primary : context.colors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? context.colors.primary : context.colors.border,
+                          width: isSelected ? 0 : 0.8,
+                        ),
+                        boxShadow: isSelected
+                            ? [BoxShadow(color: context.colors.primary.withValues(alpha: 0.30), blurRadius: 8, offset: const Offset(0, 3))]
+                            : null,
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        _fmt(s),
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : context.colors.textPrimary,
+                          fontSize: 13,
+                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
           const SizedBox(height: 8),
         ],

@@ -22,6 +22,7 @@ import 'package:pms_app/features/consultations/models/consultation_model.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/utils/date_picker_helper.dart';
 import 'package:pms_app/core/services/idle_reminder_service.dart';
 import 'package:pms_app/core/services/photo_quota_service.dart';
 import 'package:pms_app/core/widgets/photo_limit_dialog.dart';
@@ -854,7 +855,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           eyeDiagnosis: _eyeDiagnosisCtrl.text.trim(),
           pulseDiagnosis: _pulseDiagnosisCtrl.text.trim(),
           coronaVaccinated: _coronaVaccinated,
-          newPhotoPaths: _photos.map((p) => p.path).toList(),
+          newPhotos: _photos,
         );
       } else {
         // No consultation ID and no ongoing consultation found —
@@ -901,7 +902,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
 
   Future<void> _rescheduleSession(SessionModel session) async {
     final dt = DateTime.tryParse(session.scheduledDate) ?? DateTime.now();
-    final newDate = await showDatePicker(
+    final newDate = await showAppDatePicker(
       context: context,
       initialDate: dt,
       firstDate: DateTime.now(),
@@ -1220,16 +1221,19 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          title: Text(label, style: context.textStyles.bodyMedium),
-          value: value,
-          onChanged: _isViewing ? null : (v) {
-            onChanged(v ?? false);
-            _onInteraction();
-          },
-          activeColor: context.colors.primary,
-          controlAffinity: ListTileControlAffinity.leading,
+        Material(
+          color: Colors.transparent,
+          child: CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(label, style: context.textStyles.bodyMedium),
+            value: value,
+            onChanged: _isViewing ? null : (v) {
+              onChanged(v ?? false);
+              _onInteraction();
+            },
+            activeColor: context.colors.primary,
+            controlAffinity: ListTileControlAffinity.leading,
+          ),
         ),
         if (value)
           Padding(

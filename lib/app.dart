@@ -14,6 +14,8 @@ import 'package:flutter/foundation.dart';
 import 'package:pms_app/core/widgets/desktop_loading_wrapper.dart';
 import 'package:pms_app/core/widgets/app_splash_screen.dart';
 
+import 'package:flutter_localizations/flutter_localizations.dart';
+
 /// Global navigator key so the timer service can push dialogs from anywhere.
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -56,6 +58,17 @@ class _PmsAppState extends ConsumerState<PmsApp> {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       themeMode: ThemeMode.light,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en', 'GB'),
+        Locale('en', 'IN'),
+        Locale('en', 'US'),
+      ],
+      locale: const Locale('en', 'GB'),
       // Lock UI scale to ~85% so the app always looks like Android "Small"
       // display size, regardless of the user's system Display Size setting.
       // Layout still adapts to different screen sizes / aspect ratios.

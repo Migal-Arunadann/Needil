@@ -11,8 +11,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   tz.initializeTimeZones();
 
-  // Disable runtime fetching to force Google Fonts to use bundled assets
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // Allow runtime fetching fallback for unbundled font variants
+  GoogleFonts.config.allowRuntimeFetching = true;
   await GoogleFonts.pendingFonts();
 
   // Restrict app orientation to portrait mode

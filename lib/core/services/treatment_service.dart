@@ -9,6 +9,7 @@ import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/features/auth/models/doctor_model.dart';
 import 'package:pms_app/core/services/session_lifecycle_service.dart';
+import 'package:image_picker/image_picker.dart';
 
 class TreatmentService {
   final PocketBase pb;
@@ -49,7 +50,7 @@ class TreatmentService {
     String? eyeDiagnosis,
     String? pulseDiagnosis,
     bool coronaVaccinated = false,
-    List<String> photoPaths = const [],
+    List<XFile> photos = const [],
   }) async {
     final body = <String, dynamic>{
       'patient': patientId,
@@ -87,10 +88,12 @@ class TreatmentService {
     };
 
     final files = <http.MultipartFile>[];
-    for (final path in photoPaths) {
-      files.add(await http.MultipartFile.fromPath('photos', path));
+    for (final file in photos) {
+      try {
+        final bytes = await file.readAsBytes();
+        files.add(http.MultipartFile.fromBytes('photos', bytes, filename: file.name));
+      } catch (_) {}
     }
-
     final record = await pb.collection(PBCollections.consultations).create(
       body: body,
       files: files,
@@ -130,7 +133,7 @@ class TreatmentService {
     String? eyeDiagnosis,
     String? pulseDiagnosis,
     bool? coronaVaccinated,
-    List<String> newPhotoPaths = const [],
+    List<XFile> newPhotos = const [],
   }) async {
     final body = <String, dynamic>{
       if (status != null) 'status': status,
@@ -167,9 +170,12 @@ class TreatmentService {
     };
 
     final files = <http.MultipartFile>[];
-    for (final path in newPhotoPaths) {
-      if (!path.startsWith('http')) {
-        files.add(await http.MultipartFile.fromPath('photos', path));
+    for (final file in newPhotos) {
+      if (!file.path.startsWith('http')) {
+        try {
+          final bytes = await file.readAsBytes();
+          files.add(http.MultipartFile.fromBytes('photos', bytes, filename: file.name));
+        } catch (_) {}
       }
     }
 
@@ -355,6 +361,12 @@ class TreatmentService {
         };
         await pb.collection(PBCollections.sessions).create(body: sessionBody);
 
+        // Create linked appointment for Session 1 (starting today)
+        final session1Rec = await pb.collection(PBCollections.sessions).getList(
+          filter: 'treatment_plan = "${plan.id}" && session_number = 1',
+          perPage: 1,
+        );
+        final session1Id = session1Rec.items.isNotEmpty ? session1Rec.items.first.id : '';
         try {
           await pb.collection('appointments').create(body: {
             'patient': patientId,
@@ -366,6 +378,7 @@ class TreatmentService {
             'status': 'waiting',
             'session_type': planType,
             'check_in_time': now.toUtc().toIso8601String(),
+            if (session1Id.isNotEmpty) 'linked_session_id': session1Id,
           });
         } catch (_) {}
 
@@ -431,7 +444,8 @@ class TreatmentService {
         'session_type': planType,
         'treatment_type': treatmentType,
       };
-      await pb.collection(PBCollections.sessions).create(body: sessionBody);
+      // Create the session record first to get its ID
+      final sessionRec2 = await pb.collection(PBCollections.sessions).create(body: sessionBody);
 
       try {
         await pb.collection('appointments').create(body: {
@@ -443,6 +457,7 @@ class TreatmentService {
           'time': resolvedTimeStr,
           'status': 'scheduled',
           'session_type': planType,
+          'linked_session_id': sessionRec2.id,
         });
       } catch (e) {
         throw Exception(
@@ -560,6 +575,7 @@ class TreatmentService {
         'time': scheduledTime,
         'status': startImmediately ? 'waiting' : 'scheduled',
         'session_type': sessionType,
+        'linked_session_id': session.id,
         if (startImmediately)
           'check_in_time': DateTime.now().toUtc().toIso8601String(),
       });
@@ -600,9 +616,10 @@ class TreatmentService {
     String? bpLevel,
     int? pulse,
     String? remarks,
-    List<String> photoPaths = const [],
+    List<XFile> photos = const [],
     bool isCompleted = true,
     String? treatmentModality,
+    String? doctorId,
   }) async {
     final body = <String, dynamic>{
       if (isCompleted) 'status': 'completed',
@@ -615,14 +632,25 @@ class TreatmentService {
       if (remarks != null) 'remark': remarks,
       if (treatmentModality != null && treatmentModality.isNotEmpty)
         'treatment_type': treatmentModality,
+      if (doctorId != null && doctorId.isNotEmpty)
+        'doctor': doctorId,
     };
 
-    final files = <http.MultipartFile>[];
-    for (final path in photoPaths) {
-      // Guard: skip files that no longer exist on disk (e.g., already uploaded)
-      if (!await File(path).exists()) continue;
+    if (photos.isNotEmpty) {
       try {
-        files.add(await http.MultipartFile.fromPath('photos', path));
+        final existing = await pb.collection(PBCollections.sessions).getOne(sessionId);
+        final existingPhotos = existing.getListValue<String>('photos');
+        if (existingPhotos.isNotEmpty) {
+          body['photos'] = existingPhotos;
+        }
+      } catch (_) {}
+    }
+
+    final files = <http.MultipartFile>[];
+    for (final file in photos) {
+      try {
+        final bytes = await file.readAsBytes();
+        files.add(http.MultipartFile.fromBytes('photos', bytes, filename: file.name));
       } catch (_) {
         // Skip unreadable files rather than crashing the save
       }
@@ -742,7 +770,7 @@ class TreatmentService {
 
   /// Mark session as missed. Increments the plan's consecutive_misses counter
   /// and triggers auto-rescheduling if the count is still below 3.
-  Future<void> markSessionMissed(String sessionId) async {
+  Future<void> markSessionMissed(String sessionId, {DateTime? anchorDate}) async {
     final record = await pb.collection(PBCollections.sessions).update(
       sessionId,
       body: {'status': 'missed'},
@@ -768,11 +796,11 @@ class TreatmentService {
         body: {'consecutive_misses': newMissCount},
       );
 
-      // If < 3 misses, auto-reschedule from today
+      // If < 3 misses, auto-reschedule from anchorDate (defaults to today)
       if (newMissCount < 3) {
         try {
           final lifecycle = SessionLifecycleService(pb);
-          await lifecycle.rescheduleFromToday(plan.id, [session]);
+          await lifecycle.rescheduleFromToday(plan.id, [session], anchorDate: anchorDate);
         } catch (e) {
           debugPrint('[TreatmentService] markSessionMissed reschedule error: $e');
         }
@@ -952,35 +980,19 @@ class TreatmentService {
   // Keep old name as alias for backward compatibility
   Future<void> endConsultation(String consultationId) => endTreatment(consultationId);
 
-  /// Reschedule a single session to a new date and/or time.
+  /// Reschedule a single session to a new date and/or time, automatically
+  /// cascading shifts to all subsequent sessions in the treatment plan.
   Future<void> rescheduleSession({
     required String sessionId,
     required String newDate,
     required String newTime,
   }) async {
-    final session = await pb.collection(PBCollections.sessions).getOne(sessionId);
-    final oldDate = session.getStringValue('scheduled_date');
-    final oldTime = session.getStringValue('scheduled_time');
-    final doctorId = session.getStringValue('doctor');
-    final patientId = session.getStringValue('patient');
-
-    await pb.collection(PBCollections.sessions).update(sessionId, body: {
-      'scheduled_date': newDate,
-      'scheduled_time': newTime,
-    });
-
-    try {
-      final appts = await pb.collection(PBCollections.appointments).getList(
-        filter:
-            'patient = "$patientId" && doctor = "$doctorId" && date = "$oldDate" && time = "$oldTime" && type = "session" && status != "cancelled"',
-      );
-      for (final appt in appts.items) {
-        await pb.collection(PBCollections.appointments).update(appt.id, body: {
-          'date': newDate,
-          'time': newTime,
-        });
-      }
-    } catch (_) {}
+    final lifecycle = SessionLifecycleService(pb);
+    await lifecycle.rescheduleSessionAndCascade(
+      sessionId: sessionId,
+      newDate: newDate,
+      newTime: newTime,
+    );
   }
 
   // ─── Pause / Resume ─────────────────────────────────────────
@@ -1156,7 +1168,7 @@ class TreatmentService {
         'is_rescheduled': true,
       });
 
-      // Recreate linked appointment
+      // Recreate linked appointment with session FK
       try {
         await pb.collection('appointments').create(body: {
           'patient': sess.getStringValue('patient'),
@@ -1167,6 +1179,7 @@ class TreatmentService {
           'time': resolvedTime,
           'status': 'scheduled',
           'session_type': plan.treatmentType,
+          'linked_session_id': sess.id,
         });
       } catch (_) {}
     }

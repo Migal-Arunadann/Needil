@@ -357,10 +357,10 @@ class SessionLifecycleService {
   /// Cancel the old linked appointment and create a fresh one with the
   /// correct date, time, and clinic ID.
   ///
-  /// This is safer than updating the old record because:
-  ///   1. The old record may already be `cancelled`
-  ///   2. A fresh record always has the correct `clinic` field, ensuring
-  ///      the appointment is visible to clinic-role users.
+  /// Sync the linked appointment record with the new date, time, and status.
+  /// Prefers finding the appointment via linked_session_id (exact, O(1)).
+  /// Falls back to date-based matching for legacy records without the FK.
+  /// Always writes linked_session_id to ensure future lookups are fast.
   Future<void> _replaceLinkedAppointment({
     required SessionModel session,
     required String newDate,
@@ -369,38 +369,65 @@ class SessionLifecycleService {
     required String sessionType,
   }) async {
     try {
-      // Normalise old date to YYYY-MM-DD
-      String oldDatePart = session.scheduledDate;
+      // Fast path: find appointment by session FK (exact match)
+      List<RecordModel> apptItems = [];
       try {
-        final dt = DateTime.parse(session.scheduledDate);
-        oldDatePart = _formatDate(dt);
+        final bySessionId = await pb.collection(PBCollections.appointments).getList(
+          filter: 'linked_session_id = "${session.id}" && type = "session"',
+          perPage: 5,
+        );
+        apptItems = bySessionId.items;
       } catch (_) {}
 
-      // Cancel the old appointment (regardless of current status)
-      final oldAppts = await pb.collection(PBCollections.appointments).getList(
-        filter:
-            'patient = "${session.patientId}" && doctor = "${session.doctorId}" '
-            '&& date = "$oldDatePart" && time = "${session.scheduledTime}" '
-            '&& type = "session"',
-      );
-      for (final appt in oldAppts.items) {
-        await pb.collection(PBCollections.appointments).update(
-          appt.id,
-          body: {'status': 'cancelled'},
-        );
+      // Fallback: find by old date if no FK match
+      if (apptItems.isEmpty) {
+        String oldDatePart = session.scheduledDate;
+        try {
+          final dt = DateTime.parse(session.scheduledDate);
+          oldDatePart = _formatDate(dt);
+        } catch (_) {}
+
+        try {
+          final byDate = await pb.collection(PBCollections.appointments).getList(
+            filter:
+                'patient = "${session.patientId}" && doctor = "${session.doctorId}" '
+                '&& (date ~ "$oldDatePart" || (date >= "$oldDatePart 00:00:00.000Z" && date <= "$oldDatePart 23:59:59.999Z")) '
+                '&& type = "session"',
+          );
+          apptItems = byDate.items;
+        } catch (_) {}
       }
 
-      // Create a fresh appointment with all required fields
-      await pb.collection(PBCollections.appointments).create(body: {
-        'patient': session.patientId,
-        'doctor': session.doctorId,
-        if (clinicId != null && clinicId.isNotEmpty) 'clinic': clinicId,
-        'type': 'session',
-        'date': newDate,
-        'time': newTime,
-        'status': 'scheduled',
-        'session_type': sessionType,
-      });
+      if (apptItems.isNotEmpty) {
+        // Update existing appointment in place: move to new date, stamp the session FK
+        for (final appt in apptItems) {
+          await pb.collection(PBCollections.appointments).update(
+            appt.id,
+            body: {
+              'date': newDate,
+              'time': newTime,
+              'status': 'scheduled',
+              'is_rescheduled': true,
+              'linked_session_id': session.id,
+              if (clinicId != null && clinicId.isNotEmpty) 'clinic': clinicId,
+            },
+          );
+        }
+      } else {
+        // Create fresh appointment — stamp the session FK immediately
+        await pb.collection(PBCollections.appointments).create(body: {
+          'patient': session.patientId,
+          'doctor': session.doctorId,
+          if (clinicId != null && clinicId.isNotEmpty) 'clinic': clinicId,
+          'type': 'session',
+          'date': newDate,
+          'time': newTime,
+          'status': 'scheduled',
+          'is_rescheduled': true,
+          'session_type': sessionType,
+          'linked_session_id': session.id,
+        });
+      }
     } catch (e) {
       debugPrint('[SessionLifecycle] _replaceLinkedAppointment error: $e');
     }
@@ -469,12 +496,130 @@ class SessionLifecycleService {
   /// Called by [TreatmentService.markSessionMissed] to reschedule a
   /// manually-missed session and cascade subsequent ones from today,
   /// when the plan has fewer than 3 consecutive misses.
-  Future<void> rescheduleFromToday(String planId, List<SessionModel> missedSessions) async {
+  Future<void> rescheduleFromToday(String planId, List<SessionModel> missedSessions, {DateTime? anchorDate}) async {
     await _autoRescheduleForPlan(
       planId,
       missedSessions,
-      anchorDate: DateTime.now(),
+      anchorDate: anchorDate ?? DateTime.now(),
     );
+  }
+
+  /// Centralized session reschedule engine:
+  /// Reschedules a specific session to [newDate] (and optional [newTime]),
+  /// and automatically shifts all subsequent upcoming/paused sessions in the same plan
+  /// by the plan's interval while respecting doctor working days and bed capacity.
+  Future<void> rescheduleSessionAndCascade({
+    required String sessionId,
+    required String newDate,
+    String? newTime,
+    DateTime? customAnchorDate,
+  }) async {
+    try {
+      final sessionRec = await pb.collection(PBCollections.sessions).getOne(sessionId);
+      final targetSession = SessionModel.fromRecord(sessionRec);
+      final planId = targetSession.treatmentPlanId;
+
+      final planRec = await pb.collection(PBCollections.treatmentPlans).getOne(planId);
+      final plan = TreatmentPlanModel.fromRecord(planRec);
+
+      final docRec = await pb.collection('doctors').getOne(plan.doctorId);
+      final doctor = DoctorModel.fromRecord(docRec);
+      final validDays = doctor.workingDays;
+      final clinicId = doctor.clinicId;
+
+      int maxBeds = 3;
+      if (clinicId != null && clinicId.isNotEmpty) {
+        try {
+          final clinicRec = await pb.collection('clinics').getOne(clinicId);
+          maxBeds = clinicRec.getIntValue('bed_count');
+          if (maxBeds <= 0) maxBeds = 3;
+        } catch (_) {}
+      }
+
+      final allRes = await pb.collection(PBCollections.sessions).getList(
+        filter: 'treatment_plan = "$planId"',
+        sort: 'session_number',
+        perPage: 200,
+      );
+      final allSessions = allRes.items.map((r) => SessionModel.fromRecord(r)).toList();
+
+      // Only reschedule sessions >= the target that are still pending
+      final toReschedule = allSessions.where((s) {
+        if (s.sessionNumber < targetSession.sessionNumber) return false;
+        return s.status == SessionStatus.upcoming ||
+            s.status == SessionStatus.missed ||
+            s.status == SessionStatus.paused;
+      }).toList()..sort((a, b) => a.sessionNumber.compareTo(b.sessionNumber));
+
+      if (toReschedule.isEmpty) return;
+
+      // The user's chosen date for Session N — immovable anchor for i=0.
+      // For i>0, we chain: each session is placed at (prevActualDate + interval),
+      // so if a day-off pushes Session 3 forward, Session 4 automatically inherits
+      // the correct base and shifts forward too.
+      final anchorDate = customAnchorDate ?? DateTime.parse(newDate);
+      final preferredTime = newTime ?? targetSession.scheduledTime ?? '10:00';
+
+      // Tracks the actual placed date of the previous session in the chain
+      DateTime prevActualDate = anchorDate;
+
+      for (int i = 0; i < toReschedule.length; i++) {
+        final session = toReschedule[i];
+
+        String updatedDateStr;
+        String updatedTimeStr;
+
+        if (i == 0) {
+          // Session N: use the user's explicitly chosen date + time as-is
+          updatedDateStr = _formatDate(anchorDate);
+          updatedTimeStr = preferredTime;
+          prevActualDate = anchorDate; // seed the chain
+        } else {
+          // Session N+k: start from prevActualDate + interval, respect working days,
+          // then find a free slot. If the slot-finder jumps (day full), it stays on
+          // the earliest available date from that candidate — the NEXT session then
+          // chains from that actual date.
+          DateTime candidateDate = prevActualDate.add(Duration(days: plan.intervalDays));
+          candidateDate = _nextWorkingDay(candidateDate, validDays);
+
+          final slotResult = await _findAvailableSlot(
+            doctorId: plan.doctorId,
+            startDate: candidateDate,
+            preferredTime: preferredTime,
+            maxBeds: maxBeds,
+            validDays: validDays,
+          );
+
+          updatedDateStr = _formatDate(slotResult.date);
+          updatedTimeStr = slotResult.time;
+          prevActualDate = slotResult.date; // chain: next session starts from here
+        }
+
+        final newRescheduleCount = (i == 0) ? session.rescheduleCount + 1 : session.rescheduleCount;
+
+        await pb.collection(PBCollections.sessions).update(session.id, body: {
+          'scheduled_date': updatedDateStr,
+          'scheduled_time': updatedTimeStr,
+          'is_rescheduled': i == 0 ? true : session.isRescheduled,
+          'reschedule_count': newRescheduleCount,
+          'original_date': (session.originalDate != null && session.originalDate!.isNotEmpty)
+              ? session.originalDate
+              : session.scheduledDate,
+          if (session.status == SessionStatus.missed || session.status == SessionStatus.paused)
+            'status': 'upcoming',
+        });
+
+        await _replaceLinkedAppointment(
+          session: session,
+          newDate: updatedDateStr,
+          newTime: updatedTimeStr,
+          clinicId: clinicId,
+          sessionType: plan.treatmentType,
+        );
+      }
+    } catch (e) {
+      debugPrint('[SessionLifecycle] rescheduleSessionAndCascade error: $e');
+    }
   }
 
   String _formatDate(DateTime d) =>

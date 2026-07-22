@@ -22,6 +22,7 @@ import 'package:pms_app/core/services/idle_reminder_service.dart';
 import 'package:pms_app/core/services/photo_quota_service.dart';
 import 'package:pms_app/core/widgets/photo_limit_dialog.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/features/auth/models/doctor_model.dart';
 import '../../../core/services/auth_service.dart' show UserRole;
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
@@ -273,6 +274,11 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
   PhysioData _physioData = PhysioData();
   ReflexologyData _reflexologyData = ReflexologyData();
 
+  // ── Doctor & Clinic Services ──
+  List<DoctorModel> _clinicDoctors = [];
+  String? _selectedDoctorId;
+  DoctorModel? _selectedDoctor;
+
   /// Timer visible for any active (not completed/missed) session.
   bool get _canUseTimer =>
       _liveSession.status == SessionStatus.inProgress ||
@@ -282,6 +288,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
   void initState() {
     super.initState();
     _liveSession = widget.session; // Initial snapshot; replaced after load
+    _selectedDoctorId = widget.session.doctorId;
     _isViewMode = widget.session.status == SessionStatus.completed ||
                   widget.session.status == SessionStatus.missed ||
                   widget.session.status == SessionStatus.cancelled;
@@ -440,12 +447,14 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         if (fresh.treatmentModality.isNotEmpty) {
           _selectedTreatmentType = fresh.treatmentModality;
         }
+        _selectedDoctorId = fresh.doctorId.isNotEmpty ? fresh.doctorId : widget.session.doctorId;
         _isLoadingSession = false;
       });
       // If session doesn't have a treatment modality, load from its plan
       if (_selectedTreatmentType.isEmpty) {
         _loadTreatmentTypeFromPlan(fresh.treatmentPlanId);
       }
+      await _loadClinicDoctors();
     } catch (_) {
       if (!mounted) return;
       // Fallback to the widget snapshot
@@ -463,11 +472,13 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         if (widget.session.treatmentModality.isNotEmpty) {
           _selectedTreatmentType = widget.session.treatmentModality;
         }
+        _selectedDoctorId = widget.session.doctorId;
         _isLoadingSession = false;
       });
       if (_selectedTreatmentType.isEmpty) {
         _loadTreatmentTypeFromPlan(widget.session.treatmentPlanId);
       }
+      await _loadClinicDoctors();
     }
 
     _notesCtrl.addListener(_onFieldChanged);
@@ -499,6 +510,118 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
     } catch (_) {
       // Silently fail — treatment type will just be empty
     }
+  }
+
+  /// Load all doctors in the clinic to restrict treatment types to configured services
+  Future<void> _loadClinicDoctors() async {
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final auth = ref.read(authProvider);
+      final clinicId = auth.clinicId;
+
+      List<DoctorModel> docs = [];
+      if (clinicId != null && clinicId.isNotEmpty) {
+        try {
+          final records = await pb.collection('doctors').getFullList(
+            filter: 'clinic = "$clinicId"',
+          );
+          docs = records.map((r) => DoctorModel.fromRecord(r)).toList();
+        } catch (_) {}
+      }
+
+      // If no clinic docs found by clinic filter, try fetching doctor by assigned doctor ID
+      if (docs.isEmpty && _selectedDoctorId != null && _selectedDoctorId!.isNotEmpty) {
+        try {
+          final rec = await pb.collection('doctors').getOne(_selectedDoctorId!);
+          docs = [DoctorModel.fromRecord(rec)];
+        } catch (_) {}
+      }
+
+      // If logged in as doctor and still empty, use auth.doctor
+      if (docs.isEmpty && auth.doctor != null) {
+        docs = [auth.doctor!];
+      }
+
+      // Final fallback: fetch all doctors in DB if still empty
+      if (docs.isEmpty) {
+        try {
+          final records = await pb.collection('doctors').getFullList();
+          docs = records.map((r) => DoctorModel.fromRecord(r)).toList();
+        } catch (_) {}
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _clinicDoctors = docs;
+        if (_selectedDoctorId == null || _selectedDoctorId!.isEmpty) {
+          _selectedDoctorId = docs.isNotEmpty ? docs.first.id : auth.userId;
+        }
+        _selectedDoctor = docs.firstWhere(
+          (d) => d.id == _selectedDoctorId,
+          orElse: () => docs.isNotEmpty ? docs.first : (auth.doctor ?? DoctorModel(id: '', name: '', age: 0, username: '', workingSchedule: [], treatments: [])),
+        );
+      });
+    } catch (_) {}
+  }
+
+  /// Gets the available treatment types based on the assigned doctor's configured services.
+  List<String> get _availableTreatmentTypes {
+    List<String> types = [];
+
+    // 1. Assigned Doctor's configured services
+    if (_selectedDoctor != null && _selectedDoctor!.treatments.isNotEmpty) {
+      types = _selectedDoctor!.treatments.map((t) => t.type).toList();
+    }
+
+    // 2. Fallback to all clinic doctors' configured services
+    if (types.isEmpty && _clinicDoctors.isNotEmpty) {
+      final allSet = <String>{};
+      for (final doc in _clinicDoctors) {
+        for (final t in doc.treatments) {
+          if (t.type.isNotEmpty) allSet.add(t.type);
+        }
+      }
+      types = allSet.toList();
+    }
+
+    // 3. Fallback to standard treatment types if still empty
+    if (types.isEmpty) {
+      types = List.from(_treatmentTypes);
+    }
+
+    // 4. Ensure currently selected treatment modality is included
+    if (_selectedTreatmentType.isNotEmpty && !types.contains(_selectedTreatmentType)) {
+      types = [_selectedTreatmentType, ...types];
+    }
+
+    return types;
+  }
+
+  Future<void> _onDoctorChanged(String newDoctorId) async {
+    if (_selectedDoctorId == newDoctorId) return;
+
+    final matchedDoc = _clinicDoctors.firstWhere(
+      (d) => d.id == newDoctorId,
+      orElse: () => _clinicDoctors.first,
+    );
+
+    setState(() {
+      _selectedDoctorId = newDoctorId;
+      _selectedDoctor = matchedDoc;
+      final newTypes = _availableTreatmentTypes;
+      if (newTypes.isNotEmpty && !newTypes.contains(_selectedTreatmentType)) {
+        _selectedTreatmentType = newTypes.first;
+      }
+    });
+
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      await pb.collection(PBCollections.sessions).update(_liveSession.id, body: {
+        'doctor': newDoctorId,
+      });
+    } catch (_) {}
+    _onFieldChanged();
   }
 
   /// Shows a confirmation dialog when the user switches treatment type mid-form.
@@ -557,21 +680,20 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
       // Save directly via service so it persists even if sessionsProvider is empty
       final service = ref.read(treatmentServiceProvider);
       final sessionId = _liveSession.id;
-      final photoPaths = List<String>.from(_photos.map((p) => p.path));
       final saved = await service.recordSession(
         sessionId: sessionId,
         notes: _buildFullNotes(),
         bpLevel: _bpCtrl.text.trim(),
         pulse: _pulseCtrl.text.isNotEmpty ? int.tryParse(_pulseCtrl.text.trim()) : null,
         remarks: _remarksCtrl.text.trim(),
-        photoPaths: photoPaths,
+        photos: const [], // Do not auto-save photos
         isCompleted: false,
         treatmentModality: _selectedTreatmentType,
+        doctorId: _selectedDoctorId,
       );
       if (mounted && saved.notes != null) {
         setState(() {
           _liveSession = saved;
-          _photos.clear(); // Photos now in PB — avoid duplicates
         });
       }
     } catch (_) {
@@ -594,41 +716,6 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
     // Stop idle tracking
     IdleReminderService.instance.stopTracking(_liveSession.id);
     super.dispose();
-  }
-
-  Future<void> _pickPhoto() async {
-    // ── Quota check ──
-    final clinicId = ref.read(authProvider).clinicId;
-    if (clinicId != null) {
-      try {
-        final quota = ref.read(photoQuotaServiceProvider);
-        if (!await quota.canUpload(clinicId, 1)) {
-          if (mounted) {
-            final (used, limit) = await quota.getQuota(clinicId);
-            showPhotoLimitDialog(context, used: used, limit: limit,
-              isClinicAdmin: ref.read(authProvider).role == UserRole.clinic);
-          }
-          return;
-        }
-      } catch (_) {}
-    }
-    try {
-      final img = await _picker.pickImage(
-        source: ImageSource.camera,
-        maxWidth: 800,
-        maxHeight: 800,
-        imageQuality: 60,
-      );
-      if (img != null && mounted) {
-        final compressed = await ImageHelper.compressToWebP(img);
-        if (compressed != null && mounted) {
-          setState(() => _photos.add(compressed));
-          _onFieldChanged();
-        }
-      }
-    } catch (_) {
-      // Camera access failed or user denied — silently ignore
-    }
   }
 
   Future<void> _pickFromGallery() async {
@@ -654,11 +741,22 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         imageQuality: 60,
       );
       if (imgs.isNotEmpty && mounted) {
+        final validImgs = <XFile>[];
+        for (final img in imgs) {
+          final ext = img.name.split('.').last.toLowerCase();
+          if (['png', 'jpg', 'jpeg', 'webp', 'heic', 'heif'].contains(ext) || img.mimeType?.startsWith('image/') == true) {
+             validImgs.add(img);
+          } else {
+             AppToast.show('Only image files are supported (e.g., JPG, PNG). Skipped: ${img.name}', type: ToastType.error);
+          }
+        }
+        if (validImgs.isEmpty) return;
+        
         // Check quota for batch
         if (clinicId != null) {
           try {
             final quota = ref.read(photoQuotaServiceProvider);
-            if (!await quota.canUpload(clinicId, imgs.length)) {
+            if (!await quota.canUpload(clinicId, validImgs.length)) {
               final remaining = await quota.getRemainingQuota(clinicId);
               if (remaining <= 0) {
                 final (used, limit) = await quota.getQuota(clinicId);
@@ -669,12 +767,12 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
               if (mounted) {
                 AppToast.show('Only $remaining photo(s) remaining in your quota. Selecting first $remaining.', type: ToastType.warning);
               }
-              imgs.removeRange(remaining, imgs.length);
+              validImgs.removeRange(remaining, validImgs.length);
             }
           } catch (_) {}
         }
         final compressedList = <XFile>[];
-        for (final file in imgs) {
+        for (final file in validImgs) {
           final comp = await ImageHelper.compressToWebP(file);
           if (comp != null) {
             compressedList.add(comp);
@@ -705,11 +803,12 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         bpLevel: _bpCtrl.text.trim(),
         pulse: _pulseCtrl.text.isNotEmpty ? int.tryParse(_pulseCtrl.text.trim()) : null,
         remarks: _remarksCtrl.text.trim(),
-        photoPaths: _photos.map((p) => p.path).toList(),
+        photos: _photos,
         // Save button never completes the session — only End Session on the
         // schedule card does that. Preserve existing status.
         isCompleted: isAlreadyCompleted,
         treatmentModality: _selectedTreatmentType,
+        doctorId: _selectedDoctorId,
       );
       setState(() {
         _isSubmitting = false;
@@ -978,6 +1077,43 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
 
                   // ── EDIT MODE ──
                   if (!_isViewMode) ...[
+                    // ── Assigned Doctor Selector (Allows switching doctor to access other clinic services) ──
+                    if (_clinicDoctors.isNotEmpty) ...[
+                      Text('Assigned Doctor', style: context.textStyles.label),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: context.colors.surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: context.colors.border),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<String>(
+                            value: _selectedDoctorId,
+                            hint: Text('Select assigned doctor...', style: TextStyle(color: context.colors.textHint)),
+                            isExpanded: true,
+                            icon: Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textSecondary),
+                            items: _clinicDoctors.map((doc) => DropdownMenuItem(
+                              value: doc.id,
+                              child: Row(
+                                children: [
+                                  Icon(Icons.person_outline_rounded, size: 18, color: context.colors.primary),
+                                  const SizedBox(width: 10),
+                                  Expanded(child: Text(doc.name, overflow: TextOverflow.ellipsis)),
+                                ],
+                              ),
+                            )).toList(),
+                            onChanged: (val) {
+                              if (val != null) _onDoctorChanged(val);
+                            },
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+
                     // ── Treatment Type Selector ──
                     Text('Treatment Type', style: context.textStyles.label),
                     const SizedBox(height: 8),
@@ -991,11 +1127,13 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
-                          value: _selectedTreatmentType.isNotEmpty ? _selectedTreatmentType : null,
+                          value: _selectedTreatmentType.isNotEmpty && _availableTreatmentTypes.contains(_selectedTreatmentType)
+                              ? _selectedTreatmentType
+                              : (_availableTreatmentTypes.isNotEmpty ? _availableTreatmentTypes.first : null),
                           hint: Text('Select treatment type...', style: TextStyle(color: context.colors.textHint)),
                           isExpanded: true,
                           icon: Icon(Icons.keyboard_arrow_down_rounded, color: context.colors.textSecondary),
-                          items: _treatmentTypes.map((type) => DropdownMenuItem(
+                          items: _availableTreatmentTypes.map((type) => DropdownMenuItem(
                             value: type,
                             child: Row(
                               children: [
@@ -1085,19 +1223,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                       }),
                       // Show newly picked photos
                       ..._photos.asMap().entries.map((e) => _photoThumb(e.key)),
-                      if (kIsWeb)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8.0),
-                          child: Text(
-                            '⚠️ Photo uploads are only supported on the mobile app.',
-                            style: context.textStyles.caption.copyWith(color: context.colors.warning),
-                          ),
-                        )
-                      else ...[
-                        if (!Platform.isWindows)
-                          _addPhotoBtn(Icons.camera_alt_rounded, 'Camera', _pickPhoto),
-                        _addPhotoBtn(Icons.photo_library_rounded, 'Gallery', _pickFromGallery),
-                      ],
+                      _addPhotoBtn(Icons.file_upload_outlined, 'Upload File', _pickFromGallery),
                     ]),
                     const SizedBox(height: 16),
                     // Remarks
@@ -1243,8 +1369,11 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(10), border: Border.all(color: context.colors.border), color: context.colors.surface),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(9),
-          child: Image.file(File(_photos[index].path), fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => Icon(Icons.image_rounded, color: context.colors.textHint)),
+          child: kIsWeb
+              ? Image.network(_photos[index].path, fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Icon(Icons.image_rounded, color: context.colors.textHint))
+              : Image.file(File(_photos[index].path), fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => Icon(Icons.image_rounded, color: context.colors.textHint)),
         ),
       ),
       Positioned(top: -4, right: -4, child: GestureDetector(

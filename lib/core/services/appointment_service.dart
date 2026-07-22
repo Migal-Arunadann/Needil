@@ -5,6 +5,8 @@ import 'package:pms_app/core/utils/time_utils.dart';
 import 'package:pms_app/features/appointments/models/appointment_model.dart';
 import 'package:pms_app/features/patients/models/patient_model.dart';
 import 'package:pms_app/features/consultations/models/consultation_model.dart';
+import 'package:pms_app/core/services/session_lifecycle_service.dart';
+import 'package:pms_app/core/utils/validators.dart';
 
 class AppointmentService {
   final PocketBase pb;
@@ -16,7 +18,23 @@ class AppointmentService {
     required String date,
     required String time,
     required String doctorId,
+    String? linkedSessionId,
   }) async {
+    // Fast path: appointment already carries the session FK — skip all fuzzy matching
+    if (linkedSessionId != null && linkedSessionId.isNotEmpty) {
+      try {
+        return await pb.collection(PBCollections.sessions).getOne(linkedSessionId);
+      } catch (_) {
+        // Fall through to fuzzy matching if the record was somehow deleted
+      }
+    }
+
+    String datePart = date;
+    try {
+      final dt = DateTime.parse(date);
+      datePart = '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+    } catch (_) {}
+
     final timeCandidates = TimeUtils.generateTimeCandidates(time);
     final timeFilter = timeCandidates.isNotEmpty
         ? timeCandidates.map((t) => 'scheduled_time = "$t"').join(' || ')
@@ -26,7 +44,7 @@ class AppointmentService {
     try {
       final res = await pb.collection(PBCollections.sessions).getList(
         filter: 'patient = "$patientId" && doctor = "$doctorId" '
-            '&& scheduled_date >= "$date 00:00:00.000Z" && scheduled_date <= "$date 23:59:59.999Z" '
+            '&& (scheduled_date = "$datePart" || (scheduled_date >= "$datePart 00:00:00.000Z" && scheduled_date <= "$datePart 23:59:59.999Z")) '
             '&& ($timeFilter) && (status = "upcoming" || status = "waiting" || status = "in_progress")',
         perPage: 1,
         sort: 'session_number',
@@ -422,8 +440,17 @@ class AppointmentService {
   /// server versions. Filters by clinic/doctor in Dart after fetching by phone.
   Future<List<PatientModel>> findAllPatientsByPhone(String phone, String doctorId, {String? clinicId}) async {
     try {
+      final clean = phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+      final parsed = PhoneParser.parse(clean);
+      final countryCode = parsed.$1;
+      final nationalNumber = parsed.$2;
+      final combinedWithPlus = '$countryCode$nationalNumber';
+      final combinedRaw = combinedWithPlus.replaceAll('+', '');
+
+      final filterStr = 'phone = "$phone" || phone = "$combinedWithPlus" || phone = "$combinedRaw" || phone = "$nationalNumber"';
+
       final all = await pb.collection(PBCollections.patients).getFullList(
-        filter: 'phone = "$phone"',
+        filter: filterStr,
       );
       return all
           .map((rec) => PatientModel.fromRecord(rec))
@@ -443,8 +470,17 @@ class AppointmentService {
   Future<AppointmentModel?> findExistingAppointment(String phone, String doctorId, {required String date}) async {
     try {
       final today = _todayString();
+      final clean = phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+      final parsed = PhoneParser.parse(clean);
+      final countryCode = parsed.$1;
+      final nationalNumber = parsed.$2;
+      final combinedWithPlus = '$countryCode$nationalNumber';
+      final combinedRaw = combinedWithPlus.replaceAll('+', '');
+
+      final filterStr = '(patient_phone = "$phone" || patient_phone = "$combinedWithPlus" || patient_phone = "$combinedRaw" || patient_phone = "$nationalNumber") && doctor = "$doctorId" && status = "scheduled" && date >= "$today"';
+
       final result = await pb.collection(PBCollections.appointments).getList(
-        filter: 'patient_phone = "$phone" && doctor = "$doctorId" && status = "scheduled" && date >= "$today"',
+        filter: filterStr,
         perPage: 1,
         sort: 'date,time',
       );
@@ -460,8 +496,17 @@ class AppointmentService {
   Future<AppointmentModel?> findAnyActiveTodayByPhone(String phone, String doctorId) async {
     try {
       final today = _todayString();
+      final clean = phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
+      final parsed = PhoneParser.parse(clean);
+      final countryCode = parsed.$1;
+      final nationalNumber = parsed.$2;
+      final combinedWithPlus = '$countryCode$nationalNumber';
+      final combinedRaw = combinedWithPlus.replaceAll('+', '');
+
+      final filterStr = '(patient_phone = "$phone" || patient_phone = "$combinedWithPlus" || patient_phone = "$combinedRaw" || patient_phone = "$nationalNumber") && doctor = "$doctorId" && date = "$today" && status != "cancelled"';
+
       final result = await pb.collection(PBCollections.appointments).getList(
-        filter: 'patient_phone = "$phone" && doctor = "$doctorId" && date = "$today" && status != "cancelled"',
+        filter: filterStr,
         perPage: 1,
       );
       if (result.items.isNotEmpty) {
@@ -527,6 +572,7 @@ class AppointmentService {
           date: appt.date,
           time: appt.time,
           doctorId: appt.doctorId,
+          linkedSessionId: appt.linkedSessionId,
         );
         if (s != null) {
           await pb.collection(PBCollections.sessions).update(
@@ -559,6 +605,7 @@ class AppointmentService {
           date: appt.date,
           time: appt.time,
           doctorId: appt.doctorId,
+          linkedSessionId: appt.linkedSessionId,
         );
         if (s != null) {
           await pb.collection(PBCollections.sessions).update(
@@ -605,6 +652,7 @@ class AppointmentService {
           date: appt.date,
           time: appt.time,
           doctorId: appt.doctorId,
+          linkedSessionId: appt.linkedSessionId,
         );
         if (s != null) {
           await pb.collection(PBCollections.sessions).update(
@@ -630,6 +678,7 @@ class AppointmentService {
         date: apt.date,
         time: apt.time,
         doctorId: apt.doctorId,
+        linkedSessionId: apt.linkedSessionId,
       );
       if (s != null) {
         return {
@@ -642,15 +691,10 @@ class AppointmentService {
     return null;
   }
 
-  /// Reschedule a SESSION appointment AND sync the matching session record.
+  /// Reschedule a SESSION appointment AND sync the matching session record
+  /// with automatic cascading shifts for subsequent sessions in the plan.
   Future<AppointmentModel> rescheduleSessionAppointment(
       String appointmentId, AppointmentModel apt, String newDate, String newTime) async {
-    // Update appointment first
-    final record = await pb.collection(PBCollections.appointments).update(
-      appointmentId,
-      body: {'date': newDate, 'time': newTime, 'is_rescheduled': true},
-    );
-    // Sync the linked sessions record
     if (apt.patientId != null) {
       try {
         final s = await _findSessionRecordForAppointment(
@@ -658,16 +702,28 @@ class AppointmentService {
           date: apt.date,
           time: apt.time,
           doctorId: apt.doctorId,
+          linkedSessionId: apt.linkedSessionId,
         );
         if (s != null) {
-          await pb.collection(PBCollections.sessions).update(s.id, body: {
-            'scheduled_date': newDate,
-            'scheduled_time': newTime,
-            'is_rescheduled': true,
-          });
+          final lifecycle = SessionLifecycleService(pb);
+          await lifecycle.rescheduleSessionAndCascade(
+            sessionId: s.id,
+            newDate: newDate,
+            newTime: newTime,
+          );
+
+          // Return fresh updated appointment record
+          final record = await pb.collection(PBCollections.appointments).getOne(appointmentId);
+          return AppointmentModel.fromRecord(record);
         }
       } catch (_) {}
     }
+
+    // Fallback: direct update if session record lookup fails
+    final record = await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {'date': newDate, 'time': newTime, 'is_rescheduled': true},
+    );
     return AppointmentModel.fromRecord(record);
   }
 
@@ -697,6 +753,7 @@ class AppointmentService {
           date: appt.date,
           time: appt.time,
           doctorId: appt.doctorId,
+          linkedSessionId: appt.linkedSessionId,
         );
         if (s != null) {
           await pb.collection(PBCollections.sessions).update(
@@ -1050,6 +1107,7 @@ class AppointmentService {
         date: apt.date,
         time: apt.time,
         doctorId: apt.doctorId,
+        linkedSessionId: apt.linkedSessionId,
       );
       if (s != null) {
         return {

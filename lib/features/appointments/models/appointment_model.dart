@@ -31,6 +31,7 @@ class AppointmentModel {
   final DateTime? reconciledAt;
   final String? reconciledBy;
   final String? sessionType;
+  final String? linkedSessionId; // Direct FK to session record — eliminates fuzzy date+time lookup
   final DateTime? created;
   final DateTime? updated;
 
@@ -66,6 +67,7 @@ class AppointmentModel {
     this.reconciledAt,
     this.reconciledBy,
     this.sessionType,
+    this.linkedSessionId,
     this.created,
     this.updated,
     this.doctorName,
@@ -135,6 +137,8 @@ class AppointmentModel {
           ? record.getStringValue('reconciled_by') : null,
       sessionType: record.getStringValue('session_type').isNotEmpty
           ? record.getStringValue('session_type') : null,
+      linkedSessionId: record.getStringValue('linked_session_id').isNotEmpty
+          ? record.getStringValue('linked_session_id') : null,
       created: DateTime.tryParse(record.get<String>('created')),
       updated: DateTime.tryParse(record.get<String>('updated')),
       doctorName: doctorName,
@@ -171,6 +175,8 @@ class AppointmentModel {
         'linked_treatment_plan_id': linkedTreatmentPlanId,
       if (linkedConsultationId != null && linkedConsultationId!.isNotEmpty)
         'linked_consultation_id': linkedConsultationId,
+      if (linkedSessionId != null && linkedSessionId!.isNotEmpty)
+        'linked_session_id': linkedSessionId,
       if (isRescheduled) 'is_rescheduled': true,
       if (previousStatus != null) 'previous_status': previousStatus,
       if (reconciliationReason != null) 'reconciliation_reason': reconciliationReason,

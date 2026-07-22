@@ -16,6 +16,7 @@ import 'package:pms_app/core/utils/time_utils.dart';
 import 'package:pms_app/features/auth/providers/registration_cache_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
+import 'package:pms_app/core/utils/date_picker_helper.dart';
 
 
 // A break time range
@@ -512,12 +513,11 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                                   FocusManager.instance.primaryFocus?.unfocus();
                                   await Future.delayed(Duration.zero);
                                   if (!mounted) return;
-                                  final picked = await showDatePicker(
+                                  final picked = await showAppDatePicker(
                                     context: context,
                                     initialDate: _dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
                                     firstDate: DateTime(1940),
                                     lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
-                                    locale: const Locale('en', 'IN'),
                                   );
                                   if (!mounted) return;
                                   FocusManager.instance.primaryFocus?.unfocus();
@@ -581,12 +581,11 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                             FocusManager.instance.primaryFocus?.unfocus();
                             await Future.delayed(Duration.zero);
                             if (!mounted) return;
-                            final picked = await showDatePicker(
+                            final picked = await showAppDatePicker(
                               context: context,
                               initialDate: _dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
                               firstDate: DateTime(1940),
                               lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
-                              locale: const Locale('en', 'IN'),
                             );
                             if (!mounted) return;
                             FocusManager.instance.primaryFocus?.unfocus();
@@ -724,12 +723,11 @@ class _ClinicStep3ScreenState extends ConsumerState<ClinicStep3Screen> {
                             FocusManager.instance.primaryFocus?.unfocus();
                             await Future.delayed(Duration.zero);
                             if (!mounted) return;
-                            final picked = await showDatePicker(
+                            final picked = await showAppDatePicker(
                               context: context,
                               initialDate: _dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
                               firstDate: DateTime(1940),
                               lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
-                              locale: const Locale('en', 'IN'),
                             );
                             if (!mounted) return;
                             FocusManager.instance.primaryFocus?.unfocus();

@@ -1,13 +1,12 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:pms_app/core/widgets/app_text_field.dart';
 import 'package:pms_app/core/widgets/location_fields.dart';
 import 'package:pms_app/core/utils/validators.dart';
-import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/utils/date_picker_helper.dart';
+import 'package:pms_app/features/patients/models/patient_model.dart';
 
 
 /// ─── Shared Patient Details Form ────────────────────────────────────────────
@@ -44,9 +43,7 @@ class PatientDetailsForm extends StatefulWidget {
   final bool privacyPolicyAccepted;
   final ValueChanged<bool> onPrivacyPolicyChanged;
 
-  // ── New fields ────────────────────────────────────────────────────────────
-  final File? photoFile;
-  final ValueChanged<File?> onPhotoChanged;
+
 
   final String? howDidYouHear;
   final ValueChanged<String?> onHowDidYouHearChanged;
@@ -63,6 +60,12 @@ class PatientDetailsForm extends StatefulWidget {
   final bool phoneLocked;
   final bool isReturningPatient;
   final bool isCheckingPhone;
+  final String selectedPhoneCode;
+  final ValueChanged<String> onPhoneCodeChanged;
+  final List<PatientModel>? matchingPatients;
+  final PatientModel? existingPatient;
+  final VoidCallback? onAddFamilyMember;
+  final VoidCallback? onChangeFamilyMember;
 
   const PatientDetailsForm({
     super.key,
@@ -83,8 +86,7 @@ class PatientDetailsForm extends StatefulWidget {
     required this.onConsentChanged,
     required this.privacyPolicyAccepted,
     required this.onPrivacyPolicyChanged,
-    this.photoFile,
-    required this.onPhotoChanged,
+
     this.howDidYouHear,
     required this.onHowDidYouHearChanged,
     this.isNewFamilyMember = false,
@@ -94,6 +96,12 @@ class PatientDetailsForm extends StatefulWidget {
     this.phoneLocked = false,
     this.isReturningPatient = false,
     this.isCheckingPhone = false,
+    required this.selectedPhoneCode,
+    required this.onPhoneCodeChanged,
+    this.matchingPatients,
+    this.existingPatient,
+    this.onAddFamilyMember,
+    this.onChangeFamilyMember,
   });
 
   @override
@@ -129,12 +137,11 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
   }
 
   Future<void> _pickDob() async {
-    final picked = await showDatePicker(
+    final picked = await showAppDatePicker(
       context: context,
       initialDate: DateTime(1990),
       firstDate: DateTime(1920),
       lastDate: DateTime.now(),
-      locale: const Locale('en', 'IN'),
     );
     if (picked != null && mounted) {
       widget.dobCtrl.text =
@@ -151,65 +158,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
     return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
   }
 
-  Future<void> _pickPhoto() async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: context.colors.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const SizedBox(height: 12),
-          Container(width: 40, height: 4,
-            decoration: BoxDecoration(color: context.colors.border, borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 16),
-          Text('Patient Photo', style: context.textStyles.h3),
-          const SizedBox(height: 8),
-          ListTile(
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: context.colors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(Icons.photo_library_rounded, color: context.colors.primary),
-            ),
-            title: const Text('Choose from Gallery'),
-            onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-          ),
-          ListTile(
-            leading: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: context.colors.accent.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(Icons.camera_alt_rounded, color: context.colors.accent),
-            ),
-            title: const Text('Take a Photo'),
-            onTap: () => Navigator.pop(ctx, ImageSource.camera),
-          ),
-          const SizedBox(height: 8),
-        ]),
-      ),
-    );
-    if (source == null) return;
-    try {
-      final picker = ImagePicker();
-      final picked = await picker.pickImage(source: source, imageQuality: 60);
-      if (picked != null && mounted) {
-        final compressed = await ImageHelper.compressToWebP(picked);
-        if (compressed != null && mounted) {
-          widget.onPhotoChanged(File(compressed.path));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        AppToast.show('Failed to pick image: $e', type: ToastType.error);
-      }
-    }
-  }
+
 
 
   @override
@@ -227,29 +176,82 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
 
   @override
   Widget build(BuildContext context) {
-    final phoneField = Stack(
+    final phoneField = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        AppTextField(
-          controller: widget.phoneCtrl,
-          label: 'Phone Number',
-          prefixIcon: Icon(Icons.phone_outlined, color: context.colors.textHint),
-          keyboardType: TextInputType.phone,
-          validator: Validators.phone,
-          readOnly: widget.phoneLocked,
-        ),
-        if (widget.isCheckingPhone)
-          const Positioned(
-            right: 14,
-            top: 0,
-            bottom: 0,
-            child: Center(
-              child: SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
+        Text('Phone Number', style: context.textStyles.label),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              decoration: BoxDecoration(
+                color: context.colors.divider,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.colors.border.withValues(alpha: 0.5), width: 0.8),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: widget.selectedPhoneCode,
+                  icon: const Icon(Icons.arrow_drop_down, size: 18),
+                  items: Validators.countryPhoneCodes.keys.map((code) {
+                    return DropdownMenuItem(
+                      value: code,
+                      child: Text(
+                        ' $code',
+                        style: context.textStyles.bodyLarge.copyWith(
+                          color: context.colors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: widget.phoneLocked ? null : (val) {
+                    if (val != null) {
+                      widget.onPhoneCodeChanged(val);
+                    }
+                  },
+                ),
               ),
             ),
-          ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Stack(
+                children: [
+                  AppTextField(
+                    label: '',
+                    controller: widget.phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    validator: (v) => Validators.phone(v, countryCode: widget.selectedPhoneCode),
+                    readOnly: widget.phoneLocked,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(
+                        Validators.countryPhoneCodes[widget.selectedPhoneCode] ?? 15,
+                      ),
+                    ],
+                  ),
+                  if (widget.isCheckingPhone)
+                    const Positioned(
+                      right: 14,
+                      top: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ],
     );
 
@@ -258,7 +260,57 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
       mainAxisSize: MainAxisSize.min,
       children: [
         phoneField,
-        if (widget.isReturningPatient) ...[
+        if (widget.existingPatient != null) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: context.colors.success.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: context.colors.success.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: context.colors.success, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Returning Patient: ${widget.existingPatient!.fullName} '
+                    '(${widget.existingPatient!.relationToPrimary ?? 'Self'}'
+                    '${widget.existingPatient!.gender != null ? ' • ${widget.existingPatient!.gender}' : ''}'
+                    '${widget.existingPatient!.age != null ? ' • ${widget.existingPatient!.age} yrs' : ''})',
+                    style: context.textStyles.caption.copyWith(
+                      color: context.colors.success,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (widget.onChangeFamilyMember != null || widget.onAddFamilyMember != null)
+                  InkWell(
+                    onTap: () {
+                      final hasMultiple = (widget.matchingPatients?.length ?? 0) > 1;
+                      if (hasMultiple && widget.onChangeFamilyMember != null) {
+                        widget.onChangeFamilyMember!();
+                      } else if (widget.onAddFamilyMember != null) {
+                        widget.onAddFamilyMember!();
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      child: Text(
+                        (widget.matchingPatients?.length ?? 0) > 1 ? 'Change' : '+ Add Family Member',
+                        style: context.textStyles.caption.copyWith(
+                          color: context.colors.primary,
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ] else if (widget.isReturningPatient) ...[
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -292,74 +344,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
       readOnly: widget.nameLocked,
     );
 
-    // Patient photo
-    Widget photoSection;
-    if (kIsWeb) {
-      photoSection = Center(
-        child: Column(
-          children: [
-            Icon(Icons.person_outline_rounded, color: context.colors.textHint, size: 48),
-            const SizedBox(height: 6),
-            Text(
-              'Patient photo upload is available on the mobile app.',
-              style: context.textStyles.caption.copyWith(color: context.colors.textHint),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    } else {
-      photoSection = Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Center(
-            child: GestureDetector(
-              onTap: _pickPhoto,
-              child: Stack(
-                children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: context.colors.surface,
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: context.colors.border),
-                      image: widget.photoFile != null
-                          ? DecorationImage(image: FileImage(widget.photoFile!), fit: BoxFit.cover)
-                          : null,
-                    ),
-                    child: widget.photoFile == null
-                        ? Icon(Icons.person_add_alt_1_rounded, color: context.colors.textHint, size: 32)
-                        : null,
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    right: 0,
-                    child: Container(
-                      width: 26,
-                      height: 26,
-                      decoration: BoxDecoration(
-                        color: context.colors.primary,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: context.colors.textPrimary, width: 2),
-                      ),
-                      child: Icon(Icons.camera_alt_rounded, color: context.colors.textPrimary, size: 14),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Center(
-            child: Text(
-              'Patient Photo (Optional)',
-              style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
-            ),
-          ),
-        ],
-      );
-    }
+
 
     final genderSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -587,11 +572,13 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
                 children: [
                   Expanded(child: phoneSection),
                   const SizedBox(width: 16),
+                  if (widget.isNewFamilyMember) ...[
+                    Expanded(child: relationSection),
+                    const SizedBox(width: 16),
+                  ],
                   Expanded(child: nameSection),
                 ],
               ),
-              const SizedBox(height: 16),
-              photoSection,
               const SizedBox(height: 16),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -622,9 +609,11 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
             ] else ...[
               phoneSection,
               const SizedBox(height: 14),
+              if (widget.isNewFamilyMember) ...[
+                relationSection,
+                const SizedBox(height: 14),
+              ],
               nameSection,
-              const SizedBox(height: 14),
-              photoSection,
               const SizedBox(height: 14),
               genderSection,
               const SizedBox(height: 14),
@@ -648,10 +637,6 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
               allRequired: true,
             ),
             const SizedBox(height: 16),
-            if (widget.isNewFamilyMember) ...[
-              relationSection,
-              const SizedBox(height: 16),
-            ],
             consentSection,
             const SizedBox(height: 12),
             privacySection,

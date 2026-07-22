@@ -146,14 +146,17 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
         final session = settings.arguments as SessionModel;
         return _slide(RecordSessionScreen(session: session), settings);
       }
-      final args = settings.arguments as Map<String, dynamic>;
-      return _slide(
-        RecordSessionScreen(
-          session: args['session'] as SessionModel,
-          patientName: args['patientName'] as String?,
-        ),
-        settings,
-      );
+      if (settings.arguments is Map<String, dynamic>) {
+        final args = settings.arguments as Map<String, dynamic>;
+        return _slide(
+          RecordSessionScreen(
+            session: args['session'] as SessionModel,
+            patientName: args['patientName'] as String?,
+          ),
+          settings,
+        );
+      }
+      return _fade(MainLayout(), settings);
 
     case '/available-slots':
       final args = settings.arguments as Map<String, dynamic>? ?? {};

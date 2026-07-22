@@ -18,6 +18,7 @@ import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'clinic_step3_screen.dart' show BreakTime, DayOverride;
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
+import 'package:pms_app/core/utils/date_picker_helper.dart';
 
 
 // Full doctor data model used within step 4
@@ -645,12 +646,11 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
                           FocusManager.instance.primaryFocus?.unfocus();
                           await Future.delayed(Duration.zero);
                           if (!mounted) return;
-                          final picked = await showDatePicker(
+                          final picked = await showAppDatePicker(
                             context: context,
                             initialDate: doc.dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
                             firstDate: DateTime(1940),
                             lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
-                            locale: const Locale('en', 'IN'),
                           );
                           if (!mounted) return;
                           FocusManager.instance.primaryFocus?.unfocus();
@@ -750,12 +750,11 @@ class _ClinicStep4ScreenState extends ConsumerState<ClinicStep4Screen> {
                     FocusManager.instance.primaryFocus?.unfocus();
                     await Future.delayed(Duration.zero);
                     if (!mounted) return;
-                    final picked = await showDatePicker(
+                    final picked = await showAppDatePicker(
                       context: context,
                       initialDate: doc.dateOfBirth ?? DateTime.now().subtract(const Duration(days: 365 * 30)),
                       firstDate: DateTime(1940),
                       lastDate: DateTime.now().subtract(const Duration(days: 365 * 18)),
-                      locale: const Locale('en', 'IN'),
                     );
                     if (!mounted) return;
                     FocusManager.instance.primaryFocus?.unfocus();

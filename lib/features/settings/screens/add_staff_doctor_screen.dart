@@ -13,6 +13,7 @@ import '../../../../core/utils/time_utils.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import '../../auth/screens/clinic_registration/clinic_step3_screen.dart' show BreakTime, DayOverride;
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/utils/date_picker_helper.dart';
 import '../../../../core/utils/image_helper.dart';
 
 
@@ -201,7 +202,7 @@ class _AddStaffDoctorScreenState extends ConsumerState<AddStaffDoctorScreen> {
   Future<void> _pickDate() async {
     final DateTime now = DateTime.now();
     final DateTime initialDate = dateOfBirth ?? DateTime(now.year - 30);
-    final DateTime? picked = await showDatePicker(
+    final DateTime? picked = await showAppDatePicker(
       context: context,
       initialDate: initialDate,
       firstDate: DateTime(1920),

@@ -1,8 +1,6 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pms_app/core/constants/pb_collections.dart';
 import 'package:pms_app/core/widgets/app_button.dart';
 import 'package:pms_app/core/widgets/patient_details_form.dart';
 import 'package:pms_app/features/appointments/providers/appointment_provider.dart';
@@ -12,6 +10,7 @@ import 'package:pms_app/features/patients/models/patient_model.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 import 'package:pms_app/features/patients/screens/family_member_selection_screen.dart';
+import 'package:pms_app/core/utils/validators.dart';
 
 
 /// Screen shown when a call-by patient arrives — uses the shared
@@ -44,19 +43,24 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
   final _occupationCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _referenceCtrl = TextEditingController();
-  File? _patientPhoto;
+
   String? _howDidYouHear;
   bool _isNewFamilyMember = false;
   String? _selectedRelation;
 
   PatientModel? _existingPatient;
   bool _isRegisteredPatient = false;
+  String _selectedPhoneCode = '+91';
+  List<PatientModel> _matchingPatients = [];
 
   @override
   void initState() {
     super.initState();
     _nameCtrl.text = widget.appointment.patientName ?? '';
-    _phoneCtrl.text = widget.appointment.patientPhone ?? '';
+    
+    final parsed = PhoneParser.parse(widget.appointment.patientPhone);
+    _selectedPhoneCode = parsed.$1;
+    _phoneCtrl.text = parsed.$2;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -86,18 +90,60 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     });
   }
 
+  void _applySelectedPatient(PatientModel existing) {
+    _nameCtrl.text = existing.fullName;
+    final parsed = PhoneParser.parse(existing.phone);
+    _selectedPhoneCode = parsed.$1;
+    _phoneCtrl.text = parsed.$2;
+    if (existing.dateOfBirth != null && existing.dateOfBirth!.isNotEmpty) _dobCtrl.text = existing.dateOfBirth!;
+    if (existing.city != null && existing.city!.isNotEmpty) _cityCtrl.text = existing.city!;
+    if (existing.area != null && existing.area!.isNotEmpty) _areaCtrl.text = existing.area!;
+    if (existing.occupation != null && existing.occupation!.isNotEmpty) _occupationCtrl.text = existing.occupation!;
+    if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
+    if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
+    setState(() {
+      _existingPatient = existing;
+      _isRegisteredPatient = true;
+      _isNewFamilyMember = false;
+      _selectedRelation = null;
+    });
+  }
+
+  void _applyNewFamilyMemberMode(PatientModel primary) {
+    if (primary.city != null && primary.city!.isNotEmpty) _cityCtrl.text = primary.city!;
+    if (primary.area != null && primary.area!.isNotEmpty) _areaCtrl.text = primary.area!;
+    if (primary.pincode != null && primary.pincode!.isNotEmpty) _pincodeCtrl.text = primary.pincode!;
+    _nameCtrl.clear();
+    _dobCtrl.clear();
+    _occupationCtrl.clear();
+    _emailCtrl.clear();
+    setState(() {
+      _existingPatient = null;
+      _isRegisteredPatient = false;
+      _isNewFamilyMember = true;
+      _selectedRelation = null;
+      _selectedGender = null;
+    });
+  }
+
   Future<void> _checkExistingPatients() async {
     final phone = _phoneCtrl.text.trim();
     if (phone.isEmpty) return;
 
+    final combined = '$_selectedPhoneCode$phone';
     final service = ref.read(appointmentServiceProvider);
     final allPatients = await service.findAllPatientsByPhone(
-      phone,
+      combined,
       widget.appointment.doctorId,
       clinicId: widget.appointment.clinicId,
     );
 
     if (!mounted) return;
+    
+    setState(() {
+      _matchingPatients = allPatients;
+    });
+
     if (allPatients.isEmpty) return;
 
     // Show family member selection screen
@@ -120,36 +166,9 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     }
 
     if (result.isNew) {
-      // Create new family member
-      final primary = allPatients.first;
-      if (primary.city != null && primary.city!.isNotEmpty) _cityCtrl.text = primary.city!;
-      if (primary.area != null && primary.area!.isNotEmpty) _areaCtrl.text = primary.area!;
-      if (primary.pincode != null && primary.pincode!.isNotEmpty) _pincodeCtrl.text = primary.pincode!;
-      
-      setState(() {
-        _existingPatient = null;
-        _isRegisteredPatient = false;
-        _isNewFamilyMember = true;
-        _selectedRelation = null;
-        _selectedGender = null;
-      });
+      _applyNewFamilyMemberMode(allPatients.first);
     } else if (result.selected != null) {
-      // Use existing patient details
-      final existing = result.selected!;
-      _nameCtrl.text = existing.fullName;
-      if (existing.dateOfBirth != null && existing.dateOfBirth!.isNotEmpty) _dobCtrl.text = existing.dateOfBirth!;
-      if (existing.city != null && existing.city!.isNotEmpty) _cityCtrl.text = existing.city!;
-      if (existing.area != null && existing.area!.isNotEmpty) _areaCtrl.text = existing.area!;
-      if (existing.occupation != null && existing.occupation!.isNotEmpty) _occupationCtrl.text = existing.occupation!;
-      if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
-      if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
-      
-      setState(() {
-        _existingPatient = existing;
-        _isRegisteredPatient = true;
-        _isNewFamilyMember = false;
-        _selectedRelation = null;
-      });
+      _applySelectedPatient(result.selected!);
     }
   }
 
@@ -195,7 +214,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
 
     try {
       final service = ref.read(appointmentServiceProvider);
-      final phone = _phoneCtrl.text.trim();
+      final phone = '$_selectedPhoneCode${_phoneCtrl.text.trim()}';
 
       // Auto-calculate age from DoB
       final dob = DateTime.tryParse(_dobCtrl.text);
@@ -235,7 +254,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
           reference: _referenceCtrl.text.isNotEmpty ? _referenceCtrl.text : null,
           relationToPrimary: _isNewFamilyMember ? _selectedRelation : null,
           howDidYouHear: _howDidYouHear,
-          photoPath: _patientPhoto?.path,
+          photoPath: null,
           consentGiven: _dataConsentGiven,
           privacyPolicyAccepted: _privacyPolicyAccepted,
         );
@@ -391,8 +410,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                     onConsentChanged: (v) => setState(() => _dataConsentGiven = v),
                     privacyPolicyAccepted: _privacyPolicyAccepted,
                     onPrivacyPolicyChanged: (v) => setState(() => _privacyPolicyAccepted = v),
-                    photoFile: _patientPhoto,
-                    onPhotoChanged: (f) => setState(() => _patientPhoto = f),
+
                     howDidYouHear: _howDidYouHear,
                     onHowDidYouHearChanged: (v) => setState(() => _howDidYouHear = v),
                     nameLocked: _isRegisteredPatient || (widget.appointment.patientName ?? '').isNotEmpty,
@@ -400,6 +418,14 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                     isNewFamilyMember: _isNewFamilyMember,
                     relationToPrimary: _selectedRelation,
                     onRelationChanged: (v) => setState(() => _selectedRelation = v),
+                    selectedPhoneCode: _selectedPhoneCode,
+                    onPhoneCodeChanged: (v) => setState(() => _selectedPhoneCode = v),
+                    existingPatient: _existingPatient,
+                    matchingPatients: _matchingPatients,
+                    onAddFamilyMember: _matchingPatients.isNotEmpty
+                        ? () => _applyNewFamilyMemberMode(_matchingPatients.first)
+                        : null,
+                    onChangeFamilyMember: () => _checkExistingPatients(),
                   ),
                   const SizedBox(height: 28),
                   AppButton(

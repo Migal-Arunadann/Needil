@@ -29,6 +29,7 @@ import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/utils/date_picker_helper.dart';
 import 'package:pms_app/core/services/session_timer_service.dart';
 import 'package:pms_app/core/utils/whatsapp_helper.dart';
 import 'package:pms_app/core/services/audit_service.dart';
@@ -279,7 +280,7 @@ class _AppointmentListScreenState
   String _formatDate(DateTime d) => DateFormat('yyyy-MM-dd').format(d);
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+    final picked = await showAppDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime.now().subtract(const Duration(days: 365)),
@@ -857,6 +858,32 @@ class _AppointmentListScreenState
 
 
   Future<void> _rescheduleSession(AppointmentModel apt) async {
+    DateTime? minDate;
+    String? minTime;
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final service = ref.read(appointmentServiceProvider);
+      final s = await service.findSessionForAppointment(apt);
+      if (s != null && s['sessionId'] != null) {
+        final sessionRec = await pb.collection(PBCollections.sessions).getOne(s['sessionId']!);
+        final session = SessionModel.fromRecord(sessionRec);
+        if (session.sessionNumber > 1) {
+          final allSessRes = await pb.collection(PBCollections.sessions).getList(
+            filter: 'treatment_plan = "${session.treatmentPlanId}" && session_number = ${session.sessionNumber - 1}',
+            perPage: 1,
+          );
+          if (allSessRes.items.isNotEmpty) {
+            final prevSess = SessionModel.fromRecord(allSessRes.items.first);
+            final prevDate = DateTime.tryParse(prevSess.scheduledDate);
+            if (prevDate != null) {
+              minDate = DateTime(prevDate.year, prevDate.month, prevDate.day);
+              minTime = prevSess.scheduledTime;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
@@ -864,6 +891,8 @@ class _AppointmentListScreenState
           doctorId: apt.doctorId,
           clinicId: (apt.clinicId != null && apt.clinicId!.isNotEmpty) ? apt.clinicId : null,
           treatmentDuration: 30,
+          minDate: minDate,
+          minTime: minTime,
         ),
       ),
     );

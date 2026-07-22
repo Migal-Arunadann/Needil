@@ -17,6 +17,8 @@ class AvailableSlotsScreen extends ConsumerStatefulWidget {
   final bool isSelectionMode;
   final bool allowFutureDates;
   final DateTime? initialDate;
+  final DateTime? minDate;
+  final String? minTime;
 
   const AvailableSlotsScreen({
     super.key,
@@ -27,6 +29,8 @@ class AvailableSlotsScreen extends ConsumerStatefulWidget {
     this.isSelectionMode = false,
     this.allowFutureDates = true,
     this.initialDate,
+    this.minDate,
+    this.minTime,
   });
 
   @override
@@ -54,7 +58,10 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
   @override
   void initState() {
     super.initState();
-    final initial = widget.initialDate ?? DateTime.now();
+    final today = DateTime.now();
+    final todayStart = DateTime(today.year, today.month, today.day);
+    final min = widget.minDate != null && widget.minDate!.isAfter(todayStart) ? widget.minDate! : todayStart;
+    final initial = widget.initialDate != null && widget.initialDate!.isAfter(min) ? widget.initialDate! : min;
     _selectedDate = DateTime(initial.year, initial.month, initial.day);
     _calendarMonth = DateTime(_selectedDate.year, _selectedDate.month);
     _slotDuration = widget.treatmentDuration;
@@ -112,6 +119,30 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
   void _selectSlot(String time) {
     setState(() => _selectedSlot = time);
     _confirmCtrl.forward();
+  }
+
+  bool _isSlotDisabled(TimeSlot slot) {
+    if (!slot.isAvailable || slot.isPast) return true;
+    if (widget.minDate != null && widget.minTime != null) {
+      final minStart = DateTime(widget.minDate!.year, widget.minDate!.month, widget.minDate!.day);
+      if (DateUtils.isSameDay(_selectedDate, minStart)) {
+        final slotMin = _parseTimeToMinutes(slot.time);
+        final limitMin = _parseTimeToMinutes(widget.minTime!);
+        if (slotMin <= limitMin) return true;
+      }
+    }
+    return false;
+  }
+
+  int _parseTimeToMinutes(String t) {
+    try {
+      final parts = t.trim().split(':');
+      final h = int.parse(parts[0]);
+      final m = int.parse(parts[1].split(' ').first);
+      return h * 60 + m;
+    } catch (_) {
+      return 0;
+    }
   }
 
   void _confirmSlot() {
@@ -237,6 +268,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
               selectedDate: _selectedDate,
               month: _calendarMonth,
               allowFutureDates: widget.allowFutureDates,
+              minDate: widget.minDate,
               schedules: activeSchedules,
               schedulingService: service,
               onDateSelected: _selectDate,
@@ -285,7 +317,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                   itemBuilder: (context, index) => _SlotChip(
                     slot: state.slots[index],
                     isSelected: _selectedSlot == state.slots[index].time,
-                    onTap: state.slots[index].isAvailable && !state.slots[index].isPast
+                    onTap: !_isSlotDisabled(state.slots[index])
                         ? () => _selectSlot(state.slots[index].time)
                         : null,
                   ),
@@ -394,7 +426,7 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                       itemBuilder: (context, index) => _SlotChip(
                         slot: state.slots[index],
                         isSelected: _selectedSlot == state.slots[index].time,
-                        onTap: state.slots[index].isAvailable && !state.slots[index].isPast
+                        onTap: !_isSlotDisabled(state.slots[index])
                             ? () => _selectSlot(state.slots[index].time)
                             : null,
                       ),
@@ -454,15 +486,17 @@ class _InlineCalendar extends StatelessWidget {
   final DateTime selectedDate;
   final DateTime month;
   final bool allowFutureDates;
+  final DateTime? minDate;
   final List<WorkingSchedule> schedules;
   final SchedulingService schedulingService;
-  final void Function(DateTime) onDateSelected;
-  final void Function(DateTime) onMonthChanged;
+  final ValueChanged<DateTime> onDateSelected;
+  final ValueChanged<DateTime> onMonthChanged;
 
   const _InlineCalendar({
     required this.selectedDate,
     required this.month,
     required this.allowFutureDates,
+    this.minDate,
     required this.schedules,
     required this.schedulingService,
     required this.onDateSelected,
@@ -566,8 +600,9 @@ class _InlineCalendar extends StatelessWidget {
                         DateUtils.isSameDay(date, selectedDate);
                     final isToday =
                         DateUtils.isSameDay(date, today);
-                    final earliest = DateTime(today.year, today.month, today.day);
-                    final isPast = date.isBefore(earliest) || (!allowFutureDates && date.isAfter(earliest));
+                    final todayStart = DateTime(today.year, today.month, today.day);
+                    final minStart = minDate != null ? DateTime(minDate!.year, minDate!.month, minDate!.day) : todayStart;
+                    final isPast = date.isBefore(minStart) || (!allowFutureDates && date.isAfter(todayStart));
                     final isWorkingDay = schedulingService
                             .getScheduleForDay(
                                 schedules, date.weekday) !=

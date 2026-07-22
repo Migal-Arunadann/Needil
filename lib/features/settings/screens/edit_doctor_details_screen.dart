@@ -13,6 +13,7 @@ import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import '../../auth/screens/clinic_registration/clinic_step3_screen.dart' show BreakTime;
 import 'package:pms_app/core/services/auth_service.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/utils/date_picker_helper.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 
 
@@ -533,7 +534,7 @@ class _EditDoctorDetailsScreenState
           // DOB picker
           GestureDetector(
             onTap: () async {
-              final picked = await showDatePicker(
+              final picked = await showAppDatePicker(
                 context: context,
                 initialDate: _dateOfBirth ?? DateTime(1990),
                 firstDate: DateTime(1930),
