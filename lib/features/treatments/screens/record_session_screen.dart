@@ -789,6 +789,9 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
   }
 
   Future<void> _submit() async {
+    // Capture navigator before async gap to safely pop after saving
+    final navigator = Navigator.of(context);
+    
     // NOTE: Do NOT end running timer here — timer should persist in background
     // even when saving session details. Only "End Session" on the card stops it.
     // Flush any pending auto-save first
@@ -825,9 +828,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
       });
       if (mounted) {
         AppToast.show('Session ${_liveSession.sessionNumber} details saved ✓', type: ToastType.success);
-        if (isAlreadyCompleted) {
-          setState(() => _isViewMode = true);
-        }
+        navigator.pop();
       }
     } catch (e) {
       setState(() => _isSubmitting = false);
