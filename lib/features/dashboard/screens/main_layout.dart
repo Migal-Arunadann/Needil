@@ -137,33 +137,47 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         body: Stack(
           children: [
             const AmbientBackground(),
-            Row(
-              children: [
-                _buildSidebar(context, tabs),
-                Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: context.colors.background,
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(32),
-                        bottomLeft: Radius.circular(32),
-                      ),
-                    ),
-                      clipBehavior: Clip.antiAlias,
-                      child: Column(
-                        children: [
-                          const PendingDeletionBanner(),
-                          Expanded(
-                            child: IndexedStack(
-                              index: _currentIndex,
-                              children: pages,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final double minWidth = 1320.0;
+                final double targetWidth = max(constraints.maxWidth, minWidth);
+
+                return SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: targetWidth,
+                    height: constraints.maxHeight,
+                    child: Row(
+                      children: [
+                        _buildSidebar(context, tabs),
+                        Expanded(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: context.colors.background,
+                              borderRadius: const BorderRadius.only(
+                                topLeft: Radius.circular(32),
+                                bottomLeft: Radius.circular(32),
+                              ),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: Column(
+                              children: [
+                                const PendingDeletionBanner(),
+                                Expanded(
+                                  child: IndexedStack(
+                                    index: _currentIndex,
+                                    children: pages,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-              ],
+                );
+              },
             ),
           ],
         ),

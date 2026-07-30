@@ -326,7 +326,7 @@ class _AppointmentListScreenState
     if (parts.length != 2) return false;
     final aptTime = DateTime(now.year, now.month, now.day,
         int.tryParse(parts[0]) ?? 0, int.tryParse(parts[1]) ?? 0);
-    return now.isAfter(aptTime);
+    return now.difference(aptTime).inMinutes >= 1;
   }
 
   bool _isMissed(AppointmentModel apt) {
@@ -590,6 +590,25 @@ class _AppointmentListScreenState
   Future<void> _navigateToCreatePlan(AppointmentModel apt, String consultationId) async {
     if (apt.patientId == null || apt.patientId!.isEmpty) return;
     try {
+      // Option A — Pre-flight guard: verify the consultation still exists in the
+      // database before opening the plan creator. Protects against the stale-state
+      // bug where a consultation was deleted externally (e.g. from patient profile)
+      // but the appointment card hasn't refreshed yet.
+      final pb = ref.read(pocketbaseProvider);
+      try {
+        await pb.collection(PBCollections.consultations).getOne(consultationId);
+      } catch (_) {
+        // Consultation record is gone — refresh appointments and bail out.
+        if (mounted) {
+          AppToast.show(
+            'This consultation no longer exists. Refreshing data...',
+            type: ToastType.error,
+          );
+          ref.read(appointmentListProvider.notifier).loadAppointments();
+        }
+        return;
+      }
+
       final patientName = apt.displayName;
       if (mounted) {
         final result = await Navigator.push<dynamic>(
@@ -621,14 +640,14 @@ class _AppointmentListScreenState
           ref.read(analyticsProvider.notifier).load();
 
           if (firstSessionToday) {
-            // Auto-end the consultation appointment Ã¢â‚¬â€ 1st session is being handled today
+            // Auto-end the consultation appointment Ã¢â‚¬â€  1st session is being handled today
             final service = ref.read(appointmentServiceProvider);
             await service.markEnded(apt.id);
             if (mounted) {
               AppToast.show('Treatment plan created & consultation ended. Session 1 is waiting on today\'s schedule.', type: ToastType.success, duration: const Duration(seconds: 5));
             }
           } else {
-            // Don't auto-end Ã¢â‚¬â€ sessions start on a different day
+            // Don't auto-end Ã¢â‚¬â€  sessions start on a different day
             if (mounted) {
               AppToast.show('Treatment plan created & sessions scheduled! You may end this appointment now or keep it open.', type: ToastType.success, duration: const Duration(seconds: 5));
             }
@@ -641,7 +660,7 @@ class _AppointmentListScreenState
     }
   }
 
-  // Ã¢â€â‚¬Ã¢â€â‚¬ Session card actions Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+  // Ã¢â€ â‚¬Ã¢â€ â‚¬ Session card actions Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬
 
   Future<void> _markSessionArrived(AppointmentModel apt) async {
     try {
@@ -1493,10 +1512,12 @@ class _AppointmentListScreenState
                               borderRadius: 26,
                               child: Container(
                                 width: 300,
-                                child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
+                                child: SingleChildScrollView(
+                                  physics: const BouncingScrollPhysics(),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
                                   // Title & Header inside card
                                   Padding(
                                     padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
@@ -1617,7 +1638,8 @@ class _AppointmentListScreenState
                               ),
                             ),
                           ),
-                            const SizedBox(width: 24),
+                        ),
+                        const SizedBox(width: 24),
                             // Right Column: Appointments List with Filter Tabs
                             Expanded(
                               child: Column(
@@ -2603,12 +2625,21 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
         subtitle: 'Appointment cancelled',
       );
     } else if (widget.isLate && !widget.isMissed && apt.status == AppointmentStatus.scheduled) {
+      final now = DateTime.now();
+      final parts = apt.time.split(':');
+      int minsLate = 1;
+      if (parts.length == 2) {
+        final aptTime = DateTime(now.year, now.month, now.day, int.tryParse(parts[0]) ?? 0, int.tryParse(parts[1]) ?? 0);
+        minsLate = now.difference(aptTime).inMinutes;
+        if (minsLate < 1) minsLate = 1;
+      }
+
       return _indicatorItem(
         context: context,
         icon: Icons.warning_amber_rounded,
         iconColor: context.colors.warning,
         title: 'Patient is late',
-        subtitle: '15m past schedule',
+        subtitle: '${minsLate}m past schedule',
       );
     } else {
       final checkedIn = apt.checkInTime != null;
@@ -2627,18 +2658,18 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
         } else if (apt.patientDetailsPartial) {
           return _indicatorItem(
             context: context,
-            icon: Icons.sync_rounded,
+            icon: Icons.assignment_late_outlined,
             iconColor: context.colors.warning,
-            title: 'Details Pending',
+            title: 'Form Pending',
             subtitle: 'In Progress',
           );
         } else {
           return _indicatorItem(
             context: context,
-            icon: Icons.radio_button_unchecked,
+            icon: Icons.assignment_late_outlined,
             iconColor: context.colors.warning,
-            title: 'Details Pending',
-            subtitle: 'Not Started',
+            title: 'Form Pending',
+            subtitle: 'Action required',
           );
         }
       }
@@ -2927,8 +2958,16 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
         context: context,
         icon: Icons.sync_rounded,
         iconColor: context.colors.warning,
-        title: 'In Progress',
-        subtitle: 'Consultation ongoing',
+        title: 'Consultation',
+        subtitle: 'In Progress',
+      );
+    } else if (apt.status == AppointmentStatus.waiting || apt.checkInTime != null) {
+      return _indicatorItem(
+        context: context,
+        icon: Icons.medical_services_outlined,
+        iconColor: context.colors.textSecondary,
+        title: 'Not Started',
+        subtitle: 'In Waiting Queue',
       );
     } else {
       return _indicatorItem(
@@ -3109,16 +3148,20 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
         effectivePatientDetailsSaved &&
         !apt.consultationFormSaved;
     final consultationLabel = apt.consultationStartTime != null && !apt.consultationFormSaved
-        ? 'Resume Consultation'
-        : 'Start Consultation';
+        ? 'Resume Consult'
+        : 'Start Consult';
     final consultationIcon = apt.consultationStartTime != null && !apt.consultationFormSaved
-        ? Icons.restart_alt_rounded
+        ? Icons.arrow_forward_rounded
         : Icons.medical_services_rounded;
 
     // Step 4: Create/Resume Treatment Plan + End Appointment
+    // Guard: require _consultationId to be live (non-null) before showing this.
+    // If the consultation was deleted externally, _loadPlanInfo() returns null
+    // and this button correctly stays hidden. (Option B — stale-state guard)
     final showPlanSection = apt.consultationFormSaved &&
         apt.linkedTreatmentPlanId == null &&
-        !(_planInfoLoaded && _hasPlan);
+        !(_planInfoLoaded && _hasPlan) &&
+        _consultationId != null;
     final planLabel = apt.treatmentPlanPartial ? 'Resume Treatment Plan' : 'Create Plan';
     final planIcon = apt.treatmentPlanPartial ? Icons.restart_alt_rounded : Icons.add_chart_rounded;
 
@@ -3239,9 +3282,13 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                               child: Column(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  Text(
-                                                    TimeUtils.formatStringTime(apt.time).split(' ')[0],
-                                                    style: context.textStyles.h2.copyWith(color: accentColor, fontWeight: FontWeight.bold, fontSize: 22, height: 1.1),
+                                                  FittedBox(
+                                                    fit: BoxFit.scaleDown,
+                                                    alignment: Alignment.center,
+                                                    child: Text(
+                                                      TimeUtils.formatStringTime(apt.time).split(' ')[0],
+                                                      style: context.textStyles.h2.copyWith(color: accentColor, fontWeight: FontWeight.bold, fontSize: 22, height: 1.1),
+                                                    ),
                                                   ),
                                                   if (TimeUtils.formatStringTime(apt.time).split(' ').length > 1)
                                                     Text(
@@ -3335,38 +3382,73 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                                 mainAxisAlignment: MainAxisAlignment.center,
                                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                                 children: [
-                                                  Row(
-                                                    mainAxisAlignment: MainAxisAlignment.end,
-                                                    children: [
-                                                      if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty && !isActive) ...[
-                                                        _buildContactButtons(context, apt),
-                                                        const SizedBox(width: 6),
+                                                  if (!isActive) ...[
+                                                    Row(
+                                                      mainAxisAlignment: MainAxisAlignment.end,
+                                                      children: [
+                                                        if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty) ...[
+                                                          _buildContactButtons(context, apt),
+                                                          const SizedBox(width: 6),
+                                                        ],
+                                                        _buildDesktopSecondaryActions(
+                                                          context: context,
+                                                          showRescheduleBtn: showRescheduleBtn,
+                                                          showCancelBtn: !widget.isMissed && apt.status != AppointmentStatus.cancelled,
+                                                          showUndoArrivalBtn: isCallBy && isActive && apt.checkInTime != null && !apt.patientDetailsSaved && !apt.consultationFormSaved,
+                                                        ),
                                                       ],
-                                                      _buildDesktopSecondaryActions(
+                                                    ),
+                                                    if (hasPrimaryActions) ...[
+                                                      const SizedBox(height: 8),
+                                                      _buildDesktopPrimaryAction(
                                                         context: context,
-                                                        showRescheduleBtn: showRescheduleBtn,
-                                                        showCancelBtn: !widget.isMissed && apt.status != AppointmentStatus.cancelled,
-                                                        showUndoArrivalBtn: isCallBy && isActive && apt.checkInTime != null && !apt.patientDetailsSaved && !apt.consultationFormSaved,
+                                                        effectiveShowPlanSection: effectiveShowPlanSection,
+                                                        isCompleted: apt.status == AppointmentStatus.completed,
+                                                        showEndedBtn: showEndedBtn,
+                                                        effectiveShowStartConsultation: effectiveShowStartConsultation,
+                                                        showFillDetailsBtn: showFillDetailsBtn,
+                                                        showArrivedBtn: showArrivedBtn,
+                                                        planLabel: planLabel,
+                                                        planIcon: planIcon,
+                                                        consultationLabel: consultationLabel,
+                                                        consultationIcon: consultationIcon,
+                                                        fillDetailsLabel: fillDetailsLabel,
+                                                        fillDetailsIcon: fillDetailsIcon,
+                                                        consultationId: _consultationId,
                                                       ),
                                                     ],
-                                                  ),
-                                                  if (hasPrimaryActions) ...[
-                                                    const SizedBox(height: 8),
-                                                    _buildDesktopPrimaryAction(
-                                                      context: context,
-                                                      effectiveShowPlanSection: effectiveShowPlanSection,
-                                                      isCompleted: apt.status == AppointmentStatus.completed,
-                                                      showEndedBtn: showEndedBtn,
-                                                      effectiveShowStartConsultation: effectiveShowStartConsultation,
-                                                      showFillDetailsBtn: showFillDetailsBtn,
-                                                      showArrivedBtn: showArrivedBtn,
-                                                      planLabel: planLabel,
-                                                      planIcon: planIcon,
-                                                      consultationLabel: consultationLabel,
-                                                      consultationIcon: consultationIcon,
-                                                      fillDetailsLabel: fillDetailsLabel,
-                                                      fillDetailsIcon: fillDetailsIcon,
-                                                      consultationId: _consultationId,
+                                                  ] else ...[
+                                                    Row(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        if (hasPrimaryActions)
+                                                          Expanded(
+                                                            child: _buildDesktopPrimaryAction(
+                                                              context: context,
+                                                              effectiveShowPlanSection: effectiveShowPlanSection,
+                                                              isCompleted: apt.status == AppointmentStatus.completed,
+                                                              showEndedBtn: showEndedBtn,
+                                                              effectiveShowStartConsultation: effectiveShowStartConsultation,
+                                                              showFillDetailsBtn: showFillDetailsBtn,
+                                                              showArrivedBtn: showArrivedBtn,
+                                                              planLabel: planLabel,
+                                                              planIcon: planIcon,
+                                                              consultationLabel: consultationLabel,
+                                                              consultationIcon: consultationIcon,
+                                                              fillDetailsLabel: fillDetailsLabel,
+                                                              fillDetailsIcon: fillDetailsIcon,
+                                                              consultationId: _consultationId,
+                                                            ),
+                                                          ),
+                                                        if (hasPrimaryActions)
+                                                          const SizedBox(width: 8),
+                                                        _buildDesktopSecondaryActions(
+                                                          context: context,
+                                                          showRescheduleBtn: showRescheduleBtn,
+                                                          showCancelBtn: !widget.isMissed && apt.status != AppointmentStatus.cancelled,
+                                                          showUndoArrivalBtn: isCallBy && isActive && apt.checkInTime != null && !apt.patientDetailsSaved && !apt.consultationFormSaved,
+                                                        ),
+                                                      ],
                                                     ),
                                                   ],
                                                 ],
@@ -3863,44 +3945,24 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
         context: context,
         icon: Icons.sync_rounded,
         iconColor: context.colors.warning,
-        title: 'In Progress',
-        subtitle: 'Session ongoing',
+        title: 'Session',
+        subtitle: 'In Progress',
+      );
+    } else if (apt.status == AppointmentStatus.waiting || apt.checkInTime != null) {
+      return _indicatorItem(
+        context: context,
+        icon: Icons.healing_outlined,
+        iconColor: context.colors.textSecondary,
+        title: 'Not Started',
+        subtitle: 'In Waiting Queue',
       );
     } else {
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 12,
-            height: 1.5,
-            color: context.colors.border.withValues(alpha: 0.8),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'Not Started',
-                  style: context.textStyles.bodyMedium.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: context.colors.textPrimary.withValues(alpha: 0.8),
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Session pending',
-                  style: context.textStyles.caption.copyWith(
-                    color: context.colors.textSecondary,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      return _indicatorItem(
+        context: context,
+        icon: Icons.healing_outlined,
+        iconColor: context.colors.textSecondary,
+        title: 'Not Started',
+        subtitle: 'Session pending',
       );
     }
   }
@@ -4244,6 +4306,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     final isScheduled = apt.status == AppointmentStatus.scheduled;
     final isWaiting = apt.status == AppointmentStatus.waiting;
     final isInProgress = apt.status == AppointmentStatus.inProgress;
+    final bool isActive = isWaiting || isInProgress;
     final bool isCancelled = apt.status == AppointmentStatus.cancelled;
     final bool isCompleted = apt.status == AppointmentStatus.completed;
 
@@ -4404,10 +4467,22 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
 
                       // Card body
                       Expanded(
-                        child: isDesktop
-                            ? IntrinsicHeight(
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => widget.onTap(_sessionId),
+                              onLongPress: (isCancelled || isCompleted || widget.isMissed) ? null : () {
+                                HapticFeedback.mediumImpact();
+                                widget.onLongPress();
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+                                child: isDesktop
+                                    ? IntrinsicHeight(
+                                        child: Row(
+                                          crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     // Col 1: Time (flex 2) - Hidden if in progress
                                     if (!isInProgress) ...[
@@ -4451,7 +4526,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
                                             Text(
-                                              apt.displayName,
+                                              _toTitleCase(apt.displayName),
                                               style: context.textStyles.h3.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
@@ -4517,97 +4592,109 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                     
                                     // Col 3: Session Status
                                     Expanded(
-                                      flex: 3,
+                                      flex: 6,
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 10),
                                         child: Center(
-                                          child: _buildSessionStatus(context, apt, isCompleted),
+                                          child: isInProgress ? _buildDesktopTimer(context) : _buildSessionStatus(context, apt, isCompleted),
                                         ),
                                       ),
                                     ),
                                     VerticalDivider(color: context.colors.border.withValues(alpha: 0.3), width: 1),
                                     
-                                    // Col 4: Timer (Only if in progress)
-                                    if (isInProgress) ...[
-                                      Expanded(
-                                        flex: 3,
-                                        child: Padding(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                                          child: Center(
-                                            child: _buildDesktopTimer(context),
-                                          ),
-                                        ),
-                                      ),
-                                      VerticalDivider(color: context.colors.border.withValues(alpha: 0.3), width: 1),
-                                    ],
-                                    
-                                    // Col 5: Actions
+                                    // Col 4: Actions
                                     Expanded(
-                                      flex: isInProgress ? 3 : 4,
+                                      flex: 4,
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                         child: Column(
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           crossAxisAlignment: CrossAxisAlignment.stretch,
                                           children: [
-                                            Row(
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                              children: [
-                                                if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty && !isInProgress)
-                                                  _buildContactButtons(context, apt)
-                                                else
-                                                  const SizedBox.shrink(),
-                                                PopupMenuButton<String>(
-                                                  padding: EdgeInsets.zero,
-                                                  icon: Icon(Icons.more_vert_rounded, color: context.colors.textSecondary),
-                                                  onSelected: (value) {
-                                                    if (value == 'reschedule') widget.onReschedule();
-                                                    else if (value == 'undo') widget.onUndoArrived();
-                                                    else if (value == 'cancel') widget.onLongPress();
-                                                  },
-                                                  itemBuilder: (BuildContext context) {
-                                                    final items = <PopupMenuEntry<String>>[];
-                                                    if (showRescheduleBtn) {
-                                                      items.add(const PopupMenuItem<String>(value: 'reschedule', child: Text('Reschedule')));
-                                                    }
-                                                    final showUndoArrivedBtn = isWaiting && apt.checkInTime != null;
-                                                    if (showUndoArrivedBtn) {
-                                                      items.add(const PopupMenuItem<String>(value: 'undo', child: Text('Undo Arrival')));
-                                                    }
-                                                    final showCancelBtn = !isCancelled && !isCompleted && !widget.isMissed;
-                                                    if (showCancelBtn) {
-                                                      items.add(const PopupMenuItem<String>(value: 'cancel', child: Text('Cancel Session')));
-                                                    }
-                                                    return items;
-                                                  },
-                                                ),
+                                            if (!isActive) ...[
+                                              Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty)
+                                                    _buildContactButtons(context, apt)
+                                                  else
+                                                    const SizedBox.shrink(),
+                                                  PopupMenuButton<String>(
+                                                    padding: EdgeInsets.zero,
+                                                    icon: Icon(Icons.more_vert_rounded, color: context.colors.textSecondary),
+                                                    onSelected: (value) {
+                                                      if (value == 'reschedule') widget.onReschedule();
+                                                      else if (value == 'undo') widget.onUndoArrived();
+                                                      else if (value == 'cancel') widget.onLongPress();
+                                                    },
+                                                    itemBuilder: (BuildContext context) {
+                                                      final items = <PopupMenuEntry<String>>[];
+                                                      if (showRescheduleBtn) {
+                                                        items.add(const PopupMenuItem<String>(value: 'reschedule', child: Text('Reschedule')));
+                                                      }
+                                                      final showUndoArrivedBtn = isWaiting && apt.checkInTime != null;
+                                                      if (showUndoArrivedBtn) {
+                                                        items.add(const PopupMenuItem<String>(value: 'undo', child: Text('Undo Arrival')));
+                                                      }
+                                                      final showCancelBtn = !isCancelled && !isCompleted && !widget.isMissed;
+                                                      if (showCancelBtn) {
+                                                        items.add(const PopupMenuItem<String>(value: 'cancel', child: Text('Cancel Session')));
+                                                      }
+                                                      return items;
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                              if (hasActions) ...[
+                                                const SizedBox(height: 8),
+                                                _buildDesktopActions(context),
                                               ],
-                                            ),
-                                            if (hasActions) ...[
-                                              const SizedBox(height: 8),
-                                              _buildDesktopActions(context),
+                                            ] else ...[
+                                              Row(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  if (hasActions)
+                                                    Expanded(
+                                                      child: _buildDesktopActions(context),
+                                                    ),
+                                                  if (hasActions)
+                                                    const SizedBox(width: 8),
+                                                  PopupMenuButton<String>(
+                                                    padding: EdgeInsets.zero,
+                                                    icon: Icon(Icons.more_vert_rounded, color: context.colors.textSecondary),
+                                                    onSelected: (value) {
+                                                      if (value == 'reschedule') widget.onReschedule();
+                                                      else if (value == 'undo') widget.onUndoArrived();
+                                                      else if (value == 'cancel') widget.onLongPress();
+                                                    },
+                                                    itemBuilder: (BuildContext context) {
+                                                      final items = <PopupMenuEntry<String>>[];
+                                                      if (showRescheduleBtn) {
+                                                        items.add(const PopupMenuItem<String>(value: 'reschedule', child: Text('Reschedule')));
+                                                      }
+                                                      final showUndoArrivedBtn = isWaiting && apt.checkInTime != null;
+                                                      if (showUndoArrivedBtn) {
+                                                        items.add(const PopupMenuItem<String>(value: 'undo', child: Text('Undo Arrival')));
+                                                      }
+                                                      final showCancelBtn = !isCancelled && !isCompleted && !widget.isMissed;
+                                                      if (showCancelBtn) {
+                                                        items.add(const PopupMenuItem<String>(value: 'cancel', child: Text('Cancel Session')));
+                                                      }
+                                                      return items;
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
                                             ],
                                           ],
                                         ),
                                       ),
                                     ),
-                                  ],
-                                ),
-                              )
-                            : Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  GestureDetector(
-                                    behavior: HitTestBehavior.opaque,
-                                    onTap: () => widget.onTap(_sessionId),
-                                    onLongPress: (isCancelled || isCompleted || widget.isMissed) ? null : () {
-                                      HapticFeedback.mediumImpact();
-                                      widget.onLongPress();
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        ],
+                                      ),
+                                    )
+                                  : Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           // Left session number badge (same design on mobile)
                                           Container(
@@ -4645,7 +4732,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
                                                 Text(
-                                                  apt.displayName,
+                                                  _toTitleCase(apt.displayName),
                                                   style: context.textStyles.h3.copyWith(fontSize: 16),
                                                   maxLines: 1,
                                                   overflow: TextOverflow.ellipsis,
@@ -4712,7 +4799,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                                   ),
                                                 ),
                                               ),
-                                              if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty && !isInProgress) ...[
+                                              if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty && !isActive) ...[
                                                 const SizedBox(height: 8),
                                                 _buildContactButtons(context, apt),
                                               ],
@@ -4720,10 +4807,12 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                           ),
                                         ],
                                       ),
-                                    ),
-                                  ),
+                              ),
+                            ),
 
-                                  if (widget.isMissed)
+                            // Banners and actions only for mobile layout
+                            if (!isDesktop) ...[
+                              if (widget.isMissed)
                                     _InfoBanner(
                                       Icons.event_busy_rounded,
                                       'Patient missed this session',
@@ -4870,7 +4959,8 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                     ),
                                   ],
                                 ],
-                              ),
+                              ],
+                        ),
                       ),
                     ],
                   ),
@@ -5083,16 +5173,19 @@ class _ActionButton extends StatelessWidget {
                 const SizedBox(width: 7),
               ],
               Flexible(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    color: foregroundColor,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.1,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color: foregroundColor,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.1,
+                    ),
+                    maxLines: 1,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               if (showTrailingChevron) ...[

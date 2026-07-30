@@ -837,9 +837,13 @@ class AppointmentService {
             .collection(PBCollections.consultations)
             .getOne(apt.linkedConsultationId!);
         final c = ConsultationModel.fromRecord(record);
-        // Return regardless of status — ongoing = resume, completed = view only.
-        // Never create a second consultation for the same appointment.
-        return (c.id, false);
+        if (c.isDeleted) {
+          // If the linked consultation is soft-deleted, ignore it and fall through to create a new one.
+        } else {
+          // Return regardless of status — ongoing = resume, completed = view only.
+          // Never create a second consultation for the same appointment unless the old one was deleted.
+          return (c.id, false);
+        }
       } catch (_) {
         // Record deleted or unreachable — fall through to create
       }
@@ -940,6 +944,21 @@ class AppointmentService {
             );
           }
         } catch (_) {}
+      }
+    } catch (_) {}
+
+    // 4. Find associated appointment and reset consultation_form_saved
+    try {
+      final apts = await pb.collection(PBCollections.appointments).getList(
+        filter: 'linked_consultation_id = "${consultationId}"',
+      );
+      for (final apt in apts.items) {
+        await pb.collection(PBCollections.appointments).update(
+          apt.id,
+          body: {
+            'consultation_form_saved': false,
+          },
+        );
       }
     } catch (_) {}
   }
