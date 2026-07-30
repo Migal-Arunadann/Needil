@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -67,6 +67,7 @@ class _CreateTreatmentPlanScreenState
   final _sessionsCtrl = TextEditingController(text: '5');
   final _intervalCtrl = TextEditingController(text: '1');
   final _feeCtrl = TextEditingController();
+  final _expiryDaysCtrl = TextEditingController(text: '90');
 
   // Maintenance-specific
   String _intervalUnit = 'days'; // 'days', 'months', 'years'
@@ -294,6 +295,7 @@ class _CreateTreatmentPlanScreenState
     _sessionsCtrl.dispose();
     _intervalCtrl.dispose();
     _feeCtrl.dispose();
+    _expiryDaysCtrl.dispose();
     super.dispose();
   }
 
@@ -430,6 +432,7 @@ class _CreateTreatmentPlanScreenState
           totalSessions: numSessions,
           intervalDays: intervalVal,
           sessionFee: fee,
+          expiryDays: int.tryParse(_expiryDaysCtrl.text.trim()) ?? 90,
           firstSessionCompletedToday: _firstSessionCompletedToday,
         );
 
@@ -822,11 +825,11 @@ class _CreateTreatmentPlanScreenState
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Start the 1st session today itself?',
+                            Text('Start first session today',
                                 style: context.textStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600)),
                             const SizedBox(height: 4),
                             Text(
-                                'Creates Session 1 today and schedules the remaining sessions',
+                                'Session 1 will be created today and the remaining sessions scheduled automatically.',
                                 style: context.textStyles.caption),
                           ],
                         ),
@@ -947,13 +950,34 @@ class _CreateTreatmentPlanScreenState
                       if (!isMaintenance) ...[
                         firstSessionTodayWidget,
                         const SizedBox(height: 16),
+                        // Expiry days field
+                        AppTextField(
+                          controller: _expiryDaysCtrl,
+                          label: 'Review After (Days)',
+                          hint: 'Days before plan is flagged for review (e.g. 90)',
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          validator: (v) {
+                            final n = int.tryParse(v?.trim() ?? '');
+                            if (n == null || n < 30) return 'Minimum 30 days';
+                            if (n > 730) return 'Maximum 730 days (2 years)';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'If no future session is scheduled within this period, the treatment will be flagged for manual review.',
+                          style: TextStyle(color: context.colors.textHint, fontSize: 11, height: 1.4),
+                        ),
+                        const SizedBox(height: 16),
                       ],
+
 
                       Padding(
                         padding: const EdgeInsets.only(top: 16),
                         child: Text(
-                          '💡 Note: The smart scheduling engine will book sessions sequentially. '
-                          'If a time slot is fully occupied (all beds taken), it will find the closest next available slot.',
+                          '💡 Note: The scheduler books sessions sequentially. '
+                          'If a preferred slot is unavailable, the next available slot will be selected automatically.',
                           style: TextStyle(color: context.colors.textHint, fontSize: 13, height: 1.4),
                         ),
                       ),
@@ -1268,6 +1292,11 @@ class _SessionDatePreview extends StatelessWidget {
             const Spacer(),
             Text('$numSessions sessions', style: context.textStyles.caption.copyWith(color: context.colors.primary)),
           ]),
+          const SizedBox(height: 4),
+          Text(
+            'These dates are generated automatically and may adjust based on availability.',
+            style: TextStyle(color: context.colors.textHint, fontSize: 11),
+          ),
           const SizedBox(height: 10),
           Wrap(
             spacing: 6,
@@ -1290,7 +1319,7 @@ class _SessionDatePreview extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  '#${idx + 1}  ${DateFormat('MMM d').format(d)}',
+                  '#${idx + 1}  ${DateFormat('EEE • MMM d').format(d)}',
                   style: context.textStyles.caption.copyWith(
                     fontSize: 11,
                     fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,

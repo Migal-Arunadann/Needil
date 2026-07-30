@@ -12,6 +12,7 @@ import 'package:pms_app/features/consultations/screens/consultation_screen.dart'
 import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/features/treatments/screens/create_treatment_plan_screen.dart';
+import 'package:pms_app/features/treatments/screens/session_list_screen.dart' show showClosureReasonDialog;
 import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/utils/date_picker_helper.dart';
@@ -26,7 +27,7 @@ import 'package:pms_app/core/utils/time_utils.dart';
 import 'package:pms_app/features/patients/screens/family_member_selection_screen.dart';
 import 'package:pms_app/core/widgets/reschedule_anchor_dialog.dart';
 import 'package:pms_app/features/auth/models/doctor_model.dart';
-
+import 'package:pms_app/features/scheduling/screens/scheduling_audit_history_screen.dart';
 
 class PatientProfileScreen extends ConsumerStatefulWidget {
   final PatientModel patient;
@@ -2010,7 +2011,10 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     required IconData icon,
   }) {
     final isDesktop = MediaQuery.of(context).size.width >= 900;
-    
+    final (statusLabel, statusColor) = _planStatusMeta(plan.status);
+    final canClose = plan.status != TreatmentPlanStatus.completed &&
+        plan.status != TreatmentPlanStatus.closed;
+
     return Row(
       children: [
         Icon(icon, size: 16, color: color),
@@ -2021,16 +2025,96 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               ? TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)
               : context.textStyles.label.copyWith(fontSize: 13, color: color),
         ),
+        const SizedBox(width: 8),
+        // Status badge
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+          decoration: BoxDecoration(
+            color: statusColor.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            statusLabel,
+            style: context.textStyles.caption.copyWith(
+              color: statusColor,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
         const Spacer(),
         Text(
-          '${plan.treatmentType} · ₹${plan.sessionFee.toInt()}/session',
+          '₹${plan.sessionFee.toInt()}/session',
           style: isDesktop
               ? TextStyle(color: context.colors.textMuted, fontSize: 11)
               : context.textStyles.caption.copyWith(color: context.colors.textSecondary),
         ),
+        const SizedBox(width: 8),
+        IconButton(
+          tooltip: 'Schedule History',
+          icon: Icon(Icons.history_rounded, size: 18, color: context.colors.textHint),
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => SchedulingAuditHistoryScreen(plan: plan),
+            ),
+          ),
+        ),
+        // ⋮ Close Treatment menu
+        if (canClose) ...[const SizedBox(width: 8), PopupMenuButton<String>(
+          icon: Icon(Icons.more_vert_rounded, size: 16, color: context.colors.textHint),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          onSelected: (v) { if (v == 'close') _closeTreatment(plan); },
+          itemBuilder: (ctx) => [
+            PopupMenuItem(
+              value: 'close',
+              child: Row(children: [
+                Icon(Icons.cancel_outlined, size: 16, color: context.colors.error),
+                const SizedBox(width: 8),
+                Text('Close Treatment', style: TextStyle(color: context.colors.error, fontSize: 13)),
+              ]),
+            ),
+          ],
+        )],
       ],
     );
   }
+
+  (String, Color) _planStatusMeta(TreatmentPlanStatus s) {
+    switch (s) {
+      case TreatmentPlanStatus.active:       return ('Active',         context.colors.success);
+      case TreatmentPlanStatus.paused:       return ('Paused',         context.colors.warning);
+      case TreatmentPlanStatus.manualReview: return ('Manual Review',  context.colors.error);
+      case TreatmentPlanStatus.completed:    return ('Completed',       context.colors.primary);
+      case TreatmentPlanStatus.closed:       return ('Closed',          context.colors.textSecondary);
+    }
+  }
+
+  Future<void> _closeTreatment(TreatmentPlanModel plan) async {
+    final reason = await showClosureReasonDialog(
+      context,
+      patientName: widget.patient.fullName,
+    );
+    if (reason == null || !mounted) return;
+    try {
+      final svc = ref.read(treatmentServiceProvider);
+      final auth = ref.read(authProvider);
+      await svc.closeTreatment(
+        plan.id,
+        reason: reason,
+        performedBy: auth.userId ?? 'system',
+      );
+      AppToast.show('Treatment closed ✓', type: ToastType.success);
+      setState(() { _planLoaded = false; });
+      await _loadPlans();
+      widget.onReturn();
+    } catch (e) {
+      AppToast.show('Failed to close treatment: $e', type: ToastType.error);
+    }
+  }
+
 
   /// Warning banner shown when a plan has consecutive missed sessions.
   Widget _consecutiveMissBanner(TreatmentPlanModel plan) {
@@ -2077,29 +2161,44 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   Widget _pauseResumeRow(TreatmentPlanModel plan) {
     final isPaused = plan.isPaused;
     final color = isPaused ? context.colors.success : context.colors.warning;
-    final icon = isPaused ? Icons.play_circle_outline_rounded : Icons.pause_circle_outline_rounded;
+    final icon = isPaused ? Icons.play_arrow_rounded : Icons.pause_rounded;
     final label = isPaused ? 'Resume Plan' : 'Pause Plan';
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: () async {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: InkWell(
+          onTap: () async {
             if (isPaused) {
               await _showResumeDialog(plan);
             } else {
               await _showPauseConfirmation(plan);
             }
           },
-          icon: Icon(icon, size: 15),
-          label: Text(label),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: color,
-            side: BorderSide(color: color.withValues(alpha: 0.5)),
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: color.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: color),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -2131,8 +2230,9 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     if (confirmed != true) return;
     try {
       final svc = ref.read(treatmentServiceProvider);
-      await svc.pauseSessions(plan.id);
-      AppToast.show('Sessions paused \u23f8', type: ToastType.info);
+      final auth = ref.read(authProvider);
+      await svc.pauseSessions(plan.id, performedBy: auth.userId ?? 'system');
+      AppToast.show('Sessions paused ⏸', type: ToastType.info);
       setState(() { _planLoaded = false; });
       await _loadPlans();
       widget.onReturn();
@@ -2178,8 +2278,13 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     if (result == null) return;
     try {
       final svc = ref.read(treatmentServiceProvider);
-      await svc.resumeSessions(plan.id, startFromFirst: result == 'first');
-      AppToast.show('Sessions resumed \u25b6', type: ToastType.success);
+      final auth = ref.read(authProvider);
+      await svc.resumeSessions(
+        plan.id,
+        startFromFirst: result == 'first',
+        performedBy: auth.userId ?? 'system',
+      );
+      AppToast.show('Sessions resumed ▶', type: ToastType.success);
       setState(() { _planLoaded = false; });
       await _loadPlans();
       widget.onReturn();
@@ -3835,6 +3940,7 @@ class _RecentlyDeletedSheetState extends ConsumerState<RecentlyDeletedSheet> {
   }
 
   Future<void> _loadDeletedItems() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
       final pb = ref.read(pocketbaseProvider);
@@ -3922,6 +4028,7 @@ class _RecentlyDeletedSheetState extends ConsumerState<RecentlyDeletedSheet> {
                                   onPressed: () async {
                                     final service = ref.read(appointmentServiceProvider);
                                     await service.restoreConsultation(item.id);
+                                    if (!context.mounted) return;
                                     widget.onRestore();
                                     _loadDeletedItems();
                                   },
