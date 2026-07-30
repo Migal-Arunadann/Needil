@@ -769,16 +769,16 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
     builder: (ctx) => AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       backgroundColor: context.colors.surface,
-      title: Text('Reschedule Scope', style: context.textStyles.h3),
+      title: Text('Reschedule Future Sessions?', style: context.textStyles.h3),
       content: Text(
-        'How should this reschedule affect other sessions?',
+        'Do you want to shift all upcoming sessions forward to keep the same spacing?',
         style: context.textStyles.bodyMedium,
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
         OutlinedButton(
           onPressed: () => Navigator.pop(ctx, RescheduleMode.cascadeAll),
-          child: const Text('Cascade All'),
+          child: const Text('Shift All Upcoming'),
         ),
         ElevatedButton(
           onPressed: () => Navigator.pop(ctx, RescheduleMode.missedOnly),
@@ -787,7 +787,7 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
-          child: const Text('This Session Only'),
+          child: const Text('Only This Session'),
         ),
       ],
     ),
