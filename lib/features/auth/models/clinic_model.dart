@@ -24,6 +24,11 @@ class ClinicModel {
   final String subscriptionTier;
   final int photosUsed;
   final int photoLimit;
+  // Razorpay billing
+  final String subscriptionStatus; // 'trialing' | 'active' | 'past_due' | 'canceled'
+  final DateTime? subscriptionEndDate;
+  final String? razorpayCustomerId;
+  final String? razorpaySubscriptionId;
   // Soft-delete / superadmin deactivation
   final bool isDeactivated;
   final DateTime? deactivatedAt;
@@ -46,6 +51,15 @@ class ClinicModel {
     return purgeAt!.difference(DateTime.now()).inDays.clamp(0, 9999);
   }
 
+  /// True when the clinic has an active or trialing subscription that hasn't expired.
+  bool get isSubscriptionActive {
+    if (subscriptionStatus == 'trialing' || subscriptionStatus == 'active') {
+      if (subscriptionEndDate == null) return true; // no end date = unlimited
+      return subscriptionEndDate!.isAfter(DateTime.now());
+    }
+    return false;
+  }
+
   ClinicModel({
     required this.id,
     required this.name,
@@ -65,6 +79,10 @@ class ClinicModel {
     this.patientIdPrefix,
     this.subscriptionTier = 'base',
     this.photosUsed = 0,
+    this.subscriptionStatus = 'trialing',
+    this.subscriptionEndDate,
+    this.razorpayCustomerId,
+    this.razorpaySubscriptionId,
     this.photoLimit = 2000,
     this.isDeactivated = false,
     this.deactivatedAt,
@@ -110,6 +128,12 @@ class ClinicModel {
       photoLimit: record.getIntValue('photo_limit') > 0
           ? record.getIntValue('photo_limit')
           : 2000,
+      subscriptionStatus: record.getStringValue('subscription_status').isNotEmpty
+          ? record.getStringValue('subscription_status')
+          : 'trialing',
+      subscriptionEndDate: DateTime.tryParse(record.getStringValue('subscription_end_date')),
+      razorpayCustomerId: record.getStringValue('razorpay_customer_id'),
+      razorpaySubscriptionId: record.getStringValue('razorpay_subscription_id'),
       isDeactivated: record.getBoolValue('is_deactivated'),
       deactivatedAt: DateTime.tryParse(record.getStringValue('deactivated_at')),
       scheduledDeletionDate: DateTime.tryParse(record.getStringValue('scheduled_deletion_date')),

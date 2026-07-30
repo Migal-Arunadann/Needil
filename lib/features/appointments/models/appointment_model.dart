@@ -32,13 +32,17 @@ class AppointmentModel {
   final String? reconciledBy;
   final String? sessionType;
   final String? linkedSessionId; // Direct FK to session record — eliminates fuzzy date+time lookup
+  final bool isNewFamilyMember;
+  final String? intendedRelation;
+  final bool isPinned; // Mirrors session.is_pinned — set when appointment is tied to a pinned session
   final DateTime? created;
   final DateTime? updated;
 
-  // Expanded relations (populated when fetched with expand)
+  // Expanded fields
   final String? doctorName;
   final String? expandedPatientName;
   final String? expandedPatientPhone;
+  final bool requiresPatientDetailsUpdate;
 
   AppointmentModel({
     required this.id,
@@ -68,20 +72,32 @@ class AppointmentModel {
     this.reconciledBy,
     this.sessionType,
     this.linkedSessionId,
+    this.isNewFamilyMember = false,
+    this.intendedRelation,
+    this.isPinned = false,
     this.created,
     this.updated,
     this.doctorName,
     this.expandedPatientName,
     this.expandedPatientPhone,
+    this.requiresPatientDetailsUpdate = false,
   });
 
   bool get consultationFormSaved => consultationEndTime != null;
+
+  bool get isEffectivePatientDetailsSaved {
+    if (requiresPatientDetailsUpdate) return false;
+    final isCallBy = type == AppointmentType.callBy;
+    final hasPatientLinked = patientId != null && patientId!.isNotEmpty;
+    return patientDetailsSaved || (!isCallBy && hasPatientLinked);
+  }
 
   factory AppointmentModel.fromRecord(RecordModel record) {
     // Try to get expanded doctor/patient names
     String? doctorName;
     String? expandedPatientName;
     String? expandedPatientPhone;
+    bool requiresPatientDetailsUpdate = false;
 
     try {
       final expandData = record.get<Map<String, dynamic>>('expand');
@@ -95,6 +111,9 @@ class AppointmentModel {
           if (pat is Map) {
             expandedPatientName = pat['full_name'] as String?;
             expandedPatientPhone = pat['phone'] as String?;
+            if (pat.containsKey('requires_patient_details_update')) {
+              requiresPatientDetailsUpdate = pat['requires_patient_details_update'] as bool? ?? false;
+            }
           }
         }
       }
@@ -133,17 +152,18 @@ class AppointmentModel {
       reconciliationReason: record.getStringValue('reconciliation_reason').isNotEmpty 
           ? record.getStringValue('reconciliation_reason') : null,
       reconciledAt: _parseDateTimeOrNull(record.getStringValue('reconciled_at')),
-      reconciledBy: record.getStringValue('reconciled_by').isNotEmpty 
-          ? record.getStringValue('reconciled_by') : null,
-      sessionType: record.getStringValue('session_type').isNotEmpty
-          ? record.getStringValue('session_type') : null,
-      linkedSessionId: record.getStringValue('linked_session_id').isNotEmpty
-          ? record.getStringValue('linked_session_id') : null,
-      created: DateTime.tryParse(record.get<String>('created')),
-      updated: DateTime.tryParse(record.get<String>('updated')),
+      reconciledBy: record.getStringValue('reconciled_by').isEmpty ? null : record.getStringValue('reconciled_by'),
+      sessionType: record.getStringValue('session_type').isEmpty ? null : record.getStringValue('session_type'),
+      linkedSessionId: record.getStringValue('linked_session_id').isEmpty ? null : record.getStringValue('linked_session_id'),
+      isNewFamilyMember: record.getBoolValue('is_new_family_member'),
+      intendedRelation: record.getStringValue('intended_relation').isEmpty ? null : record.getStringValue('intended_relation'),
+      isPinned: record.getBoolValue('is_pinned'),
+      created: DateTime.tryParse(record.created)?.toLocal(),
+      updated: DateTime.tryParse(record.updated)?.toLocal(),
       doctorName: doctorName,
       expandedPatientName: expandedPatientName,
       expandedPatientPhone: expandedPatientPhone,
+      requiresPatientDetailsUpdate: requiresPatientDetailsUpdate,
     );
   }
 

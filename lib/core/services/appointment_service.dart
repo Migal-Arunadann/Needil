@@ -6,6 +6,7 @@ import 'package:pms_app/features/appointments/models/appointment_model.dart';
 import 'package:pms_app/features/patients/models/patient_model.dart';
 import 'package:pms_app/features/consultations/models/consultation_model.dart';
 import 'package:pms_app/core/services/session_lifecycle_service.dart';
+import 'package:pms_app/core/scheduling/treatment_scheduler.dart' show RescheduleMode;
 import 'package:pms_app/core/utils/validators.dart';
 
 class AppointmentService {
@@ -179,6 +180,8 @@ class AppointmentService {
     required String patientPhone,
     required String date,
     required String time,
+    bool isNewFamilyMember = false,
+    String? intendedRelation,
   }) async {
     final body = {
       'doctor': doctorId,
@@ -189,6 +192,9 @@ class AppointmentService {
       'status': 'scheduled',
       'patient_name': patientName,
       'patient_phone': patientPhone,
+      'is_new_family_member': isNewFamilyMember,
+      if (intendedRelation != null && intendedRelation.isNotEmpty)
+        'intended_relation': intendedRelation,
     };
 
     final record =
@@ -693,8 +699,17 @@ class AppointmentService {
 
   /// Reschedule a SESSION appointment AND sync the matching session record
   /// with automatic cascading shifts for subsequent sessions in the plan.
+  ///
+  /// [performedBy] should be the current user's PocketBase record ID.
+  /// [mode] controls whether subsequent sessions are cascaded.
   Future<AppointmentModel> rescheduleSessionAppointment(
-      String appointmentId, AppointmentModel apt, String newDate, String newTime) async {
+      String appointmentId,
+      AppointmentModel apt,
+      String newDate,
+      String newTime, {
+      String performedBy = 'system',
+      RescheduleMode mode = RescheduleMode.cascadeAll,
+  }) async {
     if (apt.patientId != null) {
       try {
         final s = await _findSessionRecordForAppointment(
@@ -710,6 +725,8 @@ class AppointmentService {
             sessionId: s.id,
             newDate: newDate,
             newTime: newTime,
+            performedBy: performedBy,
+            mode: mode,
           );
 
           // Return fresh updated appointment record
@@ -734,6 +751,46 @@ class AppointmentService {
       body: {'date': newDate, 'time': newTime, 'is_rescheduled': true},
     );
     return AppointmentModel.fromRecord(record);
+  }
+
+  /// Reopen a missed appointment (restore to waiting status).
+  Future<AppointmentModel> reopenMissedAppointment(String appointmentId) async {
+    final record = await pb.collection(PBCollections.appointments).update(
+      appointmentId,
+      body: {'status': 'waiting'},
+    );
+    final appt = AppointmentModel.fromRecord(record);
+    if (appt.patientId != null) {
+      try {
+        final s = await _findSessionRecordForAppointment(
+          patientId: appt.patientId!,
+          date: appt.date,
+          time: appt.time,
+          doctorId: appt.doctorId,
+          linkedSessionId: appt.linkedSessionId,
+        );
+        if (s != null) {
+          await pb.collection(PBCollections.sessions).update(
+            s.id,
+            body: {
+              'status': 'upcoming',
+            },
+          );
+          if (s.getStringValue('treatment_plan').isNotEmpty) {
+            final planId = s.getStringValue('treatment_plan');
+            final planRecord = await pb.collection(PBCollections.treatmentPlans).getOne(planId);
+            final currentMisses = planRecord.getIntValue('consecutive_misses');
+            if (currentMisses > 0) {
+              await pb.collection(PBCollections.treatmentPlans).update(
+                planId,
+                body: {'consecutive_misses': 0},
+              );
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    return appt;
   }
 
   /// Undo arrived — reset status to scheduled, clear check_in_time.

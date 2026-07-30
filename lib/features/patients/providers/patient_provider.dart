@@ -51,7 +51,11 @@ class PatientListNotifier extends StateNotifier<PatientListState> {
   }
 
   Future<void> loadPatients() async {
-    state = state.copyWith(isLoading: true, error: null);
+    if (state.patients.isEmpty) {
+      state = state.copyWith(isLoading: true, error: null);
+    } else {
+      state = state.copyWith(error: null);
+    }
     try {
       List<PatientModel> result = [];
       

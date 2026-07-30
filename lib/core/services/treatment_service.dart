@@ -9,7 +9,10 @@ import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/features/auth/models/doctor_model.dart';
 import 'package:pms_app/core/services/session_lifecycle_service.dart';
+import 'package:pms_app/core/scheduling/slot_finder.dart';
+import 'package:pms_app/core/scheduling/treatment_scheduler.dart' show RescheduleMode;
 import 'package:image_picker/image_picker.dart';
+
 
 class TreatmentService {
   final PocketBase pb;
@@ -209,6 +212,7 @@ class TreatmentService {
     required int totalSessions,
     required int intervalDays,
     required double sessionFee,
+    int expiryDays = 90,
     bool firstSessionCompletedToday = false,
   }) async {
     return _createPlan(
@@ -223,6 +227,7 @@ class TreatmentService {
       sessionFee: sessionFee,
       planType: 'treatment',
       intervalUnit: 'days',
+      expiryDays: expiryDays,
       firstSessionCompletedToday: firstSessionCompletedToday,
     );
   }
@@ -286,6 +291,7 @@ class TreatmentService {
     required double sessionFee,
     required String planType,     // 'treatment' or 'maintenance'
     required String intervalUnit, // 'days', 'months', 'years'
+    int expiryDays = 90,
     bool firstSessionCompletedToday = false,
   }) async {
     // Attempt to fetch clinic bed count (fallback to default 3)
@@ -317,6 +323,7 @@ class TreatmentService {
       'status': 'active',
       'plan_type': planType,
       'interval_unit': intervalUnit,
+      'expiry_days': expiryDays,
     };
 
     final planRecord = await pb.collection(PBCollections.treatmentPlans).create(body: planBody);
@@ -328,19 +335,33 @@ class TreatmentService {
     final pTimeHr = int.parse(timeParts[0]);
     final pTimeMn = int.parse(timeParts[1]);
 
-    // Retrieve doctor's working days
-    List<int> validDays = [];
+    // Build a SchedulingContext so SlotFinder can handle all slot logic
+    // (per-clinic capacity, break windows, scheduling_exceptions, 90-day search).
+    final contextLoader = SchedulingContextLoader(pb);
+    final slotFinder = SlotFinder(pb);
+    SchedulingContext? schedCtx;
     try {
-      final docRec = await pb.collection('doctors').getOne(doctorId);
-      final doctor = DoctorModel.fromRecord(docRec);
-      validDays = doctor.workingDays;
-    } catch (_) {}
+      schedCtx = await contextLoader.load(plan.id);
+    } catch (_) {
+      // Context load failed — fall through without SlotFinder
+    }
+
+    // Retrieve doctor's working days as a plain list (needed for the
+    // firstSessionCompletedToday path which skips SlotFinder).
+    List<int> validDays = schedCtx?.workingDays ?? [];
+    if (validDays.isEmpty) {
+      try {
+        final docRec = await pb.collection('doctors').getOne(doctorId);
+        final doctor = DoctorModel.fromRecord(docRec);
+        validDays = doctor.workingDays;
+      } catch (_) {}
+    }
 
     DateTime currentSessionDate = start;
 
     for (int i = 0; i < totalSessions; i++) {
       if (firstSessionCompletedToday && i == 0 && planType == 'treatment') {
-        // First treatment session starts today
+        // First treatment session starts today — no slot finding needed.
         final now = DateTime.now();
         final nowStr = _formatDate(now);
         final timeStr = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
@@ -386,50 +407,67 @@ class TreatmentService {
         continue;
       }
 
-      // Find a valid slot
-      String resolvedTimeStr = preferredTime;
-      bool foundSlot = false;
-      int dayAttempts = 0;
+      // Use SlotFinder (v2) when context is available — respects per-clinic
+      // capacity, break windows, scheduling_exceptions, and 90-day search.
+      String resolvedDateStr;
+      String resolvedTimeStr;
 
-      while (!foundSlot && dayAttempts < 30) {
-        if (validDays.isNotEmpty) {
-          while (!validDays.contains(currentSessionDate.weekday)) {
-            currentSessionDate = currentSessionDate.add(const Duration(days: 1));
-          }
-        }
-
-        final tryDateStr = _formatDate(currentSessionDate);
-        DateTime slotAttempt = DateTime(
-            currentSessionDate.year, currentSessionDate.month,
-            currentSessionDate.day, pTimeHr, pTimeMn);
-
-        for (int attempt = 0; attempt < 16; attempt++) {
-          if (slotAttempt.hour >= 20) break;
-
-          final checkTimeStr =
-              '${slotAttempt.hour.toString().padLeft(2, "0")}:${slotAttempt.minute.toString().padLeft(2, "0")}';
-
-          final existingAppts = await pb.collection(PBCollections.appointments).getList(
-            filter:
-                'doctor = "$doctorId" && date = "$tryDateStr" && time = "$checkTimeStr" && status != "cancelled"',
+      if (schedCtx != null) {
+        try {
+          final slotResult = await slotFinder.findBestSlot(
+            context: schedCtx,
+            startDate: currentSessionDate,
+            preferredTime: preferredTime,
           );
-
-          if (existingAppts.totalItems < maxBeds) {
-            resolvedTimeStr = checkTimeStr;
-            foundSlot = true;
-            break;
-          }
-
-          slotAttempt = slotAttempt.add(const Duration(minutes: 30));
+          resolvedDateStr = _formatDate(slotResult.date);
+          resolvedTimeStr = slotResult.time;
+          currentSessionDate = slotResult.date;
+        } on NoSlotFoundException {
+          // No slot found within 90 days — fall back to force-placing on
+          // currentSessionDate so plan creation never hard-fails.
+          resolvedDateStr = _formatDate(currentSessionDate);
+          resolvedTimeStr = preferredTime;
         }
-
-        if (!foundSlot) {
-          currentSessionDate = currentSessionDate.add(const Duration(days: 1));
-          dayAttempts++;
+      } else {
+        // Fallback: legacy inline logic when context loader fails.
+        resolvedDateStr = _formatDate(currentSessionDate);
+        resolvedTimeStr = preferredTime;
+        bool foundSlot = false;
+        int dayAttempts = 0;
+        while (!foundSlot && dayAttempts < 30) {
+          if (validDays.isNotEmpty) {
+            while (!validDays.contains(currentSessionDate.weekday)) {
+              currentSessionDate = currentSessionDate.add(const Duration(days: 1));
+            }
+          }
+          final tryDateStr = _formatDate(currentSessionDate);
+          DateTime slotAttempt = DateTime(
+              currentSessionDate.year, currentSessionDate.month,
+              currentSessionDate.day, pTimeHr, pTimeMn);
+          for (int attempt = 0; attempt < 16; attempt++) {
+            if (slotAttempt.hour >= 20) break;
+            final checkTimeStr =
+                '${slotAttempt.hour.toString().padLeft(2, "0")}:${slotAttempt.minute.toString().padLeft(2, "0")}';
+            final existingAppts = await pb.collection(PBCollections.appointments).getList(
+              filter:
+                  'doctor = "$doctorId" && date = "$tryDateStr" && time = "$checkTimeStr" && status != "cancelled"',
+            );
+            if (existingAppts.totalItems < maxBeds) {
+              resolvedDateStr = tryDateStr;
+              resolvedTimeStr = checkTimeStr;
+              foundSlot = true;
+              break;
+            }
+            slotAttempt = slotAttempt.add(const Duration(minutes: 30));
+          }
+          if (!foundSlot) {
+            currentSessionDate = currentSessionDate.add(const Duration(days: 1));
+            dayAttempts++;
+          }
         }
       }
 
-      final sessionDateStr = _formatDate(currentSessionDate);
+      final sessionDateStr = resolvedDateStr;
 
       final sessionBody = {
         'treatment_plan': plan.id,
@@ -664,14 +702,29 @@ class TreatmentService {
     final session = SessionModel.fromRecord(record);
 
     if (isCompleted) {
+      // Stamp completed_at timestamp (v2 scheduling field)
+      try {
+        await pb.collection(PBCollections.sessions).update(sessionId, body: {
+          'completed_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      } catch (_) {}
+
       // Also mark the linked appointment as completed
       await _syncAppointmentStatus(session, 'completed');
+
+      // v2: update plan statistics (reset consecutive_misses, increment completed_sessions)
       try {
-        await pb.collection(PBCollections.treatmentPlans).update(
-          session.treatmentPlanId,
-          body: {'consecutive_misses': 0},
-        );
-      } catch (_) {}
+        final lifecycle = SessionLifecycleService(pb).lifecycle;
+        await lifecycle.onSessionCompleted(session.treatmentPlanId);
+      } catch (_) {
+        // Fallback: just reset consecutive_misses (v1 behaviour)
+        try {
+          await pb.collection(PBCollections.treatmentPlans).update(
+            session.treatmentPlanId,
+            body: {'consecutive_misses': 0},
+          );
+        } catch (_) {}
+      }
     }
 
     return session;
@@ -780,35 +833,65 @@ class TreatmentService {
     // Also mark the linked appointment as cancelled
     await _syncAppointmentStatus(session, 'cancelled');
 
-    // Increment the plan's consecutive miss counter
+    // Increment the plan's consecutive miss counter + total_misses
     try {
       final planRec = await pb.collection(PBCollections.treatmentPlans).getOne(
         session.treatmentPlanId,
       );
       final plan = TreatmentPlanModel.fromRecord(planRec);
 
-      // Skip if plan is already paused
-      if (plan.isPaused) return;
+      // Skip if plan is already paused, completed, or closed
+      if (plan.isPaused ||
+          plan.status == TreatmentPlanStatus.completed ||
+          plan.status == TreatmentPlanStatus.closed) return;
 
-      final newMissCount = plan.consecutiveMisses + 1;
-      await pb.collection(PBCollections.treatmentPlans).update(
-        plan.id,
-        body: {'consecutive_misses': newMissCount},
-      );
+      // Stamp missed_at on the session
+      try {
+        await pb.collection(PBCollections.sessions).update(sessionId, body: {
+          'missed_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      } catch (_) {}
+
+      final lifecycle = SessionLifecycleService(pb);
+      final newMissCount = await lifecycle.lifecycle.onSessionMissed(plan.id);
 
       // If < 3 misses, auto-reschedule from anchorDate (defaults to today)
       if (newMissCount < 3) {
         try {
-          final lifecycle = SessionLifecycleService(pb);
           await lifecycle.rescheduleFromToday(plan.id, [session], anchorDate: anchorDate);
         } catch (e) {
           debugPrint('[TreatmentService] markSessionMissed reschedule error: $e');
         }
+      } else {
+        // >= 3 misses: transition to manualReview if not already there
+        try {
+          await lifecycle.lifecycle.transition(
+            plan.id,
+            TreatmentPlanStatus.manualReview,
+          );
+        } catch (_) {}
       }
-      // If >= 3, the Auto-Scheduling Dashboard will surface this plan.
     } catch (e) {
       debugPrint('[TreatmentService] markSessionMissed counter error: $e');
     }
+  }
+
+  /// Close a treatment plan early.
+  ///
+  /// Cancels all remaining sessions and appointments, records the closure
+  /// reason, and transitions the plan to [closed] status.
+  /// Delegates to [TreatmentScheduler.closeTreatment].
+  Future<void> closeTreatment(
+    String planId, {
+    required ClosureReason reason,
+    required String performedBy,
+  }) async {
+    final lifecycle = SessionLifecycleService(pb);
+    await lifecycle.scheduler.closeTreatment(
+      planId,
+      reason: reason,
+      performedBy: performedBy,
+    );
   }
 
   /// Cancel a session and its synced appointment.
@@ -982,215 +1065,53 @@ class TreatmentService {
 
   /// Reschedule a single session to a new date and/or time, automatically
   /// cascading shifts to all subsequent sessions in the treatment plan.
+  ///
+  /// Delegates to the v2 TreatmentScheduler via the facade.
+  /// Sets is_pinned = true on the target session.
   Future<void> rescheduleSession({
     required String sessionId,
     required String newDate,
     required String newTime,
+    String performedBy = 'system',
+    RescheduleMode mode = RescheduleMode.cascadeAll,
   }) async {
     final lifecycle = SessionLifecycleService(pb);
     await lifecycle.rescheduleSessionAndCascade(
       sessionId: sessionId,
       newDate: newDate,
       newTime: newTime,
+      performedBy: performedBy,
+      mode: mode,
     );
   }
 
   // ─── Pause / Resume ─────────────────────────────────────────
 
-  /// Pause a treatment plan: change all upcoming sessions → paused,
-  /// cancel their linked appointments, and set plan's is_paused flag.
-  Future<void> pauseSessions(String planId) async {
-    // 1) Set plan as paused
-    await pb.collection(PBCollections.treatmentPlans).update(planId, body: {
-      'is_paused': true,
-      'paused_at': DateTime.now().toUtc().toIso8601String(),
-      'status': 'paused',
-    });
-
-    // 2) Find all upcoming sessions for this plan
-    final sessRes = await pb.collection(PBCollections.sessions).getList(
-      filter: 'treatment_plan = "$planId" && status = "upcoming"',
-      sort: 'session_number',
-      perPage: 200,
+  /// Pause a treatment plan: delegates to [TreatmentScheduler.pausePlan].
+  ///
+  /// Pauses BOTH upcoming AND missed sessions (v2 fix — v1 only paused upcoming).
+  /// Cancels all linked appointments.
+  Future<void> pauseSessions(String planId, {String performedBy = 'system'}) async {
+    final lifecycle = SessionLifecycleService(pb);
+    await lifecycle.scheduler.pausePlan(
+      planId,
+      performedBy: performedBy,
+      trigger: performedBy == 'system' ? 'system' : 'doctor_manual',
     );
-
-    // 3) Mark each as paused and cancel linked appointments
-    for (final sess in sessRes.items) {
-      await pb.collection(PBCollections.sessions).update(sess.id, body: {
-        'status': 'paused',
-      });
-
-      // Cancel linked appointment
-      final rawDate = sess.getStringValue('scheduled_date');
-      String datePart = rawDate;
-      try {
-        final dt = DateTime.parse(rawDate);
-        datePart = _formatDate(dt);
-      } catch (_) {}
-      final timeStr = sess.getStringValue('scheduled_time');
-      final doctorId = sess.getStringValue('doctor');
-      final patientId = sess.getStringValue('patient');
-      try {
-        final appts = await pb.collection(PBCollections.appointments).getList(
-          filter:
-              'patient = "$patientId" && doctor = "$doctorId" '
-              '&& date >= "$datePart 00:00:00.000Z" && date <= "$datePart 23:59:59.999Z" '
-              '&& time = "$timeStr" && type = "session" && status != "cancelled"',
-        );
-        for (final appt in appts.items) {
-          await pb.collection(PBCollections.appointments).update(appt.id, body: {'status': 'cancelled'});
-        }
-      } catch (_) {}
-    }
   }
 
-  /// Resume a treatment plan: reschedule all paused sessions from today
-  /// using the smart scheduling engine. If [startFromFirst] is true,
-  /// all paused sessions are rescheduled starting from the lowest session
-  /// number. Otherwise, they continue from where they left off (same order).
+  /// Resume a treatment plan: delegates to [TreatmentScheduler.resumePlan].
   ///
-  /// Both modes reschedule from today forward — the difference is only
-  /// semantic (both reschedule the same paused sessions in order).
-  Future<void> resumeSessions(String planId, {bool startFromFirst = false}) async {
-    // 1) Load plan
-    final planRec = await pb.collection(PBCollections.treatmentPlans).getOne(planId);
-    final plan = TreatmentPlanModel.fromRecord(planRec);
-
-    // 2) Load doctor info for working days
-    List<int> validDays = [];
-    int maxBeds = 3;
-    String? validClinicId;
-    try {
-      final docRec = await pb.collection('doctors').getOne(plan.doctorId);
-      final doctor = DoctorModel.fromRecord(docRec);
-      validDays = doctor.workingDays;
-      validClinicId = doctor.clinicId;
-      if (validClinicId != null && validClinicId.isNotEmpty) {
-        try {
-          final clinicRec = await pb.collection('clinics').getOne(validClinicId);
-          maxBeds = clinicRec.getIntValue('bed_count');
-          if (maxBeds <= 0) maxBeds = 3;
-        } catch (_) {}
-      }
-    } catch (_) {}
-
-    // 3) Get all paused sessions sorted by session_number
-    final sessRes = await pb.collection(PBCollections.sessions).getList(
-      filter: 'treatment_plan = "$planId" && status = "paused"',
-      sort: 'session_number',
-      perPage: 200,
+  /// [startFromFirst] = true  → clears all pins, rebuilds entire schedule
+  /// [startFromFirst] = false → preserves pinned sessions, reschedules non-pinned
+  Future<void> resumeSessions(String planId, {bool startFromFirst = false, String performedBy = 'system'}) async {
+    final lifecycle = SessionLifecycleService(pb);
+    await lifecycle.scheduler.resumePlan(
+      planId,
+      rescheduleAll: startFromFirst,
+      performedBy: performedBy,
+      trigger: performedBy == 'system' ? 'system' : 'doctor_manual',
     );
-
-    if (sessRes.items.isEmpty) return;
-
-    // 4) Determine preferred time from the plan's first session
-    String preferredTime = '10:00';
-    try {
-      final allSessions = await pb.collection(PBCollections.sessions).getList(
-        filter: 'treatment_plan = "$planId"',
-        sort: 'session_number',
-        perPage: 1,
-      );
-      if (allSessions.items.isNotEmpty) {
-        final t = allSessions.items.first.getStringValue('scheduled_time');
-        if (t.isNotEmpty) preferredTime = t;
-      }
-    } catch (_) {}
-
-    final timeParts = preferredTime.split(':');
-    final pTimeHr = int.parse(timeParts[0]);
-    final pTimeMn = int.parse(timeParts[1]);
-
-    // 5) Schedule from today forward
-    DateTime cursor = DateTime.now();
-    final pausedSessions = sessRes.items.toList();
-
-    for (int i = 0; i < pausedSessions.length; i++) {
-      final sess = pausedSessions[i];
-
-      if (i > 0) {
-        cursor = cursor.add(Duration(days: plan.intervalDays));
-      }
-
-      // Skip to next working day
-      if (validDays.isNotEmpty) {
-        while (!validDays.contains(cursor.weekday)) {
-          cursor = cursor.add(const Duration(days: 1));
-        }
-      }
-
-      // Find available slot
-      String resolvedTime = preferredTime;
-      bool foundSlot = false;
-      DateTime tryDate = cursor;
-      int dayAttempts = 0;
-
-      while (!foundSlot && dayAttempts < 30) {
-        if (validDays.isNotEmpty) {
-          while (!validDays.contains(tryDate.weekday)) {
-            tryDate = tryDate.add(const Duration(days: 1));
-          }
-        }
-
-        final tryDateStr = _formatDate(tryDate);
-        DateTime slotAttempt = DateTime(tryDate.year, tryDate.month, tryDate.day, pTimeHr, pTimeMn);
-
-        for (int attempt = 0; attempt < 16; attempt++) {
-          if (slotAttempt.hour >= 20) break;
-          final checkTimeStr =
-              '${slotAttempt.hour.toString().padLeft(2, "0")}:${slotAttempt.minute.toString().padLeft(2, "0")}';
-
-          final existing = await pb.collection(PBCollections.appointments).getList(
-            filter: 'doctor = "${plan.doctorId}" && date = "$tryDateStr" && time = "$checkTimeStr" && status != "cancelled"',
-          );
-          if (existing.totalItems < maxBeds) {
-            resolvedTime = checkTimeStr;
-            cursor = tryDate;
-            foundSlot = true;
-            break;
-          }
-          slotAttempt = slotAttempt.add(const Duration(minutes: 30));
-        }
-
-        if (!foundSlot) {
-          tryDate = tryDate.add(const Duration(days: 1));
-          dayAttempts++;
-        }
-      }
-
-      final newDate = _formatDate(cursor);
-
-      // Update session
-      await pb.collection(PBCollections.sessions).update(sess.id, body: {
-        'scheduled_date': newDate,
-        'scheduled_time': resolvedTime,
-        'status': 'upcoming',
-        'is_rescheduled': true,
-      });
-
-      // Recreate linked appointment with session FK
-      try {
-        await pb.collection('appointments').create(body: {
-          'patient': sess.getStringValue('patient'),
-          'doctor': sess.getStringValue('doctor'),
-          if (validClinicId != null && validClinicId.isNotEmpty) 'clinic': validClinicId,
-          'type': 'session',
-          'date': newDate,
-          'time': resolvedTime,
-          'status': 'scheduled',
-          'session_type': plan.treatmentType,
-          'linked_session_id': sess.id,
-        });
-      } catch (_) {}
-    }
-
-    // 6) Un-pause the plan
-    await pb.collection(PBCollections.treatmentPlans).update(planId, body: {
-      'is_paused': false,
-      'paused_at': '',
-      'status': 'active',
-      'consecutive_misses': 0,
-    });
   }
 
   /// Sync a session's status change to its linked appointment record.

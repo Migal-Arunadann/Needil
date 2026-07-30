@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:pms_app/core/utils/whatsapp_helper.dart';
 import 'package:pms_app/features/patients/models/patient_model.dart';
 import 'package:pms_app/features/patients/providers/patient_provider.dart';
+import 'package:pms_app/features/analytics/screens/analytics_screen.dart';
+import 'package:pms_app/core/widgets/shimmer_effect.dart';
 import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/widgets/responsive_wrapper.dart';
@@ -237,9 +239,9 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
   }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// WEB LAYOUT â€” redesigned table layout
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ─────────────────────────────────────────────────────────────────────────────
+// WEB LAYOUT — redesigned table layout
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _WebPatientScreen extends ConsumerWidget {
   final TextEditingController searchCtrl;
@@ -783,12 +785,7 @@ class _WebPatientScreen extends ConsumerWidget {
             // ── Main Content Area ──
             Expanded(
               child: state.isLoading
-                  ? Center(
-                      child: CircularProgressIndicator(
-                        color: context.colors.primary,
-                        strokeWidth: 3,
-                      ),
-                    )
+                  ? _buildSkeletonList(context)
                   : state.error != null
                       ? _WebErrorView(error: state.error!, onRetry: onRetry)
                       : filteredList.isEmpty
@@ -857,6 +854,25 @@ class _WebPatientScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSkeletonList(BuildContext context) {
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 36),
+      itemCount: 8,
+      itemBuilder: (context, index) => Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: ShimmerEffect(
+          child: Container(
+            height: 60,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
         ),
       ),
     );
@@ -966,9 +982,9 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ─────────────────────────────────────────────────────────────────────────────
 // WEB COMPONENTS
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _WebSearchBar extends StatelessWidget {
   final TextEditingController controller;
@@ -1479,7 +1495,7 @@ class _WebMobileRow extends StatelessWidget {
                 ],
               ),
             ),
-            // Web mobile â€” WhatsApp ONLY
+            // Web mobile — WhatsApp ONLY
             if (patient.phone.isNotEmpty)
               _WebActionBtn(
                 icon: Icons.chat_rounded,
@@ -1497,7 +1513,7 @@ class _WebMobileRow extends StatelessWidget {
   }
 }
 
-// â”€â”€ Pagination â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Pagination ──────────────────────────────────────────────────────────────
 
 class _WebPaginationBar extends StatelessWidget {
   final int currentPage;
@@ -1636,7 +1652,7 @@ class _PgNum extends StatelessWidget {
   }
 }
 
-// â”€â”€ Shared web helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Shared web helpers ──────────────────────────────────────────────────────
 
 class _WebAvatar extends StatelessWidget {
   final String initials;
@@ -1767,7 +1783,7 @@ class _WebErrorView extends StatelessWidget {
   }
 }
 
-// â”€â”€ Web animated row stagger â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Web animated row stagger ────────────────────────────────────────────────
 
 class _WebAnimatedRow extends StatefulWidget {
   final Widget child;
@@ -1810,9 +1826,9 @@ class _WebAnimatedRowState extends State<_WebAnimatedRow>
   }
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// APP â€” Animated card (original, for mobile only)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ─────────────────────────────────────────────────────────────────────────────
+// APP — Animated card (original, for mobile only)
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _AnimatedCard extends StatefulWidget {
   final Widget child;

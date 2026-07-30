@@ -7,10 +7,10 @@ import 'package:pms_app/features/dashboard/screens/main_layout.dart';
 import 'package:pms_app/features/auth/screens/login_screen.dart';
 import 'package:pms_app/features/auth/screens/clinic_deletion_screen.dart';
 import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step1_screen.dart';
+import 'package:pms_app/features/billing/screens/subscription_locked_screen.dart';
 import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/services/notification_service.dart';
-import 'package:flutter/foundation.dart';
 import 'package:pms_app/core/widgets/desktop_loading_wrapper.dart';
 import 'package:pms_app/core/widgets/app_splash_screen.dart';
 
@@ -116,6 +116,10 @@ class _PmsAppState extends ConsumerState<PmsApp> {
       // New clinic registration not yet complete
       if (state.clinic != null && state.clinic!.name.isEmpty) {
         return const AuthWebShell(child: ClinicStep1Screen());
+      }
+      // Subscription expired — show lockout screen
+      if (state.clinic != null && !state.clinic!.isSubscriptionActive) {
+        return const SubscriptionLockedScreen();
       }
     }
     return MainLayout();

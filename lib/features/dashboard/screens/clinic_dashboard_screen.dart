@@ -13,8 +13,7 @@ import 'package:pms_app/features/appointments/models/appointment_model.dart';
 import 'package:pms_app/features/patients/models/patient_model.dart';
 import 'package:pms_app/features/patients/providers/patient_provider.dart';
 import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
-import 'package:pms_app/core/providers/pocketbase_provider.dart';
-import 'package:pms_app/core/services/session_lifecycle_service.dart';
+import 'package:pms_app/core/providers/session_lifecycle_provider.dart';
 import 'package:pms_app/features/appointments/screens/auto_scheduling_dashboard.dart';
 import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 import 'package:pms_app/core/services/auth_service.dart';
@@ -1078,9 +1077,8 @@ class _ConsecutiveMissesAlertCardState
 
   Future<void> _load() async {
     try {
-      final pb = ref.read(pocketbaseProvider);
       final auth = ref.read(authProvider);
-      final lifecycle = SessionLifecycleService(pb);
+      final lifecycle = ref.read(sessionLifecycleServiceProvider);
       final isClinic = auth.role == UserRole.clinic || auth.role == UserRole.receptionist;
       final id = isClinic ? (auth.clinicId ?? auth.userId ?? '') : (auth.userId ?? '');
       final plans = await lifecycle.getPendingMissedPlans(id, isClinic: isClinic);

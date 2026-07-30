@@ -99,6 +99,7 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     required String time,
     String? existingPatientId,
     bool isNewFamilyMember = false,
+    String? intendedRelation,
   }) async {
     try {
       final schedulingService = _ref.read(schedulingServiceProvider);
@@ -115,6 +116,8 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
         patientPhone: patientPhone,
         date: date,
         time: time,
+        isNewFamilyMember: isNewFamilyMember,
+        intendedRelation: intendedRelation,
       );
 
       // ── Returning patient auto-link ────────────────────────────────────────────────
@@ -242,6 +245,15 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
       String appointmentId, AppointmentStatus status) async {
     try {
       await _service.updateStatus(appointmentId, status);
+      await loadAppointments();
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  Future<void> reopenMissedAppointment(String appointmentId) async {
+    try {
+      await _service.reopenMissedAppointment(appointmentId);
       await loadAppointments();
     } catch (e) {
       state = state.copyWith(error: e.toString());

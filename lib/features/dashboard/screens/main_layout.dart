@@ -14,6 +14,7 @@ import 'package:pms_app/features/patients/screens/patient_list_screen.dart';
 import 'package:pms_app/features/analytics/screens/analytics_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/features/appointments/providers/appointment_provider.dart';
+import 'package:pms_app/features/patients/providers/patient_provider.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
 
@@ -321,6 +322,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                       if (isApptsTab) {
                         ref.read(appointmentListProvider.notifier).loadAppointments();
                       }
+                      final isPatientsTab = tab.label == 'Patients';
+                      if (isPatientsTab) {
+                        ref.read(patientListProvider.notifier).loadPatients();
+                      }
                     },
                   ),
                 );
@@ -492,6 +497,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         final isApptsTab = index < tabs.length && tabs[index].label == 'Appts';
         if (isApptsTab) {
           ref.read(appointmentListProvider.notifier).loadAppointments();
+        }
+        final isPatientsTab = index < tabs.length && tabs[index].label == 'Patients';
+        if (isPatientsTab) {
+          ref.read(patientListProvider.notifier).loadPatients();
         }
       },
       child: AnimatedContainer(

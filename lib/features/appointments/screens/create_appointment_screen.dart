@@ -478,6 +478,7 @@ class _CreateAppointmentScreenState
         time: _selectedTimeStr!,
         existingPatientId: _existingPatient?.id,
         isNewFamilyMember: _isNewFamilyMember,
+        intendedRelation: _isNewFamilyMember ? _selectedRelation : null,
       );
       success = result != null;
     } else {

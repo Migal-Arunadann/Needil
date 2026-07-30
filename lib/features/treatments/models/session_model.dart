@@ -21,6 +21,14 @@ class SessionModel {
   final bool isRescheduled;
   final int rescheduleCount;
   final String? originalDate;
+  // ── v2 scheduling fields ──────────────────────────────────────
+  /// True when a doctor or receptionist manually rescheduled this session.
+  /// Auto-cascades will skip pinned sessions during rescheduling.
+  final bool isPinned;
+  final DateTime? completedAt;
+  final DateTime? missedAt;
+  final DateTime? pausedAt;
+  // ─────────────────────────────────────────────────────────────
   final DateTime? created;
   final DateTime? updated;
 
@@ -47,6 +55,10 @@ class SessionModel {
     this.isRescheduled = false,
     this.rescheduleCount = 0,
     this.originalDate,
+    this.isPinned = false,
+    this.completedAt,
+    this.missedAt,
+    this.pausedAt,
     this.created,
     this.updated,
     this.isDeleted = false,
@@ -82,6 +94,16 @@ class SessionModel {
       originalDate: record.getStringValue('original_date').isNotEmpty
           ? record.getStringValue('original_date')
           : null,
+      isPinned: record.getBoolValue('is_pinned'),
+      completedAt: record.getStringValue('completed_at').isNotEmpty
+          ? DateTime.tryParse(record.getStringValue('completed_at'))
+          : null,
+      missedAt: record.getStringValue('missed_at').isNotEmpty
+          ? DateTime.tryParse(record.getStringValue('missed_at'))
+          : null,
+      pausedAt: record.getStringValue('paused_at').isNotEmpty
+          ? DateTime.tryParse(record.getStringValue('paused_at'))
+          : null,
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
       isDeleted: record.getBoolValue('is_deleted'),
@@ -106,6 +128,10 @@ class SessionModel {
       if (isRescheduled) 'is_rescheduled': true,
       if (rescheduleCount > 0) 'reschedule_count': rescheduleCount,
       if (originalDate != null && originalDate!.isNotEmpty) 'original_date': originalDate,
+      if (isPinned) 'is_pinned': true,
+      if (completedAt != null) 'completed_at': completedAt!.toUtc().toIso8601String(),
+      if (missedAt != null) 'missed_at': missedAt!.toUtc().toIso8601String(),
+      if (pausedAt != null) 'paused_at': pausedAt!.toUtc().toIso8601String(),
       'is_deleted': isDeleted,
       if (deletedAt != null) 'deleted_at': deletedAt!.toUtc().toIso8601String(),
     };

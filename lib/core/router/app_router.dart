@@ -29,6 +29,10 @@ import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
 import 'package:pms_app/features/patients/models/patient_model.dart';
 import 'package:pms_app/features/superadmin/screens/superadmin_login_screen.dart';
 import 'package:pms_app/features/superadmin/screens/superadmin_clinic_detail_screen.dart';
+import 'package:pms_app/features/billing/screens/billing_screen.dart';
+import 'package:pms_app/features/billing/screens/subscription_locked_screen.dart';
+import 'package:pms_app/features/scheduling/screens/scheduling_exceptions_screen.dart';
+import 'package:pms_app/features/scheduling/screens/scheduling_audit_history_screen.dart';
 
 /// Named route generator for the app.
 Route<dynamic>? generateRoute(RouteSettings settings) {
@@ -179,12 +183,26 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
     case '/consent':
       return _slide(const ConsentScreen(), settings);
 
+    case '/billing':
+      return _slide(const BillingScreen(), settings);
+
+    case '/subscription-locked':
+      return _fade(const SubscriptionLockedScreen(), settings);
+
     case '/superadmin/login':
       return _fade(const SuperadminLoginScreen(), settings);
 
     case '/superadmin/clinic':
       final clinicId = settings.arguments as String;
       return _slide(SuperadminClinicDetailScreen(clinicId: clinicId), settings);
+
+    case '/scheduling/exceptions':
+      return _slide(const SchedulingExceptionsScreen(), settings);
+
+    case '/scheduling/audit':
+      final plan = settings.arguments;
+      if (plan is! TreatmentPlanModel) return _fade(const LoginScreen(), settings);
+      return _slide(SchedulingAuditHistoryScreen(plan: plan), settings);
 
     default:
       return _fade(const LoginScreen(), settings);

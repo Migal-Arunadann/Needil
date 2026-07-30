@@ -9,10 +9,10 @@ import 'package:pms_app/core/widgets/responsive_wrapper.dart';
 import 'package:pms_app/features/dashboard/screens/main_layout.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
-import 'package:pms_app/core/providers/pocketbase_provider.dart';
-import 'package:pms_app/core/services/session_lifecycle_service.dart';
+import 'package:pms_app/core/providers/session_lifecycle_provider.dart';
 import 'package:pms_app/features/appointments/screens/auto_scheduling_dashboard.dart';
 import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
+import 'package:pms_app/features/scheduling/screens/scheduling_exceptions_screen.dart';
 
 class DoctorDashboardScreen extends ConsumerWidget {
   const DoctorDashboardScreen({super.key});
@@ -448,75 +448,88 @@ class DoctorDashboardScreen extends ConsumerWidget {
       data: Theme.of(context).copyWith(
         cardColor: context.colors.surface,
       ),
-      child: PopupMenuButton<bool>(
-        tooltip: 'Book New Appointment',
-        offset: const Offset(0, 44),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: context.colors.border.withValues(alpha: 0.5)),
-        ),
-        onSelected: (isCallBy) {
-          Navigator.pushNamed(
-            context,
-            '/appointments/create',
-            arguments: {'isCallBy': isCallBy},
-          );
-        },
-        itemBuilder: (context) => [
-          PopupMenuItem(
-            value: true,
-            child: Row(
-              children: [
-                Icon(Icons.phone_in_talk_rounded, color: Colors.blueAccent, size: 16),
-                const SizedBox(width: 8),
-                Text('Call-By / Booking', style: TextStyle(color: context.colors.textPrimary, fontSize: 13)),
-              ],
+      child: Row(
+        children: [
+          // Scheduling Exceptions shortcut
+          Tooltip(
+            message: 'Scheduling Exceptions',
+            child: IconButton(
+              icon: Icon(Icons.event_busy_rounded, size: 20, color: context.colors.textSecondary),
+              onPressed: () => Navigator.pushNamed(context, '/scheduling/exceptions'),
             ),
           ),
-          PopupMenuItem(
-            value: false,
-            child: Row(
-              children: [
-                Icon(Icons.directions_walk_rounded, color: Colors.greenAccent, size: 16),
-                const SizedBox(width: 8),
-                Text('Walk-In Patient', style: TextStyle(color: context.colors.textPrimary, fontSize: 13)),
-              ],
+          // Book appointment popup
+          PopupMenuButton<bool>(
+            tooltip: 'Book New Appointment',
+            offset: const Offset(0, 44),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: context.colors.border.withValues(alpha: 0.5)),
             ),
+            onSelected: (isCallBy) {
+              Navigator.pushNamed(
+                context,
+                '/appointments/create',
+                arguments: {'isCallBy': isCallBy},
+              );
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: true,
+                child: Row(
+                  children: [
+                    Icon(Icons.phone_in_talk_rounded, color: Colors.blueAccent, size: 16),
+                    const SizedBox(width: 8),
+                    Text('Call-By / Booking', style: TextStyle(color: context.colors.textPrimary, fontSize: 13)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: false,
+                child: Row(
+                  children: [
+                    Icon(Icons.directions_walk_rounded, color: Colors.greenAccent, size: 16),
+                    const SizedBox(width: 8),
+                    Text('Walk-In Patient', style: TextStyle(color: context.colors.textPrimary, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ],
+            child: isDesktop 
+              ? const _HeaderCTAButton()
+              : Container(
+                  height: 38,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2563EB),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF2563EB).withValues(alpha: 0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        'New Appointment',
+                        style: context.textStyles.bodyMedium.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 16),
+                    ],
+                  ),
+                ),
           ),
         ],
-        child: isDesktop 
-          ? const _HeaderCTAButton()
-          : Container(
-              height: 38,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF2563EB),
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF2563EB).withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.add_rounded, color: Colors.white, size: 16),
-                  const SizedBox(width: 6),
-                  Text(
-                    'New Appointment',
-                    style: context.textStyles.bodyMedium.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 16),
-                ],
-              ),
-            ),
       ),
     );
   }
@@ -621,9 +634,8 @@ class _DoctorConsecutiveMissesCardState
 
   Future<void> _load() async {
     try {
-      final pb = ref.read(pocketbaseProvider);
       final auth = ref.read(authProvider);
-      final lifecycle = SessionLifecycleService(pb);
+      final lifecycle = ref.read(sessionLifecycleServiceProvider);
       final doctorId = auth.userId ?? '';
       final plans = await lifecycle.getPendingMissedPlans(doctorId, isClinic: false);
       if (mounted) setState(() { _plans = plans; _loading = false; });

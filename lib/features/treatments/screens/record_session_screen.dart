@@ -1513,8 +1513,10 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                 ),
               ],
             ),
-            child: ListView.separated(
-              shrinkWrap: true,
+            child: Material(
+              color: Colors.transparent,
+              child: ListView.separated(
+                shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: _searchSuggestions.length,
               separatorBuilder: (_, __) => Divider(height: 1, color: context.colors.border),
@@ -1558,6 +1560,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                   },
                 );
               },
+            ),
             ),
           ),
         ],

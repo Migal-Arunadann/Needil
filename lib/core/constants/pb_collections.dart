@@ -12,4 +12,7 @@ class PBCollections {
   static const String auditLogs = 'audit_logs';
   static const String consentRecords = 'consent_records';
   static const String clinicReactivationRequests = 'clinic_reactivation_requests';
+  // v2 scheduling
+  static const String schedulingAuditLogs = 'scheduling_audit_logs';
+  static const String schedulingExceptions = 'scheduling_exceptions';
 }

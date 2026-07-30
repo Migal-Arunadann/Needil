@@ -8,6 +8,8 @@ class AppToast {
     String message, {
     ToastType type = ToastType.info,
     Duration duration = const Duration(seconds: 4),
+    String? actionLabel,
+    VoidCallback? onAction,
   }) {
     final context = appNavigatorKey.currentContext;
     if (context == null) return;
@@ -42,6 +44,13 @@ class AppToast {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         duration: duration,
+        action: actionLabel != null && onAction != null
+            ? SnackBarAction(
+                label: actionLabel,
+                textColor: Colors.white,
+                onPressed: onAction,
+              )
+            : null,
       ),
     );
   }

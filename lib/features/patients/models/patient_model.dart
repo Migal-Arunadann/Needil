@@ -31,6 +31,7 @@ class PatientModel {
   final String? relationToPrimary;
   final DateTime? created;
   final DateTime? updated;
+  final bool requiresPatientDetailsUpdate;
 
   PatientModel({
     required this.id,
@@ -60,6 +61,7 @@ class PatientModel {
     this.privacyPolicyAcceptedDate,
     this.created,
     this.updated,
+    this.requiresPatientDetailsUpdate = false,
   });
 
   /// Build the full photo URL from PocketBase.
@@ -99,6 +101,7 @@ class PatientModel {
       privacyPolicyAcceptedDate: record.getStringValue('privacy_policy_accepted_date'),
       created: DateTime.tryParse(record.getStringValue('created')),
       updated: DateTime.tryParse(record.getStringValue('updated')),
+      requiresPatientDetailsUpdate: record.getBoolValue('requires_patient_details_update'),
     );
   }
 
@@ -135,6 +138,7 @@ class PatientModel {
       'privacy_policy_accepted': privacyPolicyAccepted,
       if (privacyPolicyAcceptedDate != null && privacyPolicyAcceptedDate!.isNotEmpty)
         'privacy_policy_accepted_date': privacyPolicyAcceptedDate,
+      'requires_patient_details_update': requiresPatientDetailsUpdate,
     };
   }
 }

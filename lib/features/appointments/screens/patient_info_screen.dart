@@ -18,8 +18,15 @@ import 'package:pms_app/core/utils/validators.dart';
 /// record to the appointment.
 class PatientInfoScreen extends ConsumerStatefulWidget {
   final AppointmentModel appointment;
+  final bool allowSkipRetroactive;
+  final VoidCallback? onSkipRetroactive;
 
-  const PatientInfoScreen({super.key, required this.appointment});
+  const PatientInfoScreen({
+    super.key,
+    required this.appointment,
+    this.allowSkipRetroactive = false,
+    this.onSkipRetroactive,
+  });
 
   @override
   ConsumerState<PatientInfoScreen> createState() => _PatientInfoScreenState();
@@ -109,11 +116,11 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     });
   }
 
-  void _applyNewFamilyMemberMode(PatientModel primary) {
+  void _applyNewFamilyMemberMode(PatientModel primary, {bool preserveName = false}) {
     if (primary.city != null && primary.city!.isNotEmpty) _cityCtrl.text = primary.city!;
     if (primary.area != null && primary.area!.isNotEmpty) _areaCtrl.text = primary.area!;
     if (primary.pincode != null && primary.pincode!.isNotEmpty) _pincodeCtrl.text = primary.pincode!;
-    _nameCtrl.clear();
+    if (!preserveName) _nameCtrl.clear();
     _dobCtrl.clear();
     _occupationCtrl.clear();
     _emailCtrl.clear();
@@ -145,6 +152,16 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     });
 
     if (allPatients.isEmpty) return;
+
+    // If the appointment already captured the intent to add a new family member,
+    // apply it directly without showing the selection screen.
+    if (widget.appointment.isNewFamilyMember) {
+      _applyNewFamilyMemberMode(allPatients.first, preserveName: true);
+      setState(() {
+        _selectedRelation = widget.appointment.intendedRelation;
+      });
+      return;
+    }
 
     // Show family member selection screen
     final result = await Navigator.push<FamilySelectionResult>(
@@ -314,6 +331,13 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
 
       await service.linkPatient(widget.appointment.id, patient.id);
       await service.markPatientDetailsSaved(widget.appointment.id);
+      
+      // Clear the requires_patient_details_update flag since they just saved the details
+      try {
+        final pb = ref.read(pocketbaseProvider);
+        await pb.collection('patients').update(patient.id, body: {'requires_patient_details_update': false});
+      } catch (_) {}
+
       ref.read(appointmentListProvider.notifier).loadAppointments();
 
       if (mounted) {
@@ -434,6 +458,17 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                     icon: Icons.how_to_reg_rounded,
                     onPressed: _submit,
                   ),
+                  if (widget.allowSkipRetroactive && widget.onSkipRetroactive != null) ...[
+                    const SizedBox(height: 16),
+                    AppButton(
+                      label: 'Skip for now',
+                      icon: Icons.skip_next_rounded,
+                      isOutlined: true,
+                      onPressed: () {
+                        widget.onSkipRetroactive!();
+                      },
+                    ),
+                  ],
                 ],
               ),
             );
