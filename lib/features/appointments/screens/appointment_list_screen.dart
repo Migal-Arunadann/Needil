@@ -3814,7 +3814,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
   int _sessionNumber = 0;
   String _sessionType = 'treatment'; // 'treatment' or 'maintenance'
   String? _sessionId;
-  String _treatmentModality = ''; // resolved: session.treatment_type OR plan.treatment_type
+  String? _treatmentModality; // resolved: session.treatment_type OR plan.treatment_type
   bool _sessionNumLoaded = false;
 
   @override
@@ -3893,7 +3893,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
       pb.collection(PBCollections.sessions).subscribe(sessionId, (event) {
         if (!mounted) return;
         final newModality = event.record?.getStringValue('treatment_type') ?? '';
-        if (newModality.isNotEmpty && newModality != _treatmentModality) {
+        if (newModality.isNotEmpty && newModality != (_treatmentModality ?? '')) {
           setState(() => _treatmentModality = newModality);
         }
       });
@@ -4611,10 +4611,10 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                               spacing: 6,
                                               runSpacing: 4,
                                               children: [
-                                                if (_treatmentModality.isNotEmpty)
+                                                if (_treatmentModality != null && _treatmentModality!.isNotEmpty)
                                                   _Pill(
-                                                    label: _treatmentModality,
-                                                    icon: _treatmentTypeIcon(_treatmentModality),
+                                                    label: _treatmentModality!,
+                                                    icon: _treatmentTypeIcon(_treatmentModality!),
                                                     color: sessionAccent,
                                                   ),
                                                 _Pill(
@@ -4821,10 +4821,10 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                                   spacing: 6,
                                                   runSpacing: 4,
                                                   children: [
-                                                    if (_treatmentModality.isNotEmpty)
+                                                    if (_treatmentModality != null && _treatmentModality!.isNotEmpty)
                                                       _Pill(
-                                                        label: _treatmentModality,
-                                                        icon: _treatmentTypeIcon(_treatmentModality),
+                                                        label: _treatmentModality!,
+                                                        icon: _treatmentTypeIcon(_treatmentModality!),
                                                         color: sessionAccent,
                                                       ),
                                                     _Pill(
