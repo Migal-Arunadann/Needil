@@ -3814,7 +3814,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
   int _sessionNumber = 0;
   String _sessionType = 'treatment'; // 'treatment' or 'maintenance'
   String? _sessionId;
-  String? _modality;
+  String _treatmentModality = ''; // resolved: session.treatment_type OR plan.treatment_type
   bool _sessionNumLoaded = false;
 
   @override
@@ -3835,31 +3835,80 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     // Use preloaded info from parent if available — avoids PB query
     if (widget.preloadedSessionInfo != null) {
       final info = widget.preloadedSessionInfo!;
-      setState(() {
-        _sessionNumber = info['number'] as int? ?? 0;
-        _sessionType = info['type'] as String? ?? 'treatment';
-        _sessionId = info['id'] as String?;
-        _sessionNumLoaded = true;
-      });
+      final sessionId = info['id'] as String?;
+      final rawModality = info['treatmentModality'] as String? ?? '';
+      final planId = info['planId'] as String? ?? '';
+      String resolvedModality = rawModality;
+      if (resolvedModality.isEmpty && planId.isNotEmpty) {
+        try {
+          final pb = ref.read(pocketbaseProvider);
+          final planRec = await pb.collection(PBCollections.treatmentPlans).getOne(planId);
+          resolvedModality = planRec.getStringValue('treatment_type');
+        } catch (_) {}
+      }
+      if (mounted) {
+        setState(() {
+          _sessionNumber = info['number'] as int? ?? 0;
+          _sessionType = info['type'] as String? ?? 'treatment';
+          _sessionId = sessionId;
+          _treatmentModality = resolvedModality;
+          _sessionNumLoaded = true;
+        });
+        if (sessionId != null) _subscribeToSession(sessionId);
+      }
       return;
     }
     try {
       final service = ref.read(appointmentServiceProvider);
       final info = await service.getSessionInfoForAppointment(widget.apt);
       if (mounted && info != null) {
-        setState(() {
-          _sessionNumber = info['number'] as int;
-          _sessionType = info['type'] as String;
-          _sessionId = info['id'] as String?;
-          _sessionNumLoaded = true;
-        });
+        final sessionId = info['id'] as String?;
+        final rawModality = info['treatmentModality'] as String? ?? '';
+        final planId = info['planId'] as String? ?? '';
+        String resolvedModality = rawModality;
+        if (resolvedModality.isEmpty && planId.isNotEmpty) {
+          try {
+            final pb = ref.read(pocketbaseProvider);
+            final planRec = await pb.collection(PBCollections.treatmentPlans).getOne(planId);
+            resolvedModality = planRec.getStringValue('treatment_type');
+          } catch (_) {}
+        }
+        if (mounted) {
+          setState(() {
+            _sessionNumber = info['number'] as int;
+            _sessionType = info['type'] as String;
+            _sessionId = sessionId;
+            _treatmentModality = resolvedModality;
+            _sessionNumLoaded = true;
+          });
+          if (sessionId != null) _subscribeToSession(sessionId);
+        }
       }
+    } catch (_) {}
+  }
+
+  void _subscribeToSession(String sessionId) {
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      pb.collection(PBCollections.sessions).subscribe(sessionId, (event) {
+        if (!mounted) return;
+        final newModality = event.record?.getStringValue('treatment_type') ?? '';
+        if (newModality.isNotEmpty && newModality != _treatmentModality) {
+          setState(() => _treatmentModality = newModality);
+        }
+      });
     } catch (_) {}
   }
 
   @override
   void dispose() {
     SessionTimerService.instance.removeGlobalListener(_onTimerChanged);
+    if (_sessionId != null) {
+      try {
+        final pb = ref.read(pocketbaseProvider);
+        pb.collection(PBCollections.sessions).unsubscribe(_sessionId!);
+      } catch (_) {}
+    }
     _ctrl.dispose();
     super.dispose();
   }
@@ -4009,6 +4058,23 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
         ),
       ),
     );
+  }
+
+  IconData _treatmentTypeIcon(String type) {
+    switch (type) {
+      case 'Acupuncture':
+        return Icons.medical_information_outlined;
+      case 'Acupressure':
+        return Icons.touch_app_rounded;
+      case 'Cupping Therapy':
+        return Icons.spa_outlined;
+      case 'Physiotherapy':
+        return Icons.accessibility_new_rounded;
+      case 'Foot Reflexology':
+        return Icons.directions_walk_rounded;
+      default:
+        return Icons.healing_outlined;
+    }
   }
 
   Widget _indicatorItem({
@@ -4545,6 +4611,12 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                               spacing: 6,
                                               runSpacing: 4,
                                               children: [
+                                                if (_treatmentModality.isNotEmpty)
+                                                  _Pill(
+                                                    label: _treatmentModality,
+                                                    icon: _treatmentTypeIcon(_treatmentModality),
+                                                    color: sessionAccent,
+                                                  ),
                                                 _Pill(
                                                   label: statusStr,
                                                   icon: statusIcon,
@@ -4749,6 +4821,12 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                                   spacing: 6,
                                                   runSpacing: 4,
                                                   children: [
+                                                    if (_treatmentModality.isNotEmpty)
+                                                      _Pill(
+                                                        label: _treatmentModality,
+                                                        icon: _treatmentTypeIcon(_treatmentModality),
+                                                        color: sessionAccent,
+                                                      ),
                                                     _Pill(
                                                       label: statusStr,
                                                       icon: statusIcon,

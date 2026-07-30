@@ -1192,6 +1192,8 @@ class AppointmentService {
           'type': s.getStringValue('session_type').isNotEmpty
               ? s.getStringValue('session_type')
               : 'treatment',
+          'treatmentModality': s.getStringValue('treatment_type'), // may be empty; caller falls back to plan
+          'planId': s.getStringValue('treatment_plan'),            // for fallback fetch
         };
       }
     } catch (_) {}
