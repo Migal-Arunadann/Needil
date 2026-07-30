@@ -3761,9 +3761,9 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
   }
 }
 
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-// Treatment Session Card Ã¢â‚¬â€ distinct flow from consultation cards
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+// ------------------------------------------------------------------------------------------------------------------------------------------------------
+// Treatment Session Card — distinct flow from consultation cards
+// ------------------------------------------------------------------------------------------------------------------------------------------------------
 
 class _SessionCard extends ConsumerStatefulWidget {
   final AppointmentModel apt;
@@ -3779,7 +3779,7 @@ class _SessionCard extends ConsumerStatefulWidget {
   final VoidCallback onLongPress;
   final void Function(String? sessionId) onTap;
   final bool showDoctorName;
-  /// Pre-loaded session info from parent batch-load Ã¢â‚¬â€ skips per-card PB query.
+  /// Pre-loaded session info from parent batch-load — skips per-card PB query.
   final Map<String, dynamic>? preloadedSessionInfo;
   final String? clinicLocation;
 
@@ -3832,7 +3832,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
   }
 
   Future<void> _loadSessionInfo() async {
-    // Use preloaded info from parent if available Ã¢â‚¬â€ avoids PB query
+    // Use preloaded info from parent if available — avoids PB query
     if (widget.preloadedSessionInfo != null) {
       final info = widget.preloadedSessionInfo!;
       setState(() {
@@ -4022,32 +4022,26 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
   }) {
     return Row(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         if (isDot)
-          Padding(
-            padding: const EdgeInsets.only(top: 5),
-            child: Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: iconColor,
-                shape: BoxShape.circle,
-              ),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: iconColor,
+              shape: BoxShape.circle,
             ),
           )
         else
-          Padding(
-            padding: const EdgeInsets.only(top: 2),
-            child: Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: iconColor, size: 15),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
             ),
+            child: Icon(icon, color: iconColor, size: 15),
           ),
         const SizedBox(width: 8),
         Expanded(
@@ -4240,7 +4234,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     if (timerEntry == null) {
       timerEntry = SessionTimerService.instance.getActiveTimerByPatientName(apt.displayName);
     }
-    if (timerEntry == null || !timerEntry.isActive) return const SizedBox.shrink();
+    if (timerEntry == null || !timerEntry.isActive) return _buildSessionStatus(context, apt, widget.apt.status == AppointmentStatus.completed);
 
     final mins = timerEntry.remainingSeconds ~/ 60;
     final secs = timerEntry.remainingSeconds % 60;
@@ -4485,7 +4479,6 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                           crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     // Col 1: Time (flex 2) - Hidden if in progress
-                                    if (!isInProgress) ...[
                                       Expanded(
                                         flex: 2,
                                         child: Center(
@@ -4514,7 +4507,6 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                         ),
                                       ),
                                       VerticalDivider(color: context.colors.border.withValues(alpha: 0.3), width: 1),
-                                    ],
                                     
                                     // Col 2: Patient details
                                     Expanded(
@@ -4539,7 +4531,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                                   const SizedBox(width: 4),
                                                   Expanded(
                                                     child: Text(
-                                                      'Dr. ${apt.doctorName}',
+                                                      'Dr. ${apt.doctorName != null ? _toTitleCase(apt.doctorName!) : ''}',
                                                       style: context.textStyles.caption.copyWith(fontSize: 11, color: context.colors.textSecondary),
                                                       maxLines: 1,
                                                       overflow: TextOverflow.ellipsis,
