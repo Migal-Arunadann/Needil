@@ -11,6 +11,7 @@ import 'package:pms_app/features/auth/models/doctor_model.dart';
 import 'package:pms_app/core/services/session_lifecycle_service.dart';
 import 'package:pms_app/core/scheduling/slot_finder.dart';
 import 'package:pms_app/core/scheduling/treatment_scheduler.dart' show RescheduleMode;
+import 'package:pms_app/core/scheduling/appointment_sync.dart';
 import 'package:image_picker/image_picker.dart';
 
 
@@ -1112,6 +1113,45 @@ class TreatmentService {
       performedBy: performedBy,
       trigger: performedBy == 'system' ? 'system' : 'doctor_manual',
     );
+  }
+
+  /// Manually update multiple sessions at once (dates, times, types).
+  ///
+  /// This auto-pins manually moved sessions and ensures linked appointments
+  /// are updated in sync via [AppointmentSync].
+  Future<void> bulkUpdateSessions(List<SessionModel> updatedSessions) async {
+    final appointmentSync = AppointmentSync(pb);
+    for (final session in updatedSessions) {
+      String newTime = '10:00';
+      if (session.scheduledTime != null && session.scheduledTime!.isNotEmpty) {
+        newTime = session.scheduledTime!;
+      } else {
+        try {
+          final dt = DateTime.parse(session.scheduledDate).toLocal();
+          if (dt.hour != 0 || dt.minute != 0 || dt.second != 0) {
+            newTime = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+          }
+        } catch (_) {}
+      }
+
+      // 1. Update session record
+      await pb.collection(PBCollections.sessions).update(session.id, body: {
+        'scheduled_date': session.scheduledDate,
+        'scheduled_time': newTime,
+        'session_type': session.sessionType,
+        'treatment_modality': session.treatmentModality,
+        'is_pinned': true, // Auto-pin manually placed sessions
+      });
+
+      // 2. Sync appointment
+      await appointmentSync.updateForSession(
+        session: session,
+        newDate: session.scheduledDate,
+        newTime: newTime,
+        sessionType: session.sessionType,
+        clinicId: null,
+      );
+    }
   }
 
   /// Sync a session's status change to its linked appointment record.

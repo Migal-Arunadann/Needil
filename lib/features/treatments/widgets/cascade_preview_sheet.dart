@@ -7,12 +7,20 @@ class CascadePreviewSheet extends StatelessWidget {
   final ReschedulePreview preview;
   final VoidCallback onConfirm;
   final VoidCallback onCancel;
+  final bool applyTimeToAll;
+  final ValueChanged<bool>? onToggleApplyTimeToAll;
+  final String? newTime;
+  final bool isRegenerating;
 
   const CascadePreviewSheet({
     super.key,
     required this.preview,
     required this.onConfirm,
     required this.onCancel,
+    this.applyTimeToAll = false,
+    this.onToggleApplyTimeToAll,
+    this.newTime,
+    this.isRegenerating = false,
   });
 
   @override
@@ -305,45 +313,69 @@ class CascadePreviewSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: onCancel,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    side: BorderSide(color: context.colors.border),
-                  ),
-                  child: Text(
-                    'Cancel',
-                    style: context.textStyles.bodyMedium.copyWith(
-                      color: context.colors.textPrimary,
-                      fontWeight: FontWeight.w600,
+          if (onToggleApplyTimeToAll != null && moved > 0) ...[
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: Text(
+                'Update future sessions to new time${newTime != null ? ' ($newTime)' : ''}',
+                style: context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500),
+              ),
+              value: applyTimeToAll,
+              onChanged: (val) {
+                if (val != null) onToggleApplyTimeToAll!(val);
+              },
+              activeColor: context.colors.primary,
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (isRegenerating)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: onCancel,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      side: BorderSide(color: context.colors.border),
+                    ),
+                    child: Text(
+                      'Cancel',
+                      style: context.textStyles.bodyMedium.copyWith(
+                        color: context.colors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: FilledButton(
-                  onPressed: validation.isValid ? onConfirm : null,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: context.colors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text(
-                    'Confirm',
-                    style: context.textStyles.bodyMedium.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: validation.isValid ? onConfirm : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: context.colors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text(
+                      'Confirm',
+                      style: context.textStyles.bodyMedium.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );

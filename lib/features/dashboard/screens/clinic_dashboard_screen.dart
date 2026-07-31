@@ -15,7 +15,7 @@ import 'package:pms_app/features/patients/providers/patient_provider.dart';
 import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
 import 'package:pms_app/core/providers/session_lifecycle_provider.dart';
 import 'package:pms_app/features/appointments/screens/auto_scheduling_dashboard.dart';
-import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
+import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/core/services/auth_service.dart';
 
 
@@ -1066,7 +1066,7 @@ class _ConsecutiveMissesAlertCard extends ConsumerStatefulWidget {
 
 class _ConsecutiveMissesAlertCardState
     extends ConsumerState<_ConsecutiveMissesAlertCard> {
-  List<TreatmentPlanModel>? _plans;
+  List<SessionModel>? _plans;
   bool _loading = true;
 
   @override
@@ -1080,9 +1080,12 @@ class _ConsecutiveMissesAlertCardState
       final auth = ref.read(authProvider);
       final lifecycle = ref.read(sessionLifecycleServiceProvider);
       final isClinic = auth.role == UserRole.clinic || auth.role == UserRole.receptionist;
-      final id = isClinic ? (auth.clinicId ?? auth.userId ?? '') : (auth.userId ?? '');
-      final plans = await lifecycle.getPendingMissedPlans(id, isClinic: isClinic);
-      if (mounted) setState(() { _plans = plans; _loading = false; });
+      final clinicId = auth.clinicId ?? '';
+      final doctorId = auth.userId ?? '';
+      final sessions = isClinic
+          ? await lifecycle.getOverdueSessionsForClinic(clinicId)
+          : await lifecycle.getOverdueSessions(doctorId);
+      if (mounted) setState(() { _plans = sessions; _loading = false; });
     } catch (_) {
       if (mounted) setState(() { _loading = false; _plans = []; });
     }
@@ -1097,17 +1100,17 @@ class _ConsecutiveMissesAlertCardState
     return InkWell(
       onTap: () => AutoSchedulingDashboard.show(
         context,
-        plans: plans,
+        overdueSessions: plans,
         onRefresh: _load,
       ),
       borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: context.colors.error.withValues(alpha: 0.08),
+          color: context.colors.warning.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: context.colors.error.withValues(alpha: 0.35),
+            color: context.colors.warning.withValues(alpha: 0.35),
             width: 1,
           ),
         ),
@@ -1116,12 +1119,12 @@ class _ConsecutiveMissesAlertCardState
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: context.colors.error.withValues(alpha: 0.12),
+                color: context.colors.warning.withValues(alpha: 0.12),
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons.warning_amber_rounded,
-                color: context.colors.error,
+                Icons.notifications_active_rounded,
+                color: context.colors.warning,
                 size: 18,
               ),
             ),
@@ -1131,16 +1134,16 @@ class _ConsecutiveMissesAlertCardState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Consecutive Misses Alert',
+                    'Needs Attention',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: context.colors.error,
+                      color: context.colors.warning,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${plans.length} patient${plans.length == 1 ? '' : 's'} with 3+ consecutive missed sessions',
+                    '${plans.length} overdue session${plans.length == 1 ? '' : 's'} need your review',
                     style: TextStyle(
                       fontSize: 11,
                       color: context.colors.textSecondary,
@@ -1151,7 +1154,7 @@ class _ConsecutiveMissesAlertCardState
             ),
             Icon(
               Icons.chevron_right_rounded,
-              color: context.colors.error,
+              color: context.colors.warning,
               size: 18,
             ),
           ],

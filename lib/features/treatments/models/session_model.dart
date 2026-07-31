@@ -1,6 +1,6 @@
 import 'package:pocketbase/pocketbase.dart';
 
-enum SessionStatus { upcoming, waiting, inProgress, completed, missed, cancelled, paused }
+enum SessionStatus { upcoming, overdue, waiting, inProgress, completed, missed, cancelled, paused }
 
 class SessionModel {
   final String id;
@@ -66,6 +66,64 @@ class SessionModel {
   });
 
   bool get isMaintenance => sessionType == 'maintenance';
+
+  SessionModel copyWith({
+    String? id,
+    String? treatmentPlanId,
+    String? patientId,
+    String? doctorId,
+    int? sessionNumber,
+    String? scheduledDate,
+    String? scheduledTime,
+    SessionStatus? status,
+    String? sessionType,
+    String? treatmentModality,
+    String? notes,
+    String? bpLevel,
+    int? pulse,
+    List<String>? photos,
+    String? remarks,
+    bool? isRescheduled,
+    int? rescheduleCount,
+    String? originalDate,
+    bool? isPinned,
+    DateTime? completedAt,
+    DateTime? missedAt,
+    DateTime? pausedAt,
+    DateTime? created,
+    DateTime? updated,
+    bool? isDeleted,
+    DateTime? deletedAt,
+  }) {
+    return SessionModel(
+      id: id ?? this.id,
+      treatmentPlanId: treatmentPlanId ?? this.treatmentPlanId,
+      patientId: patientId ?? this.patientId,
+      doctorId: doctorId ?? this.doctorId,
+      sessionNumber: sessionNumber ?? this.sessionNumber,
+      scheduledDate: scheduledDate ?? this.scheduledDate,
+      scheduledTime: scheduledTime ?? this.scheduledTime,
+      status: status ?? this.status,
+      sessionType: sessionType ?? this.sessionType,
+      treatmentModality: treatmentModality ?? this.treatmentModality,
+      notes: notes ?? this.notes,
+      bpLevel: bpLevel ?? this.bpLevel,
+      pulse: pulse ?? this.pulse,
+      photos: photos ?? this.photos,
+      remarks: remarks ?? this.remarks,
+      isRescheduled: isRescheduled ?? this.isRescheduled,
+      rescheduleCount: rescheduleCount ?? this.rescheduleCount,
+      originalDate: originalDate ?? this.originalDate,
+      isPinned: isPinned ?? this.isPinned,
+      completedAt: completedAt ?? this.completedAt,
+      missedAt: missedAt ?? this.missedAt,
+      pausedAt: pausedAt ?? this.pausedAt,
+      created: created ?? this.created,
+      updated: updated ?? this.updated,
+      isDeleted: isDeleted ?? this.isDeleted,
+      deletedAt: deletedAt ?? this.deletedAt,
+    );
+  }
 
   factory SessionModel.fromRecord(RecordModel record) {
     final sessionTypeVal = record.getStringValue('session_type');
@@ -151,6 +209,8 @@ class SessionModel {
         return SessionStatus.waiting;
       case 'in_progress':
         return SessionStatus.inProgress;
+      case 'overdue':
+        return SessionStatus.overdue;
       default:
         return SessionStatus.upcoming;
     }
@@ -160,6 +220,8 @@ class SessionModel {
     switch (s) {
       case SessionStatus.upcoming:
         return 'upcoming';
+      case SessionStatus.overdue:
+        return 'overdue';
       case SessionStatus.waiting:
         return 'waiting';
       case SessionStatus.inProgress:

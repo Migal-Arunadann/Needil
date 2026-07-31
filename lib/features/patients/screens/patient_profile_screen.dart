@@ -1,5 +1,8 @@
-import 'dart:ui';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:pms_app/core/services/data_export_service.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -13,6 +16,7 @@ import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/features/treatments/screens/create_treatment_plan_screen.dart';
 import 'package:pms_app/features/treatments/screens/session_list_screen.dart' show showClosureReasonDialog;
+import 'package:pms_app/features/treatments/screens/manage_plan_screen.dart';
 import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/utils/date_picker_helper.dart';
@@ -48,6 +52,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   /// null = not yet checked; '' = none found; non-empty = ongoing consultation ID.
   String? _ongoingConsultationId;
   bool _hasAnyConsultation = false;
+  bool _isDownloadingData = false;
 
   /// Incremented to force FutureBuilder + card rebuild after plan creation.
   int _refreshKey = 0;
@@ -98,6 +103,33 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     }
   }
 
+  Future<void> _downloadPatientData() async {
+    setState(() => _isDownloadingData = true);
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final service = DataExportService(pb);
+      final data = await service.exportSinglePatientData(_patient.id);
+
+      final tempDir = await getTemporaryDirectory();
+      final sanitizedName = _patient.fullName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
+      final dateStr = DateTime.now().toIso8601String().substring(0, 10);
+      final file = File('${tempDir.path}/Patient_Data_${sanitizedName}_$dateStr.txt');
+      
+      await file.writeAsString(data);
+      
+      if (mounted) {
+        await Share.shareXFiles([XFile(file.path)], text: 'Patient Data Export for ${_patient.fullName}');
+      }
+    } catch (e) {
+      if (mounted) {
+        AppToast.show('Failed to download data: $e', type: ToastType.error);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloadingData = false);
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -1057,6 +1089,30 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
             },
           ),
           const SizedBox(height: 10),
+
+          // ── DPDP Data Download Button ─────────────────────────────────────
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _isDownloadingData ? null : _downloadPatientData,
+              icon: _isDownloadingData 
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.download_rounded, size: 18),
+              label: Text(_isDownloadingData ? 'Compiling Data...' : 'Download Patient Info'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: context.colors.primary.withValues(alpha: 0.1),
+                foregroundColor: context.colors.primary,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: context.colors.primary.withValues(alpha: 0.3)),
+                ),
+                textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -2063,21 +2119,32 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
           ),
         ),
         // ⋮ Close Treatment menu
-        if (canClose) ...[const SizedBox(width: 8), PopupMenuButton<String>(
-          icon: Icon(Icons.more_vert_rounded, size: 16, color: context.colors.textHint),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          onSelected: (v) { if (v == 'close') _closeTreatment(plan); },
-          itemBuilder: (ctx) => [
-            PopupMenuItem(
-              value: 'close',
-              child: Row(children: [
-                Icon(Icons.cancel_outlined, size: 16, color: context.colors.error),
-                const SizedBox(width: 8),
-                Text('Close Treatment', style: TextStyle(color: context.colors.error, fontSize: 13)),
-              ]),
-            ),
-          ],
-        )],
+        if (canClose) ...[
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Manage Plan (Edit Sessions)',
+            icon: Icon(Icons.edit_calendar_rounded, size: 18, color: context.colors.primary),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            onPressed: () => _openManagePlan(plan),
+          ),
+          const SizedBox(width: 8),
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert_rounded, size: 16, color: context.colors.textHint),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onSelected: (v) { if (v == 'close') _closeTreatment(plan); },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(
+                value: 'close',
+                child: Row(children: [
+                  Icon(Icons.cancel_outlined, size: 16, color: context.colors.error),
+                  const SizedBox(width: 8),
+                  Text('Close Treatment', style: TextStyle(color: context.colors.error, fontSize: 13)),
+                ]),
+              ),
+            ],
+          ),
+        ],
       ],
     );
   }
@@ -2089,6 +2156,20 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       case TreatmentPlanStatus.manualReview: return ('Manual Review',  context.colors.error);
       case TreatmentPlanStatus.completed:    return ('Completed',       context.colors.primary);
       case TreatmentPlanStatus.closed:       return ('Closed',          context.colors.textSecondary);
+    }
+  }
+
+  Future<void> _openManagePlan(TreatmentPlanModel plan) async {
+    final sessions = plan.isMaintenance ? _maintenanceSessions : _treatmentSessions;
+    final didChange = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ManagePlanScreen(plan: plan, sessions: sessions),
+    );
+    if (didChange == true && mounted) {
+      _loadPlans();
     }
   }
 
@@ -2615,7 +2696,8 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   void _showSessionActions(SessionModel session) {
     final canAct = session.status == SessionStatus.upcoming ||
         session.status == SessionStatus.waiting ||
-        session.status == SessionStatus.inProgress;
+        session.status == SessionStatus.inProgress ||
+        session.status == SessionStatus.overdue; // overdue = retroactive recording allowed
     if (!canAct) return;
 
     showModalBottomSheet(
@@ -2976,6 +3058,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   Color _sessionStatusColor(SessionStatus s) {
     switch (s) {
       case SessionStatus.upcoming:    return context.colors.info;
+      case SessionStatus.overdue:     return Colors.amber.shade700;
       case SessionStatus.waiting:     return context.colors.warning;
       case SessionStatus.inProgress:  return const Color(0xFFF59E0B);
       case SessionStatus.completed:   return context.colors.success;

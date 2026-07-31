@@ -204,6 +204,7 @@ class TreatmentScheduler {
     required String performedBy,
     required String trigger,
     RescheduleMode mode = RescheduleMode.cascadeAll,
+    bool applyTimeToAll = false,
   }) async {
     final sessionRec = await pb.collection(PBCollections.sessions).getOne(sessionId);
     final targetSession = SessionModel.fromRecord(sessionRec);
@@ -247,7 +248,7 @@ class TreatmentScheduler {
           context: context,
           sessionsToReschedule: subsequent,
           anchorDate: anchorDate,
-          preferredTime: newTime,
+          preferredTime: applyTimeToAll ? newTime : await _loadPreferredTime(planId),
           trigger: trigger,
           performedBy: performedBy,
           planId: planId,
@@ -347,6 +348,7 @@ class TreatmentScheduler {
     required String performedBy,
     required String trigger,
     RescheduleMode mode = RescheduleMode.cascadeAll,
+    bool applyTimeToAll = false,
   }) async {
     try {
       final sessionRec =
@@ -355,7 +357,7 @@ class TreatmentScheduler {
       final planId = targetSession.treatmentPlanId;
 
       final context = await contextLoader.load(planId);
-      final preferredTime = newTime;
+      final preferredTime = applyTimeToAll ? newTime : await _loadPreferredTime(planId);
 
       // Pin the target session before cascade
       await pb.collection(PBCollections.sessions).update(sessionId, body: {
@@ -455,6 +457,26 @@ class TreatmentScheduler {
     } catch (e) {
       debugPrint('[TreatmentScheduler] rescheduleSession error: $e');
     }
+  }
+
+  /// Checks if there is a pending session scheduled on the [targetDate] that is not [excludeSessionId].
+  Future<SessionModel?> findConflictingSession(
+    String planId,
+    String targetDate,
+    String excludeSessionId,
+  ) async {
+    final allSessions = await _loadPendingSessions(planId, includeMissed: true);
+    for (final s in allSessions) {
+      if (s.id != excludeSessionId &&
+          !s.isPinned &&
+          (s.scheduledDate == targetDate || s.originalDate == targetDate) &&
+          (s.status == SessionStatus.upcoming ||
+           s.status == SessionStatus.missed ||
+           s.status == SessionStatus.paused)) {
+        return s;
+      }
+    }
+    return null;
   }
 
   /// Pause a treatment plan.

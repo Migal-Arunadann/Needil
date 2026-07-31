@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Platform, File;
+import 'dart:io' show File;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
@@ -12,8 +12,6 @@ import 'package:pms_app/core/constants/pb_collections.dart';
 import 'package:pms_app/core/widgets/app_button.dart';
 import 'package:pms_app/core/widgets/app_text_field.dart';
 import 'package:pms_app/core/services/session_timer_service.dart';
-import 'package:pms_app/core/services/appointment_service.dart';
-import 'package:pms_app/features/appointments/providers/appointment_provider.dart';
 import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
@@ -279,11 +277,6 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
   String? _selectedDoctorId;
   DoctorModel? _selectedDoctor;
 
-  /// Timer visible for any active (not completed/missed) session.
-  bool get _canUseTimer =>
-      _liveSession.status == SessionStatus.inProgress ||
-      _liveSession.status == SessionStatus.waiting;
-
   @override
   void initState() {
     super.initState();
@@ -292,6 +285,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
     _isViewMode = widget.session.status == SessionStatus.completed ||
                   widget.session.status == SessionStatus.missed ||
                   widget.session.status == SessionStatus.cancelled;
+    // overdue sessions open in edit mode — they are being retroactively recorded
     _loadFreshSession();
   }
 
@@ -437,6 +431,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         _isViewMode = fresh.status == SessionStatus.completed ||
                       fresh.status == SessionStatus.missed ||
                       fresh.status == SessionStatus.cancelled;
+        // overdue → always open in edit mode (retroactive recording)
         _parseSessionNotesAndPoints(fresh.notes);
         if (_bpCtrl.text.isEmpty && fresh.bpLevel?.isNotEmpty == true)
           _bpCtrl.text = fresh.bpLevel!;
@@ -462,6 +457,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         _isViewMode = widget.session.status == SessionStatus.completed ||
                       widget.session.status == SessionStatus.missed ||
                       widget.session.status == SessionStatus.cancelled;
+        // overdue → always open in edit mode (retroactive recording)
         _parseSessionNotesAndPoints(widget.session.notes);
         if (_bpCtrl.text.isEmpty && widget.session.bpLevel?.isNotEmpty == true)
           _bpCtrl.text = widget.session.bpLevel!;
@@ -797,6 +793,10 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
     // Flush any pending auto-save first
     _autoSaveTimer?.cancel();
     setState(() => _isSubmitting = true);
+    // A session that is 'overdue' came from the Needs Attention dashboard's
+    // "Patient Came" flow. The doctor never pre-recorded it, so we auto-complete
+    // it here — this is the single correct point of completion (no double-increment).
+    final isRetroactive = _liveSession.status == SessionStatus.overdue;
     final isAlreadyCompleted = _liveSession.status == SessionStatus.completed;
     try {
       final service = ref.read(treatmentServiceProvider);
@@ -807,12 +807,30 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         pulse: _pulseCtrl.text.isNotEmpty ? int.tryParse(_pulseCtrl.text.trim()) : null,
         remarks: _remarksCtrl.text.trim(),
         photos: _photos,
-        // Save button never completes the session — only End Session on the
-        // schedule card does that. Preserve existing status.
-        isCompleted: isAlreadyCompleted,
+        // Retroactive sessions auto-complete on save (single point of completion).
+        // Regular Save button never completes — only End Session on the card does.
+        isCompleted: isAlreadyCompleted || isRetroactive,
         treatmentModality: _selectedTreatmentType,
         doctorId: _selectedDoctorId,
       );
+
+      // For retroactive sessions, fix completed_at to the original scheduled
+      // date+time instead of DateTime.now() that recordSession() stamps.
+      if (isRetroactive) {
+        try {
+          final pb = ref.read(pocketbaseProvider);
+          final dateStr = _liveSession.scheduledDate; // "YYYY-MM-DD"
+          final timeStr = _liveSession.scheduledTime ?? '10:00';
+          final localDt = DateTime.tryParse('${dateStr}T$timeStr:00');
+          final completedAt = localDt != null
+              ? localDt.toUtc().toIso8601String()
+              : DateTime.now().toUtc().toIso8601String();
+          await pb.collection('sessions').update(_liveSession.id, body: {
+            'completed_at': completedAt,
+          });
+        } catch (_) {}
+      }
+
       setState(() {
         _isSubmitting = false;
         _liveSession = result;
@@ -827,7 +845,10 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         }
       });
       if (mounted) {
-        AppToast.show('Session ${_liveSession.sessionNumber} details saved ✓', type: ToastType.success);
+        final label = isRetroactive
+            ? 'Session ${_liveSession.sessionNumber} recorded retroactively ✓'
+            : 'Session ${_liveSession.sessionNumber} details saved ✓';
+        AppToast.show(label, type: ToastType.success);
         navigator.pop();
       }
     } catch (e) {
@@ -835,28 +856,6 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
       if (mounted) {
         AppToast.show('Failed to save: $e', type: ToastType.error);
       }
-    }
-  }
-
-  Future<void> _markMissed() async {
-    // Capture navigator before async gap — fixes Vivo/iQOO devices
-    final navigator = Navigator.of(context);
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Mark as Missed?'),
-        content: Text('Session ${_liveSession.sessionNumber} will be marked as missed.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text('Mark Missed', style: TextStyle(color: context.colors.error))),
-        ],
-      ),
-    );
-    if (confirm == true) {
-      await ref.read(sessionsProvider.notifier).markMissed(_liveSession.id);
-      if (mounted) navigator.pop();
     }
   }
 
@@ -871,24 +870,13 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
   Color _statusColor(SessionStatus s) {
     switch (s) {
       case SessionStatus.upcoming:   return context.colors.info;
+      case SessionStatus.overdue:    return Colors.amber.shade700;
       case SessionStatus.waiting:    return context.colors.warning;
       case SessionStatus.inProgress: return const Color(0xFFF59E0B);
       case SessionStatus.completed:  return context.colors.success;
       case SessionStatus.missed:     return context.colors.warning;
       case SessionStatus.cancelled:  return context.colors.error;
       case SessionStatus.paused:     return context.colors.info;
-    }
-  }
-
-  String _statusLabel(SessionStatus s) {
-    switch (s) {
-      case SessionStatus.upcoming:   return 'Upcoming';
-      case SessionStatus.waiting:    return 'Waiting';
-      case SessionStatus.inProgress: return 'Ongoing';
-      case SessionStatus.completed:  return 'Done';
-      case SessionStatus.missed:     return 'Missed';
-      case SessionStatus.cancelled:  return 'Cancelled';
-      case SessionStatus.paused:     return 'Paused';
     }
   }
 
@@ -945,7 +933,40 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
+
+                  // ── Retroactive Recording Banner ──
+                  if (session.status == SessionStatus.overdue) ...[  
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade700.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.amber.shade700.withValues(alpha: 0.4),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.history_rounded, size: 18, color: Colors.amber.shade700),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Recording retroactively for ${_fmtDateTime(session.scheduledDate, session.scheduledTime)}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.amber.shade800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
 
                   // ── VIEW MODE ──
                   if (_isViewMode) ...[
@@ -1244,7 +1265,11 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                       child: SizedBox(
                         width: isDesktop ? 320 : double.infinity,
                         child: AppButton(
-                          label: _liveSession.status == SessionStatus.completed ? 'Save Edits' : 'Save Session Details',
+                          label: _liveSession.status == SessionStatus.completed
+                              ? 'Save Edits'
+                              : _liveSession.status == SessionStatus.overdue
+                                  ? 'Save & Complete Retroactively'
+                                  : 'Save Session Details',
                           isLoading: _isSubmitting,
                           icon: Icons.check_circle_outline_rounded,
                           onPressed: _submit,
@@ -2496,28 +2521,6 @@ class _TimerLogRowState extends State<_TimerLogRow> {
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LogCell extends StatelessWidget {
-  final String label;
-  final String value;
-  final BuildContext context;
-  const _LogCell({required this.label, required this.value, required this.context});
-
-  @override
-  Widget build(BuildContext ctx) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: context.textStyles.caption.copyWith(
-            color: context.colors.textHint, fontSize: 10)),
-          const SizedBox(height: 2),
-          Text(value, style: context.textStyles.label.copyWith(fontSize: 13)),
         ],
       ),
     );

@@ -1,5 +1,6 @@
 // AUTO-GENERATED â€” Web-only layout.
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/scheduling/treatment_scheduler.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'dart:ui';
@@ -28,7 +29,7 @@ import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
 import 'package:pms_app/features/analytics/providers/analytics_provider.dart';
 import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 import 'package:pms_app/features/treatments/models/session_model.dart';
-import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
+
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/utils/date_picker_helper.dart';
 import 'package:pms_app/core/services/session_timer_service.dart';
@@ -49,13 +50,16 @@ class AppointmentListScreen extends ConsumerStatefulWidget {
 }
 
 class _AppointmentListScreenState
-    extends ConsumerState<AppointmentListScreen> with TickerProviderStateMixin {
+    extends ConsumerState<AppointmentListScreen>
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late DateTime _selectedDate;
   final _dateScrollCtrl = ScrollController();
   late List<DateTime> _dates;
   bool _hasMultipleDoctors = false;
-  bool _lifecycleChecked = false;
-  List<TreatmentPlanModel> _pendingAutoSchedulingPlans = [];
+  // Stores YYYY-MM-DD of the day the lifecycle sweep last ran.
+  // Empty = never run. Automatically re-runs when the calendar day changes.
+  String _lifecycleCheckedDate = '';
+  List<SessionModel> _overdueSessionsList = [];
   bool _didAutoPopupDashboard = false;
   String? _clinicLocation;
   String _selectedListFilter = 'all'; // 'all', 'consultations', 'sessions'
@@ -67,6 +71,7 @@ class _AppointmentListScreenState
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _selectedDate = DateTime.now();
     _generateDates();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -78,96 +83,101 @@ class _AppointmentListScreenState
     });
   }
 
-  /// Auto-mark missed sessions from past days and show rescheduling summary.
+  /// Re-run the lifecycle sweep when app comes back to foreground.
+  /// The date-key guard ensures the sweep only actually fires on a new day.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      _runLifecycleCheck();
+    }
+  }
+
+  /// Flag past-due sessions as overdue, then show Needs Attention badge.
+  /// Re-runs automatically if the calendar day has changed since last sweep.
   Future<void> _runLifecycleCheck() async {
-    if (_lifecycleChecked) return;
-    _lifecycleChecked = true;
+    final todayStr = _todayDateKey();
+    if (_lifecycleCheckedDate == todayStr) return; // already swept today
+    _lifecycleCheckedDate = todayStr;
+    _didAutoPopupDashboard = false; // allow re-popup on new day
 
     final auth = ref.read(authProvider);
     final pb = ref.read(pocketbaseProvider);
     final lifecycle = ref.read(sessionLifecycleServiceProvider);
 
-    int totalAutoRescheduled = 0;
+    int totalFlagged = 0;
 
-    if (auth.role == UserRole.clinic && auth.clinicId != null) {
-      // Clinic: check for all doctors in the clinic
+    if ((auth.role == UserRole.clinic || auth.role == UserRole.receptionist) &&
+        auth.clinicId != null) {
       try {
         final docs = await pb.collection('doctors').getList(
           filter: 'clinic = "${auth.clinicId}"',
           perPage: 50,
         );
         for (final doc in docs.items) {
-          totalAutoRescheduled += await lifecycle.checkAndMarkMissedSessions(doc.id);
+          totalFlagged += await lifecycle.flagOverdueSessions(doc.id);
         }
       } catch (_) {}
     } else if (auth.userId != null) {
-      totalAutoRescheduled = await lifecycle.checkAndMarkMissedSessions(auth.userId!);
+      totalFlagged = await lifecycle.flagOverdueSessions(auth.userId!);
     }
 
-    // Load any pending auto-scheduling plans (from DB, including any newly detected)
-    await _loadPendingAutoScheduling();
+    // Load overdue sessions for the badge count and dashboard
+    await _loadOverdueSessions();
 
     if (mounted) {
       ref.read(appointmentListProvider.notifier).loadAppointments();
 
-      if (totalAutoRescheduled > 0) {
+      if (totalFlagged > 0) {
         AppToast.show(
-          'Scheduling was automatically updated for $totalAutoRescheduled missed session(s). Review the Auto Scheduling dashboard for details.',
-          type: ToastType.info,
-          duration: const Duration(seconds: 8),
-          actionLabel: 'View Changes',
+          '$totalFlagged session${totalFlagged == 1 ? '' : 's'} need your attention. Tap the bell to review.',
+          type: ToastType.warning,
+          duration: const Duration(seconds: 6),
+          actionLabel: 'Review',
           onAction: () {
-            if (mounted) {
-              AutoSchedulingDashboard.show(
-                context,
-                plans: _pendingAutoSchedulingPlans,
-                onRefresh: () {
-                  _loadPendingAutoScheduling();
-                  ref.read(appointmentListProvider.notifier).loadAppointments();
-                },
-              );
-            }
+            if (mounted) _openNeedsAttentionDashboard();
           },
         );
       }
 
-      // Auto-popup the dashboard if there are pending plans and we haven't popped up yet
-      if (_pendingAutoSchedulingPlans.isNotEmpty && !_didAutoPopupDashboard) {
+      // Auto-popup if there are overdue sessions and dashboard hasn't shown yet
+      if (_overdueSessionsList.isNotEmpty && !_didAutoPopupDashboard) {
         _didAutoPopupDashboard = true;
-        // Delay slightly to let the UI finish mounting and rendering
         Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            AutoSchedulingDashboard.show(
-              context,
-              plans: _pendingAutoSchedulingPlans,
-              onRefresh: () {
-                _loadPendingAutoScheduling();
-                ref.read(appointmentListProvider.notifier).loadAppointments();
-              },
-            );
-          }
+          if (mounted) _openNeedsAttentionDashboard();
         });
       }
     }
   }
 
-  /// Loads the pending auto-scheduling plans for the current doctor/clinic
-  Future<void> _loadPendingAutoScheduling() async {
+  void _openNeedsAttentionDashboard() {
+    AutoSchedulingDashboard.show(
+      context,
+      overdueSessions: _overdueSessionsList,
+      onRefresh: () {
+        _loadOverdueSessions();
+        ref.read(appointmentListProvider.notifier).loadAppointments();
+      },
+    );
+  }
+
+  /// Loads overdue sessions for the badge count and the Needs Attention dashboard.
+  Future<void> _loadOverdueSessions() async {
     final auth = ref.read(authProvider);
     final lifecycle = ref.read(sessionLifecycleServiceProvider);
 
-    List<TreatmentPlanModel> pending = [];
+    List<SessionModel> sessions = [];
     try {
-      if (auth.role == UserRole.clinic && auth.clinicId != null) {
-        pending = await lifecycle.getPendingMissedPlans(auth.clinicId!, isClinic: true);
+      if ((auth.role == UserRole.clinic || auth.role == UserRole.receptionist) &&
+          auth.clinicId != null) {
+        sessions = await lifecycle.getOverdueSessionsForClinic(auth.clinicId!);
       } else if (auth.userId != null) {
-        pending = await lifecycle.getPendingMissedPlans(auth.userId!, isClinic: false);
+        sessions = await lifecycle.getOverdueSessions(auth.userId!);
       }
     } catch (_) {}
 
     if (mounted) {
       setState(() {
-        _pendingAutoSchedulingPlans = pending;
+        _overdueSessionsList = sessions;
       });
     }
   }
@@ -270,6 +280,12 @@ class _AppointmentListScreenState
     _dates = List.generate(lastDay, (i) => DateTime(year, month, i + 1));
   }
 
+  /// Returns today's date as YYYY-MM-DD string (used for lifecycle check dedup).
+  String _todayDateKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
   void _scrollToSelectedDate() {
     if (!_dateScrollCtrl.hasClients) return;
     // Scroll so yesterday is first visible (today is second)
@@ -294,6 +310,7 @@ class _AppointmentListScreenState
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _dateScrollCtrl.dispose();
     super.dispose();
   }
@@ -941,7 +958,7 @@ class _AppointmentListScreenState
       final newDate = DateFormat('yyyy-MM-dd').format(result['date'] as DateTime);
       final newTime = result['time'] as String;
       
-      final mode = await _askCascadeMode();
+      var mode = await _askCascadeMode();
       if (mode == null || !mounted) return;
       
       try {
@@ -954,6 +971,47 @@ class _AppointmentListScreenState
         }
         final sessionId = sessionInfo['sessionId']!;
 
+        if (mode == RescheduleMode.missedOnly) {
+          final scheduler = ref.read(sessionLifecycleServiceProvider).scheduler;
+          final planId = sessionInfo['treatmentPlanId'];
+          
+          if (planId != null && planId.isNotEmpty) {
+            final conflict = await scheduler.findConflictingSession(planId, newDate, sessionId);
+            
+            if (conflict != null && mounted) {
+              final conflictAction = await showDialog<String>(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  backgroundColor: context.colors.surface,
+                  title: Text('Scheduling Conflict', style: context.textStyles.h3),
+                  content: Text(
+                    'Session ${conflict.sessionNumber} is already scheduled on this date. How would you like to proceed?',
+                    style: context.textStyles.bodyMedium,
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, 'cancel'), child: const Text('Cancel')),
+                    OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx, 'proceed'),
+                      child: Text('Proceed Anyway', style: TextStyle(color: context.colors.primary)),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, 'cascade'),
+                      style: FilledButton.styleFrom(backgroundColor: context.colors.primary),
+                      child: Text('Shift Session ${conflict.sessionNumber}'),
+                    ),
+                  ],
+                ),
+              );
+
+              if (conflictAction == null || conflictAction == 'cancel') return;
+              if (conflictAction == 'cascade') {
+                mode = RescheduleMode.cascadeAll;
+              }
+            }
+          }
+        }
+
         if (mode == RescheduleMode.cascadeAll) {
           final lifecycle = ref.read(sessionLifecycleServiceProvider);
           final preview = await lifecycle.previewRescheduleSessionAndCascade(
@@ -965,37 +1023,67 @@ class _AppointmentListScreenState
           
           if (!mounted) return;
           
-          final confirmed = await showModalBottomSheet<bool>(
+          final confirmedPreview = await showModalBottomSheet<ReschedulePreview?>(
             context: context,
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
-            builder: (ctx) => Padding(
-              padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + kToolbarHeight),
-              child: CascadePreviewSheet(
-                preview: preview,
-                onConfirm: () => Navigator.pop(ctx, true),
-                onCancel: () => Navigator.pop(ctx, false),
-              ),
-            ),
+            builder: (ctx) {
+              bool applyTimeToAll = false;
+              bool isRegenerating = false;
+              var currentPreview = preview;
+
+              return StatefulBuilder(
+                builder: (BuildContext context, StateSetter setState) {
+                  return Padding(
+                    padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + kToolbarHeight),
+                    child: CascadePreviewSheet(
+                      preview: currentPreview,
+                      newTime: newTime,
+                      applyTimeToAll: applyTimeToAll,
+                      isRegenerating: isRegenerating,
+                      onToggleApplyTimeToAll: (val) async {
+                        setState(() {
+                          applyTimeToAll = val;
+                          isRegenerating = true;
+                        });
+                        final newPreview = await lifecycle.previewRescheduleSessionAndCascade(
+                          sessionId: sessionId,
+                          newDate: newDate,
+                          newTime: newTime,
+                          performedBy: currentUserId,
+                          applyTimeToAll: val,
+                        );
+                        setState(() {
+                          currentPreview = newPreview;
+                          isRegenerating = false;
+                        });
+                      },
+                      onConfirm: () => Navigator.pop(ctx, currentPreview),
+                      onCancel: () => Navigator.pop(ctx, null),
+                    ),
+                  );
+                },
+              );
+            },
           );
           
-          if (confirmed != true || !mounted) return;
+          if (confirmedPreview == null || !mounted) return;
           
-          await lifecycle.commitRescheduleProposal(preview);
+          await lifecycle.commitRescheduleProposal(confirmedPreview);
           
           if (mounted) {
-            final conflicts = preview.proposal.totalExpected - preview.proposal.slots.where((s) => !s.wasPinned).length;
+            final conflicts = confirmedPreview.proposal.totalExpected - confirmedPreview.proposal.slots.where((s) => !s.wasPinned).length;
             if (conflicts > 0) {
               showDialog(
                 context: context,
                 builder: (ctx) => ConflictWarningDialog(
-                  successfulMoves: preview.proposal.slots.where((s) => s.oldDate != s.newDate && !s.wasPinned).length,
-                  skippedSessions: preview.proposal.slots.where((s) => s.wasPinned && !s.isTarget).length,
+                  successfulMoves: confirmedPreview.proposal.slots.where((s) => s.oldDate != s.newDate && !s.wasPinned).length,
+                  skippedSessions: confirmedPreview.proposal.slots.where((s) => s.wasPinned && !s.isTarget).length,
                   totalConflicts: conflicts,
                 ),
               );
             } else {
-              AppToast.show('Reschedule cascade complete ✓', type: ToastType.success);
+              AppToast.show('Future sessions successfully shifted ✓', type: ToastType.success);
             }
           }
         } else {
@@ -1090,20 +1178,11 @@ class _AppointmentListScreenState
   }
 
   Widget _buildAutoSchedulingButton({bool desktop = false}) {
-    final hasPending = _pendingAutoSchedulingPlans.isNotEmpty;
+    final hasPending = _overdueSessionsList.isNotEmpty;
 
     if (desktop) {
       return GestureDetector(
-        onTap: () {
-          AutoSchedulingDashboard.show(
-            context,
-            plans: _pendingAutoSchedulingPlans,
-            onRefresh: () {
-              _loadPendingAutoScheduling();
-              ref.read(appointmentListProvider.notifier).loadAppointments();
-            },
-          );
-        },
+        onTap: _openNeedsAttentionDashboard,
         child: Container(
           height: 40,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1119,13 +1198,13 @@ class _AppointmentListScreenState
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                hasPending ? Icons.sync_problem_rounded : Icons.sync_rounded,
+                hasPending ? Icons.notifications_active_rounded : Icons.notifications_none_rounded,
                 size: 18,
                 color: hasPending ? context.colors.warning : context.colors.textSecondary,
               ),
               const SizedBox(width: 8),
               Text(
-                'Auto-Scheduling',
+                'Needs Attention',
                 style: context.textStyles.bodyMedium.copyWith(
                   fontWeight: FontWeight.bold,
                   color: hasPending ? context.colors.warning : context.colors.textSecondary,
@@ -1136,13 +1215,13 @@ class _AppointmentListScreenState
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
-                    color: context.colors.error,
+                    color: context.colors.warning,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    '${_pendingAutoSchedulingPlans.length}',
-                    style: TextStyle(
-                      color: context.colors.textPrimary,
+                    '${_overdueSessionsList.length}',
+                    style: const TextStyle(
+                      color: Colors.white,
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
@@ -1155,20 +1234,11 @@ class _AppointmentListScreenState
       );
     } else {
       return GestureDetector(
-        onTap: () {
-          AutoSchedulingDashboard.show(
-            context,
-            plans: _pendingAutoSchedulingPlans,
-            onRefresh: () {
-              _loadPendingAutoScheduling();
-              ref.read(appointmentListProvider.notifier).loadAppointments();
-            },
-          );
-        },
+        onTap: _openNeedsAttentionDashboard,
         child: hasPending
             ? Badge(
-                label: Text('${_pendingAutoSchedulingPlans.length}'),
-                backgroundColor: context.colors.error,
+                label: Text('${_overdueSessionsList.length}'),
+                backgroundColor: context.colors.warning,
                 child: Container(
                   width: 44, height: 44,
                   decoration: BoxDecoration(
@@ -1180,7 +1250,7 @@ class _AppointmentListScreenState
                     ),
                   ),
                   child: Icon(
-                    Icons.sync_problem_rounded,
+                    Icons.notifications_active_rounded,
                     size: 20,
                     color: context.colors.warning,
                   ),
@@ -1193,7 +1263,7 @@ class _AppointmentListScreenState
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
-                  Icons.sync_rounded,
+                  Icons.notifications_none_rounded,
                   size: 20,
                   color: context.colors.textSecondary,
                 ),
@@ -1201,6 +1271,8 @@ class _AppointmentListScreenState
       );
     }
   }
+
+
 
   Widget _buildNewAppointmentButton({bool compact = false}) {
     return PopupMenuButton<bool>(
@@ -4000,18 +4072,20 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     } else if (apt.status == AppointmentStatus.waiting || apt.checkInTime != null) {
       return _indicatorItem(
         context: context,
-        icon: Icons.healing_outlined,
-        iconColor: context.colors.textSecondary,
+        icon: Icons.circle,
+        iconColor: context.colors.warning, // Waiting -> orange dot
         title: 'Not Started',
         subtitle: 'In Waiting Queue',
+        isDot: true,
       );
     } else {
       return _indicatorItem(
         context: context,
-        icon: Icons.healing_outlined,
+        icon: Icons.circle,
         iconColor: context.colors.textSecondary,
         title: 'Not Started',
         subtitle: 'Session pending',
+        isDot: true,
       );
     }
   }
@@ -4606,17 +4680,23 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                                 ],
                                               ),
                                             ],
-                                            const SizedBox(height: 6),
-                                            Wrap(
-                                              spacing: 6,
-                                              runSpacing: 4,
-                                              children: [
-                                                if (_treatmentModality != null && _treatmentModality!.isNotEmpty)
+                                            if (_treatmentModality != null && _treatmentModality!.isNotEmpty) ...[
+                                              const SizedBox(height: 4),
+                                              Row(
+                                                children: [
                                                   _Pill(
                                                     label: _treatmentModality!,
                                                     icon: _treatmentTypeIcon(_treatmentModality!),
                                                     color: sessionAccent,
                                                   ),
+                                                ],
+                                              ),
+                                            ],
+                                            const SizedBox(height: 6),
+                                            Wrap(
+                                              spacing: 6,
+                                              runSpacing: 4,
+                                              children: [
                                                 _Pill(
                                                   label: statusStr,
                                                   icon: statusIcon,
@@ -4816,17 +4896,23 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                                     ],
                                                   ),
                                                 ],
-                                                const SizedBox(height: 5),
-                                                Wrap(
-                                                  spacing: 6,
-                                                  runSpacing: 4,
-                                                  children: [
-                                                    if (_treatmentModality != null && _treatmentModality!.isNotEmpty)
+                                                if (_treatmentModality != null && _treatmentModality!.isNotEmpty) ...[
+                                                  const SizedBox(height: 4),
+                                                  Row(
+                                                    children: [
                                                       _Pill(
                                                         label: _treatmentModality!,
                                                         icon: _treatmentTypeIcon(_treatmentModality!),
                                                         color: sessionAccent,
                                                       ),
+                                                    ],
+                                                  ),
+                                                ],
+                                                const SizedBox(height: 5),
+                                                Wrap(
+                                                  spacing: 6,
+                                                  runSpacing: 4,
+                                                  children: [
                                                     _Pill(
                                                       label: statusStr,
                                                       icon: statusIcon,
@@ -5238,10 +5324,8 @@ class _ActionButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (!showTrailingChevron) ...[
-                Icon(icon, size: 15, color: foregroundColor),
-                const SizedBox(width: 7),
-              ],
+              Icon(icon, size: 15, color: foregroundColor),
+              const SizedBox(width: 7),
               Flexible(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,

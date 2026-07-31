@@ -1,256 +1,335 @@
 import 'package:flutter/material.dart';
-import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:intl/intl.dart';
 import 'package:pms_app/core/providers/session_lifecycle_provider.dart';
-import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
-import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
+import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:pms_app/features/treatments/models/session_model.dart';
+import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 
-/// Reason label shown per-plan card in the manual review dashboard.
-String _reviewReasonLabel(TreatmentPlanModel plan) {
-  if (plan.status == TreatmentPlanStatus.paused) {
-    return 'Plan Paused';
-  }
-  if (plan.consecutiveMisses >= 3) {
-    return '${plan.consecutiveMisses} Consecutive Misses';
-  }
-  final lastActivity = plan.lastActivityAt;
-  if (lastActivity != null) {
-    final daysSince = DateTime.now().difference(lastActivity).inDays;
-    if (daysSince >= plan.expiryDays) {
-      return 'Inactive for $daysSince days (expired)';
-    }
-  }
-  if (plan.status == TreatmentPlanStatus.manualReview) {
-    return 'No available slots found';
-  }
-  return 'Manual Review Required';
-}
-
-Color _reviewReasonColor(TreatmentPlanModel plan, BuildContext context) {
-  if (plan.status == TreatmentPlanStatus.paused) return context.colors.warning;
-  if (plan.consecutiveMisses >= 3) return context.colors.error;
-  final lastActivity = plan.lastActivityAt;
-  if (lastActivity != null) {
-    final daysSince = DateTime.now().difference(lastActivity).inDays;
-    if (daysSince >= plan.expiryDays) return context.colors.warning;
-  }
-  if (plan.status == TreatmentPlanStatus.manualReview) return context.colors.error;
-  return context.colors.textSecondary;
-}
-
-IconData _reviewReasonIcon(TreatmentPlanModel plan) {
-  if (plan.status == TreatmentPlanStatus.paused) return Icons.pause_circle_outline_rounded;
-  if (plan.consecutiveMisses >= 3) return Icons.warning_amber_rounded;
-  final lastActivity = plan.lastActivityAt;
-  if (lastActivity != null) {
-    final daysSince = DateTime.now().difference(lastActivity).inDays;
-    if (daysSince >= plan.expiryDays) return Icons.hourglass_empty_rounded;
-  }
-  if (plan.status == TreatmentPlanStatus.manualReview) return Icons.event_busy_rounded;
-  return Icons.info_outline_rounded;
-}
-
+/// Needs Attention Dashboard.
+///
+/// Shows all [overdue] sessions and lets the doctor or receptionist confirm
+/// what actually happened for each one — without any automatic assumptions.
+///
+/// Three outcomes per session:
+///   1. "Patient Came"    → navigates to session form for retroactive recording
+///   2. "Didn't Show"     → confirms the miss, increments counters
+///   3. "Clinic Closed"   → reverts to upcoming with no penalty
+///
+/// Also surfaces plans in [manualReview] that need human rescheduling.
 class AutoSchedulingDashboard extends ConsumerStatefulWidget {
-  final List<TreatmentPlanModel> initialPlans;
+  final List<SessionModel> overdueSessions;
+  final List<TreatmentPlanModel> manualReviewPlans;
   final VoidCallback onRefresh;
 
   const AutoSchedulingDashboard({
     super.key,
-    required this.initialPlans,
+    required this.overdueSessions,
+    this.manualReviewPlans = const [],
     required this.onRefresh,
   });
 
   static Future<void> show(
     BuildContext context, {
-    required List<TreatmentPlanModel> plans,
+    required List<SessionModel> overdueSessions,
+    List<TreatmentPlanModel> manualReviewPlans = const [],
     required VoidCallback onRefresh,
+    // Legacy compat: old callers pass `plans` (TreatmentPlanModel list).
+    // Those are routed to manualReviewPlans.
+    List<TreatmentPlanModel>? plans,
   }) async {
     await showDialog(
       context: context,
       barrierDismissible: true,
       builder: (context) => AutoSchedulingDashboard(
-        initialPlans: plans,
+        overdueSessions: overdueSessions,
+        manualReviewPlans: plans ?? manualReviewPlans,
         onRefresh: onRefresh,
       ),
     );
   }
 
   @override
-  ConsumerState<AutoSchedulingDashboard> createState() => _AutoSchedulingDashboardState();
+  ConsumerState<AutoSchedulingDashboard> createState() =>
+      _AutoSchedulingDashboardState();
 }
 
-class _AutoSchedulingDashboardState extends ConsumerState<AutoSchedulingDashboard> {
-  late List<TreatmentPlanModel> _plans;
+class _AutoSchedulingDashboardState
+    extends ConsumerState<AutoSchedulingDashboard>
+    with SingleTickerProviderStateMixin {
+  late List<SessionModel> _sessions;
+  late List<TreatmentPlanModel> _manualPlans;
   bool _isProcessing = false;
-  String? _processingPlanId;
-  String? _globalProcessingText;
+  String? _processingId;
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _plans = List.from(widget.initialPlans);
+    _sessions = List.from(widget.overdueSessions);
+    _manualPlans = List.from(widget.manualReviewPlans);
+    _tabController = TabController(
+      length: _manualPlans.isNotEmpty ? 2 : 1,
+      vsync: this,
+    );
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   String get _currentUserId => ref.read(authProvider).userId ?? 'system';
 
-  /// Auto-reschedule a single plan. Keeps it in the list if no slot was found.
-  Future<void> _reschedulePlan(TreatmentPlanModel plan) async {
-    setState(() {
-      _isProcessing = true;
-      _processingPlanId = plan.id;
-    });
+  // ─── Patient Came ──────────────────────────────────────────────────────────
 
+  Future<void> _onPatientCame(SessionModel session) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Record Retroactive Session', style: context.textStyles.h3),
+        content: Text(
+          'Session ${session.sessionNumber} on '
+          '${_formatDate(session.scheduledDate)} will open for retroactive recording.\n\n'
+          'Fill in the clinical details and hit Save to complete it.',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Open Form'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // Capture the root navigator BEFORE popping the dialog
+    final nav = Navigator.of(context, rootNavigator: true);
+
+    // Optimistically remove from list and refresh badge
+    setState(() => _sessions.removeWhere((s) => s.id == session.id));
+    widget.onRefresh();
+
+    // Close dashboard, then navigate to session form.
+    // The session is still 'overdue' — the form detects this and
+    // auto-completes it retroactively when the doctor saves.
+    nav.pop();
+    nav.pushNamed('/sessions/record', arguments: session);
+  }
+
+  // ─── Patient Didn't Show ──────────────────────────────────────────────────
+
+  Future<void> _onDidntShow(SessionModel session) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Confirm Missed Session', style: context.textStyles.h3),
+        content: Text(
+          'Mark Session ${session.sessionNumber} as missed on '
+          '${_formatDate(session.scheduledDate)}?\n\n'
+          'This will count toward the patient\'s consecutive miss record.',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: context.colors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm Miss'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() { _isProcessing = true; _processingId = session.id; });
     try {
       final lifecycle = ref.read(sessionLifecycleServiceProvider);
-      await lifecycle.autoRescheduleForPlan(plan.id);
-
-      if (mounted) {
-        AppToast.show('Session(s) auto-rescheduled for ${plan.patientName ?? "Patient"}.', type: ToastType.success);
-        setState(() => _plans.removeWhere((p) => p.id == plan.id));
-        widget.onRefresh();
-        if (_plans.isEmpty) Navigator.of(context).pop();
-      }
-    } on Exception catch (e) {
-      if (mounted) {
-        final msg = e.toString().toLowerCase();
-        if (msg.contains('no slot') || msg.contains('noslot')) {
-          AppToast.show(
-            'No available slots found for ${plan.patientName ?? "Patient"}. Plan remains in Manual Review.',
-            type: ToastType.error,
-          );
-          // Keep the plan card in the list — don't remove it.
-        } else {
-          AppToast.show('Failed to reschedule: $e', type: ToastType.error);
-        }
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-          _processingPlanId = null;
-        });
-      }
-    }
-  }
-
-  /// V-4 fix: Only show Pause Plan when plan is NOT in manual_review status.
-  /// manual_review → paused is an invalid state transition in the engine.
-  /// Instead, we offer a "Close Treatment" action.
-  Future<void> _closePlan(TreatmentPlanModel plan) async {
-    final reason = await _showClosureReasonDialog(
-      context,
-      patientName: plan.patientName ?? 'Patient',
-    );
-    if (reason == null || !mounted) return;
-
-    setState(() {
-      _isProcessing = true;
-      _processingPlanId = plan.id;
-    });
-
-    try {
-      final treatmentService = ref.read(treatmentServiceProvider);
-      await treatmentService.closeTreatment(
-        plan.id,
-        reason: reason,
+      final newConsecutive = await lifecycle.confirmSessionMissed(
+        session.id,
+        session.treatmentPlanId,
         performedBy: _currentUserId,
       );
+
       if (mounted) {
-        AppToast.show('Treatment plan closed for ${plan.patientName ?? "Patient"}.', type: ToastType.success);
-        setState(() => _plans.removeWhere((p) => p.id == plan.id));
+        setState(() => _sessions.removeWhere((s) => s.id == session.id));
         widget.onRefresh();
-        if (_plans.isEmpty) Navigator.of(context).pop();
+        if (newConsecutive >= 3) {
+          AppToast.show(
+            'Session marked as missed. Patient has $newConsecutive consecutive misses — plan flagged for manual review.',
+            type: ToastType.warning,
+            duration: const Duration(seconds: 6),
+          );
+        } else {
+          AppToast.show('Session marked as missed.', type: ToastType.info);
+        }
+        if (_sessions.isEmpty && _manualPlans.isEmpty) Navigator.of(context).pop();
       }
     } catch (e) {
-      if (mounted) AppToast.show('Failed to close plan: $e', type: ToastType.error);
+      if (mounted) AppToast.show('Error: $e', type: ToastType.error);
     } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-          _processingPlanId = null;
-        });
-      }
+      if (mounted) setState(() { _isProcessing = false; _processingId = null; });
     }
   }
 
-  Future<void> _pausePlan(TreatmentPlanModel plan) async {
-    setState(() {
-      _isProcessing = true;
-      _processingPlanId = plan.id;
-    });
+  // ─── Clinic Was Closed ────────────────────────────────────────────────────
 
+  Future<void> _onClinicClosed(SessionModel session) async {
+    final sessionDate = DateTime.tryParse(session.scheduledDate);
+    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final isPastDate = sessionDate != null && sessionDate.isBefore(today);
+
+    // For past-date sessions, force a new date to prevent the infinite overdue loop.
+    // (leaving it on the same past date = tomorrow's sweep catches it again)
+    DateTime? pickedDate;
+    if (isPastDate && mounted) {
+      pickedDate = await showDatePicker(
+        context: context,
+        initialDate: DateTime.now(),
+        firstDate: DateTime.now(),
+        lastDate: DateTime.now().add(const Duration(days: 365)),
+        helpText: 'Pick a new session date',
+        confirmText: 'Reschedule',
+        cancelText: 'Cancel',
+      );
+      if (!mounted) return;
+      if (pickedDate == null) {
+        AppToast.show('Date required — session stays as overdue.', type: ToastType.warning);
+        return;
+      }
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Clinic Was Closed', style: context.textStyles.h3),
+        content: Text(
+          'Session ${session.sessionNumber} on ${_formatDate(session.scheduledDate)} '
+          'will be reverted to Upcoming with no miss penalty.\n\n'
+          + (pickedDate != null
+              ? 'New date: ${_formatDate(pickedDate.toIso8601String().substring(0, 10))}'
+              : 'The session stays on the same date.'),
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Dismiss — No Penalty'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() { _isProcessing = true; _processingId = session.id; });
     try {
-      final treatmentService = ref.read(treatmentServiceProvider);
-      await treatmentService.pauseSessions(plan.id, performedBy: _currentUserId);
+      final lifecycle = ref.read(sessionLifecycleServiceProvider);
+      final newDateStr = pickedDate != null
+          ? '${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}'
+          : null;
+      await lifecycle.dismissAsClinicHoliday(
+        session.id,
+        newDate: newDateStr,
+        performedBy: _currentUserId,
+      );
+
 
       if (mounted) {
-        AppToast.show('Sessions for ${plan.patientName ?? "Patient"} have been paused.');
-        setState(() => _plans.removeWhere((p) => p.id == plan.id));
+        setState(() => _sessions.removeWhere((s) => s.id == session.id));
         widget.onRefresh();
-        if (_plans.isEmpty) Navigator.of(context).pop();
+        AppToast.show(
+          pickedDate != null
+              ? 'Session rescheduled — no miss penalty applied ✓'
+              : 'Session reverted to upcoming ✓',
+          type: ToastType.success,
+        );
+        if (_sessions.isEmpty && _manualPlans.isEmpty) Navigator.of(context).pop();
       }
     } catch (e) {
-      if (mounted) {
-        AppToast.show('Failed to pause plan: $e', type: ToastType.error);
-      }
+      if (mounted) AppToast.show('Error: $e', type: ToastType.error);
     } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-          _processingPlanId = null;
-        });
-      }
+      if (mounted) setState(() { _isProcessing = false; _processingId = null; });
     }
   }
 
-  Future<void> _rescheduleAll() async {
-    setState(() {
-      _isProcessing = true;
-      _globalProcessingText = 'Rescheduling all patients...';
-    });
+  // ─── Dismiss All as Holiday ───────────────────────────────────────────────
 
-    final lifecycle = ref.read(sessionLifecycleServiceProvider);
-    int successCount = 0;
-    int failCount = 0;
+  Future<void> _dismissAllAsHoliday() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Dismiss All — Clinic Holiday', style: context.textStyles.h3),
+        content: Text(
+          'All ${_sessions.length} overdue sessions will be reverted to Upcoming '
+          'with no miss penalty applied to any patient.',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Dismiss All'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
 
-    for (final plan in List<TreatmentPlanModel>.from(_plans)) {
-      try {
-        await lifecycle.autoRescheduleForPlan(plan.id);
-        successCount++;
-        setState(() => _plans.removeWhere((p) => p.id == plan.id));
-      } catch (e) {
-        failCount++;
-        debugPrint('Error rescheduling plan ${plan.id}: $e');
-      }
-    }
-
-    if (mounted) {
-      if (failCount == 0) {
-        AppToast.show('Successfully rescheduled $successCount patient(s).', type: ToastType.success);
-        widget.onRefresh();
-        Navigator.of(context).pop();
-      } else {
-        final toastType = successCount == 0 ? ToastType.error : ToastType.warning;
-        AppToast.show(
-          '$successCount rescheduled, $failCount failed.',
-          type: toastType,
+    setState(() { _isProcessing = true; _processingId = '__all__'; });
+    try {
+      final lifecycle = ref.read(sessionLifecycleServiceProvider);
+      for (final session in List<SessionModel>.from(_sessions)) {
+        await lifecycle.dismissAsClinicHoliday(
+          session.id,
+          performedBy: _currentUserId,
         );
-        widget.onRefresh();
-        setState(() {
-          _isProcessing = false;
-          _globalProcessingText = null;
-        });
       }
+      if (mounted) {
+        setState(() => _sessions.clear());
+        widget.onRefresh();
+        AppToast.show('All sessions dismissed ✓', type: ToastType.success);
+        if (_manualPlans.isEmpty) Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) AppToast.show('Error: $e', type: ToastType.error);
+    } finally {
+      if (mounted) setState(() { _isProcessing = false; _processingId = null; });
     }
   }
+
+  // ─── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     final isMobile = width < 600;
+    final totalItems = _sessions.length + _manualPlans.length;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -265,482 +344,389 @@ class _AutoSchedulingDashboardState extends ConsumerState<AutoSchedulingDashboar
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Header Gradient
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    context.colors.warning.withValues(alpha: 0.15),
-                    context.colors.warning.withValues(alpha: 0.05),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                border: Border(
-                  bottom: BorderSide(
-                    color: context.colors.border.withValues(alpha: 0.5),
-                  ),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: context.colors.warning.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(
-                      Icons.sync_problem_rounded,
-                      color: context.colors.warning,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Manual Review Required',
-                          style: context.textStyles.h2,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '${_plans.length} plan(s) need your attention',
-                          style: context.textStyles.bodySmall.copyWith(
-                            color: context.colors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close_rounded, color: context.colors.textSecondary),
-                    onPressed: _isProcessing ? null : () => Navigator.of(context).pop(),
-                  ),
+            _buildHeader(totalItems),
+            if (_manualPlans.isNotEmpty)
+              TabBar(
+                controller: _tabController,
+                labelColor: context.colors.primary,
+                unselectedLabelColor: context.colors.textSecondary,
+                indicatorColor: context.colors.primary,
+                tabs: [
+                  Tab(text: 'Needs Review (${_sessions.length})'),
+                  Tab(text: 'Manual Reschedule (${_manualPlans.length})'),
                 ],
               ),
-            ),
-
-            if (_globalProcessingText != null)
-              Container(
-                color: context.colors.primary.withValues(alpha: 0.08),
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(context.colors.primary),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      _globalProcessingText!,
-                      style: context.textStyles.bodyMedium.copyWith(
-                        color: context.colors.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            // Content List
             Flexible(
-              child: _plans.isEmpty
-                  ? Padding(
-                      padding: const EdgeInsets.all(40),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.check_circle_outline_rounded,
-                            size: 64,
-                            color: context.colors.success,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'All set!',
-                            style: context.textStyles.h3,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'No plans require manual review.',
-                            style: context.textStyles.bodyMedium.copyWith(
-                              color: context.colors.textSecondary,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
+              child: _manualPlans.isNotEmpty
+                  ? TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildSessionList(),
+                        _buildManualReviewList(),
+                      ],
                     )
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(20),
-                      shrinkWrap: true,
-                      itemCount: _plans.length,
-                      separatorBuilder: (context, index) => const SizedBox(height: 16),
-                      itemBuilder: (context, index) {
-                        final plan = _plans[index];
-                        final isItemProcessing = _isProcessing && _processingPlanId == plan.id;
-                        final isInManualReview = plan.status == TreatmentPlanStatus.manualReview;
-                        final reasonLabel = _reviewReasonLabel(plan);
-                        final reasonColor = _reviewReasonColor(plan, context);
-                        final reasonIcon = _reviewReasonIcon(plan);
-
-                        return Container(
-                          decoration: BoxDecoration(
-                            color: context.colors.surface,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: context.colors.border.withValues(alpha: 0.7),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: context.colors.textPrimary.withValues(alpha: 0.02),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          plan.patientName ?? 'Patient',
-                                          style: context.textStyles.h3,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          plan.treatmentType,
-                                          style: context.textStyles.bodyMedium.copyWith(
-                                            color: context.colors.primary,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        if (plan.patientPhone != null && plan.patientPhone!.isNotEmpty)
-                                          Padding(
-                                            padding: const EdgeInsets.only(top: 4),
-                                            child: InkWell(
-                                              onTap: () async {
-                                                final uri = Uri(scheme: 'tel', path: plan.patientPhone);
-                                                if (await canLaunchUrl(uri)) {
-                                                  await launchUrl(uri);
-                                                }
-                                              },
-                                              borderRadius: BorderRadius.circular(6),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    Icons.phone_rounded,
-                                                    size: 13,
-                                                    color: context.colors.success,
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    plan.patientPhone!,
-                                                    style: context.textStyles.caption.copyWith(
-                                                      color: context.colors.success,
-                                                      fontWeight: FontWeight.w500,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                      ],
-                                    ),
-                                  ),
-                                  // Reason badge
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 10,
-                                      vertical: 6,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: reasonColor.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          reasonIcon,
-                                          size: 14,
-                                          color: reasonColor,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          reasonLabel,
-                                          style: context.textStyles.caption.copyWith(
-                                            color: reasonColor,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 12),
-                              // Description based on reason
-                              Text(
-                                plan.consecutiveMisses >= 3
-                                    ? 'Patient has missed ${plan.consecutiveMisses} consecutive sessions. Auto-rescheduling is on hold.'
-                                    : 'This plan requires manual attention before auto-scheduling can continue.',
-                                style: context.textStyles.bodySmall.copyWith(
-                                  color: context.colors.textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              // Actions Row
-                              if (isItemProcessing)
-                                Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 4),
-                                    child: SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(context.colors.primary),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              else
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    // V-4 fix: Show Pause only for active plans; show Close for manual_review plans.
-                                    if (isInManualReview)
-                                      TextButton.icon(
-                                        onPressed: _isProcessing ? null : () => _closePlan(plan),
-                                        icon: Icon(
-                                          Icons.cancel_outlined,
-                                          color: context.colors.error,
-                                          size: 18,
-                                        ),
-                                        label: Text(
-                                          'Close Treatment',
-                                          style: TextStyle(
-                                            color: context.colors.error,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        style: TextButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 8,
-                                          ),
-                                        ),
-                                      )
-                                    else
-                                      TextButton.icon(
-                                        onPressed: _isProcessing ? null : () => _pausePlan(plan),
-                                        icon: Icon(
-                                          Icons.pause_circle_outline_rounded,
-                                          color: context.colors.error,
-                                          size: 18,
-                                        ),
-                                        label: Text(
-                                          'Pause Plan',
-                                          style: TextStyle(
-                                            color: context.colors.error,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        style: TextButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 8,
-                                          ),
-                                        ),
-                                      ),
-                                    const SizedBox(width: 8),
-                                    // Auto-Reschedule Action
-                                    ElevatedButton.icon(
-                                      onPressed: _isProcessing ? null : () => _reschedulePlan(plan),
-                                      icon: const Icon(
-                                        Icons.autorenew_rounded,
-                                        size: 18,
-                                      ),
-                                      label: const Text('Auto-Reschedule'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: context.colors.primary,
-                                        foregroundColor: Colors.white,
-                                        elevation: 0,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 16,
-                                          vertical: 8,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                  : _buildSessionList(),
             ),
-
-            // Footer
-            if (_plans.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: context.colors.surface,
-                  border: Border(
-                    top: BorderSide(
-                      color: context.colors.border.withValues(alpha: 0.5),
-                    ),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: _isProcessing ? null : () => Navigator.of(context).pop(),
-                      child: Text(
-                        'Decide Later',
-                        style: TextStyle(color: context.colors.textSecondary),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton.icon(
-                      onPressed: _isProcessing ? null : _rescheduleAll,
-                      icon: const Icon(Icons.done_all_rounded, size: 18),
-                      label: const Text('Reschedule All'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: context.colors.primary,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 12,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            if (_sessions.isNotEmpty) _buildFooter(),
           ],
         ),
       ),
     );
   }
-}
 
-// ─── Closure Reason Dialog ────────────────────────────────────────────────────
-
-/// Shows a dialog asking the user to pick a closure reason.
-/// Returns null if cancelled.
-Future<ClosureReason?> _showClosureReasonDialog(
-  BuildContext context, {
-  required String patientName,
-}) async {
-  ClosureReason selected = ClosureReason.discontinued;
-
-  return showDialog<ClosureReason>(
-    context: context,
-    builder: (ctx) => StatefulBuilder(
-      builder: (ctx, setS) {
-        final colors = ctx.colors;
-        final textStyles = ctx.textStyles;
-
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          backgroundColor: colors.surface,
-          title: Row(
-            children: [
-              Icon(Icons.cancel_outlined, color: colors.error, size: 22),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Close Treatment',
-                  style: textStyles.h3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Select the reason for closing $patientName\'s treatment plan. All remaining sessions will be cancelled.',
-                style: textStyles.bodySmall.copyWith(color: colors.textSecondary),
-              ),
-              const SizedBox(height: 16),
-              ...ClosureReason.values.map((r) {
-                return RadioListTile<ClosureReason>(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  value: r,
-                  groupValue: selected,
-                  activeColor: colors.error,
-                  title: Text(_closureReasonLabel(r), style: textStyles.bodyMedium),
-                  onChanged: (v) {
-                    if (v != null) setS(() => selected = v);
-                  },
-                );
-              }),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('Cancel', style: TextStyle(color: colors.textSecondary)),
+  Widget _buildHeader(int totalItems) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            context.colors.warning.withValues(alpha: 0.15),
+            context.colors.warning.withValues(alpha: 0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border(
+          bottom: BorderSide(color: context.colors.border.withValues(alpha: 0.5)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              color: context.colors.warning.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(14),
             ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(ctx, selected),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: colors.error,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            child: Icon(Icons.notifications_active_rounded,
+                color: context.colors.warning, size: 24),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Needs Attention', style: context.textStyles.h3),
+                Text(
+                  totalItems == 0
+                      ? 'All caught up!'
+                      : '$totalItems item${totalItems == 1 ? '' : 's'} need your review',
+                  style: context.textStyles.bodySmall.copyWith(
+                    color: context.colors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.close_rounded, color: context.colors.textSecondary),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSessionList() {
+    if (_sessions.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.check_circle_outline_rounded,
+        title: 'All sessions reviewed!',
+        subtitle: 'No overdue sessions need your attention.',
+        color: context.colors.success,
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: _sessions.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (ctx, i) => _buildSessionCard(_sessions[i]),
+    );
+  }
+
+  Widget _buildSessionCard(SessionModel session) {
+    final isLoading = _isProcessing && _processingId == session.id;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.colors.warning.withValues(alpha: 0.4),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: context.colors.warning.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${session.sessionNumber}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: context.colors.warning,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Session ${session.sessionNumber}',
+                        style: context.textStyles.bodyMedium.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        '${_formatDate(session.scheduledDate)}'
+                        '${session.scheduledTime != null ? " · ${session.scheduledTime}" : ""}'
+                        '${session.treatmentModality.isNotEmpty ? " · ${session.treatmentModality}" : ""}',
+                        style: context.textStyles.bodySmall.copyWith(
+                          color: context.colors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: context.colors.warning.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Overdue',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: context.colors.warning,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: context.colors.border.withValues(alpha: 0.4)),
+          // Action buttons
+          if (isLoading)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _actionButton(
+                      label: 'Patient Came',
+                      icon: Icons.check_circle_rounded,
+                      color: context.colors.success,
+                      onTap: () => _onPatientCame(session),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _actionButton(
+                      label: 'Didn\'t Show',
+                      icon: Icons.cancel_rounded,
+                      color: context.colors.error,
+                      onTap: () => _onDidntShow(session),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _actionButton(
+                      label: 'We Were Closed',
+                      icon: Icons.business_rounded,
+                      color: context.colors.textSecondary,
+                      onTap: () => _onClinicClosed(session),
+                    ),
+                  ),
+                ],
               ),
-              child: const Text('Close Treatment'),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _actionButton({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color.withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          children: [
+            Icon(icon, size: 18, color: color),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
             ),
           ],
-        );
-      },
-    ),
-  );
-}
+        ),
+      ),
+    );
+  }
 
-String _closureReasonLabel(ClosureReason r) {
-  switch (r) {
-    case ClosureReason.completed:
-      return 'Treatment Completed';
-    case ClosureReason.discontinued:
-      return 'Doctor Discontinued';
-    case ClosureReason.patientStopped:
-      return 'Patient Chose to Stop';
-    case ClosureReason.medicalDecision:
-      return 'Medical Decision';
-    case ClosureReason.financial:
-      return 'Financial / Billing Issue';
+  Widget _buildManualReviewList() {
+    if (_manualPlans.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.event_available_rounded,
+        title: 'No plans need rescheduling',
+        subtitle: 'All treatment plans are on track.',
+        color: context.colors.success,
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: _manualPlans.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (ctx, i) => _buildManualReviewCard(_manualPlans[i]),
+    );
+  }
+
+  Widget _buildManualReviewCard(TreatmentPlanModel plan) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.colors.error.withValues(alpha: 0.4),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40, height: 40,
+            decoration: BoxDecoration(
+              color: context.colors.error.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.warning_amber_rounded,
+                color: context.colors.error, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  plan.patientName ?? 'Patient',
+                  style: context.textStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  '${plan.consecutiveMisses} consecutive misses · ${plan.treatmentType}',
+                  style: context.textStyles.bodySmall.copyWith(
+                    color: context.colors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              // TODO: navigate to patient plan for manual rescheduling
+            },
+            child: const Text('Review'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFooter() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: context.colors.border.withValues(alpha: 0.5)),
+        ),
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: (_isProcessing && _processingId == '__all__')
+              ? null
+              : _dismissAllAsHoliday,
+          icon: const Icon(Icons.business_rounded, size: 16),
+          label: Text('Dismiss All — We Were Closed (${_sessions.length})'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: context.colors.textSecondary,
+            side: BorderSide(color: context.colors.border),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.all(40),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 56, color: color.withValues(alpha: 0.7)),
+          const SizedBox(height: 16),
+          Text(title,
+              style: context.textStyles.h3, textAlign: TextAlign.center),
+          const SizedBox(height: 8),
+          Text(subtitle,
+              style: context.textStyles.bodySmall.copyWith(
+                  color: context.colors.textSecondary),
+              textAlign: TextAlign.center),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(String dateStr) {
+    final dt = DateTime.tryParse(dateStr);
+    if (dt == null) return dateStr;
+    return DateFormat('EEE, d MMM y').format(dt);
   }
 }

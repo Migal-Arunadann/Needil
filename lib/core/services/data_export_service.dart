@@ -197,6 +197,67 @@ class DataExportService {
 
   /// Exports all clinic data as a Map of filename → CSV string.
   /// Caller is responsible for downloading/sharing the files.
+  Future<String> exportSinglePatientData(String patientId) async {
+    final StringBuffer out = StringBuffer();
+
+    // 1. Fetch Patient
+    final patientRecord = await pb.collection(PBCollections.patients).getOne(patientId);
+    out.writeln('# PATIENT DATA EXPORT');
+    out.writeln('Generated: ${DateTime.now().toIso8601String()}');
+    out.writeln('--------------------------------------------------');
+    out.writeln('Patient ID: ${patientRecord.getStringValue('patient_id')}');
+    out.writeln('Name: ${patientRecord.getStringValue('full_name')}');
+    out.writeln('Phone: ${patientRecord.getStringValue('phone')}');
+    out.writeln('Gender: ${patientRecord.getStringValue('gender')}');
+    out.writeln('DOB: ${patientRecord.getStringValue('date_of_birth')}');
+    out.writeln('City: ${patientRecord.getStringValue('city')}');
+    out.writeln('--------------------------------------------------');
+    out.writeln('');
+
+    // 2. Fetch Consultations
+    final consultations = await _fetchAllRecords(PBCollections.consultations, "patient='$patientId'");
+    out.writeln('## CONSULTATIONS (${consultations.length})');
+    for (final c in consultations) {
+      out.writeln('- Date: ${c['created']}');
+      out.writeln('  Notes: ${c['notes']}');
+      out.writeln('  Complaint: ${c['chief_complaint']}');
+      out.writeln('  History: ${c['medical_history']}');
+      out.writeln('');
+    }
+    out.writeln('--------------------------------------------------');
+
+    // 3. Fetch Treatment Plans
+    final plans = await _fetchAllRecords(PBCollections.treatmentPlans, "patient='$patientId'");
+    out.writeln('## TREATMENT PLANS (${plans.length})');
+    for (final p in plans) {
+      out.writeln('- Plan Status: ${p['status']}');
+      out.writeln('  Created: ${p['created']}');
+      out.writeln('  Total Sessions: ${p['total_sessions']}');
+      out.writeln('  Modality: ${p['treatment_modality']}');
+      out.writeln('  Notes: ${p['plan_notes']}');
+      out.writeln('');
+    }
+    out.writeln('--------------------------------------------------');
+
+    // 4. Fetch Sessions
+    final sessions = await _fetchAllRecords(PBCollections.sessions, "patient='$patientId'");
+    // Sort sessions by date if possible, but they are just maps here
+    sessions.sort((a, b) => (a['scheduled_date'] as String? ?? '').compareTo(b['scheduled_date'] as String? ?? ''));
+    
+    out.writeln('## SESSIONS (${sessions.length})');
+    for (final s in sessions) {
+      out.writeln('- Session ${s['session_number']} (${s['session_type']})');
+      out.writeln('  Status: ${s['status']}');
+      out.writeln('  Date: ${s['scheduled_date']} ${s['scheduled_time']}');
+      out.writeln('  Vitals: BP ${s['vitals_bp']} | Pulse ${s['vitals_pulse']}');
+      out.writeln('  Remarks: ${s['remarks'] ?? s['session_remarks'] ?? ''}');
+      out.writeln('  Notes: ${s['session_notes_']}');
+      out.writeln('');
+    }
+
+    return out.toString();
+  }
+
   Future<Map<String, String>> exportAllData(String clinicId,
       String clinicName) async {
     final sanitizedName =

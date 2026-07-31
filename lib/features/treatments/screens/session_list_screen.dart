@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:pms_app/core/scheduling/treatment_scheduler.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -310,37 +311,6 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
     );
   }
 
-  Widget _buildPlanStatusBadge(TreatmentPlanStatus status) {
-    final (label, color, icon) = switch (status) {
-      TreatmentPlanStatus.active      => ('Active', context.colors.success, Icons.check_circle_outline),
-      TreatmentPlanStatus.paused      => ('Paused', context.colors.warning, Icons.pause_circle_outline),
-      TreatmentPlanStatus.manualReview=> ('Manual Review', context.colors.error, Icons.sync_problem_rounded),
-      TreatmentPlanStatus.completed   => ('Completed', context.colors.primary, Icons.verified_rounded),
-      TreatmentPlanStatus.closed      => ('Closed', context.colors.textSecondary, Icons.cancel_outlined),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: context.textStyles.caption.copyWith(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _sessionCard(SessionModel session, {bool isLast = false}) {
     final statusColor = _statusColor(session.status);
@@ -367,72 +337,78 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
 
     final isActive = session.status == SessionStatus.upcoming ||
         session.status == SessionStatus.inProgress ||
-        session.status == SessionStatus.waiting;
+        session.status == SessionStatus.waiting ||
+        session.status == SessionStatus.overdue; // overdue = tappable for retroactive recording
 
     return GestureDetector(
       onTap: () {
         if (!isActive) return;
         if (scheduledDt != null) {
-          final schedDay = DateTime(scheduledDt.year, scheduledDt.month, scheduledDt.day);
-          final today = DateTime(now.year, now.month, now.day);
-          if (schedDay != today) {
-            if (isFuture) {
-              // V-5 fix: Block recording future sessions
-              showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  title: const Text('Session Not Due Yet'),
-                  content: Text(
-                    'This session is scheduled for ${DateFormat('EEE, MMM d').format(scheduledDt)}. '
-                    'You cannot record it before its scheduled date.\n\nYou can reschedule it if needed.',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text('OK'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _rescheduleSessionFromList(session);
-                      },
-                      child: Text('Reschedule', style: TextStyle(color: context.colors.primary)),
-                    ),
-                  ],
-                ),
-              );
-            } else {
-              // Past date mismatch — allow with confirmation
-              showDialog(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  title: const Text('Date Mismatch'),
-                  content: const Text(
-                    'This session is not scheduled for today. Are you sure you want to record it now?',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: Text('Cancel'),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        navigateToRecord(session);
-                      },
-                      child: Text(
-                        'Proceed',
-                        style: TextStyle(color: context.colors.primary),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }
-          } else {
+          // Overdue sessions: navigate directly to form — no date-mismatch friction
+          if (session.status == SessionStatus.overdue) {
             navigateToRecord(session);
+          } else {
+            final schedDay = DateTime(scheduledDt.year, scheduledDt.month, scheduledDt.day);
+            final today = DateTime(now.year, now.month, now.day);
+            if (schedDay != today) {
+              if (isFuture) {
+                // V-5 fix: Block recording future sessions
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    title: const Text('Session Not Due Yet'),
+                    content: Text(
+                      'This session is scheduled for ${DateFormat('EEE, MMM d').format(scheduledDt)}. '
+                      'You cannot record it before its scheduled date.\n\nYou can reschedule it if needed.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('OK'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _rescheduleSessionFromList(session);
+                        },
+                        child: Text('Reschedule', style: TextStyle(color: context.colors.primary)),
+                      ),
+                    ],
+                  ),
+                );
+              } else {
+                // Past date mismatch — allow with confirmation
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    title: const Text('Date Mismatch'),
+                    content: const Text(
+                      'This session is not scheduled for today. Are you sure you want to record it now?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          navigateToRecord(session);
+                        },
+                        child: Text(
+                          'Proceed',
+                          style: TextStyle(color: context.colors.primary),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+            } else {
+              navigateToRecord(session);
+            }
           }
         }
       },
@@ -643,6 +619,8 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
     switch (s) {
       case SessionStatus.upcoming:
         return context.colors.info;
+      case SessionStatus.overdue:
+        return Colors.amber.shade700;
       case SessionStatus.waiting:
         return context.colors.warning;
       case SessionStatus.inProgress:
@@ -662,6 +640,8 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
     switch (s) {
       case SessionStatus.upcoming:
         return 'Upcoming';
+      case SessionStatus.overdue:
+        return 'Needs Review';
       case SessionStatus.waiting:
         return 'Waiting';
       case SessionStatus.inProgress:
@@ -697,10 +677,47 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
     final newTime = result['time'] as String;
 
     // Ask cascade mode
-    final mode = await _askCascadeMode();
+    var mode = await _askCascadeMode();
     if (mode == null || !mounted) return;
 
     try {
+      if (mode == RescheduleMode.missedOnly) {
+        final scheduler = ref.read(sessionLifecycleServiceProvider).scheduler;
+        final conflict = await scheduler.findConflictingSession(widget.plan.id, newDate, session.id);
+        
+        if (conflict != null && mounted) {
+          final conflictAction = await showDialog<String>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              backgroundColor: context.colors.surface,
+              title: Text('Scheduling Conflict', style: context.textStyles.h3),
+              content: Text(
+                'Session ${conflict.sessionNumber} is already scheduled on this date. How would you like to proceed?',
+                style: context.textStyles.bodyMedium,
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(ctx, 'cancel'), child: const Text('Cancel')),
+                OutlinedButton(
+                  onPressed: () => Navigator.pop(ctx, 'proceed'),
+                  child: Text('Proceed Anyway', style: TextStyle(color: context.colors.primary)),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(ctx, 'cascade'),
+                  style: FilledButton.styleFrom(backgroundColor: context.colors.primary),
+                  child: Text('Shift Session ${conflict.sessionNumber}'),
+                ),
+              ],
+            ),
+          );
+
+          if (conflictAction == null || conflictAction == 'cancel') return;
+          if (conflictAction == 'cascade') {
+            mode = RescheduleMode.cascadeAll;
+          }
+        }
+      }
+
       if (mode == RescheduleMode.cascadeAll) {
         final lifecycle = ref.read(sessionLifecycleServiceProvider);
         final preview = await lifecycle.previewRescheduleSessionAndCascade(
@@ -712,37 +729,67 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
         
         if (!mounted) return;
         
-        final confirmed = await showModalBottomSheet<bool>(
+        final confirmedPreview = await showModalBottomSheet<ReschedulePreview?>(
           context: context,
           isScrollControlled: true,
           backgroundColor: Colors.transparent,
-          builder: (ctx) => Padding(
-            padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + kToolbarHeight),
-            child: CascadePreviewSheet(
-              preview: preview,
-              onConfirm: () => Navigator.pop(ctx, true),
-              onCancel: () => Navigator.pop(ctx, false),
-            ),
-          ),
+          builder: (ctx) {
+            bool applyTimeToAll = false;
+            bool isRegenerating = false;
+            var currentPreview = preview;
+
+            return StatefulBuilder(
+              builder: (BuildContext context, StateSetter setState) {
+                return Padding(
+                  padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + kToolbarHeight),
+                  child: CascadePreviewSheet(
+                    preview: currentPreview,
+                    newTime: newTime,
+                    applyTimeToAll: applyTimeToAll,
+                    isRegenerating: isRegenerating,
+                    onToggleApplyTimeToAll: (val) async {
+                      setState(() {
+                        applyTimeToAll = val;
+                        isRegenerating = true;
+                      });
+                      final newPreview = await lifecycle.previewRescheduleSessionAndCascade(
+                        sessionId: session.id,
+                        newDate: newDate,
+                        newTime: newTime,
+                        performedBy: _currentUserId,
+                        applyTimeToAll: val,
+                      );
+                      setState(() {
+                        currentPreview = newPreview;
+                        isRegenerating = false;
+                      });
+                    },
+                    onConfirm: () => Navigator.pop(ctx, currentPreview),
+                    onCancel: () => Navigator.pop(ctx, null),
+                  ),
+                );
+              },
+            );
+          },
         );
         
-        if (confirmed != true || !mounted) return;
+        if (confirmedPreview == null || !mounted) return;
         
-        await lifecycle.commitRescheduleProposal(preview);
+        await lifecycle.commitRescheduleProposal(confirmedPreview);
         
         if (mounted) {
-          final conflicts = preview.proposal.totalExpected - preview.proposal.slots.where((s) => !s.wasPinned).length;
+          final conflicts = confirmedPreview.proposal.totalExpected - confirmedPreview.proposal.slots.where((s) => !s.wasPinned).length;
           if (conflicts > 0) {
             showDialog(
               context: context,
               builder: (ctx) => ConflictWarningDialog(
-                successfulMoves: preview.proposal.slots.where((s) => s.oldDate != s.newDate && !s.wasPinned).length,
-                skippedSessions: preview.proposal.slots.where((s) => s.wasPinned && !s.isTarget).length,
+                successfulMoves: confirmedPreview.proposal.slots.where((s) => s.oldDate != s.newDate && !s.wasPinned).length,
+                skippedSessions: confirmedPreview.proposal.slots.where((s) => s.wasPinned && !s.isTarget).length,
                 totalConflicts: conflicts,
               ),
             );
           } else {
-            AppToast.show('Reschedule cascade complete ✓', type: ToastType.success);
+            AppToast.show('Future sessions successfully shifted ✓', type: ToastType.success);
           }
         }
       } else {
