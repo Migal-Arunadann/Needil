@@ -23,8 +23,9 @@ class PatientModel {
   final String? occupation;
   final String? email;
   final int? age;
-  final String? reference;        // Referred by (doctor, friend, etc.)
-  final String? howDidYouHear;    // How do you know us
+  final String? reference;        // Specific name/reference (e.g. Dr. Smith)
+  final String? howDidYouHear;    // Category (e.g. Doctor Referral, Google)
+  final String? personalNotes;    // Independent personal notes by doctor
   /// Relation of this patient to the primary phone-account holder.
   /// Values: "Self", "Spouse", "Child", "Parent", "Sibling", "Other".
   /// Null for legacy records or the original/primary patient.
@@ -54,6 +55,7 @@ class PatientModel {
     this.age,
     this.reference,
     this.howDidYouHear,
+    this.personalNotes,
     this.relationToPrimary,
     this.consentGiven = false,
     this.consentDate,
@@ -92,6 +94,7 @@ class PatientModel {
       age: record.getIntValue('age'),
       reference: record.getStringValue('reference'),
       howDidYouHear: record.getStringValue('how_did_you_hear'),
+      personalNotes: record.getStringValue('personal_notes'),
       relationToPrimary: record.getStringValue('relation_to_primary').isNotEmpty
           ? record.getStringValue('relation_to_primary')
           : null,
@@ -127,9 +130,12 @@ class PatientModel {
       if (occupation != null && occupation!.isNotEmpty) 'occupation': occupation,
       if (email != null && email!.isNotEmpty) 'email': email,
       if (age != null) 'age': age,
-      if (reference != null && reference!.isNotEmpty) 'reference': reference,
+      if (reference != null && reference!.isNotEmpty)
+        'reference': reference,
       if (howDidYouHear != null && howDidYouHear!.isNotEmpty)
         'how_did_you_hear': howDidYouHear,
+      if (personalNotes != null && personalNotes!.isNotEmpty)
+        'personal_notes': personalNotes,
       if (relationToPrimary != null && relationToPrimary!.isNotEmpty)
         'relation_to_primary': relationToPrimary,
       'consent_given': consentGiven,

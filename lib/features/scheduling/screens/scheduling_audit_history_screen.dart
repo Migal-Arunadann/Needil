@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pms_app/core/constants/pb_collections.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/utils/error_formatter.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 
@@ -131,7 +132,7 @@ class _SchedulingAuditHistoryScreenState
               Icon(Icons.error_outline_rounded,
                   size: 48, color: context.colors.error),
               const SizedBox(height: 12),
-              Text(_error!, style: context.textStyles.bodyMedium,
+              Text(ErrorFormatter.format(_error!), style: context.textStyles.bodyMedium,
                   textAlign: TextAlign.center),
               const SizedBox(height: 16),
               ElevatedButton(onPressed: _load, child: const Text('Retry')),

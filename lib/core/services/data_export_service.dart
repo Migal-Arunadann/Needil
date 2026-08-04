@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
 import 'package:pms_app/core/constants/pb_collections.dart';
+import 'web_download_stub.dart' if (dart.library.html) 'web_download.dart';
 
 /// Exports all clinic data as CSV strings.
 /// Supports web (blob download) and mobile (returns CSV string for sharing).
@@ -286,47 +287,5 @@ class DataExportService {
 /// On non-web platforms, this is a no-op — callers handle mobile saving separately.
 void downloadCsvWeb(String csvContent, String filename) {
   if (!kIsWeb) return;
-  // Use a conditional import via dart:html on web
-  // We use the `dart:html` package indirectly through a JS interop approach
-  // that avoids compile errors on mobile targets.
-  _downloadCsvWebImpl(csvContent, filename);
-}
-
-// Platform-safe download function
-void _downloadCsvWebImpl(String csvContent, String filename) {
-  if (!kIsWeb) return;
-  // On web: create a blob URL and trigger download
-  // This is done via the web-specific implementation below
-  _triggerWebDownload(csvContent, filename);
-}
-
-void _triggerWebDownload(String content, String filename) {
-  // This will only be called on web — use a try/catch to avoid
-  // dart:html import issues on mobile
-  try {
-    // ignore: avoid_dynamic_calls
-    final dynamic html = _getHtml();
-    if (html == null) return;
-    final bytes = utf8.encode(content);
-    final blob = html.Blob([bytes], 'text/csv;charset=utf-8');
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    final anchor = html.document.createElement('a');
-    anchor.href = url;
-    anchor.download = filename;
-    html.document.body?.appendChild(anchor);
-    anchor.click();
-    html.document.body?.removeChild(anchor);
-    html.Url.revokeObjectUrl(url);
-  } catch (_) {
-    // Silently fail if dart:html not available
-  }
-}
-
-dynamic _getHtml() {
-  try {
-    // This will throw on non-web platforms
-    return null; // Placeholder — actual web impl uses conditional imports
-  } catch (_) {
-    return null;
-  }
+  downloadFileWeb(csvContent, filename);
 }

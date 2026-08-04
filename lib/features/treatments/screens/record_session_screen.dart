@@ -23,6 +23,8 @@ import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/features/auth/models/doctor_model.dart';
 import '../../../core/services/auth_service.dart' show UserRole;
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/features/appointments/screens/patient_info_screen.dart';
+import 'package:pms_app/features/appointments/models/appointment_model.dart';
 
 class AcupointUsage {
   String point;
@@ -277,6 +279,12 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
   String? _selectedDoctorId;
   DoctorModel? _selectedDoctor;
 
+  // ── Deferred Patient Details Gate ──
+  // Set to true when the source appointment had patientDetailsSkipped=true (retroactive consultation skip)
+  bool _requiresPatientDetailsFill = false;
+  String? _linkedAppointmentId;     // appointment that triggered the gate
+  String? _linkedPatientId;         // patient to update
+
   @override
   void initState() {
     super.initState();
@@ -450,6 +458,9 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         _loadTreatmentTypeFromPlan(fresh.treatmentPlanId);
       }
       await _loadClinicDoctors();
+
+      // ── Deferred patient details gate: check if source appointment had details skipped ──
+      await _checkDeferredPatientDetails(fresh.treatmentPlanId);
     } catch (_) {
       if (!mounted) return;
       // Fallback to the widget snapshot
@@ -475,6 +486,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         _loadTreatmentTypeFromPlan(widget.session.treatmentPlanId);
       }
       await _loadClinicDoctors();
+      await _checkDeferredPatientDetails(widget.session.treatmentPlanId);
     }
 
     _notesCtrl.addListener(_onFieldChanged);
@@ -507,6 +519,47 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
       // Silently fail — treatment type will just be empty
     }
   }
+
+  /// Check if the source consultation appointment had patient details skipped.
+  /// Only applies to the first session — once details are filled the gate clears.
+  Future<void> _checkDeferredPatientDetails(String treatmentPlanId) async {
+    if (treatmentPlanId.isEmpty) return;
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final apts = await pb.collection(PBCollections.appointments).getList(
+        filter: 'linked_treatment_plan_id = "$treatmentPlanId" && patient_details_skipped = true',
+        perPage: 1,
+      );
+      if (apts.items.isEmpty) return;
+      final rec = apts.items.first;
+      final patientId = rec.getStringValue('patient');
+      if (patientId.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _requiresPatientDetailsFill = true;
+            _linkedAppointmentId = rec.id;
+            _linkedPatientId = patientId;
+          });
+        }
+      }
+    } catch (_) {
+      // Silently ignore — gate only activates if data confirms it
+    }
+  }
+
+  /// Clear the deferred patient details gate after staff fills them in.
+  Future<void> _clearPatientDetailsGate() async {
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      if (_linkedAppointmentId != null) {
+        await pb.collection(PBCollections.appointments).update(_linkedAppointmentId!, body: {
+          'patient_details_skipped': false,
+        });
+      }
+      if (mounted) setState(() => _requiresPatientDetailsFill = false);
+    } catch (_) {}
+  }
+
 
   /// Load all doctors in the clinic to restrict treatment types to configured services
   Future<void> _loadClinicDoctors() async {
@@ -889,6 +942,115 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         body: Center(child: CircularProgressIndicator(color: context.colors.primary)),
       );
     }
+
+    // ── Deferred patient details gate ──────────────────────────────────────────
+    // If the doctor skipped patient details during the retroactive consultation,
+    // the first session must collect those details before proceeding.
+    if (_requiresPatientDetailsFill && _linkedPatientId != null) {
+      return Scaffold(
+        backgroundColor: context.colors.background,
+        body: SafeArea(
+          child: Column(
+            children: [
+              // Header
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(
+                          color: context.colors.surface,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: context.colors.border),
+                        ),
+                        child: Icon(Icons.arrow_back_rounded, size: 20, color: context.colors.textPrimary),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Patient Details Required', style: context.textStyles.h2),
+                          Text('Please fill before starting this session', style: context.textStyles.caption),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Notice card
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline_rounded, color: Color(0xFFF59E0B), size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Patient details were skipped during the initial consultation.',
+                              style: context.textStyles.label.copyWith(color: const Color(0xFFF59E0B), fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'The patient is present now. Please fill their details first before proceeding to the session.',
+                              style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Expand to fill, load PatientInfoScreen embedded
+              Expanded(
+                child: Builder(builder: (ctx) {
+                  // We push PatientInfoScreen content inline by navigating immediately.
+                  // Use a post-frame callback to push the full screen.
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (_requiresPatientDetailsFill && mounted) {
+                      final apt = AppointmentModel(
+                        id: _linkedAppointmentId ?? '',
+                        patientId: _linkedPatientId,
+                        doctorId: _liveSession.doctorId,
+                        type: AppointmentType.callBy,
+                        date: _liveSession.scheduledDate,
+                        time: _liveSession.scheduledTime ?? '00:00',
+                        status: AppointmentStatus.inProgress,
+                      );
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PatientInfoScreen(appointment: apt),
+                        ),
+                      ).then((_) => _clearPatientDetailsGate());
+                    }
+                  });
+                  return const SizedBox.shrink();
+                }),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final session = _liveSession;
     final sColor = _statusColor(session.status);
 
@@ -982,7 +1144,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                     ],
                     // Vitals row
                     if ((_bpCtrl.text.trim().isNotEmpty) || (_pulseCtrl.text.trim().isNotEmpty)) ...[
-                      Text('Vitals', style: context.textStyles.label),
+                      const AppLabel(text: 'Vitals'),
                       const SizedBox(height: 8),
                       Row(children: [
                         if (_bpCtrl.text.trim().isNotEmpty)
@@ -1007,21 +1169,21 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                     ],
                     // Cupping Therapy (view)
                     if (_cuppingData.placementZones.isNotEmpty) ...[
-                      Text('Cupping Therapy Details', style: context.textStyles.label),
+                      const AppLabel(text: 'Cupping Therapy Details'),
                       const SizedBox(height: 8),
                       _buildReadOnlyCuppingSection(),
                       const SizedBox(height: 16),
                     ],
                     // Physiotherapy (view)
                     if (_physioData.exercises.isNotEmpty) ...[
-                      Text('Physiotherapy Details', style: context.textStyles.label),
+                      const AppLabel(text: 'Physiotherapy Details'),
                       const SizedBox(height: 8),
                       _buildReadOnlyPhysioSection(),
                       const SizedBox(height: 16),
                     ],
                     // Foot Reflexology (view)
                     if (_reflexologyData.pressureZones.isNotEmpty) ...[
-                      Text('Foot Reflexology Details', style: context.textStyles.label),
+                      const AppLabel(text: 'Foot Reflexology Details'),
                       const SizedBox(height: 8),
                       _buildReadOnlyReflexologySection(),
                       const SizedBox(height: 16),
@@ -1030,7 +1192,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
 
                     // Photos from PocketBase
                     if (_liveSession.photos.isNotEmpty) ...[
-                      Text('Photos', style: context.textStyles.label),
+                      const AppLabel(text: 'Photos'),
                       const SizedBox(height: 8),
                       SizedBox(
                         height: 100,
@@ -1101,7 +1263,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                   if (!_isViewMode) ...[
                     // ── Assigned Doctor Selector (Allows switching doctor to access other clinic services) ──
                     if (_clinicDoctors.isNotEmpty) ...[
-                      Text('Assigned Doctor', style: context.textStyles.label),
+                      const AppLabel(text: 'Assigned Doctor', isRequired: true),
                       const SizedBox(height: 8),
                       Container(
                         width: double.infinity,
@@ -1137,7 +1299,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                     ],
 
                     // ── Treatment Type Selector ──
-                    Text('Treatment Type', style: context.textStyles.label),
+                    const AppLabel(text: 'Treatment Type', isRequired: true),
                     const SizedBox(height: 8),
                     Container(
                       width: double.infinity,
@@ -1200,7 +1362,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                     if (_selectedTreatmentType == 'Foot Reflexology')
                       _buildEditableReflexologySection(),
                     const SizedBox(height: 16),
-                    Text('Vitals (Optional)', style: context.textStyles.label),
+                    const AppLabel(text: 'Vitals'),
                     const SizedBox(height: 8),
                     Row(children: [
                       Expanded(child: AppTextField(controller: _bpCtrl, label: 'BP Level', hint: '120/80',
@@ -1224,7 +1386,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                           prefixIcon: Icon(Icons.monitor_heart_outlined, color: context.colors.warning, size: 18))),
                     ]),
                     const SizedBox(height: 16),
-                    Text('Photos', style: context.textStyles.label),
+                    const AppLabel(text: 'Photos'),
                     const SizedBox(height: 8),
                     Wrap(spacing: 8, runSpacing: 8, children: [
                       // Show existing PB photos first
@@ -1966,7 +2128,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Cupping Therapy Details', style: context.textStyles.label),
+        const AppLabel(text: 'Cupping Therapy Details'),
         const SizedBox(height: 12),
         // Cup Type
         Text('Cup Type', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600)),
@@ -2086,7 +2248,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('Physiotherapy Exercises', style: context.textStyles.label),
+          const AppLabel(text: 'Physiotherapy Exercises'),
           if (_physioData.exercises.isNotEmpty)
             Text('${_physioData.exercises.length} exercise(s)',
               style: TextStyle(color: context.colors.primary, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -2199,7 +2361,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
 
   Widget _buildEditableReflexologySection() {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('Foot Reflexology Details', style: context.textStyles.label),
+      const AppLabel(text: 'Foot Reflexology Details'),
       const SizedBox(height: 12),
       // Foot Selection
       Text('Foot', style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w600)),
@@ -2637,7 +2799,7 @@ class _SessionTimerWidgetState extends State<_SessionTimerWidget> {
         Row(children: [
           Icon(Icons.timer_outlined, size: 18, color: isRunning ? context.colors.primary : context.colors.textSecondary),
           const SizedBox(width: 8),
-          Text('Session Timer', style: context.textStyles.label),
+          const AppLabel(text: 'Session Timer'),
           const Spacer(),
           if (!isActive)
             GestureDetector(

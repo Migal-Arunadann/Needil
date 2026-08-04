@@ -3,6 +3,38 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 
+/// A styled label for forms
+class AppLabel extends StatelessWidget {
+  final String text;
+  final bool isRequired;
+  final TextStyle? style;
+
+  const AppLabel({super.key, required this.text, this.isRequired = false, this.style});
+
+  @override
+  Widget build(BuildContext context) {
+    if (text.isEmpty) return const SizedBox.shrink();
+    return RichText(
+      text: TextSpan(
+        text: text,
+        style: style ?? context.textStyles.label,
+        children: [
+          if (isRequired)
+            TextSpan(
+              text: ' *',
+              style: (style ?? context.textStyles.label).copyWith(color: Colors.red, fontWeight: FontWeight.bold),
+            )
+          else
+            TextSpan(
+              text: ' (optional)',
+              style: (style ?? context.textStyles.label).copyWith(color: context.colors.textHint, fontSize: 12, fontWeight: FontWeight.normal),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// A styled text field with consistent theming and high-performance native interactions.
 class AppTextField extends StatelessWidget {
   final String label;
@@ -23,6 +55,7 @@ class AppTextField extends StatelessWidget {
   final VoidCallback? onTap;
   final List<TextInputFormatter>? inputFormatters;
   final String? errorText;
+  final bool isRequired;
 
   const AppTextField({
     super.key,
@@ -44,6 +77,7 @@ class AppTextField extends StatelessWidget {
     this.onTap,
     this.inputFormatters,
     this.errorText,
+    this.isRequired = false,
   });
 
   @override
@@ -71,6 +105,7 @@ class AppTextField extends StatelessWidget {
         onTap: onTap,
         inputFormatters: inputFormatters,
         errorText: errorText,
+        isRequired: isRequired,
       );
     }
 
@@ -78,7 +113,24 @@ class AppTextField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (label.isNotEmpty) ...[
-          Text(label, style: context.textStyles.label),
+          RichText(
+            text: TextSpan(
+              text: label,
+              style: context.textStyles.label,
+              children: [
+                if (isRequired)
+                  TextSpan(
+                    text: ' *',
+                    style: context.textStyles.label.copyWith(color: Colors.red, fontWeight: FontWeight.bold),
+                  )
+                else
+                  TextSpan(
+                    text: ' (optional)',
+                    style: context.textStyles.label.copyWith(color: context.colors.textHint, fontSize: 12),
+                  ),
+              ],
+            ),
+          ),
           const SizedBox(height: 8),
         ],
         TextFormField(
@@ -185,6 +237,7 @@ class _WebTextField extends StatefulWidget {
   final VoidCallback? onTap;
   final List<TextInputFormatter>? inputFormatters;
   final String? errorText;
+  final bool isRequired;
 
   const _WebTextField({
     required this.label,
@@ -205,6 +258,7 @@ class _WebTextField extends StatefulWidget {
     this.onTap,
     this.inputFormatters,
     this.errorText,
+    this.isRequired = false,
   });
 
   @override
@@ -250,12 +304,26 @@ class _WebTextFieldState extends State<_WebTextField> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (widget.label.isNotEmpty) ...[
-          Text(
-            widget.label,
-            style: context.textStyles.bodyMedium.copyWith(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: textDark,
+          RichText(
+            text: TextSpan(
+              text: widget.label,
+              style: context.textStyles.bodyMedium.copyWith(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: textDark,
+              ),
+              children: [
+                if (widget.isRequired)
+                  TextSpan(
+                    text: ' *',
+                    style: context.textStyles.label.copyWith(color: Colors.red, fontWeight: FontWeight.bold),
+                  )
+                else
+                  TextSpan(
+                    text: ' (optional)',
+                    style: context.textStyles.label.copyWith(color: context.colors.textHint, fontSize: 12),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 8),

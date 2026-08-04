@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/utils/error_formatter.dart';
 import 'package:pms_app/core/services/superadmin_service.dart';
 import 'package:pms_app/core/services/data_export_service.dart';
 import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
@@ -241,7 +242,7 @@ class _SuperadminClinicDetailScreenState extends ConsumerState<SuperadminClinicD
               constraints: const BoxConstraints(maxWidth: 900),
               child: dataAsync.when(
                 loading: () => const Center(child: CircularProgressIndicator(color: SAColors.accent)),
-                error: (e, _) => Center(child: Text('Error: $e', style: const TextStyle(color: SAColors.error))),
+                error: (e, _) => Center(child: Text('Error: ${ErrorFormatter.format(e)}', style: const TextStyle(color: SAColors.error))),
                 data: (data) {
                   final clinic = data['clinic'] as RecordModel;
                   final doctors = data['doctors'] as List<RecordModel>;

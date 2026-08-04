@@ -232,7 +232,8 @@ class _LocationFieldsState extends State<LocationFields> {
           children: [
             AppTextField(
               controller: widget.pincodeCtrl,
-              label: widget.allRequired ? 'Pincode *' : 'Pincode',
+              label: 'Pincode',
+              isRequired: widget.allRequired,
               hint: '6-digit code',
               keyboardType: TextInputType.number,
               inputFormatters: [
@@ -280,7 +281,7 @@ class _LocationFieldsState extends State<LocationFields> {
         );
 
         final countryField = _DropdownField(
-          label: widget.allRequired ? 'Country *' : 'Country',
+          label: 'Country',
           value: widget.countryCtrl.text.isNotEmpty
               ? widget.countryCtrl.text
               : null,
@@ -297,7 +298,7 @@ class _LocationFieldsState extends State<LocationFields> {
 
         final stateField = isIndian
             ? _DropdownField(
-                label: widget.allRequired ? 'State *' : 'State',
+                label: 'State',
                 value: kIndianStates.contains(widget.stateCtrl.text)
                     ? widget.stateCtrl.text
                     : null,
@@ -311,7 +312,8 @@ class _LocationFieldsState extends State<LocationFields> {
               )
             : AppTextField(
                 controller: widget.stateCtrl,
-                label: widget.allRequired ? 'State / Province *' : 'State / Province',
+                label: 'State / Province',
+                isRequired: widget.allRequired,
                 prefixIcon: Icon(Icons.flag_rounded, color: context.colors.textHint),
                 validator: widget.allRequired
                     ? (v) => (v == null || v.trim().isEmpty) ? 'State is required' : null
@@ -321,7 +323,8 @@ class _LocationFieldsState extends State<LocationFields> {
 
         final cityField = AppTextField(
           controller: widget.cityCtrl,
-          label: widget.allRequired ? 'City / District *' : 'City / District',
+          label: 'City / District',
+          isRequired: widget.allRequired,
           prefixIcon: Icon(Icons.location_city_rounded,
               color: context.colors.textHint),
           validator: widget.allRequired
@@ -332,7 +335,7 @@ class _LocationFieldsState extends State<LocationFields> {
 
         final areaField = _areaOptions.isNotEmpty
             ? _DropdownField(
-                label: widget.allRequired ? 'Area / Locality *' : 'Area / Locality',
+                label: 'Area / Locality',
                 value: _areaOptions.contains(widget.areaCtrl.text)
                     ? widget.areaCtrl.text
                     : (_areaOptions.isNotEmpty ? _areaOptions.first : null),
@@ -345,7 +348,8 @@ class _LocationFieldsState extends State<LocationFields> {
               )
             : AppTextField(
                 controller: widget.areaCtrl,
-                label: widget.allRequired ? 'Area / Locality *' : 'Area / Locality',
+                label: 'Area / Locality',
+                isRequired: widget.allRequired,
                 prefixIcon: Icon(Icons.map_rounded, color: context.colors.textHint),
                 validator: widget.allRequired
                     ? (v) => (v == null || v.trim().isEmpty) ? 'Area is required' : null
@@ -430,8 +434,9 @@ class _DropdownField extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (label.isNotEmpty) ...[
-            Text(
-              label,
+            AppLabel(
+              text: label,
+              isRequired: required,
               style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
@@ -488,8 +493,10 @@ class _DropdownField extends StatelessWidget {
     return DropdownButtonFormField<String>(
       value: value,
       decoration: InputDecoration(
-        labelText: label,
-        labelStyle: context.textStyles.caption.copyWith(color: context.colors.textHint),
+        label: AppLabel(
+          text: label,
+          isRequired: required,
+        ),
         prefixIcon: Icon(icon, color: context.colors.textHint, size: 20),
         filled: true,
         fillColor: context.colors.surface,

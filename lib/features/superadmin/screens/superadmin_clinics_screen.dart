@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/utils/error_formatter.dart';
 import 'package:pms_app/core/services/superadmin_service.dart';
 import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
@@ -103,7 +104,8 @@ class _SuperadminClinicsScreenState extends ConsumerState<SuperadminClinicsScree
                           child: CircularProgressIndicator(color: SAColors.accent),
                         ),
                         error: (e, _) => Center(
-                          child: Text('Error: $e', style: context.textStyles.bodyMedium.copyWith(color: SAColors.error)),
+                          child: Text('Error: ${ErrorFormatter.format(e)}',
+                              style: const TextStyle(color: SAColors.error)),
                         ),
                         data: (clinics) => clinics.isEmpty
                             ? ListView(

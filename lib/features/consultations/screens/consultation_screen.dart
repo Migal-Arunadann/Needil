@@ -39,6 +39,8 @@ class ConsultationScreen extends ConsumerStatefulWidget {
   final String? consultationId;
   final bool isViewMode;
   final String? appointmentId; // If set, mark appointment's consultation_form_saved on submit
+  final bool isRetroactive;          // true = staff forgot to fill → retroactive mode
+  final String? retroactiveOriginalDate; // YYYY-MM-DD of original appointment
 
   const ConsultationScreen({
     super.key,
@@ -47,7 +49,9 @@ class ConsultationScreen extends ConsumerStatefulWidget {
     required this.doctorId,
     this.consultationId,
     this.isViewMode = false,
-    this.appointmentId, // pass to mark form saved
+    this.appointmentId,
+    this.isRetroactive = false,
+    this.retroactiveOriginalDate,
   });
 
   @override
@@ -58,6 +62,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
   final _formKey = GlobalKey<FormState>();
   bool _isSubmitting = false;
   bool _charged = false;
+
+  // Retroactive mode state
+  TimeOfDay? _retroactiveTime;     // null = "I Don't Know"
+  bool _retroactiveTimeKnown = true; // starts true, set to false on "I Don't Know"
+  bool _retroactivePatientSkipped = false; // true if staff tapped Skip on patient details
 
 
   final _notesCtrl = TextEditingController(); // Chief Complaint / Main Problem
@@ -848,7 +857,31 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
       if (widget.appointmentId != null) {
         try {
           final aptService = ref.read(appointmentServiceProvider);
-          await aptService.markConsultationEndTime(widget.appointmentId!);
+          final pb = ref.read(pocketbaseProvider);
+
+          // Retroactive: override consultation_start_time with picked time or original scheduled time
+          if (widget.isRetroactive) {
+            final originalDate = widget.retroactiveOriginalDate ?? DateTime.now().toIso8601String().substring(0, 10);
+            String startTimeIso;
+            if (_retroactiveTimeKnown && _retroactiveTime != null) {
+              final t = _retroactiveTime!;
+              startTimeIso = '${originalDate}T${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:00.000Z';
+            } else {
+              // "I Don't Know" — use original scheduled date at noon as placeholder
+              startTimeIso = '${originalDate}T12:00:00.000Z';
+            }
+            await pb.collection(PBCollections.appointments).update(widget.appointmentId!, body: {
+              'status': 'completed',
+              'consultation_start_time': startTimeIso,
+              'consultation_end_time': DateTime.now().toUtc().toIso8601String(),
+              if (_retroactivePatientSkipped) 'patient_details_skipped': true,
+              'reconciliation_reason': _retroactiveTimeKnown
+                  ? 'Details recorded later on ${DateTime.now().toIso8601String().substring(0, 10)} (original: $originalDate)'
+                  : 'Details recorded later on ${DateTime.now().toIso8601String().substring(0, 10)} — exact time unknown (original: $originalDate)',
+            });
+          } else {
+            await aptService.markConsultationEndTime(widget.appointmentId!);
+          }
         } catch (_) {}
       }
 
@@ -1101,8 +1134,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                         ],
                       ),
                     )
-                  else
+                  else ...[
+                    // ── Retroactive banner (only in retroactive mode) ────────
+                    if (widget.isRetroactive) ..._buildRetroactiveBanner(context),
                     _buildFormContent(),
+                  ],
 
                   const SizedBox(height: 28),
 
@@ -1229,6 +1265,216 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     );
   }
 
+  // ─── Retroactive Banner ──────────────────────────────────────────────────
+
+  List<Widget> _buildRetroactiveBanner(BuildContext context) {
+    return [
+      // Amber notice banner
+      Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.history_edu_rounded, color: Color(0xFFF59E0B), size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Filling Details Retroactively',
+                    style: context.textStyles.label.copyWith(color: const Color(0xFFF59E0B), fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Original appointment: ${widget.retroactiveOriginalDate ?? 'unknown date'}. This consultation will be recorded as filled later.',
+                    style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+
+      // Approximate time section
+      Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('What time did the consultation happen?', style: context.textStyles.label.copyWith(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text('Enter the approximate time or tap "I Don\'t Know".', style: context.textStyles.caption.copyWith(color: context.colors.textSecondary)),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: _retroactiveTimeKnown ? () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: _retroactiveTime ?? TimeOfDay.now(),
+                        helpText: 'Approximate Consultation Time',
+                      );
+                      if (picked != null && mounted) {
+                        setState(() {
+                          _retroactiveTime = picked;
+                          _retroactiveTimeKnown = true;
+                        });
+                      }
+                    } : null,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                      decoration: BoxDecoration(
+                        color: _retroactiveTimeKnown
+                            ? context.colors.primary.withValues(alpha: 0.08)
+                            : context.colors.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _retroactiveTimeKnown
+                              ? context.colors.primary.withValues(alpha: 0.4)
+                              : context.colors.border,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.access_time_rounded, size: 16,
+                              color: _retroactiveTimeKnown ? context.colors.primary : context.colors.textHint),
+                          const SizedBox(width: 8),
+                          Text(
+                            _retroactiveTime != null
+                                ? _retroactiveTime!.format(context)
+                                : 'Pick a time',
+                            style: context.textStyles.bodyMedium.copyWith(
+                              color: _retroactiveTime != null
+                                  ? context.colors.textPrimary
+                                  : context.colors.textHint,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                GestureDetector(
+                  onTap: () => setState(() {
+                    _retroactiveTimeKnown = false;
+                    _retroactiveTime = null;
+                  }),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: !_retroactiveTimeKnown
+                          ? context.colors.textSecondary.withValues(alpha: 0.15)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: !_retroactiveTimeKnown
+                            ? context.colors.textSecondary
+                            : context.colors.border,
+                      ),
+                    ),
+                    child: Text(
+                      "I Don't Know",
+                      style: context.textStyles.bodyMedium.copyWith(
+                        color: !_retroactiveTimeKnown
+                            ? context.colors.textSecondary
+                            : context.colors.textHint,
+                        fontWeight: !_retroactiveTimeKnown ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (!_retroactiveTimeKnown)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Will be recorded as "filled retroactively" on today\'s date.',
+                  style: context.textStyles.caption.copyWith(color: context.colors.textHint, fontStyle: FontStyle.italic),
+                ),
+              ),
+          ],
+        ),
+      ),
+
+      // Patient details skip section
+      Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _retroactivePatientSkipped
+              ? const Color(0xFFF59E0B).withValues(alpha: 0.06)
+              : context.colors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _retroactivePatientSkipped
+                ? const Color(0xFFF59E0B).withValues(alpha: 0.3)
+                : context.colors.border.withValues(alpha: 0.6),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.person_outline_rounded, size: 18, color: context.colors.textSecondary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Patient Details Form', style: context.textStyles.label.copyWith(fontWeight: FontWeight.bold)),
+                      Text(
+                        _retroactivePatientSkipped
+                            ? 'Skipped \u2014 patient must fill at next visit'
+                            : 'Patient is not present? You may skip this.',
+                        style: context.textStyles.caption.copyWith(
+                          color: _retroactivePatientSkipped
+                              ? const Color(0xFFF59E0B)
+                              : context.colors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (!_retroactivePatientSkipped)
+                  TextButton.icon(
+                    onPressed: () => setState(() => _retroactivePatientSkipped = true),
+                    icon: const Icon(Icons.skip_next_rounded, size: 16),
+                    label: const Text('Skip'),
+                    style: TextButton.styleFrom(foregroundColor: const Color(0xFFF59E0B)),
+                  )
+                else
+                  TextButton.icon(
+                    onPressed: () => setState(() => _retroactivePatientSkipped = false),
+                    icon: const Icon(Icons.undo_rounded, size: 16),
+                    label: const Text('Undo'),
+                    style: TextButton.styleFrom(foregroundColor: context.colors.textSecondary),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ];
+  }
+
   Widget _buildFormContent() {
     final isDesktop = MediaQuery.of(context).size.width >= 900;
     return Column(
@@ -1239,8 +1485,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
 
         // Chief Complaint label
         if (!_isViewing)
-          Text(
-            'Chief Complaint / Main Problem',
+          AppLabel(
+            text: 'Chief Complaint / Main Problem',
             style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold),
           ),
         if (!_isViewing) const SizedBox(height: 8),
@@ -1265,7 +1511,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           },
         ),
         const SizedBox(height: 16),
-        Text('Previous Treatments', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        AppLabel(text: 'Previous Treatments', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         _buildMultiSelectGrid(
           ['Acupuncture', 'Acupressure', 'Cupping', 'Physiotherapy', 'Foot Reflexology', 'Allopathy', 'Ayurveda', 'Siddha treatments', 'No previous treatments', 'Other'],
@@ -1285,7 +1531,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         ),
         
         const SizedBox(height: 32),
-        Text('Main Problem Pain Area', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        AppLabel(text: 'Main Problem Pain Area', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         _buildMultiSelectGrid(
           ['Head', 'Neck', 'Shoulder', 'Upper Back', 'Lower Back', 'Chest', 'Abdomen', 'Arms', 'Hands', 'Hips', 'Legs', 'Knees', 'Feet', 'Joints', 'Muscle', 'No Pain', 'Other'],
@@ -1310,7 +1556,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         ],
 
         const SizedBox(height: 32),
-        Text('Past Major Illnesses', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        AppLabel(text: 'Past Major Illnesses', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         _buildMultiSelectGrid(
           ['Heart diseases', 'Heart attack', 'TB', 'Stroke', 'Chronic kidney disease', 'Hep-B', 'HIV/AIDS', 'Cirrhosis', 'Pancreatitis', 'Cancer', 'No illness', 'Other'],
@@ -1330,7 +1576,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         ),
 
         const SizedBox(height: 24),
-        Text('Past Major Surgeries', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        AppLabel(text: 'Past Major Surgeries', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         _buildMultiSelectGrid(
           ['Appendicitis', 'Gall bladder removal', 'Hernia repair', 'Knee/Hip replacement', 'Spinal procedures', 'Hysterectomy', 'C-section', 'Cancer surgeries', 'No surgeries', 'Other'],
@@ -1359,7 +1605,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         ),
 
         const SizedBox(height: 24),
-        Text('Known Allergies', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        AppLabel(text: 'Known Allergies', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         _responsiveRow(
           _buildAllergyCheckbox('Drug / Medication Allergies', _hasDrugAllergy, (v) => setState(() => _hasDrugAllergy = v), _drugAllergyCtrl, 'Which drugs?'),
@@ -1374,7 +1620,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         ),
 
         const SizedBox(height: 24),
-        Text('Chronic Diseases', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        AppLabel(text: 'Chronic Diseases', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         _buildMultiSelectGrid(
           ['None', 'Arthritis', 'Sinus', 'Asthma', 'Thyroid', 'Diabetes', 'BP', 'Heart problems', 'Other'],
@@ -1421,7 +1667,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         _buildDropdown('Stress / Mental Health', 'Current stress level', _selectedStress, _stressOptions, (v) => setState(() => _selectedStress = v)),
         const SizedBox(height: 32),
 
-        Text('Substance Use', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
+        AppLabel(text: 'Substance Use', style: context.textStyles.label.copyWith(fontSize: 15, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         _responsiveRow(
           _buildRadioGroup('Smoking', _smoking, (v) => setState(() => _smoking = v!)),
@@ -1629,7 +1875,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
         // ─── Consent & Safety ───
         _buildSectionHeader('Consent & Safety', Icons.verified_user_outlined),
         if (_patientGender != 'Male') ...[
-          Text('Pregnancy Status', style: context.textStyles.label.copyWith(fontSize: 14, fontWeight: FontWeight.bold)),
+          AppLabel(text: 'Pregnancy Status', style: context.textStyles.label.copyWith(fontSize: 14, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           _buildRadioGroup('Are you currently pregnant?', _pregnancyStatus, (v) {
             setState(() {

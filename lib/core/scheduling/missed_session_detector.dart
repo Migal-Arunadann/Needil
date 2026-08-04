@@ -3,6 +3,7 @@ import 'package:pocketbase/pocketbase.dart';
 import 'package:pms_app/core/constants/pb_collections.dart';
 import 'package:pms_app/core/scheduling/audit_logger.dart';
 import 'package:pms_app/core/scheduling/treatment_lifecycle.dart';
+import 'package:pms_app/core/scheduling/appointment_sync.dart';
 import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 
@@ -107,6 +108,7 @@ class MissedSessionDetector {
         await pb.collection(PBCollections.sessions).update(session.id, body: {
           'status': 'overdue',
         });
+        await AppointmentSync(pb).syncStatus(session, 'overdue');
 
         await auditLogger.log(
           sessionId: session.id,

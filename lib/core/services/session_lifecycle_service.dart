@@ -67,7 +67,7 @@ class SessionLifecycleService {
       final result = await _pb.collection(PBCollections.sessions).getFullList(
         filter: 'doctor = "$doctorId" && status = "overdue"',
         sort: 'scheduled_date,session_number',
-        expand: 'patient,treatment_plan',
+        expand: 'patient,doctor,treatment_plan',
       );
       return result.map((r) => SessionModel.fromRecord(r)).toList();
     } catch (e) {
@@ -101,7 +101,7 @@ class SessionLifecycleService {
         final result = await _pb.collection(PBCollections.sessions).getFullList(
           filter: '($orFilter) && status = "overdue"',
           sort: 'scheduled_date,session_number',
-          expand: 'patient,treatment_plan',
+          expand: 'patient,doctor,treatment_plan',
         );
         allSessions.addAll(result.map((r) => SessionModel.fromRecord(r)));
       }
@@ -110,7 +110,7 @@ class SessionLifecycleService {
       allSessions.sort((a, b) {
         final dateComp = a.scheduledDate.compareTo(b.scheduledDate);
         if (dateComp != 0) return dateComp;
-        return (a.sessionNumber ?? 0).compareTo(b.sessionNumber ?? 0);
+        return a.sessionNumber.compareTo(b.sessionNumber);
       });
 
       return allSessions;
@@ -183,7 +183,7 @@ class SessionLifecycleService {
       'missed_at': missedAt,
     });
 
-    await _appointmentSync.syncStatus(session, 'cancelled');
+    await _appointmentSync.syncStatus(session, 'missed');
     final newConsecutive = await _lifecycle.onSessionMissed(planId);
 
     await _auditLogger.log(
@@ -237,6 +237,18 @@ class SessionLifecycleService {
     final sessionRec = await _pb.collection(PBCollections.sessions).getOne(sessionId);
     final session = SessionModel.fromRecord(sessionRec);
     final planId = session.treatmentPlanId;
+    if (newDate != null && newDate.isNotEmpty) {
+      await _appointmentSync.updateForSession(
+        session: session,
+        newDate: newDate,
+        newTime: session.scheduledTime ?? '09:00',
+        clinicId: null,
+        sessionType: session.sessionType,
+        isRescheduled: true,
+      );
+    } else {
+      await _appointmentSync.syncStatus(session, 'scheduled');
+    }
 
     await _auditLogger.log(
       sessionId: sessionId,

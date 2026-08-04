@@ -295,6 +295,7 @@ class AppointmentService {
     String? email,
     int? age,
     String? reference,
+    String? personalNotes,
     String? howDidYouHear,
     String? relationToPrimary,
     String? photoPath,
@@ -352,6 +353,7 @@ class AppointmentService {
       if (email != null && email.isNotEmpty) 'email': email,
       if (age != null) 'age': age,
       if (reference != null && reference.isNotEmpty) 'reference': reference,
+      if (personalNotes != null && personalNotes.isNotEmpty) 'personal_notes': personalNotes,
       if (howDidYouHear != null && howDidYouHear.isNotEmpty)
         'how_did_you_hear': howDidYouHear,
       if (relationToPrimary != null && relationToPrimary.isNotEmpty)

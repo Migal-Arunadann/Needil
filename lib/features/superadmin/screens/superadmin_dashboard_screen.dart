@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/utils/error_formatter.dart';
 import 'package:pms_app/core/services/superadmin_service.dart';
 import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
@@ -110,7 +111,7 @@ class _SuperadminDashboardScreenState
                       const SizedBox(height: 12),
                       statsAsync.when(
                         loading: () => _statsPlaceholder(),
-                        error: (e, _) => _errorCard(context, 'Failed to load stats: $e'),
+                        error: (e, _) => _errorCard(context, 'Failed to load stats: ${ErrorFormatter.format(e)}'),
                         data: (stats) => Column(
                           children: [
                             Row(children: [
@@ -202,7 +203,7 @@ class _SuperadminDashboardScreenState
                             child: CircularProgressIndicator(color: SAColors.accent),
                           ),
                         ),
-                        error: (e, _) => _errorCard(context, 'Failed to load clinics: $e'),
+                        error: (e, _) => _errorCard(context, 'Failed to load clinics: ${ErrorFormatter.format(e)}'),
                         data: (clinics) => clinics.isEmpty
                             ? _emptyCard(context, 'No clinics registered yet')
                             : Column(

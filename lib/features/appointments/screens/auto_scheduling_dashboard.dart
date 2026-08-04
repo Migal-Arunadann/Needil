@@ -7,6 +7,9 @@ import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
+import 'package:pms_app/features/appointments/models/appointment_model.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 
 /// Needs Attention Dashboard.
 ///
@@ -20,13 +23,18 @@ import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 ///
 /// Also surfaces plans in [manualReview] that need human rescheduling.
 class AutoSchedulingDashboard extends ConsumerStatefulWidget {
+  /// Global notifier tracking if the Needs Attention dashboard has been opened or notification dismissed during this session.
+  static final ValueNotifier<bool> notificationDismissed = ValueNotifier<bool>(false);
+
   final List<SessionModel> overdueSessions;
+  final List<AppointmentModel> overdueConsultations;
   final List<TreatmentPlanModel> manualReviewPlans;
   final VoidCallback onRefresh;
 
   const AutoSchedulingDashboard({
     super.key,
     required this.overdueSessions,
+    this.overdueConsultations = const [],
     this.manualReviewPlans = const [],
     required this.onRefresh,
   });
@@ -34,17 +42,21 @@ class AutoSchedulingDashboard extends ConsumerStatefulWidget {
   static Future<void> show(
     BuildContext context, {
     required List<SessionModel> overdueSessions,
+    List<AppointmentModel> overdueConsultations = const [],
     List<TreatmentPlanModel> manualReviewPlans = const [],
     required VoidCallback onRefresh,
     // Legacy compat: old callers pass `plans` (TreatmentPlanModel list).
     // Those are routed to manualReviewPlans.
     List<TreatmentPlanModel>? plans,
   }) async {
+    notificationDismissed.value = true;
+    AppToast.dismiss(context);
     await showDialog(
       context: context,
       barrierDismissible: true,
       builder: (context) => AutoSchedulingDashboard(
         overdueSessions: overdueSessions,
+        overdueConsultations: overdueConsultations,
         manualReviewPlans: plans ?? manualReviewPlans,
         onRefresh: onRefresh,
       ),
@@ -60,6 +72,7 @@ class _AutoSchedulingDashboardState
     extends ConsumerState<AutoSchedulingDashboard>
     with SingleTickerProviderStateMixin {
   late List<SessionModel> _sessions;
+  late List<AppointmentModel> _consultations;
   late List<TreatmentPlanModel> _manualPlans;
   bool _isProcessing = false;
   String? _processingId;
@@ -68,10 +81,18 @@ class _AutoSchedulingDashboardState
   @override
   void initState() {
     super.initState();
+    AutoSchedulingDashboard.notificationDismissed.value = true;
+    AppToast.dismiss();
     _sessions = List.from(widget.overdueSessions);
+    _consultations = List.from(widget.overdueConsultations);
     _manualPlans = List.from(widget.manualReviewPlans);
+    
+    // We now have 3 potential tabs: Consultations, Sessions, Manual Review
+    int tabCount = 2; // Consultations and Sessions
+    if (_manualPlans.isNotEmpty) tabCount++;
+    
     _tabController = TabController(
-      length: _manualPlans.isNotEmpty ? 2 : 1,
+      length: tabCount,
       vsync: this,
     );
   }
@@ -178,7 +199,7 @@ class _AutoSchedulingDashboardState
         } else {
           AppToast.show('Session marked as missed.', type: ToastType.info);
         }
-        if (_sessions.isEmpty && _manualPlans.isEmpty) Navigator.of(context).pop();
+        if (_sessions.isEmpty && _consultations.isEmpty && _manualPlans.isEmpty) Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) AppToast.show('Error: $e', type: ToastType.error);
@@ -264,12 +285,163 @@ class _AutoSchedulingDashboardState
               : 'Session reverted to upcoming ✓',
           type: ToastType.success,
         );
-        if (_sessions.isEmpty && _manualPlans.isEmpty) Navigator.of(context).pop();
+        if (_sessions.isEmpty && _consultations.isEmpty && _manualPlans.isEmpty) Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) AppToast.show('Error: $e', type: ToastType.error);
     } finally {
       if (mounted) setState(() { _isProcessing = false; _processingId = null; });
+    }
+  }
+
+  // ─── Pause Sessions ───────────────────────────────────────────────────────
+
+  Future<void> _onPauseSessions({
+    required String planId,
+    required String patientName,
+    required List<SessionModel> planSessions,
+  }) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Pause Sessions for $patientName?', style: context.textStyles.h3),
+        content: Text(
+          'This will pause the treatment plan and all upcoming sessions for $patientName. '
+          'No further sessions will be auto-scheduled until the plan is resumed.',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: context.colors.warning),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Pause Plan'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() { _isProcessing = true; _processingId = planId; });
+    try {
+      final service = ref.read(treatmentServiceProvider);
+      await service.pauseSessions(planId, performedBy: _currentUserId);
+      if (mounted) {
+        // Remove all sessions of this plan from the list
+        setState(() => _sessions.removeWhere((s) => s.treatmentPlanId == planId));
+        widget.onRefresh();
+        AppToast.show(
+          'Treatment plan paused. Sessions for $patientName are on hold.',
+          type: ToastType.warning,
+          duration: const Duration(seconds: 5),
+        );
+        if (_sessions.isEmpty && _consultations.isEmpty && _manualPlans.isEmpty) Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) AppToast.show('Error pausing plan: $e', type: ToastType.error);
+    } finally {
+      if (mounted) setState(() { _isProcessing = false; _processingId = null; });
+    }
+  }
+
+  // ─── Consultations Handlers ─────────────────────────────────────────────
+
+  Future<void> _onConsultationDidntArrive(AppointmentModel apt) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Patient Didn\'t Arrive', style: context.textStyles.h3),
+        content: Text(
+          'Mark consultation for ${apt.patientName ?? "Unknown"} on ${_formatDate(apt.date)} as Missed/Cancelled?',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Back'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: context.colors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Mark as Missed'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() { _isProcessing = true; _processingId = apt.id; });
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      await pb.collection('appointments').update(apt.id, body: {
+        'status': 'cancelled', // Or 'missed' if AppointmentModel uses it
+      });
+
+      if (mounted) {
+        setState(() => _consultations.removeWhere((c) => c.id == apt.id));
+        widget.onRefresh();
+        AppToast.show('Consultation marked as missed', type: ToastType.success);
+        if (_sessions.isEmpty && _consultations.isEmpty && _manualPlans.isEmpty) Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) AppToast.show('Error: $e', type: ToastType.error);
+    } finally {
+      if (mounted) setState(() { _isProcessing = false; _processingId = null; });
+    }
+  }
+
+  Future<void> _onConsultationForgotRecord(AppointmentModel apt) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Retroactively Record Consultation', style: context.textStyles.h3),
+        content: Text(
+          'Open the form to record details for ${apt.patientName ?? "Unknown"}?',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Open Form'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    // Optimistically remove from list and refresh badge
+    setState(() => _consultations.removeWhere((c) => c.id == apt.id));
+    widget.onRefresh();
+
+    // Close dashboard and navigate to PatientInfoScreen / Consultation
+    final nav = Navigator.of(context, rootNavigator: true);
+    nav.pop(); // Close dashboard
+    
+    // We cannot push PatientInfoScreen directly because it requires imports.
+    // However, if we pop, they can just click the normal card. 
+    // Wait, the card is now gone! We should just refresh the list so it appears as waiting/scheduled?
+    // Let's just update the status to scheduled so it appears on the main screen, then they can tap it.
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      await pb.collection('appointments').update(apt.id, body: {
+        'status': 'scheduled',
+      });
+      AppToast.show('Consultation reverted to Upcoming. Tap it in the list to fill details.', type: ToastType.info);
+    } catch (e) {
+      if (mounted) AppToast.show('Error: $e', type: ToastType.error);
     }
   }
 
@@ -314,7 +486,7 @@ class _AutoSchedulingDashboardState
         setState(() => _sessions.clear());
         widget.onRefresh();
         AppToast.show('All sessions dismissed ✓', type: ToastType.success);
-        if (_manualPlans.isEmpty) Navigator.of(context).pop();
+        if (_sessions.isEmpty && _consultations.isEmpty && _manualPlans.isEmpty) Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) AppToast.show('Error: $e', type: ToastType.error);
@@ -329,7 +501,7 @@ class _AutoSchedulingDashboardState
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     final isMobile = width < 600;
-    final totalItems = _sessions.length + _manualPlans.length;
+    final totalItems = _sessions.length + _consultations.length + _manualPlans.length;
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -345,27 +517,28 @@ class _AutoSchedulingDashboardState
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(totalItems),
-            if (_manualPlans.isNotEmpty)
-              TabBar(
-                controller: _tabController,
-                labelColor: context.colors.primary,
-                unselectedLabelColor: context.colors.textSecondary,
-                indicatorColor: context.colors.primary,
-                tabs: [
-                  Tab(text: 'Needs Review (${_sessions.length})'),
+            TabBar(
+              controller: _tabController,
+              labelColor: context.colors.primary,
+              unselectedLabelColor: context.colors.textSecondary,
+              indicatorColor: context.colors.primary,
+              tabs: [
+                Tab(text: 'Consultations (${_consultations.length})'),
+                Tab(text: 'Sessions (${_sessions.length})'),
+                if (_manualPlans.isNotEmpty)
                   Tab(text: 'Manual Reschedule (${_manualPlans.length})'),
+              ],
+            ),
+            Flexible(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildConsultationList(),
+                  _buildSessionList(),
+                  if (_manualPlans.isNotEmpty)
+                    _buildManualReviewList(),
                 ],
               ),
-            Flexible(
-              child: _manualPlans.isNotEmpty
-                  ? TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildSessionList(),
-                        _buildManualReviewList(),
-                      ],
-                    )
-                  : _buildSessionList(),
             ),
             if (_sessions.isNotEmpty) _buildFooter(),
           ],
@@ -427,6 +600,136 @@ class _AutoSchedulingDashboardState
     );
   }
 
+  Widget _buildConsultationList() {
+    if (_consultations.isEmpty) {
+      return _buildEmptyState(
+        icon: Icons.check_circle_outline_rounded,
+        title: 'All consultations reviewed!',
+        subtitle: 'No overdue consultations need your attention.',
+        color: context.colors.success,
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: _consultations.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (ctx, i) => _buildConsultationCard(_consultations[i]),
+    );
+  }
+
+  Widget _buildConsultationCard(AppointmentModel apt) {
+    final isLoading = _isProcessing && _processingId == apt.id;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.colors.error.withValues(alpha: 0.4),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: context.colors.error.withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: Icon(Icons.assignment_ind_rounded, color: context.colors.error, size: 20),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        (apt.patientName != null && apt.patientName!.isNotEmpty)
+                            ? apt.patientName!
+                            : 'Unknown Patient',
+                        style: context.textStyles.bodyMedium.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${apt.type.name.toUpperCase()}'
+                        ' · ${_formatDate(apt.date)}'
+                        '${apt.time.isNotEmpty ? " · ${apt.time}" : ""}'
+                        '${(apt.doctorName != null && apt.doctorName!.isNotEmpty) ? " · Dr. ${apt.doctorName}" : ""}',
+                        style: context.textStyles.bodySmall.copyWith(
+                          color: context.colors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: context.colors.error.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Overdue',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: context.colors.error,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: context.colors.border.withValues(alpha: 0.4)),
+          // Action buttons
+          if (isLoading)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _actionButton(
+                      label: 'Didn\'t Arrive',
+                      icon: Icons.event_busy_rounded,
+                      color: context.colors.error,
+                      onTap: () => _onConsultationDidntArrive(apt),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _actionButton(
+                      label: 'Forgot to Record',
+                      icon: Icons.edit_note_rounded,
+                      color: context.colors.primary,
+                      onTap: () => _onConsultationForgotRecord(apt),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSessionList() {
     if (_sessions.isEmpty) {
       return _buildEmptyState(
@@ -437,11 +740,36 @@ class _AutoSchedulingDashboardState
       );
     }
 
+    // Group sessions by treatmentPlanId
+    final Map<String, List<SessionModel>> grouped = {};
+    for (final s in _sessions) {
+      final key = s.treatmentPlanId.isNotEmpty ? s.treatmentPlanId : s.id;
+      grouped.putIfAbsent(key, () => []).add(s);
+    }
+    // Sort each group by session number
+    for (final group in grouped.values) {
+      group.sort((a, b) => a.sessionNumber.compareTo(b.sessionNumber));
+    }
+
+    final groupKeys = grouped.keys.toList();
+
     return ListView.separated(
       padding: const EdgeInsets.all(16),
-      itemCount: _sessions.length,
+      itemCount: groupKeys.length,
       separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (ctx, i) => _buildSessionCard(_sessions[i]),
+      itemBuilder: (ctx, i) {
+        final planId = groupKeys[i];
+        final planSessions = grouped[planId]!;
+        if (planSessions.length == 1) {
+          // Single overdue session — render flat card (no grouping)
+          return _buildSessionCard(planSessions.first);
+        }
+        // Multiple overdue sessions for same patient — render grouped card
+        return _buildPatientSessionGroup(
+          planId: planId,
+          sessions: planSessions,
+        );
+      },
     );
   }
 
@@ -489,15 +817,20 @@ class _AutoSchedulingDashboardState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Session ${session.sessionNumber}',
+                        (session.patientName != null && session.patientName!.isNotEmpty) 
+                            ? session.patientName! 
+                            : 'Unknown Patient',
                         style: context.textStyles.bodyMedium.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                       ),
+                      const SizedBox(height: 2),
                       Text(
-                        '${_formatDate(session.scheduledDate)}'
-                        '${session.scheduledTime != null ? " · ${session.scheduledTime}" : ""}'
-                        '${session.treatmentModality.isNotEmpty ? " · ${session.treatmentModality}" : ""}',
+                        'Session ${session.sessionNumber}'
+                        ' · ${_formatDate(session.scheduledDate)}'
+                        '${(session.scheduledTime != null && session.scheduledTime!.isNotEmpty) ? " · ${session.scheduledTime}" : ""}'
+                        '${session.treatmentModality.isNotEmpty ? " · ${session.treatmentModality}" : ""}'
+                        '${(session.doctorName != null && session.doctorName!.isNotEmpty) ? " · Dr. ${session.doctorName}" : ""}',
                         style: context.textStyles.bodySmall.copyWith(
                           color: context.colors.textSecondary,
                         ),
@@ -566,6 +899,242 @@ class _AutoSchedulingDashboardState
             ),
         ],
       ),
+    );
+  }
+
+  /// Renders a grouped patient card for when a patient has 2+ overdue sessions.
+  Widget _buildPatientSessionGroup({
+    required String planId,
+    required List<SessionModel> sessions,
+  }) {
+    final patientName = (sessions.first.patientName?.isNotEmpty == true)
+        ? sessions.first.patientName!
+        : 'Unknown Patient';
+    final missCount = sessions.length;
+    final isPausing = _isProcessing && _processingId == planId;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.colors.error.withValues(alpha: 0.5),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Patient header ───────────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 40, height: 40,
+                  decoration: BoxDecoration(
+                    color: context.colors.error.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.person_off_outlined,
+                      color: context.colors.error, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              patientName,
+                              style: context.textStyles.bodyMedium.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Consecutive misses badge
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: context.colors.error.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.warning_amber_rounded,
+                                    size: 11, color: context.colors.error),
+                                const SizedBox(width: 3),
+                                Text(
+                                  '$missCount misses',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                    color: context.colors.error,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${sessions.first.treatmentModality.isNotEmpty ? sessions.first.treatmentModality : "Treatment"} · $missCount overdue session${missCount == 1 ? '' : 's'}',
+                        style: context.textStyles.bodySmall.copyWith(
+                          color: context.colors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Pause Sessions button
+                if (isPausing)
+                  const SizedBox(
+                    width: 24, height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  TextButton.icon(
+                    onPressed: () => _onPauseSessions(
+                      planId: planId,
+                      patientName: patientName,
+                      planSessions: sessions,
+                    ),
+                    icon: Icon(Icons.pause_circle_outline_rounded,
+                        size: 16, color: context.colors.warning),
+                    label: Text(
+                      'Pause',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.colors.warning,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      backgroundColor: context.colors.warning.withValues(alpha: 0.08),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(
+                            color: context.colors.warning.withValues(alpha: 0.3)),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: context.colors.border.withValues(alpha: 0.5)),
+          // ── Individual session sub-cards ─────────────────────────────
+          ...sessions.map((session) => _buildSessionSubCard(session)),
+        ],
+      ),
+    );
+  }
+
+  /// Compact session row inside a patient group card.
+  Widget _buildSessionSubCard(SessionModel session) {
+    final isLoading = _isProcessing && _processingId == session.id;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Row(
+            children: [
+              // Session number bubble
+              Container(
+                width: 30, height: 30,
+                decoration: BoxDecoration(
+                  color: context.colors.warning.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    '${session.sessionNumber}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: context.colors.warning,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Session ${session.sessionNumber} · ${_formatDate(session.scheduledDate)}'
+                  '${(session.scheduledTime != null && session.scheduledTime!.isNotEmpty) ? " · ${session.scheduledTime}" : ""}',
+                  style: context.textStyles.bodySmall.copyWith(
+                    color: context.colors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: context.colors.warning.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Overdue',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    color: context.colors.warning,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (isLoading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          )
+        else
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _actionButton(
+                    label: 'Patient Came',
+                    icon: Icons.check_circle_rounded,
+                    color: context.colors.success,
+                    onTap: () => _onPatientCame(session),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _actionButton(
+                    label: "Didn't Show",
+                    icon: Icons.cancel_rounded,
+                    color: context.colors.error,
+                    onTap: () => _onDidntShow(session),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _actionButton(
+                    label: 'We Were Closed',
+                    icon: Icons.business_rounded,
+                    color: context.colors.textSecondary,
+                    onTap: () => _onClinicClosed(session),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: context.colors.border.withValues(alpha: 0.3)),
+      ],
     );
   }
 

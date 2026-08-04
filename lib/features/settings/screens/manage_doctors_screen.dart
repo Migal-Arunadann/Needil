@@ -11,6 +11,7 @@ import 'package:pms_app/features/settings/screens/add_staff_doctor_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/utils/error_formatter.dart';
 
 
 class ManageDoctorsScreen extends ConsumerStatefulWidget {
@@ -234,7 +235,7 @@ class _ManageDoctorsScreenState extends ConsumerState<ManageDoctorsScreen> {
         const SizedBox(height: 12),
         Text('Failed to load doctors', style: context.textStyles.label),
         const SizedBox(height: 8),
-        Text(_error ?? '', style: context.textStyles.caption, textAlign: TextAlign.center),
+        Text(_error != null ? ErrorFormatter.format(_error!) : '', style: context.textStyles.caption, textAlign: TextAlign.center),
         const SizedBox(height: 16),
         ElevatedButton(onPressed: _load, child: const Text('Retry')),
       ]),
@@ -545,7 +546,7 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
             child: Row(children: [
               Icon(Icons.error_outline_rounded, size: 14, color: context.colors.error),
               const SizedBox(width: 6),
-              Expanded(child: Text(_error!, style: context.textStyles.caption.copyWith(color: context.colors.error, fontSize: 11))),
+              Expanded(child: Text(ErrorFormatter.format(_error!), style: context.textStyles.caption.copyWith(color: context.colors.error, fontSize: 11))),
             ]),
           ),
           const SizedBox(height: 12),

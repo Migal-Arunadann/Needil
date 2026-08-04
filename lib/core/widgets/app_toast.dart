@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pms_app/app.dart';
+import 'package:pms_app/core/utils/error_formatter.dart';
 
 enum ToastType { success, error, warning, info }
 
@@ -37,7 +38,7 @@ class AppToast {
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          message,
+          ErrorFormatter.format(message),
           style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
         ),
         backgroundColor: bgColor,
@@ -53,5 +54,11 @@ class AppToast {
             : null,
       ),
     );
+  }
+
+  static void dismiss([BuildContext? context]) {
+    final ctx = context ?? appNavigatorKey.currentContext;
+    if (ctx == null) return;
+    ScaffoldMessenger.maybeOf(ctx)?.clearSnackBars();
   }
 }

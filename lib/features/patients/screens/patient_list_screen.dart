@@ -12,6 +12,8 @@ import 'package:pms_app/core/widgets/shimmer_effect.dart';
 import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/widgets/responsive_wrapper.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/utils/error_formatter.dart';
 import 'package:pms_app/features/appointments/providers/appointment_provider.dart';
 import 'package:pms_app/features/dashboard/widgets/dashboard_widgets.dart';
 
@@ -1769,7 +1771,7 @@ class _WebErrorView extends StatelessWidget {
                 size: 48, color: context.colors.error),
             const SizedBox(height: 12),
             Text(
-              error,
+              ErrorFormatter.format(error),
               textAlign: TextAlign.center,
               style: context.textStyles.bodyMedium
                   .copyWith(color: context.colors.textSecondary),

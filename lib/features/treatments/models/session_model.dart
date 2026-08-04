@@ -7,6 +7,8 @@ class SessionModel {
   final String treatmentPlanId;
   final String patientId;
   final String doctorId;
+  final String? patientName;
+  final String? doctorName;
   final int sessionNumber;
   final String scheduledDate;
   final String? scheduledTime;
@@ -41,6 +43,8 @@ class SessionModel {
     required this.treatmentPlanId,
     required this.patientId,
     required this.doctorId,
+    this.patientName,
+    this.doctorName,
     required this.sessionNumber,
     required this.scheduledDate,
     this.scheduledTime,
@@ -72,6 +76,8 @@ class SessionModel {
     String? treatmentPlanId,
     String? patientId,
     String? doctorId,
+    String? patientName,
+    String? doctorName,
     int? sessionNumber,
     String? scheduledDate,
     String? scheduledTime,
@@ -100,6 +106,8 @@ class SessionModel {
       treatmentPlanId: treatmentPlanId ?? this.treatmentPlanId,
       patientId: patientId ?? this.patientId,
       doctorId: doctorId ?? this.doctorId,
+      patientName: patientName ?? this.patientName,
+      doctorName: doctorName ?? this.doctorName,
       sessionNumber: sessionNumber ?? this.sessionNumber,
       scheduledDate: scheduledDate ?? this.scheduledDate,
       scheduledTime: scheduledTime ?? this.scheduledTime,
@@ -128,11 +136,30 @@ class SessionModel {
   factory SessionModel.fromRecord(RecordModel record) {
     final sessionTypeVal = record.getStringValue('session_type');
     final treatmentTypeVal = record.getStringValue('treatment_type');
+
+    String? pName;
+    String? dName;
+    try {
+      final expandData = record.get<Map<String, dynamic>>('expand');
+      if (expandData.isNotEmpty) {
+        if (expandData.containsKey('patient')) {
+          final pMap = expandData['patient'];
+          if (pMap is Map) pName = pMap['full_name'] as String?;
+        }
+        if (expandData.containsKey('doctor')) {
+          final dMap = expandData['doctor'];
+          if (dMap is Map) dName = dMap['name'] as String?;
+        }
+      }
+    } catch (_) {}
+
     return SessionModel(
       id: record.id,
       treatmentPlanId: record.getStringValue('treatment_plan'),
       patientId: record.getStringValue('patient'),
       doctorId: record.getStringValue('doctor'),
+      patientName: (pName != null && pName.isNotEmpty) ? pName : null,
+      doctorName: (dName != null && dName.isNotEmpty) ? dName : null,
       sessionNumber: record.getIntValue('session_number'),
       scheduledDate: record.getStringValue('scheduled_date'),
       scheduledTime: record.getStringValue('scheduled_time'),

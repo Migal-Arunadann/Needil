@@ -50,6 +50,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
   final _occupationCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _referenceCtrl = TextEditingController();
+  final _personalNotesCtrl = TextEditingController();
 
   String? _howDidYouHear;
   bool _isNewFamilyMember = false;
@@ -107,6 +108,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     if (existing.area != null && existing.area!.isNotEmpty) _areaCtrl.text = existing.area!;
     if (existing.occupation != null && existing.occupation!.isNotEmpty) _occupationCtrl.text = existing.occupation!;
     if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
+    if (existing.personalNotes != null && existing.personalNotes!.isNotEmpty) _personalNotesCtrl.text = existing.personalNotes!;
     if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
     setState(() {
       _existingPatient = existing;
@@ -202,6 +204,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     _occupationCtrl.dispose();
     _emailCtrl.dispose();
     _referenceCtrl.dispose();
+    _personalNotesCtrl.dispose();
     super.dispose();
   }
 
@@ -269,6 +272,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
           email: _emailCtrl.text.isNotEmpty ? _emailCtrl.text : null,
           age: calculatedAge,
           reference: _referenceCtrl.text.isNotEmpty ? _referenceCtrl.text : null,
+          personalNotes: _personalNotesCtrl.text.trim(),
           relationToPrimary: _isNewFamilyMember ? _selectedRelation : null,
           howDidYouHear: _howDidYouHear,
           photoPath: null,
@@ -428,6 +432,7 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                     occupationCtrl: _occupationCtrl,
                     emailCtrl: _emailCtrl,
                     referenceCtrl: _referenceCtrl,
+                    personalNotesCtrl: _personalNotesCtrl,
                     selectedGender: _selectedGender,
                     onGenderChanged: (v) => setState(() => _selectedGender = v),
                     consentGiven: _dataConsentGiven,

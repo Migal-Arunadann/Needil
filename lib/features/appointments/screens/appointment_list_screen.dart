@@ -23,6 +23,7 @@ import 'package:pms_app/features/treatments/screens/create_treatment_plan_screen
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/core/services/auth_service.dart';
 import 'package:pms_app/core/providers/session_lifecycle_provider.dart';
+import 'package:pms_app/core/services/appointment_reconciliation_service.dart';
 import 'package:pms_app/features/appointments/screens/patient_info_screen.dart';
 import 'package:pms_app/features/appointments/screens/auto_scheduling_dashboard.dart';
 import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
@@ -60,17 +61,39 @@ class _AppointmentListScreenState
   // Empty = never run. Automatically re-runs when the calendar day changes.
   String _lifecycleCheckedDate = '';
   List<SessionModel> _overdueSessionsList = [];
+  List<AppointmentModel> _overdueConsultationsList = [];
   bool _didAutoPopupDashboard = false;
+  bool _showOverdueBanner = false;
+
+  String get _overdueBannerText {
+    final sCount = _overdueSessionsList.length;
+    final cCount = _overdueConsultationsList.length;
+    final total = sCount + cCount;
+    if (total == 0) return '';
+    if (cCount == 0) return '$sCount overdue session${sCount == 1 ? '' : 's'} need attention';
+    if (sCount == 0) return '$cCount overdue consultation${cCount == 1 ? '' : 's'} need attention';
+    return '$total overdue items ($cCount consultations, $sCount sessions) need attention';
+  }
   String? _clinicLocation;
   String _selectedListFilter = 'all'; // 'all', 'consultations', 'sessions'
   String _activeQuickFilter = 'today'; // 'today', 'tomorrow', 'this_week', 'all'
   int? _todayCount;
   int? _tomorrowCount;
   int? _thisWeekCount;
+  
+  String _searchQuery = '';
+  final _searchCtrl = TextEditingController();
+
+  void _onNotificationDismissedChanged() {
+    if (AutoSchedulingDashboard.notificationDismissed.value && _showOverdueBanner) {
+      if (mounted) setState(() => _showOverdueBanner = false);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
+    AutoSchedulingDashboard.notificationDismissed.addListener(_onNotificationDismissedChanged);
     WidgetsBinding.instance.addObserver(this);
     _selectedDate = DateTime.now();
     _generateDates();
@@ -99,6 +122,7 @@ class _AppointmentListScreenState
     if (_lifecycleCheckedDate == todayStr) return; // already swept today
     _lifecycleCheckedDate = todayStr;
     _didAutoPopupDashboard = false; // allow re-popup on new day
+    AutoSchedulingDashboard.notificationDismissed.value = false; // reset notification state on new day
 
     final auth = ref.read(authProvider);
     final pb = ref.read(pocketbaseProvider);
@@ -122,12 +146,12 @@ class _AppointmentListScreenState
     }
 
     // Load overdue sessions for the badge count and dashboard
-    await _loadOverdueSessions();
+    await _loadOverdueItems();
 
     if (mounted) {
       ref.read(appointmentListProvider.notifier).loadAppointments();
 
-      if (totalFlagged > 0) {
+      if (totalFlagged > 0 && !AutoSchedulingDashboard.notificationDismissed.value) {
         AppToast.show(
           '$totalFlagged session${totalFlagged == 1 ? '' : 's'} need your attention. Tap the bell to review.',
           type: ToastType.warning,
@@ -150,34 +174,44 @@ class _AppointmentListScreenState
   }
 
   void _openNeedsAttentionDashboard() {
+    AutoSchedulingDashboard.notificationDismissed.value = true;
+    AppToast.dismiss(context);
+    if (_showOverdueBanner) setState(() => _showOverdueBanner = false);
     AutoSchedulingDashboard.show(
       context,
       overdueSessions: _overdueSessionsList,
+      overdueConsultations: _overdueConsultationsList,
       onRefresh: () {
-        _loadOverdueSessions();
+        _loadOverdueItems();
         ref.read(appointmentListProvider.notifier).loadAppointments();
       },
     );
   }
 
-  /// Loads overdue sessions for the badge count and the Needs Attention dashboard.
-  Future<void> _loadOverdueSessions() async {
+  /// Loads overdue sessions and consultations for the badge count and the Needs Attention dashboard.
+  Future<void> _loadOverdueItems() async {
     final auth = ref.read(authProvider);
     final lifecycle = ref.read(sessionLifecycleServiceProvider);
+    final reconciliation = ref.read(appointmentReconciliationServiceProvider);
 
     List<SessionModel> sessions = [];
+    List<AppointmentModel> consultations = [];
     try {
       if ((auth.role == UserRole.clinic || auth.role == UserRole.receptionist) &&
           auth.clinicId != null) {
         sessions = await lifecycle.getOverdueSessionsForClinic(auth.clinicId!);
+        consultations = await reconciliation.getOverdueConsultations(auth.clinicId!, isClinic: true);
       } else if (auth.userId != null) {
         sessions = await lifecycle.getOverdueSessions(auth.userId!);
+        consultations = await reconciliation.getOverdueConsultations(auth.userId!);
       }
     } catch (_) {}
 
     if (mounted) {
       setState(() {
         _overdueSessionsList = sessions;
+        _overdueConsultationsList = consultations;
+        _showOverdueBanner = (sessions.isNotEmpty || consultations.isNotEmpty) && !AutoSchedulingDashboard.notificationDismissed.value;
       });
     }
   }
@@ -310,8 +344,10 @@ class _AppointmentListScreenState
 
   @override
   void dispose() {
+    AutoSchedulingDashboard.notificationDismissed.removeListener(_onNotificationDismissedChanged);
     WidgetsBinding.instance.removeObserver(this);
     _dateScrollCtrl.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
@@ -1173,6 +1209,211 @@ class _AppointmentListScreenState
     }
   }
 
+  Future<SessionModel?> _resolveSessionForAppointment(AppointmentModel apt, String? preloadedSessionId) async {
+    final sid = preloadedSessionId ?? apt.linkedSessionId;
+    if (sid != null && sid.isNotEmpty) {
+      try {
+        final pb = ref.read(pocketbaseProvider);
+        final rec = await pb.collection(PBCollections.sessions).getOne(sid);
+        return SessionModel.fromRecord(rec);
+      } catch (_) {}
+    }
+    if (apt.patientId != null && apt.patientId!.isNotEmpty) {
+      return await ref.read(treatmentServiceProvider).findSessionForAppointment(
+        patientId: apt.patientId!,
+        date: apt.date,
+        time: apt.time,
+        doctorId: apt.doctorId,
+      );
+    }
+    return null;
+  }
+
+  Future<void> _handleOverdueCame(AppointmentModel apt, {String? preloadedSessionId}) async {
+    final session = await _resolveSessionForAppointment(apt, preloadedSessionId);
+    if (session == null || !mounted) {
+      AppToast.show('Could not resolve linked session details.', type: ToastType.error);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Record Retroactive Session', style: context.textStyles.h3),
+        content: Text(
+          'Session ${session.sessionNumber} on '
+          '${_formatDate(DateTime.tryParse(session.scheduledDate) ?? DateTime.now())} will open for retroactive recording.\n\n'
+          'Fill in the clinical details and hit Save to complete it.',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Open Form'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    await Navigator.pushNamed(
+      context,
+      '/sessions/record',
+      arguments: {
+        'session': session,
+        'patientName': apt.displayName,
+      },
+    );
+    ref.read(appointmentListProvider.notifier).loadAppointments();
+    _loadOverdueItems();
+  }
+
+  Future<void> _handleOverdueMissed(AppointmentModel apt, {String? preloadedSessionId}) async {
+    final session = await _resolveSessionForAppointment(apt, preloadedSessionId);
+    if (session == null || !mounted) {
+      AppToast.show('Could not resolve linked session details.', type: ToastType.error);
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Confirm Missed Session', style: context.textStyles.h3),
+        content: Text(
+          'Mark Session ${session.sessionNumber} as missed on '
+          '${session.scheduledDate}?\n\n'
+          'This will count toward the patient\'s consecutive miss record.',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: context.colors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm Miss'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final auth = ref.read(authProvider);
+      final lifecycle = ref.read(sessionLifecycleServiceProvider);
+      final newConsecutive = await lifecycle.confirmSessionMissed(
+        session.id,
+        session.treatmentPlanId,
+        performedBy: auth.userId ?? 'staff',
+      );
+
+      if (mounted) {
+        ref.read(appointmentListProvider.notifier).loadAppointments();
+        _loadOverdueItems();
+        if (newConsecutive >= 3) {
+          AppToast.show(
+            'Session marked as missed. Patient has $newConsecutive consecutive misses — plan flagged for manual review.',
+            type: ToastType.warning,
+            duration: const Duration(seconds: 6),
+          );
+        } else {
+          AppToast.show('Session marked as missed.', type: ToastType.info);
+        }
+      }
+    } catch (e) {
+      if (mounted) AppToast.show('Error: $e', type: ToastType.error);
+    }
+  }
+
+  Future<void> _handleOverdueClosed(AppointmentModel apt, {String? preloadedSessionId}) async {
+    final session = await _resolveSessionForAppointment(apt, preloadedSessionId);
+    if (session == null || !mounted) {
+      AppToast.show('Could not resolve linked session details.', type: ToastType.error);
+      return;
+    }
+
+    final sessionDate = DateTime.tryParse(session.scheduledDate);
+    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final isPastDate = sessionDate != null && sessionDate.isBefore(today);
+
+    DateTime? pickedDate;
+    if (isPastDate && mounted) {
+      pickedDate = await showDatePicker(
+        context: context,
+        initialDate: DateTime.now(),
+        firstDate: DateTime.now(),
+        lastDate: DateTime.now().add(const Duration(days: 365)),
+        helpText: 'Pick a new session date',
+        confirmText: 'Reschedule',
+        cancelText: 'Cancel',
+      );
+      if (!mounted) return;
+      if (pickedDate == null) {
+        AppToast.show('Date required — session stays as overdue.', type: ToastType.warning);
+        return;
+      }
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Clinic Was Closed', style: context.textStyles.h3),
+        content: Text(
+          'Session ${session.sessionNumber} on ${session.scheduledDate} '
+          'will be reverted to Upcoming with no miss penalty.\n\n'
+          + (pickedDate != null
+              ? 'New date: ${pickedDate.toIso8601String().substring(0, 10)}'
+              : 'The session stays on the same date.'),
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Dismiss — No Penalty'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final auth = ref.read(authProvider);
+      final lifecycle = ref.read(sessionLifecycleServiceProvider);
+      final newDateStr = pickedDate != null
+          ? '${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}'
+          : null;
+      await lifecycle.dismissAsClinicHoliday(
+        session.id,
+        newDate: newDateStr,
+        performedBy: auth.userId ?? 'staff',
+      );
+
+      if (mounted) {
+        AppToast.show('Session dismissed without miss penalty.', type: ToastType.info);
+        ref.read(appointmentListProvider.notifier).loadAppointments();
+        _loadOverdueItems();
+      }
+    } catch (e) {
+      if (mounted) AppToast.show('Error: $e', type: ToastType.error);
+    }
+  }
+
   void _showError(String msg) {
     AppToast.show(msg, type: ToastType.error);
   }
@@ -1495,8 +1736,22 @@ class _AppointmentListScreenState
         .map((a) => a.patientId)
         .toSet();
 
-    final consultations = all.where((a) => a.type != AppointmentType.session).toList();
-    final sessions = all.where((a) => a.type == AppointmentType.session && !activeConsultationPatientIds.contains(a.patientId)).toList();
+    final consultations = all.where((a) {
+      if (a.type == AppointmentType.session) return false;
+      if (_searchQuery.isNotEmpty) {
+        if (!(a.patientName?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false)) return false;
+      }
+      return true;
+    }).toList();
+
+    final sessions = all.where((a) {
+      if (a.type != AppointmentType.session) return false;
+      if (activeConsultationPatientIds.contains(a.patientId)) return false;
+      if (_searchQuery.isNotEmpty) {
+        if (!(a.patientName?.toLowerCase().contains(_searchQuery.toLowerCase()) ?? false)) return false;
+      }
+      return true;
+    }).toList();
     final width = MediaQuery.of(context).size.width;
     final isDesktop = width >= 900.0;
 
@@ -1536,9 +1791,11 @@ class _AppointmentListScreenState
               onPressed: () => _showAppointmentTypeSelector(context),
               child: Icon(Icons.add, color: context.colors.textPrimary, size: 24),
             ),
-      body: SafeArea(
-        child: ResponsiveWrapper(
-          child: isDesktop
+      body: Stack(
+        children: [
+          SafeArea(
+            child: ResponsiveWrapper(
+              child: isDesktop
               ? Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -1775,7 +2032,7 @@ class _AppointmentListScreenState
                                       final missedCount = (consultations.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length) +
                                           (sessions.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length);
                                           
-                                      return Wrap(
+                                      final filterPills = Wrap(
                                         spacing: 6,
                                         runSpacing: 8,
                                         children: [
@@ -1787,6 +2044,70 @@ class _AppointmentListScreenState
                                           _filterTabItem('Missed', 'missed', missedCount, color: context.colors.error),
                                         ],
                                       );
+
+                                      final searchField = SizedBox(
+                                        width: isDesktop ? 260 : double.infinity,
+                                        child: TextField(
+                                          controller: _searchCtrl,
+                                          onChanged: (val) {
+                                            setState(() {
+                                              _searchQuery = val.trim();
+                                            });
+                                          },
+                                          decoration: InputDecoration(
+                                            hintText: 'Search by patient name...',
+                                            prefixIcon: Icon(Icons.search_rounded, color: context.colors.textHint),
+                                            suffixIcon: _searchQuery.isNotEmpty
+                                                ? IconButton(
+                                                    icon: Icon(Icons.close_rounded, color: context.colors.textHint, size: 20),
+                                                    onPressed: () {
+                                                      _searchCtrl.clear();
+                                                      setState(() {
+                                                        _searchQuery = '';
+                                                      });
+                                                    },
+                                                  )
+                                                : null,
+                                            isDense: true,
+                                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                            filled: true,
+                                            fillColor: context.colors.surface,
+                                            border: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                              borderSide: BorderSide(color: context.colors.border),
+                                            ),
+                                            enabledBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                              borderSide: BorderSide(color: context.colors.border),
+                                            ),
+                                            focusedBorder: OutlineInputBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                              borderSide: BorderSide(color: context.colors.primary),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+
+                                      if (isDesktop) {
+                                        return Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                          children: [
+                                            Expanded(child: filterPills),
+                                            const SizedBox(width: 16),
+                                            searchField,
+                                          ],
+                                        );
+                                      } else {
+                                        return Column(
+                                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                                          children: [
+                                            searchField,
+                                            const SizedBox(height: 12),
+                                            filterPills,
+                                          ],
+                                        );
+                                      }
                                     },
                                   ),
                                   const SizedBox(height: 16),
@@ -1979,6 +2300,59 @@ class _AppointmentListScreenState
                 ),
         ),
       ),
+          // Custom Needs Attention Banner
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            bottom: _showOverdueBanner ? 24 : -100,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                constraints: const BoxConstraints(maxWidth: 500),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.15),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _overdueBannerText,
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                    ),
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      onPressed: () {
+                        setState(() => _showOverdueBanner = false);
+                        _openNeedsAttentionDashboard();
+                      },
+                      child: const Text('Review', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2076,6 +2450,9 @@ class _AppointmentListScreenState
                 onUndoArrived: () => _undoArrived(e.value),
                 onLongPress: () => _cancelSession(e.value),
                 onTap: (sid) => _openSessionDirectly(e.value, preloadedSessionId: sid),
+                onOverdueCame: (sid) => _handleOverdueCame(e.value, preloadedSessionId: sid),
+                onOverdueMissed: (sid) => _handleOverdueMissed(e.value, preloadedSessionId: sid),
+                onOverdueClosed: (sid) => _handleOverdueClosed(e.value, preloadedSessionId: sid),
               ),
             ),
           ),
@@ -2104,9 +2481,28 @@ class _AppointmentListScreenState
   }
 
   Widget _emptySectionLabel(String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Center(child: Text(text, style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint))),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      decoration: BoxDecoration(
+        color: context.colors.surface.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.coffee_rounded, size: 20, color: context.colors.textHint.withValues(alpha: 0.8)),
+          const SizedBox(width: 10),
+          Text(
+            text,
+            style: context.textStyles.bodyMedium.copyWith(
+              color: context.colors.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2402,6 +2798,9 @@ class _AppointmentListScreenState
                   onUndoArrived: () => _undoArrived(e.value),
                   onLongPress: () => _cancelSession(e.value),
                   onTap: (sid) => _openSessionDirectly(e.value, preloadedSessionId: sid),
+                  onOverdueCame: (sid) => _handleOverdueCame(e.value, preloadedSessionId: sid),
+                  onOverdueMissed: (sid) => _handleOverdueMissed(e.value, preloadedSessionId: sid),
+                  onOverdueClosed: (sid) => _handleOverdueClosed(e.value, preloadedSessionId: sid),
                 ),
               ),
             ),
@@ -2695,6 +3094,17 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
         iconColor: context.colors.error,
         title: 'Cancelled',
         subtitle: 'Appointment cancelled',
+      );
+    } else if (apt.status == AppointmentStatus.overdue) {
+      return _indicatorItem(
+        context: context,
+        icon: Icons.error_outline_rounded,
+        iconColor: context.colors.error,
+        title: 'Overdue',
+        subtitle: 'Action required',
+        action: _buildForgotDetailsButton(context, () {
+          _handleRetroactiveEntry(apt);
+        }),
       );
     } else if (widget.isLate && !widget.isMissed && apt.status == AppointmentStatus.scheduled) {
       final now = DateTime.now();
@@ -3850,6 +4260,9 @@ class _SessionCard extends ConsumerStatefulWidget {
   final VoidCallback onUndoArrived;
   final VoidCallback onLongPress;
   final void Function(String? sessionId) onTap;
+  final void Function(String? sessionId) onOverdueCame;
+  final void Function(String? sessionId) onOverdueMissed;
+  final void Function(String? sessionId) onOverdueClosed;
   final bool showDoctorName;
   /// Pre-loaded session info from parent batch-load — skips per-card PB query.
   final Map<String, dynamic>? preloadedSessionInfo;
@@ -3869,6 +4282,9 @@ class _SessionCard extends ConsumerStatefulWidget {
     required this.onUndoArrived,
     required this.onLongPress,
     required this.onTap,
+    required this.onOverdueCame,
+    required this.onOverdueMissed,
+    required this.onOverdueClosed,
     this.showDoctorName = false,
     this.preloadedSessionInfo,
     this.clinicLocation,
@@ -4030,6 +4446,9 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
 
 
   Widget _buildSessionStatus(BuildContext context, AppointmentModel apt, bool isCompleted) {
+    final isPastDate = apt.date.compareTo(DateFormat('yyyy-MM-dd').format(DateTime.now())) < 0;
+    final isOverdue = apt.status == AppointmentStatus.overdue || (isPastDate && !isCompleted && apt.status != AppointmentStatus.cancelled && !widget.isMissed);
+
     if (widget.isMissed) {
       return _indicatorItem(
         context: context,
@@ -4048,6 +4467,14 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
         iconColor: context.colors.error,
         title: 'Cancelled',
         subtitle: 'Session cancelled',
+      );
+    } else if (isOverdue) {
+      return _indicatorItem(
+        context: context,
+        icon: Icons.error_outline_rounded,
+        iconColor: context.colors.error,
+        title: 'Overdue',
+        subtitle: 'Action required',
       );
     } else if (isCompleted) {
       String timeStr = '';
@@ -4286,12 +4713,45 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     final isWaiting = apt.status == AppointmentStatus.waiting;
     final isInProgress = apt.status == AppointmentStatus.inProgress;
 
-    final showArrivedBtn = isScheduled && !widget.isFutureDate && !widget.isMissed;
-    final showStartBtn   = isWaiting && !widget.isFutureDate;
-    final showResumeBtn  = isInProgress; 
-    final showEndedBtn   = isInProgress;
+    final isPastDate = apt.date.compareTo(DateFormat('yyyy-MM-dd').format(DateTime.now())) < 0;
+    final isOverdue = apt.status == AppointmentStatus.overdue || (isPastDate && !widget.isMissed && apt.status != AppointmentStatus.completed && apt.status != AppointmentStatus.cancelled);
+
+    final showArrivedBtn = isScheduled && !widget.isFutureDate && !widget.isMissed && !isOverdue;
+    final showStartBtn   = isWaiting && !widget.isFutureDate && !isOverdue;
+    final showResumeBtn  = isInProgress && !isOverdue; 
+    final showEndedBtn   = isInProgress && !isOverdue;
 
     final List<Widget> buttons = [];
+
+    if (isOverdue) {
+      buttons.add(Row(
+        children: [
+          Expanded(
+            child: _ActionButton(
+              label: 'Came',
+              icon: Icons.check_circle_rounded,
+              color: context.colors.success,
+              onTap: () => widget.onOverdueCame(_sessionId),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _ActionButton(
+              label: 'No Show',
+              icon: Icons.cancel_rounded,
+              color: context.colors.error,
+              onTap: () => widget.onOverdueMissed(_sessionId),
+            ),
+          ),
+        ],
+      ));
+      buttons.add(_ActionButton(
+        label: 'We Were Closed',
+        icon: Icons.business_rounded,
+        color: context.colors.textSecondary,
+        onTap: () => widget.onOverdueClosed(_sessionId),
+      ));
+    }
 
     if (showArrivedBtn) {
       buttons.add(_ActionButton(
@@ -4443,6 +4903,8 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     final bool isActive = isWaiting || isInProgress;
     final bool isCancelled = apt.status == AppointmentStatus.cancelled;
     final bool isCompleted = apt.status == AppointmentStatus.completed;
+    final isPastDate = apt.date.compareTo(DateFormat('yyyy-MM-dd').format(DateTime.now())) < 0;
+    final isOverdue = apt.status == AppointmentStatus.overdue || (isPastDate && !widget.isMissed && !isCompleted && !isCancelled);
 
     const kWaiting = Color(0xFFF59E0B);
     Color statusColor;
@@ -4454,6 +4916,8 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
       statusColor = context.colors.error; statusStr = 'Cancelled'; statusIcon = Icons.cancel_rounded;
     } else if (isCompleted) {
       statusColor = context.colors.success; statusStr = 'Completed'; statusIcon = Icons.check_circle_rounded;
+    } else if (isOverdue) {
+      statusColor = context.colors.error; statusStr = 'Overdue'; statusIcon = Icons.error_outline_rounded;
     } else if (isInProgress) {
       statusColor = context.colors.warning; statusStr = 'In Progress'; statusIcon = Icons.sync_rounded;
     } else if (isWaiting) {
@@ -4462,14 +4926,15 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
       statusColor = const Color(0xFF7C3AED); statusStr = 'Scheduled'; statusIcon = Icons.healing_rounded;
     }
 
-    final showArrivedBtn = isScheduled && !widget.isFutureDate && !widget.isMissed;
-    final showStartBtn   = isWaiting && !widget.isFutureDate;
-    final showResumeBtn  = isInProgress; 
-    final showEndedBtn   = isInProgress;
-    final showRescheduleBtn = isScheduled && (widget.isFutureDate || !widget.isMissed) || widget.isMissed && !isInProgress;
+    final showArrivedBtn = isScheduled && !widget.isFutureDate && !widget.isMissed && !isOverdue;
+    final showStartBtn   = isWaiting && !widget.isFutureDate && !isOverdue;
+    final showResumeBtn  = isInProgress && !isOverdue; 
+    final showEndedBtn   = isInProgress && !isOverdue;
+    final showRescheduleBtn = !isOverdue && (isScheduled && (widget.isFutureDate || !widget.isMissed) || widget.isMissed && !isInProgress);
+    final showOverdueActions = isOverdue;
 
     const sessionAccent = Color(0xFF7C3AED);
-    final accentColor = widget.isMissed || isCancelled
+    final accentColor = widget.isMissed || isCancelled || isOverdue
         ? context.colors.error
         : widget.isLate
             ? context.colors.warning
@@ -4479,7 +4944,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                     ? kWaiting
                     : sessionAccent;
 
-    final hasActions = showArrivedBtn || showStartBtn || showResumeBtn || showEndedBtn || showRescheduleBtn;
+    final hasActions = showArrivedBtn || showStartBtn || showResumeBtn || showEndedBtn || showRescheduleBtn || showOverdueActions;
 
     // Helper to build the timeline log items
     Widget buildTimelineInfo() {
@@ -4697,11 +5162,12 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                               spacing: 6,
                                               runSpacing: 4,
                                               children: [
-                                                _Pill(
-                                                  label: statusStr,
-                                                  icon: statusIcon,
-                                                  color: statusColor,
-                                                ),
+                                                if (!isOverdue)
+                                                  _Pill(
+                                                    label: statusStr,
+                                                    icon: statusIcon,
+                                                    color: statusColor,
+                                                  ),
                                                 if (_sessionNumLoaded)
                                                   _Pill(
                                                     label: _sessionType == 'maintenance'
@@ -5051,6 +5517,34 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                     Padding(
                                       padding: const EdgeInsets.all(10),
                                       child: Row(children: [
+                                        if (showOverdueActions) ...[
+                                          Expanded(
+                                            child: _ActionButton(
+                                              label: 'Came',
+                                              icon: Icons.check_circle_rounded,
+                                              color: context.colors.success,
+                                              onTap: () => widget.onOverdueCame(_sessionId),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: _ActionButton(
+                                              label: 'No Show',
+                                              icon: Icons.cancel_rounded,
+                                              color: context.colors.error,
+                                              onTap: () => widget.onOverdueMissed(_sessionId),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: _ActionButton(
+                                              label: 'Closed',
+                                              icon: Icons.business_rounded,
+                                              color: context.colors.textSecondary,
+                                              onTap: () => widget.onOverdueClosed(_sessionId),
+                                            ),
+                                          ),
+                                        ],
                                         if (showArrivedBtn)
                                           Expanded(child: _ActionButton(
                                             label: 'Patient Arrived',

@@ -172,6 +172,7 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     int? age,
     String? existingPatientId, // If set, skip patient creation and reuse this ID
     String? reference,
+    String? personalNotes,
     String? relationToPrimary,
     String? howDidYouHear,
     String? photoPath,
@@ -208,6 +209,7 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
           email: email,
           age: age,
           reference: reference,
+          personalNotes: personalNotes,
           relationToPrimary: relationToPrimary,
           howDidYouHear: howDidYouHear,
           photoPath: photoPath,

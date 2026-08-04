@@ -32,6 +32,7 @@ class PatientDetailsForm extends StatefulWidget {
   final TextEditingController occupationCtrl;
   final TextEditingController emailCtrl;
   final TextEditingController referenceCtrl;
+  final TextEditingController personalNotesCtrl;
 
   // ── State bindings ────────────────────────────────────────────────────────
   final String? selectedGender;
@@ -80,6 +81,7 @@ class PatientDetailsForm extends StatefulWidget {
     required this.occupationCtrl,
     required this.emailCtrl,
     required this.referenceCtrl,
+    required this.personalNotesCtrl,
     required this.selectedGender,
     required this.onGenderChanged,
     required this.consentGiven,
@@ -180,7 +182,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('Phone Number', style: context.textStyles.label),
+        const AppLabel(text: 'Phone Number', isRequired: true),
         const SizedBox(height: 8),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,6 +341,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
     final nameSection = AppTextField(
       controller: widget.nameCtrl,
       label: 'Full Name',
+      isRequired: true,
       prefixIcon: Icon(Icons.person_outline_rounded, color: context.colors.textHint),
       validator: Validators.required,
       readOnly: widget.nameLocked,
@@ -350,15 +353,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        RichText(
-          text: TextSpan(children: [
-            TextSpan(text: 'Gender ', style: context.textStyles.label),
-            const TextSpan(
-              text: '*',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            ),
-          ]),
-        ),
+        const AppLabel(text: 'Gender', isRequired: true),
         const SizedBox(height: 8),
         Container(
           height: 52,
@@ -396,7 +391,8 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
           flex: 3,
           child: AppTextField(
             controller: TextEditingController(text: _displayDob()),
-            label: 'Date of Birth *',
+            label: 'Date of Birth',
+            isRequired: true,
             prefixIcon: Icon(Icons.cake_outlined, color: context.colors.textHint),
             hint: 'DD/MM/YYYY',
             readOnly: true,
@@ -414,7 +410,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Age', style: context.textStyles.label),
+              const AppLabel(text: 'Age'),
               const SizedBox(height: 8),
               Container(
                 height: 52,
@@ -440,47 +436,29 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
 
     final occupationSection = AppTextField(
       controller: widget.occupationCtrl,
-      label: 'Occupation (Optional)',
+      label: 'Occupation',
       prefixIcon: Icon(Icons.work_outline_rounded, color: context.colors.textHint),
     );
 
     final emailSection = AppTextField(
       controller: widget.emailCtrl,
-      label: 'Email (Optional)',
+      label: 'Email',
       prefixIcon: Icon(Icons.email_outlined, color: context.colors.textHint),
       keyboardType: TextInputType.emailAddress,
     );
 
-    final referredBySection = _ReferredByDropdown(referenceCtrl: widget.referenceCtrl);
+    final howDidYouHearSection = _CombinedSourceDropdown(
+      initialValue: widget.howDidYouHear,
+      onChanged: widget.onHowDidYouHearChanged,
+      referenceCtrl: widget.referenceCtrl,
+    );
 
-    final howDidYouHearSection = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('How Did You Know Us? (Optional)', style: context.textStyles.label),
-        const SizedBox(height: 8),
-        Container(
-          height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          decoration: BoxDecoration(
-            color: context.colors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: context.colors.border),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: widget.howDidYouHear,
-              isExpanded: true,
-              hint: Text('Select an option',
-                  style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint)),
-              items: _howDidYouHearOptions
-                  .map((o) => DropdownMenuItem(value: o, child: Text(o, style: context.textStyles.bodyMedium)))
-                  .toList(),
-              onChanged: widget.onHowDidYouHearChanged,
-            ),
-          ),
-        ),
-      ],
+    final personalNotesSection = AppTextField(
+      controller: widget.personalNotesCtrl,
+      label: 'Personal Notes (For Clinic Use Only)',
+      hint: 'Add any specific notes or info...',
+      prefixIcon: Icon(Icons.note_alt_outlined, color: context.colors.textHint),
+      maxLines: 3,
     );
 
     // Relation picker — only shown when registering a new family member
@@ -488,8 +466,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
         ? Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Relation to Primary Account Holder',
-                  style: context.textStyles.label),
+              const AppLabel(text: 'Relation to Primary Account Holder', isRequired: true),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -601,9 +578,9 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: referredBySection),
-                  const SizedBox(width: 16),
                   Expanded(child: howDidYouHearSection),
+                  const SizedBox(width: 16),
+                  const Spacer(), // Keeps it aligned on desktop
                 ],
               ),
             ] else ...[
@@ -623,9 +600,14 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
               const SizedBox(height: 14),
               emailSection,
               const SizedBox(height: 14),
-              referredBySection,
-              const SizedBox(height: 14),
               howDidYouHearSection,
+              const SizedBox(height: 14),
+              consentSection,
+              const SizedBox(height: 16),
+              privacySection,
+              const SizedBox(height: 24),
+              personalNotesSection,
+              const SizedBox(height: 32),
             ],
             const SizedBox(height: 16),
             LocationFields(
@@ -637,6 +619,8 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
               allRequired: true,
             ),
             const SizedBox(height: 16),
+            personalNotesSection,
+            const SizedBox(height: 24),
             consentSection,
             const SizedBox(height: 12),
             privacySection,
@@ -854,19 +838,26 @@ class _ConsentCheckboxCardState extends State<_ConsentCheckboxCard> {
   }
 }
 
-// ─── Referred-By Dropdown ──────────────────────────────────────────────────────
+// ─── Combined Source Dropdown ──────────────────────────────────────────────────────
 
-/// Dropdown for "Referred By" with common referral options + custom "Other" input.
+/// Dropdown for "How Did You Know Us?" with common options + dynamic input.
 /// Syncs to the existing [referenceCtrl] so parent screens don't need changes.
-class _ReferredByDropdown extends StatefulWidget {
+class _CombinedSourceDropdown extends StatefulWidget {
+  final String? initialValue;
+  final ValueChanged<String?> onChanged;
   final TextEditingController referenceCtrl;
-  const _ReferredByDropdown({required this.referenceCtrl});
+
+  const _CombinedSourceDropdown({
+    required this.initialValue,
+    required this.onChanged,
+    required this.referenceCtrl,
+  });
 
   @override
-  State<_ReferredByDropdown> createState() => _ReferredByDropdownState();
+  State<_CombinedSourceDropdown> createState() => _CombinedSourceDropdownState();
 }
 
-class _ReferredByDropdownState extends State<_ReferredByDropdown> {
+class _CombinedSourceDropdownState extends State<_CombinedSourceDropdown> {
   static const List<String> _options = [
     'Doctor Referral',
     'Friend / Family',
@@ -880,28 +871,31 @@ class _ReferredByDropdownState extends State<_ReferredByDropdown> {
 
   String? _selected;
   bool _showCustomField = false;
-  final _customCtrl = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    // Pre-fill from existing controller value (e.g. returning patient)
-    final existing = widget.referenceCtrl.text.trim();
-    if (existing.isNotEmpty) {
+    // Initialize based on initialValue
+    final existing = widget.initialValue;
+    if (existing != null && existing.isNotEmpty) {
       if (_options.contains(existing)) {
         _selected = existing;
+        // If it's one of the options that requires specific name, show it
+        if (_requiresSpecificName(existing)) {
+          _showCustomField = true;
+        }
       } else {
         _selected = 'Other';
         _showCustomField = true;
-        _customCtrl.text = existing;
       }
     }
   }
 
-  @override
-  void dispose() {
-    _customCtrl.dispose();
-    super.dispose();
+  bool _requiresSpecificName(String option) {
+    return option == 'Doctor Referral' ||
+           option == 'Friend / Family' ||
+           option == 'Social Media' ||
+           option == 'Other';
   }
 
   @override
@@ -909,7 +903,7 @@ class _ReferredByDropdownState extends State<_ReferredByDropdown> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Referred By (Optional)', style: context.textStyles.label),
+        const AppLabel(text: 'How Did You Know Us?'),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
@@ -926,7 +920,7 @@ class _ReferredByDropdownState extends State<_ReferredByDropdown> {
               hint: Row(children: [
                 Icon(Icons.handshake_outlined, color: context.colors.textHint, size: 18),
                 const SizedBox(width: 10),
-                Text('Select referral source',
+                Text('Select source',
                     style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint)),
               ]),
               items: _options
@@ -935,16 +929,12 @@ class _ReferredByDropdownState extends State<_ReferredByDropdown> {
               onChanged: (val) {
                 setState(() {
                   _selected = val;
-                  _showCustomField = val == 'Other';
-                  if (val != null && val != 'Other') {
-                    widget.referenceCtrl.text = val;
-                    _customCtrl.clear();
-                  } else if (val == 'Other') {
-                    widget.referenceCtrl.text = _customCtrl.text;
-                  } else {
-                    widget.referenceCtrl.text = '';
+                  _showCustomField = val != null && _requiresSpecificName(val);
+                  if (!_showCustomField) {
+                    widget.referenceCtrl.clear();
                   }
                 });
+                widget.onChanged(val);
               },
             ),
           ),
@@ -952,11 +942,16 @@ class _ReferredByDropdownState extends State<_ReferredByDropdown> {
         if (_showCustomField) ...[
           const SizedBox(height: 10),
           AppTextField(
-            controller: _customCtrl,
+            controller: widget.referenceCtrl,
             label: '',
-            hint: 'Enter referral source...',
-            prefixIcon: Icon(Icons.edit_rounded, color: context.colors.textHint, size: 18),
-            onChanged: (val) => widget.referenceCtrl.text = val,
+            hint: _selected == 'Doctor Referral'
+                ? 'Doctor\'s Name...'
+                : _selected == 'Friend / Family'
+                    ? 'Friend/Family Name...'
+                    : _selected == 'Social Media'
+                        ? 'Which platform / ad?'
+                        : 'Please specify...',
+            prefixIcon: Icon(Icons.person_outline, color: context.colors.textHint),
           ),
         ],
       ],

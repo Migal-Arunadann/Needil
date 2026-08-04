@@ -11,6 +11,7 @@ import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/services/audit_service.dart';
 import 'package:intl/intl.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/core/utils/error_formatter.dart';
 
 
 class ManageReceptionistScreen extends ConsumerStatefulWidget {
@@ -247,9 +248,9 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.error_outline_rounded, size: 48, color: context.colors.error),
         const SizedBox(height: 12),
-        Text('Failed to load', style: context.textStyles.label),
+        Text('Failed to load receptionists', style: context.textStyles.label),
         const SizedBox(height: 8),
-        Text(_error ?? '', style: context.textStyles.caption, textAlign: TextAlign.center),
+        Text(_error != null ? ErrorFormatter.format(_error!) : '', style: context.textStyles.caption, textAlign: TextAlign.center),
         const SizedBox(height: 16),
         ElevatedButton(onPressed: _load, child: Text('Retry')),
       ]),
@@ -504,7 +505,7 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
             child: Row(children: [
               Icon(Icons.error_outline_rounded, size: 14, color: context.colors.error),
               const SizedBox(width: 6),
-              Expanded(child: Text(_error!, style: context.textStyles.caption.copyWith(color: context.colors.error, fontSize: 11))),
+              Expanded(child: Text(ErrorFormatter.format(_error!), style: context.textStyles.caption.copyWith(color: context.colors.error, fontSize: 11))),
             ]),
           ),
           const SizedBox(height: 12),
@@ -619,7 +620,7 @@ class _EditReceptionistDialogState extends State<_EditReceptionistDialog> {
             child: Row(children: [
               Icon(Icons.error_outline_rounded, size: 14, color: context.colors.error),
               const SizedBox(width: 6),
-              Expanded(child: Text(_error!, style: context.textStyles.caption.copyWith(color: context.colors.error, fontSize: 11))),
+              Expanded(child: Text(ErrorFormatter.format(_error!), style: context.textStyles.caption.copyWith(color: context.colors.error, fontSize: 11))),
             ]),
           ),
           const SizedBox(height: 12),

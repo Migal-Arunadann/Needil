@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -110,15 +111,21 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       final service = DataExportService(pb);
       final data = await service.exportSinglePatientData(_patient.id);
 
-      final tempDir = await getTemporaryDirectory();
       final sanitizedName = _patient.fullName.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_');
       final dateStr = DateTime.now().toIso8601String().substring(0, 10);
-      final file = File('${tempDir.path}/Patient_Data_${sanitizedName}_$dateStr.txt');
-      
-      await file.writeAsString(data);
-      
-      if (mounted) {
-        await Share.shareXFiles([XFile(file.path)], text: 'Patient Data Export for ${_patient.fullName}');
+      final filename = 'Patient_Data_${sanitizedName}_$dateStr.txt';
+
+      if (kIsWeb) {
+        downloadCsvWeb(data, filename);
+      } else {
+        final tempDir = await getTemporaryDirectory();
+        final file = File('${tempDir.path}/$filename');
+        
+        await file.writeAsString(data);
+        
+        if (mounted) {
+          await Share.shareXFiles([XFile(file.path)], text: 'Patient Data Export for ${_patient.fullName}');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -584,6 +591,29 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                   ],
                 );
               },
+            ),
+            const SizedBox(height: 32),
+            // DPDP Data Download Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _isDownloadingData ? null : _downloadPatientData,
+                icon: _isDownloadingData 
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.download_rounded, size: 18),
+                label: Text(_isDownloadingData ? 'Compiling Data...' : 'Download Patient Info'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: context.colors.primary.withValues(alpha: 0.1),
+                  foregroundColor: context.colors.primary,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: context.colors.primary.withValues(alpha: 0.3)),
+                  ),
+                  textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ),
             ),
           ],
         ),

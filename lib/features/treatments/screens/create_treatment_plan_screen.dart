@@ -481,7 +481,7 @@ class _CreateTreatmentPlanScreenState
                 final doctorField = Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Assign Doctor', style: context.textStyles.label),
+                    const AppLabel(text: 'Assign Doctor', isRequired: true),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -556,7 +556,7 @@ class _CreateTreatmentPlanScreenState
                 final treatmentField = Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Treatment Type', style: context.textStyles.label),
+                    const AppLabel(text: 'Treatment Type', isRequired: true),
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -597,6 +597,7 @@ class _CreateTreatmentPlanScreenState
                 final sessionsField = AppTextField(
                   controller: _sessionsCtrl,
                   label: isMaintenance ? 'Total Maintenance Sessions' : 'Total Sessions',
+                  isRequired: true,
                   hint: '10',
                   keyboardType: TextInputType.number,
                   inputFormatters: [
@@ -615,7 +616,7 @@ class _CreateTreatmentPlanScreenState
                 final intervalField = Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Interval', style: context.textStyles.label),
+                    const AppLabel(text: 'Interval', isRequired: true),
                     const SizedBox(height: 8),
                     Row(
                       children: [
@@ -698,6 +699,7 @@ class _CreateTreatmentPlanScreenState
                 final feeField = AppTextField(
                   controller: _feeCtrl,
                   label: isMaintenance ? 'Maintenance Session Fee (₹)' : 'Session Fee (₹)',
+                  isRequired: true,
                   hint: '500',
                   keyboardType: TextInputType.number,
                   prefixIcon: Icon(Icons.currency_rupee_rounded, size: 18, color: context.colors.success),
@@ -725,7 +727,7 @@ class _CreateTreatmentPlanScreenState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Start Date', style: context.textStyles.caption),
+                              AppLabel(text: 'Start Date', isRequired: true, style: context.textStyles.caption),
                               const SizedBox(height: 4),
                               Row(
                                 children: [
@@ -779,7 +781,7 @@ class _CreateTreatmentPlanScreenState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Preferred Slot', style: context.textStyles.caption),
+                              AppLabel(text: 'Preferred Slot', isRequired: true, style: context.textStyles.caption),
                               const SizedBox(height: 4),
                               Row(
                                 children: [
@@ -954,6 +956,7 @@ class _CreateTreatmentPlanScreenState
                         AppTextField(
                           controller: _expiryDaysCtrl,
                           label: 'Review After (Days)',
+                          isRequired: true,
                           hint: 'Days before plan is flagged for review (e.g. 90)',
                           keyboardType: TextInputType.number,
                           inputFormatters: [FilteringTextInputFormatter.digitsOnly],

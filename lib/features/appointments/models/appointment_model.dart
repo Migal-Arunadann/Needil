@@ -2,7 +2,7 @@ import 'package:pocketbase/pocketbase.dart';
 
 enum AppointmentType { callBy, walkIn, session }
 
-enum AppointmentStatus { scheduled, waiting, inProgress, completed, cancelled, missed }
+enum AppointmentStatus { scheduled, waiting, inProgress, completed, cancelled, missed, overdue }
 
 class AppointmentModel {
   final String id;
@@ -23,6 +23,7 @@ class AppointmentModel {
   final bool patientDetailsSaved;            // true once PatientInfoScreen form is submitted
   final bool patientDetailsPartial;          // true once PatientInfoScreen form is opened (but not yet submitted)
   final bool treatmentPlanPartial;           // true once treatment plan form opened but not submitted
+  final bool patientDetailsSkipped;          // true when staff skipped patient details during retroactive consultation fill
   final String? linkedTreatmentPlanId;       // ID of created treatment plan (prevents duplicates)
   final String? linkedConsultationId;        // ID of linked consultation stub (avoids list queries)
   final bool isRescheduled;                   // true when appointment has been rescheduled
@@ -63,6 +64,7 @@ class AppointmentModel {
     this.patientDetailsSaved = false,
     this.patientDetailsPartial = false,
     this.treatmentPlanPartial = false,
+    this.patientDetailsSkipped = false,
     this.linkedTreatmentPlanId,
     this.linkedConsultationId,
     this.isRescheduled = false,
@@ -140,6 +142,7 @@ class AppointmentModel {
       patientDetailsSaved: record.getBoolValue('patient_details_saved'),
       patientDetailsPartial: record.getBoolValue('patient_details_partial'),
       treatmentPlanPartial: record.getBoolValue('treatment_plan_partial'),
+      patientDetailsSkipped: record.getBoolValue('patient_details_skipped'),
       linkedTreatmentPlanId: record.getStringValue('linked_treatment_plan_id').isNotEmpty
           ? record.getStringValue('linked_treatment_plan_id')
           : null,
@@ -191,6 +194,7 @@ class AppointmentModel {
       'patient_details_saved': patientDetailsSaved,
       'patient_details_partial': patientDetailsPartial,
       'treatment_plan_partial': treatmentPlanPartial,
+      if (patientDetailsSkipped) 'patient_details_skipped': patientDetailsSkipped,
       if (linkedTreatmentPlanId != null && linkedTreatmentPlanId!.isNotEmpty)
         'linked_treatment_plan_id': linkedTreatmentPlanId,
       if (linkedConsultationId != null && linkedConsultationId!.isNotEmpty)
@@ -236,6 +240,8 @@ class AppointmentModel {
         return AppointmentStatus.cancelled;
       case 'missed':
         return AppointmentStatus.missed;
+      case 'overdue':
+        return AppointmentStatus.overdue;
       default:
         return AppointmentStatus.scheduled;
     }
@@ -253,6 +259,8 @@ class AppointmentModel {
         return 'cancelled';
       case AppointmentStatus.missed:
         return 'missed';
+      case AppointmentStatus.overdue:
+        return 'overdue';
       case AppointmentStatus.scheduled:
         return 'scheduled';
     }
