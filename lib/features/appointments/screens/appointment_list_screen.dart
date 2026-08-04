@@ -1997,10 +1997,13 @@ class _AppointmentListScreenState
                                             Row(
                                               crossAxisAlignment: CrossAxisAlignment.center,
                                               children: [
-                                                Text(
-                                                  headerTitle,
-                                                  style: context.textStyles.h2.copyWith(
-                                                    fontSize: 20,
+                                                Flexible(
+                                                  child: Text(
+                                                    headerTitle,
+                                                    style: context.textStyles.h2.copyWith(
+                                                      fontSize: 20,
+                                                    ),
+                                                    overflow: TextOverflow.ellipsis,
                                                   ),
                                                 ),
                                                 if (showHeaderBadge) ...[
@@ -2020,6 +2023,13 @@ class _AppointmentListScreenState
                                           ],
                                         ),
                                       ),
+                                      if (isDesktop) ...[
+                                        const SizedBox(width: 16),
+                                        SizedBox(
+                                          width: 260,
+                                          child: _buildSearchField(),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                   const SizedBox(height: 20),
@@ -2045,69 +2055,18 @@ class _AppointmentListScreenState
                                         ],
                                       );
 
-                                      final searchField = SizedBox(
-                                        width: isDesktop ? 260 : double.infinity,
-                                        child: TextField(
-                                          controller: _searchCtrl,
-                                          onChanged: (val) {
-                                            setState(() {
-                                              _searchQuery = val.trim();
-                                            });
-                                          },
-                                          decoration: InputDecoration(
-                                            hintText: 'Search by patient name...',
-                                            prefixIcon: Icon(Icons.search_rounded, color: context.colors.textHint),
-                                            suffixIcon: _searchQuery.isNotEmpty
-                                                ? IconButton(
-                                                    icon: Icon(Icons.close_rounded, color: context.colors.textHint, size: 20),
-                                                    onPressed: () {
-                                                      _searchCtrl.clear();
-                                                      setState(() {
-                                                        _searchQuery = '';
-                                                      });
-                                                    },
-                                                  )
-                                                : null,
-                                            isDense: true,
-                                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                            filled: true,
-                                            fillColor: context.colors.surface,
-                                            border: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(12),
-                                              borderSide: BorderSide(color: context.colors.border),
-                                            ),
-                                            enabledBorder: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(12),
-                                              borderSide: BorderSide(color: context.colors.border),
-                                            ),
-                                            focusedBorder: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(12),
-                                              borderSide: BorderSide(color: context.colors.primary),
-                                            ),
-                                          ),
-                                        ),
-                                      );
-
-                                      if (isDesktop) {
-                                        return Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                          crossAxisAlignment: CrossAxisAlignment.center,
-                                          children: [
-                                            Expanded(child: filterPills),
-                                            const SizedBox(width: 16),
-                                            searchField,
-                                          ],
-                                        );
-                                      } else {
+                                      if (!isDesktop) {
                                         return Column(
                                           crossAxisAlignment: CrossAxisAlignment.stretch,
                                           children: [
-                                            searchField,
+                                            _buildSearchField(),
                                             const SizedBox(height: 12),
                                             filterPills,
                                           ],
                                         );
                                       }
+
+                                      return filterPills;
                                     },
                                   ),
                                   const SizedBox(height: 16),
@@ -2666,6 +2625,48 @@ class _AppointmentListScreenState
           fontSize: 10,
           fontWeight: FontWeight.bold,
           letterSpacing: 0.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return TextField(
+      controller: _searchCtrl,
+      onChanged: (val) {
+        setState(() {
+          _searchQuery = val.trim();
+        });
+      },
+      decoration: InputDecoration(
+        hintText: 'Search by patient name...',
+        prefixIcon: Icon(Icons.search_rounded, color: context.colors.textHint),
+        suffixIcon: _searchQuery.isNotEmpty
+            ? IconButton(
+                icon: Icon(Icons.close_rounded, color: context.colors.textHint, size: 20),
+                onPressed: () {
+                  _searchCtrl.clear();
+                  setState(() {
+                    _searchQuery = '';
+                  });
+                },
+              )
+            : null,
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        filled: true,
+        fillColor: context.colors.surface,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: context.colors.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: context.colors.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: context.colors.primary),
         ),
       ),
     );
@@ -3866,7 +3867,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                                 children: [
                                                   if (!isActive) ...[
                                                     Row(
-                                                      mainAxisAlignment: MainAxisAlignment.end,
+                                                      mainAxisAlignment: MainAxisAlignment.center,
                                                       children: [
                                                         if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty) ...[
                                                           _buildContactButtons(context, apt),
@@ -4475,6 +4476,31 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
         iconColor: context.colors.error,
         title: 'Overdue',
         subtitle: 'Action required',
+        action: Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Expanded(
+                child: _ActionButton(
+                  label: 'Patient Came',
+                  icon: Icons.check_circle_rounded,
+                  color: context.colors.success,
+                  onTap: () => widget.onOverdueCame(_sessionId),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: _ActionButton(
+                  label: 'Patient Missed',
+                  icon: Icons.cancel_rounded,
+                  color: context.colors.error,
+                  onTap: () => widget.onOverdueMissed(_sessionId),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     } else if (isCompleted) {
       String timeStr = '';
@@ -4724,27 +4750,6 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     final List<Widget> buttons = [];
 
     if (isOverdue) {
-      buttons.add(Row(
-        children: [
-          Expanded(
-            child: _ActionButton(
-              label: 'Came',
-              icon: Icons.check_circle_rounded,
-              color: context.colors.success,
-              onTap: () => widget.onOverdueCame(_sessionId),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: _ActionButton(
-              label: 'No Show',
-              icon: Icons.cancel_rounded,
-              color: context.colors.error,
-              onTap: () => widget.onOverdueMissed(_sessionId),
-            ),
-          ),
-        ],
-      ));
       buttons.add(_ActionButton(
         label: 'We Were Closed',
         icon: Icons.business_rounded,
@@ -5223,12 +5228,12 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                           children: [
                                             if (!isActive) ...[
                                               Row(
-                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                mainAxisAlignment: MainAxisAlignment.center,
                                                 children: [
-                                                  if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty)
-                                                    _buildContactButtons(context, apt)
-                                                  else
-                                                    const SizedBox.shrink(),
+                                                  if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty) ...[
+                                                    _buildContactButtons(context, apt),
+                                                    const SizedBox(width: 8),
+                                                  ],
                                                   PopupMenuButton<String>(
                                                     padding: EdgeInsets.zero,
                                                     icon: Icon(Icons.more_vert_rounded, color: context.colors.textSecondary),
@@ -5529,7 +5534,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                           const SizedBox(width: 6),
                                           Expanded(
                                             child: _ActionButton(
-                                              label: 'No Show',
+                                              label: 'Missed',
                                               icon: Icons.cancel_rounded,
                                               color: context.colors.error,
                                               onTap: () => widget.onOverdueMissed(_sessionId),
