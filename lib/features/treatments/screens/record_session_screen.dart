@@ -445,8 +445,9 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
           _bpCtrl.text = fresh.bpLevel!;
         if (_pulseCtrl.text.isEmpty && fresh.pulse != null && fresh.pulse! > 0)
           _pulseCtrl.text = fresh.pulse.toString();
-        if (_remarksCtrl.text.isEmpty && fresh.remarks?.isNotEmpty == true)
-          _remarksCtrl.text = fresh.remarks!;
+        if (_remarksCtrl.text.isEmpty && fresh.remarks?.isNotEmpty == true) {
+          _remarksCtrl.text = fresh.remarks!.replaceAll('\n[Recorded Late]', '').replaceAll('[Recorded Late]', '');
+        }
         if (fresh.treatmentModality.isNotEmpty) {
           _selectedTreatmentType = fresh.treatmentModality;
         }
@@ -474,8 +475,9 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
           _bpCtrl.text = widget.session.bpLevel!;
         if (_pulseCtrl.text.isEmpty && widget.session.pulse != null && widget.session.pulse! > 0)
           _pulseCtrl.text = widget.session.pulse.toString();
-        if (_remarksCtrl.text.isEmpty && widget.session.remarks?.isNotEmpty == true)
-          _remarksCtrl.text = widget.session.remarks!;
+        if (_remarksCtrl.text.isEmpty && widget.session.remarks?.isNotEmpty == true) {
+          _remarksCtrl.text = widget.session.remarks!.replaceAll('\n[Recorded Late]', '').replaceAll('[Recorded Late]', '');
+        }
         if (widget.session.treatmentModality.isNotEmpty) {
           _selectedTreatmentType = widget.session.treatmentModality;
         }
@@ -853,18 +855,25 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
     final isAlreadyCompleted = _liveSession.status == SessionStatus.completed;
     try {
       final service = ref.read(treatmentServiceProvider);
+      
+      String finalRemarks = _remarksCtrl.text.trim();
+      if (isRetroactive) {
+        finalRemarks = finalRemarks.isEmpty ? '[Recorded Late]' : '$finalRemarks\n[Recorded Late]';
+      }
+
       final result = await service.recordSession(
         sessionId: _liveSession.id,
         notes: _buildFullNotes(),
         bpLevel: _bpCtrl.text.trim(),
         pulse: _pulseCtrl.text.isNotEmpty ? int.tryParse(_pulseCtrl.text.trim()) : null,
-        remarks: _remarksCtrl.text.trim(),
+        remarks: finalRemarks,
         photos: _photos,
         // Retroactive sessions auto-complete on save (single point of completion).
         // Regular Save button never completes — only End Session on the card does.
         isCompleted: isAlreadyCompleted || isRetroactive,
         treatmentModality: _selectedTreatmentType,
         doctorId: _selectedDoctorId,
+        reconciliationReason: isRetroactive ? 'late_entry' : null,
       );
 
       // For retroactive sessions, fix completed_at to the original scheduled
@@ -899,7 +908,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
       });
       if (mounted) {
         final label = isRetroactive
-            ? 'Session ${_liveSession.sessionNumber} recorded retroactively ✓'
+            ? 'Session ${_liveSession.sessionNumber} recorded late ✓'
             : 'Session ${_liveSession.sessionNumber} details saved ✓';
         AppToast.show(label, type: ToastType.success);
         navigator.pop();

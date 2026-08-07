@@ -225,11 +225,15 @@ class SessionLifecycleService {
   Future<void> dismissAsClinicHoliday(
     String sessionId, {
     String? newDate,
+    String? newTime,
     required String performedBy,
   }) async {
     final body = <String, dynamic>{'status': 'upcoming'};
     if (newDate != null && newDate.isNotEmpty) {
       body['scheduled_date'] = newDate;
+    }
+    if (newTime != null && newTime.isNotEmpty) {
+      body['scheduled_time'] = newTime;
     }
 
     await _pb.collection(PBCollections.sessions).update(sessionId, body: body);
@@ -241,7 +245,7 @@ class SessionLifecycleService {
       await _appointmentSync.updateForSession(
         session: session,
         newDate: newDate,
-        newTime: session.scheduledTime ?? '09:00',
+        newTime: newTime ?? session.scheduledTime ?? '09:00',
         clinicId: null,
         sessionType: session.sessionType,
         isRescheduled: true,

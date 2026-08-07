@@ -129,8 +129,9 @@ class AppointmentSync {
   /// Stamps checkout timestamps when completing.
   Future<void> syncStatus(
     SessionModel session,
-    String newStatus,
-  ) async {
+    String newStatus, {
+    String? reconciliationReason,
+  }) async {
     try {
       var apptItems = await _findBySessionId(session.id);
       if (apptItems.isEmpty) {
@@ -143,6 +144,9 @@ class AppointmentSync {
         if (newStatus == 'completed') {
           body['check_out_time'] = now;
           body['patient_left_at'] = now;
+        }
+        if (reconciliationReason != null) {
+          body['reconciliation_reason'] = reconciliationReason;
         }
         await pb.collection(PBCollections.appointments).update(appt.id, body: body);
       }

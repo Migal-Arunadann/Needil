@@ -38,8 +38,17 @@ class PatientProfileScreen extends ConsumerStatefulWidget {
   final PatientModel patient;
   final AppointmentModel? appointment;
   final int initialTabIndex;
+  final bool isCompact;
+  final String? highlightSessionId;
 
-  const PatientProfileScreen({super.key, required this.patient, this.appointment, this.initialTabIndex = 0});
+  const PatientProfileScreen({
+    super.key, 
+    required this.patient, 
+    this.appointment, 
+    this.initialTabIndex = 0,
+    this.isCompact = false,
+    this.highlightSessionId,
+  });
 
   @override
   ConsumerState<PatientProfileScreen> createState() => _PatientProfileScreenState();
@@ -146,6 +155,23 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isCompact) {
+      return Scaffold(
+        backgroundColor: context.colors.background,
+        appBar: AppBar(
+          title: Text(
+            widget.patient.name ?? 'Patient',
+            style: context.textStyles.h3.copyWith(fontWeight: FontWeight.bold),
+          ),
+          centerTitle: false,
+          automaticallyImplyLeading: false,
+          elevation: 0,
+          backgroundColor: context.colors.background,
+        ),
+        body: _buildTreatmentsTab(),
+      );
+    }
+
     final hasOngoing = _ongoingConsultationId != null && _ongoingConsultationId!.isNotEmpty;
     final isDesktop = MediaQuery.of(context).size.width >= 900;
 
@@ -2505,7 +2531,23 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       );
     }
 
-    return GestureDetector(
+    final bool isHighlighted = widget.highlightSessionId == session.id;
+    final GlobalKey? highlightKey = isHighlighted ? GlobalKey() : null;
+
+    if (isHighlighted && highlightKey != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (highlightKey.currentContext != null) {
+          Scrollable.ensureVisible(
+            highlightKey.currentContext!,
+            duration: const Duration(milliseconds: 600),
+            curve: Curves.easeOut,
+            alignment: 0.3, // Scroll so the item is slightly above the middle
+          );
+        }
+      });
+    }
+
+    Widget tile = GestureDetector(
       onTap: () async {
         if (!isEditable && !isViewable) return;
         if (isEditable) {
@@ -2719,6 +2761,12 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
           ],
         ),
       ),
+    );
+
+    return _HighlightedSessionGlowWrapper(
+      key: highlightKey,
+      shouldHighlight: isHighlighted,
+      child: tile,
     );
   }
 
@@ -3102,9 +3150,15 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     // 'waiting' = Patient Arrived button was clicked
     if (s == SessionStatus.waiting) return 'Patient Waiting';
     if (s == SessionStatus.inProgress) return 'Ongoing';
-    if (s == SessionStatus.completed) return 'Completed';
+    if (s == SessionStatus.completed) {
+      if (session.remarks != null && session.remarks!.contains('[Recorded Late]')) {
+        return 'Completed (Late Entry)';
+      }
+      return 'Completed';
+    }
     if (s == SessionStatus.missed) return 'Missed';
     if (s == SessionStatus.cancelled) return 'Cancelled';
+    if (s == SessionStatus.overdue) return 'Overdue';
 
     // upcoming — check if today or future
     if (s == SessionStatus.upcoming) {
@@ -4161,6 +4215,73 @@ class _RecentlyDeletedSheetState extends ConsumerState<RecentlyDeletedSheet> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _HighlightedSessionGlowWrapper extends StatefulWidget {
+  final Widget child;
+  final bool shouldHighlight;
+
+  const _HighlightedSessionGlowWrapper({
+    super.key,
+    required this.child,
+    this.shouldHighlight = false,
+  });
+
+  @override
+  State<_HighlightedSessionGlowWrapper> createState() => _HighlightedSessionGlowWrapperState();
+}
+
+class _HighlightedSessionGlowWrapperState extends State<_HighlightedSessionGlowWrapper>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Color?> _colorTween;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+
+    _colorTween = ColorTween(
+      begin: Colors.transparent,
+      end: Colors.orange.withValues(alpha: 0.3),
+    ).animate(_controller);
+
+    if (widget.shouldHighlight) {
+      _controller.repeat(reverse: true);
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) {
+          _controller.forward();
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.shouldHighlight) return widget.child;
+    return AnimatedBuilder(
+      animation: _colorTween,
+      builder: (context, child) {
+        return Container(
+          decoration: BoxDecoration(
+            color: _colorTween.value,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: child,
+        );
+      },
+      child: widget.child,
     );
   }
 }

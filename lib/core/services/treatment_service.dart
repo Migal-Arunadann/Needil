@@ -659,6 +659,7 @@ class TreatmentService {
     bool isCompleted = true,
     String? treatmentModality,
     String? doctorId,
+    String? reconciliationReason,
   }) async {
     final body = <String, dynamic>{
       if (isCompleted) 'status': 'completed',
@@ -711,7 +712,7 @@ class TreatmentService {
       } catch (_) {}
 
       // Also mark the linked appointment as completed
-      await _syncAppointmentStatus(session, 'completed');
+      await AppointmentSync(pb).syncStatus(session, 'completed', reconciliationReason: reconciliationReason);
 
       // v2: update plan statistics (reset consecutive_misses, increment completed_sessions)
       try {
@@ -831,8 +832,8 @@ class TreatmentService {
     );
     final session = SessionModel.fromRecord(record);
 
-    // Also mark the linked appointment as cancelled
-    await _syncAppointmentStatus(session, 'cancelled');
+    // Sync appointment status (no checkout time)
+    await AppointmentSync(pb).syncStatus(session, 'cancelled');
 
     // Increment the plan's consecutive miss counter + total_misses
     try {
@@ -1154,36 +1155,6 @@ class TreatmentService {
     }
   }
 
-  /// Sync a session's status change to its linked appointment record.
-  ///
-  /// Uses plain `date = "YYYY-MM-DD"` (not timestamp range) because the
-  /// date field stores plain date strings, not datetimes.
-  Future<void> _syncAppointmentStatus(SessionModel session, String newStatus) async {
-    try {
-      String datePart = session.scheduledDate;
-      try {
-        final dt = DateTime.parse(session.scheduledDate);
-        datePart = _formatDate(dt);
-      } catch (_) {}
-
-      final appts = await pb.collection(PBCollections.appointments).getList(
-        filter:
-            'patient = "${session.patientId}" && doctor = "${session.doctorId}" '
-            '&& date = "$datePart" && time = "${session.scheduledTime}" '
-            '&& type = "session" && status != "cancelled"',
-      );
-      final now = DateTime.now().toUtc().toIso8601String();
-      for (final appt in appts.items) {
-        final body = <String, dynamic>{'status': newStatus};
-        if (newStatus == 'completed') {
-          // Record session-ended + patient-left timestamps for history
-          body['check_out_time'] = now;
-          body['patient_left_at'] = now;
-        }
-        await pb.collection(PBCollections.appointments).update(appt.id, body: body);
-      }
-    } catch (_) {}
-  }
 
   String _formatDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';

@@ -78,6 +78,9 @@ class _AutoSchedulingDashboardState
   String? _processingId;
   late TabController _tabController;
 
+  String? _selectedPatientId;
+  String? _highlightSessionId;
+
   @override
   void initState() {
     super.initState();
@@ -104,6 +107,33 @@ class _AutoSchedulingDashboardState
   }
 
   String get _currentUserId => ref.read(authProvider).userId ?? 'system';
+
+  Future<void> _onCardTapped(String patientId, String sessionId) async {
+    final width = MediaQuery.of(context).size.width;
+    if (width >= 900) {
+      setState(() {
+        _selectedPatientId = patientId;
+        _highlightSessionId = sessionId;
+      });
+    } else {
+      setState(() { _isProcessing = true; _processingId = sessionId; });
+      try {
+        final p = await ref.read(patientServiceProvider).getPatient(patientId);
+        if (!mounted) return;
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => PatientProfileScreen(
+            patient: p,
+            initialTabIndex: 0,
+            highlightSessionId: sessionId,
+          )
+        ));
+      } catch (e) {
+        if (mounted) AppToast.show('Failed to load patient: $e', type: ToastType.error);
+      } finally {
+        if (mounted) setState(() { _isProcessing = false; _processingId = null; });
+      }
+    }
+  }
 
   // ─── Patient Came ──────────────────────────────────────────────────────────
 
@@ -500,50 +530,94 @@ class _AutoSchedulingDashboardState
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
-    final isMobile = width < 600;
+    final isDesktop = width >= 900;
     final totalItems = _sessions.length + _consultations.length + _manualPlans.length;
+    final hasSelection = isDesktop && _selectedPatientId != null;
+
+    Widget dashboardContent = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildHeader(totalItems),
+        TabBar(
+          controller: _tabController,
+          labelColor: context.colors.primary,
+          unselectedLabelColor: context.colors.textSecondary,
+          indicatorColor: context.colors.primary,
+          tabs: [
+            Tab(text: 'Consultations (${_consultations.length})'),
+            Tab(text: 'Sessions (${_sessions.length})'),
+            if (_manualPlans.isNotEmpty)
+              Tab(text: 'Manual Reschedule (${_manualPlans.length})'),
+          ],
+        ),
+        Flexible(
+          child: TabBarView(
+            controller: _tabController,
+            children: [
+              _buildConsultationList(),
+              _buildSessionList(),
+              if (_manualPlans.isNotEmpty) _buildManualReviewList(),
+            ],
+          ),
+        ),
+        if (_sessions.isNotEmpty) _buildFooter(),
+      ],
+    );
 
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       backgroundColor: context.colors.background,
       clipBehavior: Clip.antiAlias,
-      child: Container(
-        width: isMobile ? width * 0.95 : 650,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+        width: hasSelection ? width * 0.9 : (isDesktop ? 650 : width * 0.95),
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.85,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _buildHeader(totalItems),
-            TabBar(
-              controller: _tabController,
-              labelColor: context.colors.primary,
-              unselectedLabelColor: context.colors.textSecondary,
-              indicatorColor: context.colors.primary,
-              tabs: [
-                Tab(text: 'Consultations (${_consultations.length})'),
-                Tab(text: 'Sessions (${_sessions.length})'),
-                if (_manualPlans.isNotEmpty)
-                  Tab(text: 'Manual Reschedule (${_manualPlans.length})'),
-              ],
-            ),
-            Flexible(
-              child: TabBarView(
-                controller: _tabController,
+        child: hasSelection
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildConsultationList(),
-                  _buildSessionList(),
-                  if (_manualPlans.isNotEmpty)
-                    _buildManualReviewList(),
+                  SizedBox(
+                    width: 450,
+                    child: dashboardContent,
+                  ),
+                  Container(
+                    width: 1,
+                    color: context.colors.border,
+                  ),
+                  Expanded(
+                    child: _buildRightPane(),
+                  ),
                 ],
-              ),
-            ),
-            if (_sessions.isNotEmpty) _buildFooter(),
-          ],
-        ),
+              )
+            : dashboardContent,
       ),
+    );
+  }
+
+  Widget _buildRightPane() {
+    return FutureBuilder<PatientModel>(
+      future: ref.read(patientServiceProvider).getPatient(_selectedPatientId!),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return Center(child: Text('Failed to load patient: ${snapshot.error}'));
+        }
+        return ClipRRect(
+          borderRadius: const BorderRadius.horizontal(right: Radius.circular(24)),
+          child: PatientProfileScreen(
+            patient: snapshot.data!,
+            initialTabIndex: 0,
+            isCompact: true,
+            highlightSessionId: _highlightSessionId,
+          ),
+        );
+      },
     );
   }
 
@@ -776,7 +850,7 @@ class _AutoSchedulingDashboardState
   Widget _buildSessionCard(SessionModel session) {
     final isLoading = _isProcessing && _processingId == session.id;
 
-    return AnimatedContainer(
+    final cardContent = AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       decoration: BoxDecoration(
         color: context.colors.surface,
@@ -786,12 +860,15 @@ class _AutoSchedulingDashboardState
           width: 1.5,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+      child: GestureDetector(
+        onTap: () => _onCardTapped(session.patientId, session.id),
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header row
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
               children: [
                 Container(
@@ -899,7 +976,7 @@ class _AutoSchedulingDashboardState
             ),
         ],
       ),
-    );
+    ));
   }
 
   /// Renders a grouped patient card for when a patient has 2+ overdue sessions.
@@ -923,12 +1000,15 @@ class _AutoSchedulingDashboardState
           width: 1.5,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // ── Patient header ───────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
+      child: GestureDetector(
+        onTap: () => _onCardTapped(sessions.first.patientId, sessions.first.id),
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // ── Patient header ───────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 12, 12),
             child: Row(
               children: [
                 Container(
@@ -1034,7 +1114,7 @@ class _AutoSchedulingDashboardState
           ...sessions.map((session) => _buildSessionSubCard(session)),
         ],
       ),
-    );
+    ));
   }
 
   /// Compact session row inside a patient group card.

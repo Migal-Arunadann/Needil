@@ -1342,27 +1342,25 @@ class _AppointmentListScreenState
       return;
     }
 
-    final sessionDate = DateTime.tryParse(session.scheduledDate);
-    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-    final isPastDate = sessionDate != null && sessionDate.isBefore(today);
-
-    DateTime? pickedDate;
-    if (isPastDate && mounted) {
-      pickedDate = await showDatePicker(
-        context: context,
-        initialDate: DateTime.now(),
-        firstDate: DateTime.now(),
-        lastDate: DateTime.now().add(const Duration(days: 365)),
-        helpText: 'Pick a new session date',
-        confirmText: 'Reschedule',
-        cancelText: 'Cancel',
-      );
-      if (!mounted) return;
-      if (pickedDate == null) {
-        AppToast.show('Date required — session stays as overdue.', type: ToastType.warning);
-        return;
-      }
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AvailableSlotsScreen(
+          doctorId: session.doctorId,
+          clinicId: null,
+          treatmentDuration: 30,
+        ),
+      ),
+    );
+    
+    if (!mounted) return;
+    if (result == null) {
+      AppToast.show('Slot required — session stays as overdue.', type: ToastType.warning);
+      return;
     }
+
+    final pickedDate = result['date'] as DateTime;
+    final pickedTime = result['time'] as String;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -1373,9 +1371,7 @@ class _AppointmentListScreenState
         content: Text(
           'Session ${session.sessionNumber} on ${session.scheduledDate} '
           'will be reverted to Upcoming with no miss penalty.\n\n'
-          + (pickedDate != null
-              ? 'New date: ${pickedDate.toIso8601String().substring(0, 10)}'
-              : 'The session stays on the same date.'),
+          'New slot: ${pickedDate.toIso8601String().substring(0, 10)} at $pickedTime',
           style: context.textStyles.bodyMedium,
         ),
         actions: [
@@ -1395,12 +1391,12 @@ class _AppointmentListScreenState
     try {
       final auth = ref.read(authProvider);
       final lifecycle = ref.read(sessionLifecycleServiceProvider);
-      final newDateStr = pickedDate != null
-          ? '${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}'
-          : null;
+      final newDateStr = '${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}';
+      
       await lifecycle.dismissAsClinicHoliday(
         session.id,
         newDate: newDateStr,
+        newTime: pickedTime,
         performedBy: auth.userId ?? 'staff',
       );
 
