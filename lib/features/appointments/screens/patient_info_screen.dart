@@ -209,11 +209,8 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
   }
 
   Future<void> _submit() async {
+    if (_isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
-
-    // Capture navigator before async gap — fixes Vivo/iQOO devices where
-    // context-based navigation silently fails after await calls.
-    final navigator = Navigator.of(context);
 
     if (_selectedGender == null) {
       AppToast.show('Please select gender.', type: ToastType.error);
@@ -231,6 +228,10 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     }
 
     setState(() => _isSubmitting = true);
+
+    // Capture navigator before async gap — fixes Vivo/iQOO devices where
+    // context-based navigation silently fails after await calls.
+    final navigator = Navigator.of(context);
 
     try {
       final service = ref.read(appointmentServiceProvider);
@@ -455,6 +456,11 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                         ? () => _applyNewFamilyMemberMode(_matchingPatients.first)
                         : null,
                     onChangeFamilyMember: () => _checkExistingPatients(),
+                    onSwitchBackToPrimary: () {
+                      if (_matchingPatients.isNotEmpty) {
+                        _applySelectedPatient(_matchingPatients.first);
+                      }
+                    },
                   ),
                   const SizedBox(height: 28),
                   AppButton(

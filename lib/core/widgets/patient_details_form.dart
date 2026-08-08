@@ -67,6 +67,7 @@ class PatientDetailsForm extends StatefulWidget {
   final PatientModel? existingPatient;
   final VoidCallback? onAddFamilyMember;
   final VoidCallback? onChangeFamilyMember;
+  final VoidCallback? onSwitchBackToPrimary;
 
   const PatientDetailsForm({
     super.key,
@@ -104,6 +105,7 @@ class PatientDetailsForm extends StatefulWidget {
     this.existingPatient,
     this.onAddFamilyMember,
     this.onChangeFamilyMember,
+    this.onSwitchBackToPrimary,
   });
 
   @override
@@ -257,86 +259,134 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
       ],
     );
 
-    final phoneSection = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        phoneField,
-        if (widget.existingPatient != null) ...[
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: context.colors.success.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: context.colors.success.withValues(alpha: 0.3)),
+    final phoneSection = phoneField;
+
+    Widget? statusBanner;
+    if (widget.existingPatient != null) {
+      statusBanner = Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: context.colors.success.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.colors.success.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.check_circle_rounded, color: context.colors.success, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Returning Patient: ${widget.existingPatient!.fullName} '
+                '(${widget.existingPatient!.relationToPrimary ?? 'Self'}'
+                '${widget.existingPatient!.gender != null ? ' • ${widget.existingPatient!.gender}' : ''}'
+                '${widget.existingPatient!.age != null ? ' • ${widget.existingPatient!.age} yrs' : ''})',
+                style: context.textStyles.caption.copyWith(
+                  color: context.colors.success,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
             ),
-            child: Row(
-              children: [
-                Icon(Icons.check_circle_rounded, color: context.colors.success, size: 18),
-                const SizedBox(width: 10),
-                Expanded(
+            if (widget.onChangeFamilyMember != null || widget.onAddFamilyMember != null)
+              InkWell(
+                onTap: () {
+                  final hasMultiple = (widget.matchingPatients?.length ?? 0) > 1;
+                  if (hasMultiple && widget.onChangeFamilyMember != null) {
+                    widget.onChangeFamilyMember!();
+                  } else if (widget.onAddFamilyMember != null) {
+                    widget.onAddFamilyMember!();
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Text(
-                    'Returning Patient: ${widget.existingPatient!.fullName} '
-                    '(${widget.existingPatient!.relationToPrimary ?? 'Self'}'
-                    '${widget.existingPatient!.gender != null ? ' • ${widget.existingPatient!.gender}' : ''}'
-                    '${widget.existingPatient!.age != null ? ' • ${widget.existingPatient!.age} yrs' : ''})',
+                    (widget.matchingPatients?.length ?? 0) > 1 ? 'Change' : '+ Add Family Member',
                     style: context.textStyles.caption.copyWith(
-                      color: context.colors.success,
-                      fontWeight: FontWeight.w600,
+                      color: context.colors.primary,
+                      fontWeight: FontWeight.bold,
+                      decoration: TextDecoration.underline,
                     ),
                   ),
                 ),
-                if (widget.onChangeFamilyMember != null || widget.onAddFamilyMember != null)
-                  InkWell(
-                    onTap: () {
-                      final hasMultiple = (widget.matchingPatients?.length ?? 0) > 1;
-                      if (hasMultiple && widget.onChangeFamilyMember != null) {
-                        widget.onChangeFamilyMember!();
-                      } else if (widget.onAddFamilyMember != null) {
-                        widget.onAddFamilyMember!();
-                      }
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      child: Text(
-                        (widget.matchingPatients?.length ?? 0) > 1 ? 'Change' : '+ Add Family Member',
-                        style: context.textStyles.caption.copyWith(
-                          color: context.colors.primary,
-                          fontWeight: FontWeight.bold,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+              ),
+          ],
+        ),
+      );
+    } else if (widget.isNewFamilyMember) {
+      statusBanner = Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: context.colors.primary.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.colors.primary.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.family_restroom_rounded, color: context.colors.primary, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Adding New Family Member under ${widget.phoneCtrl.text.trim()}',
+                style: context.textStyles.caption.copyWith(
+                  color: context.colors.primary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
             ),
-          ),
-        ] else if (widget.isReturningPatient) ...[
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: context.colors.info.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: context.colors.info.withValues(alpha: 0.4)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.verified_user_rounded, color: context.colors.info, size: 18),
-                const SizedBox(width: 10),
-                Expanded(
+            if (widget.matchingPatients != null && widget.matchingPatients!.isNotEmpty)
+              InkWell(
+                onTap: () {
+                  if (widget.onSwitchBackToPrimary != null) {
+                    widget.onSwitchBackToPrimary!();
+                  } else if ((widget.matchingPatients?.length ?? 0) > 1 && widget.onChangeFamilyMember != null) {
+                    widget.onChangeFamilyMember!();
+                  } else if (widget.onAddFamilyMember != null) {
+                    widget.onAddFamilyMember!();
+                  }
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Text(
-                    'Patient already registered — details auto-filled.',
-                    style: context.textStyles.caption.copyWith(color: context.colors.info),
+                    (widget.matchingPatients?.length ?? 0) > 1
+                        ? 'Change'
+                        : 'Switch Back to ${widget.matchingPatients!.first.fullName}',
+                    style: context.textStyles.caption.copyWith(
+                      color: context.colors.primary,
+                      fontWeight: FontWeight.bold,
+                      decoration: TextDecoration.underline,
+                    ),
                   ),
                 ),
-              ],
+              ),
+          ],
+        ),
+      );
+    } else if (widget.isReturningPatient) {
+      statusBanner = Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: context.colors.info.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.colors.info.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.verified_user_rounded, color: context.colors.info, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Patient already registered — details auto-filled.',
+                style: context.textStyles.caption.copyWith(color: context.colors.info, fontSize: 13),
+              ),
             ),
-          ),
-        ],
-      ],
-    );
+          ],
+        ),
+      );
+    }
 
     final nameSection = AppTextField(
       controller: widget.nameCtrl,
@@ -346,8 +396,6 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
       validator: Validators.required,
       readOnly: widget.nameLocked,
     );
-
-
 
     final genderSection = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,6 +517,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
               const AppLabel(text: 'Relation to Primary Account Holder', isRequired: true),
               const SizedBox(height: 8),
               Container(
+                height: 52,
                 padding: const EdgeInsets.symmetric(horizontal: 14),
                 decoration: BoxDecoration(
                   color: context.colors.surface,
@@ -492,7 +541,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
                         .map((r) => DropdownMenuItem(
                             value: r,
                             child: Text(r,
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w500,
                                 ))))
@@ -556,7 +605,11 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
                   Expanded(child: nameSection),
                 ],
               ),
-              const SizedBox(height: 16),
+              if (statusBanner != null) ...[
+                const SizedBox(height: 14),
+                statusBanner,
+              ],
+              const SizedBox(height: 20),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -565,7 +618,7 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
                   Expanded(child: dobAgeSection),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -574,56 +627,73 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
                   Expanded(child: emailSection),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(child: howDidYouHearSection),
                   const SizedBox(width: 16),
-                  const Spacer(), // Keeps it aligned on desktop
+                  const Spacer(),
+                ],
+              ),
+              const SizedBox(height: 24),
+              LocationFields(
+                pincodeCtrl: widget.pincodeCtrl,
+                countryCtrl: widget.countryCtrl,
+                stateCtrl: widget.stateCtrl,
+                cityCtrl: widget.cityCtrl,
+                areaCtrl: widget.areaCtrl,
+                allRequired: true,
+              ),
+              const SizedBox(height: 24),
+              personalNotesSection,
+              const SizedBox(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: consentSection),
+                  const SizedBox(width: 16),
+                  Expanded(child: privacySection),
                 ],
               ),
             ] else ...[
               phoneSection,
-              const SizedBox(height: 14),
+              if (statusBanner != null) ...[
+                const SizedBox(height: 10),
+                statusBanner,
+              ],
+              const SizedBox(height: 16),
               if (widget.isNewFamilyMember) ...[
                 relationSection,
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
               ],
               nameSection,
-              const SizedBox(height: 14),
-              genderSection,
-              const SizedBox(height: 14),
-              dobAgeSection,
-              const SizedBox(height: 14),
-              occupationSection,
-              const SizedBox(height: 14),
-              emailSection,
-              const SizedBox(height: 14),
-              howDidYouHearSection,
-              const SizedBox(height: 14),
-              consentSection,
               const SizedBox(height: 16),
-              privacySection,
-              const SizedBox(height: 24),
+              genderSection,
+              const SizedBox(height: 16),
+              dobAgeSection,
+              const SizedBox(height: 16),
+              occupationSection,
+              const SizedBox(height: 16),
+              emailSection,
+              const SizedBox(height: 16),
+              howDidYouHearSection,
+              const SizedBox(height: 20),
+              LocationFields(
+                pincodeCtrl: widget.pincodeCtrl,
+                countryCtrl: widget.countryCtrl,
+                stateCtrl: widget.stateCtrl,
+                cityCtrl: widget.cityCtrl,
+                areaCtrl: widget.areaCtrl,
+                allRequired: true,
+              ),
+              const SizedBox(height: 20),
               personalNotesSection,
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+              consentSection,
+              const SizedBox(height: 12),
+              privacySection,
             ],
-            const SizedBox(height: 16),
-            LocationFields(
-              pincodeCtrl: widget.pincodeCtrl,
-              countryCtrl: widget.countryCtrl,
-              stateCtrl: widget.stateCtrl,
-              cityCtrl: widget.cityCtrl,
-              areaCtrl: widget.areaCtrl,
-              allRequired: true,
-            ),
-            const SizedBox(height: 16),
-            personalNotesSection,
-            const SizedBox(height: 24),
-            consentSection,
-            const SizedBox(height: 12),
-            privacySection,
           ],
         );
       },

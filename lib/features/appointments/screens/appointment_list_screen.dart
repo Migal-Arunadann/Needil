@@ -464,22 +464,31 @@ class _AppointmentListScreenState
 
       if (!proceed) return;
 
-      final service = ref.read(appointmentServiceProvider);
-      await service.markArrived(apt.id);
-      // Audit log for receptionist actions
-      final auth = ref.read(authProvider);
-      if (auth.role == UserRole.receptionist) {
-        ref.read(auditServiceProvider).log(
-          userId: auth.userId ?? '',
-          userRole: 'receptionist',
-          action: AuditAction.markArrived,
-          targetId: apt.id,
-          details: 'Marked ${apt.displayName} as arrived',
-        );
-      }
-      ref.read(appointmentListProvider.notifier).loadAppointments();
-      if (mounted) {
-        AppToast.show('${apt.displayName} marked as arrived \u2713', type: ToastType.success);
+      // Optimistic update — instant visual feedback
+      final optimistic = apt.copyWith(status: AppointmentStatus.waiting, checkInTime: DateTime.now());
+      ref.read(appointmentListProvider.notifier).updateOneAppointment(optimistic);
+
+      try {
+        final service = ref.read(appointmentServiceProvider);
+        await service.markArrived(apt.id);
+        // Audit log for receptionist actions
+        final auth = ref.read(authProvider);
+        if (auth.role == UserRole.receptionist) {
+          ref.read(auditServiceProvider).log(
+            userId: auth.userId ?? '',
+            userRole: 'receptionist',
+            action: AuditAction.markArrived,
+            targetId: apt.id,
+            details: 'Marked ${apt.displayName} as arrived',
+          );
+        }
+        if (mounted) {
+          AppToast.show('${apt.displayName} marked as arrived ✓', type: ToastType.success);
+        }
+      } catch (e) {
+        // Roll back on failure
+        ref.read(appointmentListProvider.notifier).updateOneAppointment(apt);
+        if (mounted) _showError('$e');
       }
     } catch (e) {
       if (mounted) _showError('$e');
@@ -487,15 +496,22 @@ class _AppointmentListScreenState
   }
 
   Future<void> _markEnded(AppointmentModel apt) async {
+    // Optimistic update — instant visual feedback
+    final optimistic = apt.copyWith(
+      status: AppointmentStatus.completed,
+      consultationEndTime: DateTime.now(),
+    );
+    ref.read(appointmentListProvider.notifier).updateOneAppointment(optimistic);
     try {
       final service = ref.read(appointmentServiceProvider);
       await service.markEnded(apt.id);
-      ref.read(appointmentListProvider.notifier).loadAppointments();
       ref.read(analyticsProvider.notifier).load(); // background refresh
       if (mounted) {
-        AppToast.show('${apt.displayName} \u2014 consultation ended \u2713', type: ToastType.success);
+        AppToast.show('${apt.displayName} — consultation ended ✓', type: ToastType.success);
       }
     } catch (e) {
+      // Roll back on failure
+      ref.read(appointmentListProvider.notifier).updateOneAppointment(apt);
       if (mounted) _showError('$e');
     }
   }
@@ -518,17 +534,29 @@ class _AppointmentListScreenState
       ),
     );
     if (confirm == true) {
-      ref.read(appointmentListProvider.notifier).updateStatus(apt.id, AppointmentStatus.cancelled);
-      // Audit log for receptionist actions
-      final auth = ref.read(authProvider);
-      if (auth.role == UserRole.receptionist) {
-        ref.read(auditServiceProvider).log(
-          userId: auth.userId ?? '',
-          userRole: 'receptionist',
-          action: AuditAction.cancelAppointment,
-          targetId: apt.id,
-          details: 'Cancelled appointment for ${apt.displayName}',
-        );
+      // Optimistic remove — card disappears immediately
+      ref.read(appointmentListProvider.notifier).removeOneAppointment(apt.id);
+      try {
+        final service = ref.read(appointmentServiceProvider);
+        await service.updateStatus(apt.id, AppointmentStatus.cancelled);
+        // Audit log for receptionist actions
+        final auth = ref.read(authProvider);
+        if (auth.role == UserRole.receptionist) {
+          ref.read(auditServiceProvider).log(
+            userId: auth.userId ?? '',
+            userRole: 'receptionist',
+            action: AuditAction.cancelAppointment,
+            targetId: apt.id,
+            details: 'Cancelled appointment for ${apt.displayName}',
+          );
+        }
+        if (mounted) {
+          AppToast.show('Appointment for ${apt.displayName} cancelled', type: ToastType.info);
+        }
+      } catch (e) {
+        // Roll back on failure — re-insert the card
+        ref.read(appointmentListProvider.notifier).updateOneAppointment(apt);
+        if (mounted) _showError('$e');
       }
     }
   }
@@ -556,11 +584,21 @@ class _AppointmentListScreenState
       ),
     );
     if (confirm == true) {
+      // Optimistic update — revert card immediately
+      final optimistic = apt.copyWith(
+        status: AppointmentStatus.scheduled,
+        checkInTime: null,
+      );
+      ref.read(appointmentListProvider.notifier).updateOneAppointment(optimistic);
       try {
         final service = ref.read(appointmentServiceProvider);
         await service.undoArrived(apt.id);
-        ref.read(appointmentListProvider.notifier).loadAppointments();
+        if (mounted) {
+          AppToast.show('Arrival undone for ${apt.displayName}', type: ToastType.info);
+        }
       } catch (e) {
+        // Roll back on failure
+        ref.read(appointmentListProvider.notifier).updateOneAppointment(apt);
         if (mounted) _showError('$e');
       }
     }
@@ -633,7 +671,21 @@ class _AppointmentListScreenState
             ),
           ),
         );
-        ref.read(appointmentListProvider.notifier).loadAppointments();
+        // After returning from consultation screen, do a silent single-record refresh
+        if (mounted) {
+          try {
+            final pb = ref.read(pocketbaseProvider);
+            final rec = await pb.collection('appointments').getOne(
+              apt.id,
+              query: {'expand': 'patient,doctor'},
+            );
+            ref.read(appointmentListProvider.notifier).updateOneAppointment(
+              AppointmentModel.fromRecord(rec),
+            );
+          } catch (_) {
+            // Non-fatal fallback
+          }
+        }
       }
     } catch (e) {
       if (mounted) _showError('Error starting consultation: $e');
@@ -643,15 +695,11 @@ class _AppointmentListScreenState
   Future<void> _navigateToCreatePlan(AppointmentModel apt, String consultationId) async {
     if (apt.patientId == null || apt.patientId!.isEmpty) return;
     try {
-      // Option A — Pre-flight guard: verify the consultation still exists in the
-      // database before opening the plan creator. Protects against the stale-state
-      // bug where a consultation was deleted externally (e.g. from patient profile)
-      // but the appointment card hasn't refreshed yet.
       final pb = ref.read(pocketbaseProvider);
       try {
         await pb.collection(PBCollections.consultations).getOne(consultationId);
       } catch (_) {
-        // Consultation record is gone — refresh appointments and bail out.
+        // Consultation record is gone — full refresh to reconcile state
         if (mounted) {
           AppToast.show(
             'This consultation no longer exists. Refreshing data...',
@@ -706,6 +754,8 @@ class _AppointmentListScreenState
             }
           }
         }
+        // Plan creation cascades to session scheduling — do a full reload
+        // since new session cards may appear on today's list
         ref.read(appointmentListProvider.notifier).loadAppointments();
       }
     } catch (e) {
@@ -716,6 +766,9 @@ class _AppointmentListScreenState
   // Ã¢â€ â‚¬Ã¢â€ â‚¬ Session card actions Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬Ã¢â€ â‚¬
 
   Future<void> _markSessionArrived(AppointmentModel apt) async {
+    // Optimistic update — instant visual feedback
+    final optimistic = apt.copyWith(status: AppointmentStatus.waiting, checkInTime: DateTime.now());
+    ref.read(appointmentListProvider.notifier).updateOneAppointment(optimistic);
     try {
       final service = ref.read(appointmentServiceProvider);
       await service.markSessionArrived(apt.id);
@@ -730,26 +783,29 @@ class _AppointmentListScreenState
           details: 'Marked ${apt.displayName} session as arrived',
         );
       }
-      // Reset consecutive miss counter since patient showed up
+      // Reset consecutive miss counter since patient showed up (fire-and-forget)
       if (apt.patientId != null && apt.patientId!.isNotEmpty) {
-        try {
-          final treatmentService = ref.read(treatmentServiceProvider);
-          final sess = await treatmentService.findSessionForAppointment(
-            patientId: apt.patientId!, date: apt.date, time: apt.time, doctorId: apt.doctorId,
-          );
-          if (sess != null) {
-            final pb = ref.read(pocketbaseProvider);
-            await pb.collection(PBCollections.treatmentPlans).update(
-              sess.treatmentPlanId, body: {'consecutive_misses': 0},
+        () async {
+          try {
+            final treatmentService = ref.read(treatmentServiceProvider);
+            final sess = await treatmentService.findSessionForAppointment(
+              patientId: apt.patientId!, date: apt.date, time: apt.time, doctorId: apt.doctorId,
             );
-          }
-        } catch (_) {}
+            if (sess != null) {
+              final pb = ref.read(pocketbaseProvider);
+              await pb.collection(PBCollections.treatmentPlans).update(
+                sess.treatmentPlanId, body: {'consecutive_misses': 0},
+              );
+            }
+          } catch (_) {}
+        }();
       }
-      ref.read(appointmentListProvider.notifier).loadAppointments();
       if (mounted) {
-        AppToast.show('${apt.displayName} is now waiting for session \u2713');
+        AppToast.show('${apt.displayName} is now waiting for session ✓');
       }
     } catch (e) {
+      // Roll back on failure
+      ref.read(appointmentListProvider.notifier).updateOneAppointment(apt);
       if (mounted) _showError('$e');
     }
   }
@@ -761,7 +817,7 @@ class _AppointmentListScreenState
       final treatmentService = ref.read(treatmentServiceProvider);
 
       if (preloadedSessionId != null) {
-        // Card already resolved this Ã¢â‚¬â€ skip the PB query
+        // Card already resolved this — skip the PB query
         try {
           final pb = ref.read(pocketbaseProvider);
           final rec = await pb.collection(PBCollections.sessions).getOne(preloadedSessionId);
@@ -785,7 +841,10 @@ class _AppointmentListScreenState
       if (session != null) {
         treatmentService.startSessionRecord(session.id);
       }
-      ref.read(appointmentListProvider.notifier).loadAppointments();
+      // Silent in-memory patch — mark as in-progress immediately
+      ref.read(appointmentListProvider.notifier).updateOneAppointment(
+        apt.copyWith(status: AppointmentStatus.inProgress),
+      );
 
       // Navigate immediately
       if (session != null && mounted) {
@@ -797,7 +856,19 @@ class _AppointmentListScreenState
             'patientName': apt.displayName,
           },
         );
-        ref.read(appointmentListProvider.notifier).loadAppointments();
+        // After returning, do a silent single-record refresh
+        if (mounted) {
+          try {
+            final pb = ref.read(pocketbaseProvider);
+            final rec = await pb.collection('appointments').getOne(
+              apt.id,
+              query: {'expand': 'patient,doctor'},
+            );
+            ref.read(appointmentListProvider.notifier).updateOneAppointment(
+              AppointmentModel.fromRecord(rec),
+            );
+          } catch (_) {}
+        }
       } else if (mounted) {
         // Fallback: try broader lookup
         await _openSessionDirectly(apt);
@@ -874,15 +945,22 @@ class _AppointmentListScreenState
       // Stop the timer
       SessionTimerService.instance.endTimer(resolvedSessionId);
     }
+    // Optimistic update — mark completed immediately (instant feedback)
+    final optimistic = apt.copyWith(
+      status: AppointmentStatus.completed,
+      checkOutTime: DateTime.now(),
+    );
+    ref.read(appointmentListProvider.notifier).updateOneAppointment(optimistic);
     try {
       final service = ref.read(appointmentServiceProvider);
       await service.markSessionEnded(apt.id, sessionId: resolvedSessionId);
-      ref.read(appointmentListProvider.notifier).loadAppointments();
       ref.read(analyticsProvider.notifier).load(); // background refresh
       if (mounted) {
-        AppToast.show('Session for ${apt.displayName} completed \u2713', type: ToastType.success);
+        AppToast.show('Session for ${apt.displayName} completed ✓', type: ToastType.success);
       }
     } catch (e) {
+      // Roll back on failure
+      ref.read(appointmentListProvider.notifier).updateOneAppointment(apt);
       if (mounted) _showError('$e');
     }
   }
@@ -942,7 +1020,19 @@ class _AppointmentListScreenState
             'patientName': apt.displayName,
           },
         );
-        ref.read(appointmentListProvider.notifier).loadAppointments();
+        // After returning, do a silent single-record refresh
+        if (mounted) {
+          try {
+            final pb = ref.read(pocketbaseProvider);
+            final rec = await pb.collection('appointments').getOne(
+              apt.id,
+              query: {'expand': 'patient,doctor'},
+            );
+            ref.read(appointmentListProvider.notifier).updateOneAppointment(
+              AppointmentModel.fromRecord(rec),
+            );
+          } catch (_) {}
+        }
       }
     } catch (e) {
       if (mounted) _showError('Could not open session: $e');
@@ -1190,20 +1280,28 @@ class _AppointmentListScreenState
       ),
     );
     if (confirm == true && mounted) {
+      // Optimistic remove — card disappears immediately
+      ref.read(appointmentListProvider.notifier).removeOneAppointment(apt.id);
       try {
-        // Cancel the appointment
-        ref.read(appointmentListProvider.notifier).updateStatus(apt.id, AppointmentStatus.cancelled);
-        // Also cancel the linked session record
         final service = ref.read(appointmentServiceProvider);
-        final sessionInfo = await service.findSessionForAppointment(apt);
-        if (sessionInfo != null) {
-          final pb = ref.read(pocketbaseProvider);
-          await pb.collection(PBCollections.sessions).update(
-            sessionInfo['sessionId']!,
-            body: {'status': 'cancelled'},
-          );
+        // Cancel appointment + linked session record in parallel (fire-and-forget)
+        await service.updateStatus(apt.id, AppointmentStatus.cancelled);
+        () async {
+          final sessionInfo = await service.findSessionForAppointment(apt);
+          if (sessionInfo != null) {
+            final pb = ref.read(pocketbaseProvider);
+            await pb.collection(PBCollections.sessions).update(
+              sessionInfo['sessionId']!,
+              body: {'status': 'cancelled'},
+            );
+          }
+        }();
+        if (mounted) {
+          AppToast.show('Session for ${apt.displayName} cancelled', type: ToastType.info);
         }
       } catch (e) {
+        // Roll back on failure — re-insert card
+        ref.read(appointmentListProvider.notifier).updateOneAppointment(apt);
         if (mounted) _showError('$e');
       }
     }
@@ -3001,6 +3099,8 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
         });
       }
     } catch (_) {
+      // On failure, mark as loaded but don't hide the Create Plan button —
+      // leave _consultationId as-is so an earlier successful load isn't lost
       if (mounted) setState(() => _planInfoLoaded = true);
     }
   }
@@ -3633,14 +3733,13 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
         ? Icons.arrow_forward_rounded
         : Icons.medical_services_rounded;
 
-    // Step 4: Create/Resume Treatment Plan + End Appointment
-    // Guard: require _consultationId to be live (non-null) before showing this.
-    // If the consultation was deleted externally, _loadPlanInfo() returns null
-    // and this button correctly stays hidden. (Option B — stale-state guard)
+    // Show Create Plan if: consultation form is done, no plan linked yet, and
+    // either we haven't loaded yet OR we loaded and confirmed no plan exists.
+    // We no longer gate on _consultationId != null — that was causing the button
+    // to vanish if getConsultationPlanInfo returned null on first load.
     final showPlanSection = apt.consultationFormSaved &&
         apt.linkedTreatmentPlanId == null &&
-        !(_planInfoLoaded && _hasPlan) &&
-        _consultationId != null;
+        !(_planInfoLoaded && _hasPlan);
     final planLabel = apt.treatmentPlanPartial ? 'Resume Treatment Plan' : 'Create Plan';
     final planIcon = apt.treatmentPlanPartial ? Icons.restart_alt_rounded : Icons.add_chart_rounded;
 
@@ -4174,15 +4273,18 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                             label: planLabel,
                                             icon: planIcon,
                                             color: context.colors.primary,
-                                            onTap: () async {
-                                              await Future.microtask(() => widget.onCreatePlan(_consultationId ?? ''));
-                                              if (mounted) {
-                                                setState(() {
-                                                  _planInfoLoaded = false;
-                                                  _hasPlan = false;
-                                                });
-                                                _loadPlanInfo();
+                                             onTap: () async {
+                                              // Fetch _consultationId on-demand if not yet loaded
+                                              String? cid = _consultationId;
+                                              if (cid == null || cid.isEmpty) {
+                                                final service = ref.read(appointmentServiceProvider);
+                                                final info = await service.getConsultationPlanInfo(widget.apt.patientId!, widget.apt.doctorId);
+                                                cid = info?['consultationId'] as String?;
+                                                if (mounted) setState(() { _consultationId = cid; _hasPlan = info?['hasPlan'] as bool? ?? false; _planInfoLoaded = true; });
                                               }
+                                              if ((cid == null || cid.isEmpty) && mounted) { AppToast.show('Consultation not found. Please try again.', type: ToastType.error); return; }
+                                              await Future.microtask(() => widget.onCreatePlan(cid!));
+                                              if (mounted) { setState(() { _planInfoLoaded = false; _hasPlan = false; }); _loadPlanInfo(); }
                                             },
                                             isSolid: true,
                                             showTrailingChevron: true,
@@ -5203,7 +5305,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                     
                                     // Col 3: Session Status
                                     Expanded(
-                                      flex: 6,
+                                      flex: 4,
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 10),
                                         child: Center(
@@ -5213,9 +5315,9 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                     ),
                                     VerticalDivider(color: context.colors.border.withValues(alpha: 0.3), width: 1),
                                     
-                                    // Col 4: Actions
+                                    // Col 4: Actions (wider to ensure Start Session button never shrinks)
                                     Expanded(
-                                      flex: 4,
+                                      flex: 6,
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                         child: Column(

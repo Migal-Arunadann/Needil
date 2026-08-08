@@ -349,9 +349,9 @@ class _CreateAppointmentScreenState
   }
 
   Future<void> _submit() async {
+    if (_isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
 
-    // Capture navigator before async gap — fixes Vivo/iQOO devices
     final navigator = Navigator.of(context);
 
     // Gender is mandatory for walk-in
@@ -373,6 +373,8 @@ class _CreateAppointmentScreenState
     final auth = ref.read(authProvider);
     final doctorId = _selectedDoctorId ?? auth.userId;
     if (doctorId == null) return;
+
+    setState(() => _isSubmitting = true);
 
     // --- Duplicate Appointment Check (same-date scheduled) ---
     final service = ref.read(appointmentServiceProvider);
@@ -1244,6 +1246,13 @@ class _CreateAppointmentScreenState
                   ? () => _applyNewFamilyMemberMode(_matchingPatients.first)
                   : null,
               onChangeFamilyMember: () => _checkPhone('$_selectedPhoneCode${_phoneCtrl.text.trim()}', forceShowScreen: true),
+              onSwitchBackToPrimary: () {
+                if (_matchingPatients.length > 1) {
+                  _checkPhone('$_selectedPhoneCode${_phoneCtrl.text.trim()}', forceShowScreen: true);
+                } else if (_matchingPatients.isNotEmpty) {
+                  _applySelectedPatient(_matchingPatients.first);
+                }
+              },
             ),
           const SizedBox(height: 28),
 

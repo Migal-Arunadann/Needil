@@ -1,5 +1,9 @@
 import 'package:pocketbase/pocketbase.dart';
 
+// Sentinel object used by AppointmentModel.copyWith to distinguish
+// "not provided" from "explicitly set to null" for nullable fields.
+const _sentinel = Object();
+
 enum AppointmentType { callBy, walkIn, session }
 
 enum AppointmentStatus { scheduled, waiting, inProgress, completed, cancelled, missed, overdue }
@@ -86,6 +90,86 @@ class AppointmentModel {
   });
 
   bool get consultationFormSaved => consultationEndTime != null;
+
+  AppointmentModel copyWith({
+    String? id,
+    String? patientId,
+    String? doctorId,
+    String? clinicId,
+    AppointmentType? type,
+    String? date,
+    String? time,
+    AppointmentStatus? status,
+    String? patientName,
+    String? patientPhone,
+    Object? checkInTime = _sentinel,
+    Object? checkOutTime = _sentinel,
+    Object? patientDetailsFilledTime = _sentinel,
+    Object? consultationStartTime = _sentinel,
+    Object? consultationEndTime = _sentinel,
+    bool? patientDetailsSaved,
+    bool? patientDetailsPartial,
+    bool? treatmentPlanPartial,
+    bool? patientDetailsSkipped,
+    Object? linkedTreatmentPlanId = _sentinel,
+    Object? linkedConsultationId = _sentinel,
+    bool? isRescheduled,
+    Object? previousStatus = _sentinel,
+    Object? reconciliationReason = _sentinel,
+    Object? reconciledAt = _sentinel,
+    Object? reconciledBy = _sentinel,
+    Object? sessionType = _sentinel,
+    Object? linkedSessionId = _sentinel,
+    bool? isNewFamilyMember,
+    Object? intendedRelation = _sentinel,
+    bool? isPinned,
+    Object? created = _sentinel,
+    Object? updated = _sentinel,
+    String? doctorName,
+    String? expandedPatientName,
+    String? expandedPatientPhone,
+    bool? requiresPatientDetailsUpdate,
+  }) {
+    return AppointmentModel(
+      id: id ?? this.id,
+      patientId: patientId ?? this.patientId,
+      doctorId: doctorId ?? this.doctorId,
+      clinicId: clinicId ?? this.clinicId,
+      type: type ?? this.type,
+      date: date ?? this.date,
+      time: time ?? this.time,
+      status: status ?? this.status,
+      patientName: patientName ?? this.patientName,
+      patientPhone: patientPhone ?? this.patientPhone,
+      checkInTime: checkInTime == _sentinel ? this.checkInTime : checkInTime as DateTime?,
+      checkOutTime: checkOutTime == _sentinel ? this.checkOutTime : checkOutTime as DateTime?,
+      patientDetailsFilledTime: patientDetailsFilledTime == _sentinel ? this.patientDetailsFilledTime : patientDetailsFilledTime as DateTime?,
+      consultationStartTime: consultationStartTime == _sentinel ? this.consultationStartTime : consultationStartTime as DateTime?,
+      consultationEndTime: consultationEndTime == _sentinel ? this.consultationEndTime : consultationEndTime as DateTime?,
+      patientDetailsSaved: patientDetailsSaved ?? this.patientDetailsSaved,
+      patientDetailsPartial: patientDetailsPartial ?? this.patientDetailsPartial,
+      treatmentPlanPartial: treatmentPlanPartial ?? this.treatmentPlanPartial,
+      patientDetailsSkipped: patientDetailsSkipped ?? this.patientDetailsSkipped,
+      linkedTreatmentPlanId: linkedTreatmentPlanId == _sentinel ? this.linkedTreatmentPlanId : linkedTreatmentPlanId as String?,
+      linkedConsultationId: linkedConsultationId == _sentinel ? this.linkedConsultationId : linkedConsultationId as String?,
+      isRescheduled: isRescheduled ?? this.isRescheduled,
+      previousStatus: previousStatus == _sentinel ? this.previousStatus : previousStatus as String?,
+      reconciliationReason: reconciliationReason == _sentinel ? this.reconciliationReason : reconciliationReason as String?,
+      reconciledAt: reconciledAt == _sentinel ? this.reconciledAt : reconciledAt as DateTime?,
+      reconciledBy: reconciledBy == _sentinel ? this.reconciledBy : reconciledBy as String?,
+      sessionType: sessionType == _sentinel ? this.sessionType : sessionType as String?,
+      linkedSessionId: linkedSessionId == _sentinel ? this.linkedSessionId : linkedSessionId as String?,
+      isNewFamilyMember: isNewFamilyMember ?? this.isNewFamilyMember,
+      intendedRelation: intendedRelation == _sentinel ? this.intendedRelation : intendedRelation as String?,
+      isPinned: isPinned ?? this.isPinned,
+      created: created == _sentinel ? this.created : created as DateTime?,
+      updated: updated == _sentinel ? this.updated : updated as DateTime?,
+      doctorName: doctorName ?? this.doctorName,
+      expandedPatientName: expandedPatientName ?? this.expandedPatientName,
+      expandedPatientPhone: expandedPatientPhone ?? this.expandedPatientPhone,
+      requiresPatientDetailsUpdate: requiresPatientDetailsUpdate ?? this.requiresPatientDetailsUpdate,
+    );
+  }
 
   bool get isEffectivePatientDetailsSaved {
     if (requiresPatientDetailsUpdate) return false;

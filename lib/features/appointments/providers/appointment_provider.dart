@@ -90,6 +90,26 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
   Future<void> changeDate(String date) async {
     await loadAppointments(date: date);
   }
+
+  /// Patches a single appointment in-memory. No API round-trip, no isLoading
+  /// flip. The ListView stays mounted so scroll position is preserved.
+  void updateOneAppointment(AppointmentModel updated) {
+    state = state.copyWith(
+      appointments: [
+        for (final apt in state.appointments)
+          if (apt.id == updated.id) updated else apt,
+      ],
+    );
+  }
+
+  /// Removes a single appointment from the in-memory list immediately.
+  /// Use for cancel / reschedule-away-from-current-day scenarios.
+  void removeOneAppointment(String appointmentId) {
+    state = state.copyWith(
+      appointments: state.appointments.where((a) => a.id != appointmentId).toList(),
+    );
+  }
+
   Future<AppointmentModel?> createCallBy({
     required String doctorId,
     String? clinicId,

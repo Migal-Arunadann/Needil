@@ -176,19 +176,27 @@ class AppointmentSync {
         DateTime.tryParse(session.scheduledDate)?.toLocal() ??
             DateTime.now(),
       );
+      
+      // ONLY find appointments that are either unlinked OR linked to THIS session.
+      // Do not steal appointments linked to other sessions!
       final result = await pb.collection(PBCollections.appointments).getList(
         filter: 'patient = "${session.patientId}" && doctor = "${session.doctorId}" '
-            '&& date = "$datePart" && type = "session"',
+            '&& date = "$datePart" && type = "session" && (linked_session_id = "" || linked_session_id = "${session.id}")',
         perPage: 5,
       );
-      // Guard: if multiple appointments match, only return those that share
-      // the same time to avoid merging separate sessions on the same day.
+      
+      // Guard: if multiple appointments match, only return ONE to prevent
+      // mass duplication/corruption. Prefer matching time if available.
       if (result.items.length > 1 && session.scheduledTime != null) {
-        return result.items
+        final withTime = result.items
             .where((a) => a.getStringValue('time') == session.scheduledTime)
             .toList();
+        if (withTime.isNotEmpty) return [withTime.first];
       }
-      return result.items;
+      
+      if (result.items.isNotEmpty) return [result.items.first];
+      
+      return [];
     } catch (_) {
       return [];
     }

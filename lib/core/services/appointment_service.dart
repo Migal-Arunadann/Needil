@@ -332,6 +332,19 @@ class AppointmentService {
       } catch (_) {}
     }
 
+    // ── Deduplication Guard ──
+    // Prevent duplicate patient records if multiple create requests are triggered concurrently
+    try {
+      final existingCheck = await pb.collection(PBCollections.patients).getList(
+        filter: 'phone = "$phone" && full_name = "$fullName" && doctor = "$doctorId"',
+        sort: '-created',
+        perPage: 1,
+      );
+      if (existingCheck.items.isNotEmpty) {
+        return PatientModel.fromRecord(existingCheck.items.first);
+      }
+    } catch (_) {}
+
     final body = {
       'full_name': fullName,
       'phone': phone,
@@ -1059,7 +1072,9 @@ class AppointmentService {
       String patientId, String doctorId) async {
     try {
       final result = await pb.collection(PBCollections.consultations).getList(
-        filter: 'patient = "$patientId" && doctor = "$doctorId" && status = "ongoing"',
+        // Include both ongoing AND completed — Create Plan must show after form is submitted
+        filter: 'patient = "$patientId" && doctor = "$doctorId" && (status = "ongoing" || status = "completed")',
+        sort: '-created',
         perPage: 1,
         query: {'skipTotal': '1'},
       );

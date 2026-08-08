@@ -10,6 +10,10 @@ import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 import 'package:pms_app/features/appointments/models/appointment_model.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
+import 'package:pms_app/features/patients/models/patient_model.dart';
+import 'package:pms_app/features/patients/providers/patient_provider.dart';
+import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
+import 'package:pms_app/features/scheduling/screens/available_slots_screen.dart';
 
 /// Needs Attention Dashboard.
 ///
@@ -118,7 +122,8 @@ class _AutoSchedulingDashboardState
     } else {
       setState(() { _isProcessing = true; _processingId = sessionId; });
       try {
-        final p = await ref.read(patientServiceProvider).getPatient(patientId);
+        final pRecord = await ref.read(pocketbaseProvider).collection('patients').getOne(patientId);
+        final p = PatientModel.fromRecord(pRecord);
         if (!mounted) return;
         Navigator.push(context, MaterialPageRoute(
           builder: (_) => PatientProfileScreen(
@@ -168,7 +173,13 @@ class _AutoSchedulingDashboardState
     final nav = Navigator.of(context, rootNavigator: true);
 
     // Optimistically remove from list and refresh badge
-    setState(() => _sessions.removeWhere((s) => s.id == session.id));
+    setState(() {
+      _sessions.removeWhere((s) => s.id == session.id);
+      if (_selectedPatientId == session.patientId) {
+        _selectedPatientId = null;
+        _highlightSessionId = null;
+      }
+    });
     widget.onRefresh();
 
     // Close dashboard, then navigate to session form.
@@ -218,7 +229,13 @@ class _AutoSchedulingDashboardState
       );
 
       if (mounted) {
-        setState(() => _sessions.removeWhere((s) => s.id == session.id));
+        setState(() {
+          _sessions.removeWhere((s) => s.id == session.id);
+          if (_selectedPatientId == session.patientId) {
+            _selectedPatientId = null;
+            _highlightSessionId = null;
+          }
+        });
         widget.onRefresh();
         if (newConsecutive >= 3) {
           AppToast.show(
@@ -248,21 +265,24 @@ class _AutoSchedulingDashboardState
     // For past-date sessions, force a new date to prevent the infinite overdue loop.
     // (leaving it on the same past date = tomorrow's sweep catches it again)
     DateTime? pickedDate;
+    String? pickedTime;
     if (isPastDate && mounted) {
-      pickedDate = await showDatePicker(
-        context: context,
-        initialDate: DateTime.now(),
-        firstDate: DateTime.now(),
-        lastDate: DateTime.now().add(const Duration(days: 365)),
-        helpText: 'Pick a new session date',
-        confirmText: 'Reschedule',
-        cancelText: 'Cancel',
+      final result = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AvailableSlotsScreen(
+            doctorId: session.doctorId,
+            treatmentDuration: 30, // Default duration, slots will be fetched
+          ),
+        ),
       );
       if (!mounted) return;
-      if (pickedDate == null) {
-        AppToast.show('Date required — session stays as overdue.', type: ToastType.warning);
+      if (result == null || result['date'] == null || result['time'] == null) {
+        AppToast.show('Date and time required — session stays as overdue.', type: ToastType.warning);
         return;
       }
+      pickedDate = result['date'] as DateTime;
+      pickedTime = result['time'] as String;
     }
 
     final confirmed = await showDialog<bool>(
@@ -275,7 +295,7 @@ class _AutoSchedulingDashboardState
           'Session ${session.sessionNumber} on ${_formatDate(session.scheduledDate)} '
           'will be reverted to Upcoming with no miss penalty.\n\n'
           + (pickedDate != null
-              ? 'New date: ${_formatDate(pickedDate.toIso8601String().substring(0, 10))}'
+              ? 'New slot: ${_formatDate(pickedDate.toIso8601String().substring(0, 10))} at $pickedTime'
               : 'The session stays on the same date.'),
           style: context.textStyles.bodyMedium,
         ),
@@ -302,12 +322,19 @@ class _AutoSchedulingDashboardState
       await lifecycle.dismissAsClinicHoliday(
         session.id,
         newDate: newDateStr,
+        newTime: pickedTime,
         performedBy: _currentUserId,
       );
 
 
       if (mounted) {
-        setState(() => _sessions.removeWhere((s) => s.id == session.id));
+        setState(() {
+          _sessions.removeWhere((s) => s.id == session.id);
+          if (_selectedPatientId == session.patientId) {
+            _selectedPatientId = null;
+            _highlightSessionId = null;
+          }
+        });
         widget.onRefresh();
         AppToast.show(
           pickedDate != null
@@ -600,7 +627,7 @@ class _AutoSchedulingDashboardState
 
   Widget _buildRightPane() {
     return FutureBuilder<PatientModel>(
-      future: ref.read(patientServiceProvider).getPatient(_selectedPatientId!),
+      future: ref.read(pocketbaseProvider).collection('patients').getOne(_selectedPatientId!).then((r) => PatientModel.fromRecord(r)),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -977,6 +1004,8 @@ class _AutoSchedulingDashboardState
         ],
       ),
     ));
+
+    return cardContent;
   }
 
   /// Renders a grouped patient card for when a patient has 2+ overdue sessions.

@@ -160,7 +160,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         backgroundColor: context.colors.background,
         appBar: AppBar(
           title: Text(
-            widget.patient.name ?? 'Patient',
+            widget.patient.fullName.isNotEmpty ? widget.patient.fullName : 'Patient',
             style: context.textStyles.h3.copyWith(fontWeight: FontWeight.bold),
           ),
           centerTitle: false,
@@ -873,6 +873,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                 entry: entry,
                 patient: _patient,
                 onReturn: () => setState(() => _refreshKey++),
+                highlightSessionId: widget.highlightSessionId,
               ),
             );
           },
@@ -1253,12 +1254,14 @@ class _ConsultationCard extends ConsumerStatefulWidget {
   final _ConsultationEntry entry;
   final PatientModel patient;
   final VoidCallback onReturn;
+  final String? highlightSessionId;
 
   const _ConsultationCard({
     super.key,
     required this.entry,
     required this.patient,
     required this.onReturn,
+    this.highlightSessionId,
   });
 
   @override
@@ -1284,6 +1287,20 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     super.initState();
     _loadPlans();
     _loadClinicDoctors();
+  }
+
+  @override
+  void didUpdateWidget(_ConsultationCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.highlightSessionId != null && widget.highlightSessionId != oldWidget.highlightSessionId) {
+      final shouldExpand = _treatmentSessions.any((s) => s.id == widget.highlightSessionId) || 
+                           _maintenanceSessions.any((s) => s.id == widget.highlightSessionId);
+      if (shouldExpand) {
+        setState(() {
+          _expanded = true;
+        });
+      }
+    }
   }
 
   Future<void> _loadClinicDoctors() async {
@@ -1370,11 +1387,20 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       );
       if (mounted) {
         final sessions = res.items.map((r) => SessionModel.fromRecord(r)).toList();
+        
+        bool shouldExpand = false;
+        if (widget.highlightSessionId != null) {
+          shouldExpand = sessions.any((s) => s.id == widget.highlightSessionId);
+        }
+
         setState(() {
           if (isMaintenance) {
             _maintenanceSessions = sessions;
           } else {
             _treatmentSessions = sessions;
+          }
+          if (shouldExpand) {
+            _expanded = true;
           }
         });
       }
@@ -2279,9 +2305,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              isHighAlert
-                  ? '${plan.consecutiveMisses} consecutive missed sessions — auto-scheduling is on hold.'
-                  : '${plan.consecutiveMisses} consecutive missed session(s).',
+              '${plan.consecutiveMisses} consecutive missed session(s).',
               style: TextStyle(
                 fontSize: 11,
                 color: bannerColor,
