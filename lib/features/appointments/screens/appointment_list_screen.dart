@@ -497,9 +497,13 @@ class _AppointmentListScreenState
 
   Future<void> _markEnded(AppointmentModel apt) async {
     // Optimistic update — instant visual feedback
+    // NOTE: only set status+checkOutTime, NOT consultationEndTime.
+    // markEnded() in the service only writes status='completed'+check_out_time,
+    // it does NOT write consultation_end_time, so setting it optimistically
+    // would cause a mismatch on reload.
     final optimistic = apt.copyWith(
       status: AppointmentStatus.completed,
-      consultationEndTime: DateTime.now(),
+      checkOutTime: DateTime.now(),
     );
     ref.read(appointmentListProvider.notifier).updateOneAppointment(optimistic);
     try {
@@ -740,18 +744,15 @@ class _AppointmentListScreenState
         if (planCreated) {
           ref.read(analyticsProvider.notifier).load();
 
-          if (firstSessionToday) {
-            // Auto-end the consultation appointment Ã¢â‚¬â€  1st session is being handled today
-            final service = ref.read(appointmentServiceProvider);
-            await service.markEnded(apt.id);
-            if (mounted) {
-              AppToast.show('Treatment plan created & consultation ended. Session 1 is waiting on today\'s schedule.', type: ToastType.success, duration: const Duration(seconds: 5));
-            }
-          } else {
-            // Don't auto-end Ã¢â‚¬â€  sessions start on a different day
-            if (mounted) {
-              AppToast.show('Treatment plan created & sessions scheduled! You may end this appointment now or keep it open.', type: ToastType.success, duration: const Duration(seconds: 5));
-            }
+          // Don't auto-end the consultation — the patient may still be present
+          // (e.g. for Session 1 today). Let staff manually click "End Consultation"
+          // when the patient physically leaves. Auto-ending here caused the
+          // consultation to show 'Completed' while sessions 2–N were still active.
+          if (mounted) {
+            final msg = firstSessionToday
+                ? 'Treatment plan created! Session 1 is on today\'s schedule. End the consultation when the patient leaves.'
+                : 'Treatment plan created & sessions scheduled! You may end this appointment now or keep it open.';
+            AppToast.show(msg, type: ToastType.success, duration: const Duration(seconds: 5));
           }
         }
         // Plan creation cascades to session scheduling — do a full reload
@@ -969,9 +970,7 @@ class _AppointmentListScreenState
   Future<void> _openSessionDirectly(AppointmentModel apt, {String? preloadedSessionId}) async {
     // Block navigation for future/scheduled sessions Ã¢â‚¬â€ only reschedule is available
     if (apt.status == AppointmentStatus.scheduled) {
-      if (mounted) {
-        AppToast.show('Session hasn\'t started yet. Only reschedule is available.', type: ToastType.info);
-      }
+      _navigateToPatient(apt);
       return;
     }
     if (apt.patientId == null || apt.patientId!.isEmpty) return;

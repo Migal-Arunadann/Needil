@@ -174,7 +174,8 @@ Route<dynamic>? generateRoute(RouteSettings settings) {
       );
 
     case '/patient-profile':
-      final patient = settings.arguments as PatientModel;
+      final patient = settings.arguments as PatientModel?;
+      if (patient == null) return _fade(MainLayout(), settings);
       return _slide(PatientProfileScreen(patient: patient), settings);
 
     case '/settings':

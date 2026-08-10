@@ -1388,6 +1388,19 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       if (mounted) {
         final sessions = res.items.map((r) => SessionModel.fromRecord(r)).toList();
         
+        // Always sort in memory to guarantee chronological order regardless of DB state
+        sessions.sort((a, b) {
+          final c1 = a.scheduledDate.compareTo(b.scheduledDate);
+          if (c1 != 0) return c1;
+          
+          final timeA = a.scheduledTime ?? '';
+          final timeB = b.scheduledTime ?? '';
+          final c2 = timeA.compareTo(timeB);
+          if (c2 != 0) return c2;
+          
+          return a.sessionNumber.compareTo(b.sessionNumber);
+        });
+        
         bool shouldExpand = false;
         if (widget.highlightSessionId != null) {
           shouldExpand = sessions.any((s) => s.id == widget.highlightSessionId);
@@ -1864,7 +1877,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () async {
-                        final result = await Navigator.push<dynamic>(
+                        await Navigator.push<dynamic>(
                           context,
                           MaterialPageRoute(
                             builder: (_) => CreateTreatmentPlanScreen(
@@ -1879,12 +1892,10 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                         );
                         
                         if (mounted) {
-                          if (result is Map && result['firstSessionToday'] == true) {
-                            if (widget.entry.appointment != null) {
-                              final aptService = ref.read(appointmentServiceProvider);
-                              await aptService.markEnded(widget.entry.appointment!.id);
-                            }
-                          }
+                          // Don't auto-end the consultation when firstSessionToday=true.
+                          // Auto-ending here caused the consultation to show 'Completed'
+                          // on the patient profile while sessions 2-N were still active.
+                          // Let staff manually end the consultation when the patient leaves.
 
                           setState(() {
                             _planLoaded = false;
@@ -2001,10 +2012,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 Text('No sessions found.',
                     style: TextStyle(color: isDesktop ? context.colors.textMuted : context.colors.textSecondary, fontSize: 12))
               else
-                ...List.generate(
-                  _treatmentSessions.length,
-                  (index) => _sessionTile(_treatmentSessions[index], index, _treatmentSessions.length),
-                ),
+                ..._buildSessionList(_treatmentSessions),
 
               // Add Session button (only when plan is active)
               if (_treatmentPlan!.status == TreatmentPlanStatus.active)
@@ -2122,10 +2130,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 Text('No maintenance sessions found.',
                     style: TextStyle(color: isDesktop ? context.colors.textMuted : context.colors.textSecondary, fontSize: 12))
               else
-                ...List.generate(
-                  _maintenanceSessions.length,
-                  (index) => _sessionTile(_maintenanceSessions[index], index, _maintenanceSessions.length),
-                ),
+                ..._buildSessionList(_maintenanceSessions),
 
               // Add Maintenance Session button (only when plan is active)
               if (_maintenancePlan!.status == TreatmentPlanStatus.active)
@@ -2454,7 +2459,73 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     }
   }
 
-  Widget _sessionTile(SessionModel session, int index, int totalCount) {
+  // ─── Session list grouping helpers ──────────────────────────────────────
+
+  /// Groups [sessions] by date and emits a flat list of tiles.
+  /// Sessions on the same date are stacked under one shared date-circle dot.
+  List<Widget> _buildSessionList(List<SessionModel> sessions) {
+    if (sessions.isEmpty) return [];
+
+    // Group consecutive sessions that share the same calendar date.
+    final groups = <List<SessionModel>>[];
+    List<SessionModel> current = [sessions.first];
+    for (int i = 1; i < sessions.length; i++) {
+      final prevDate = sessions[i - 1].scheduledDate.substring(0, 10);
+      final currDate = sessions[i].scheduledDate.substring(0, 10);
+      if (prevDate == currDate) {
+        current.add(sessions[i]);
+      } else {
+        groups.add(current);
+        current = [sessions[i]];
+      }
+    }
+    groups.add(current);
+
+    final total = groups.length;
+    final tiles = <Widget>[];
+    for (int gi = 0; gi < total; gi++) {
+      final group = groups[gi];
+      final isFirstGroup = gi == 0;
+      final isLastGroup = gi == total - 1;
+      for (int i = 0; i < group.length; i++) {
+        tiles.add(_sessionTile(
+          group[i],
+          showTopLine: !(isFirstGroup && i == 0),
+          showBottomLine: !(isLastGroup && i == group.length - 1),
+          showDot: i == 0, // only first session of a date gets the circle
+        ));
+      }
+    }
+    return tiles;
+  }
+
+  /// One-line date content for horizontal session timeline pills.
+  Widget _dateDotContent(DateTime date, Color color) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(
+          DateFormat('MMM').format(date).toUpperCase(),
+          style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 0.2),
+        ),
+        const SizedBox(width: 3),
+        Text(
+          DateFormat('d').format(date),
+          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w800),
+        ),
+      ],
+    );
+  }
+
+  Widget _sessionTile(
+    SessionModel session, {
+    required bool showTopLine,
+    required bool showBottomLine,
+    bool showDot = true,
+  }) {
     final isDesktop = MediaQuery.of(context).size.width >= 900;
     final isMaintenance = session.isMaintenance;
     final effectiveStatus = _displayStatus(session);
@@ -2497,61 +2568,78 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     final isCancelled = effectiveStatus == SessionStatus.cancelled;
 
     Widget dotWidget;
-    if (isCompleted) {
+    if (!showDot) {
+      // Secondary session on same date — just an 8px connecting bullet
       dotWidget = Container(
-        width: 24,
-        height: 24,
+        width: 8,
+        height: 8,
         decoration: BoxDecoration(
-          color: context.colors.success,
+          color: isDesktop ? context.colors.border : context.colors.border.withValues(alpha: 0.6),
           shape: BoxShape.circle,
         ),
+      );
+    } else if (isCompleted) {
+      dotWidget = Container(
+        width: 52,
+        height: 26,
+        decoration: BoxDecoration(
+          color: context.colors.success,
+          borderRadius: BorderRadius.circular(13),
+        ),
         alignment: Alignment.center,
-        child: Icon(Icons.check, size: 13, color: context.colors.textPrimary),
+        child: const Icon(Icons.check, size: 16, color: Colors.white),
       );
     } else if (isInProgress) {
       dotWidget = Container(
-        width: 24,
-        height: 24,
+        width: 52,
+        height: 26,
         decoration: BoxDecoration(
           color: context.colors.warning,
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(13),
         ),
         alignment: Alignment.center,
-        child: Text(
-          '${session.sessionNumber}',
-          style: TextStyle(color: context.colors.textPrimary, fontSize: 10, fontWeight: FontWeight.bold),
-        ),
+        child: date != null
+            ? _dateDotContent(date, Colors.white)
+            : Text('${session.sessionNumber}',
+                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
       );
     } else if (isMissed || isCancelled) {
       dotWidget = Container(
-        width: 24,
-        height: 24,
+        width: 52,
+        height: 26,
         decoration: BoxDecoration(
           color: context.colors.error,
-          shape: BoxShape.circle,
+          borderRadius: BorderRadius.circular(13),
         ),
         alignment: Alignment.center,
         child: Icon(
           isCancelled ? Icons.close_rounded : Icons.priority_high_rounded,
-          size: 11,
-          color: context.colors.textPrimary,
+          size: 14,
+          color: Colors.white,
         ),
       );
     } else {
-      // Upcoming
+      // Upcoming / waiting / overdue
       dotWidget = Container(
-        width: 24,
-        height: 24,
+        width: 52,
+        height: 26,
         decoration: BoxDecoration(
           color: isDesktop ? context.colors.divider : context.colors.surface,
-          shape: BoxShape.circle,
-          border: Border.all(color: isDesktop ? context.colors.border.withValues(alpha: 0.5) : context.colors.border, width: 2),
+          borderRadius: BorderRadius.circular(13),
+          border: Border.all(
+            color: isDesktop ? context.colors.border.withValues(alpha: 0.5) : context.colors.border,
+            width: 2,
+          ),
         ),
         alignment: Alignment.center,
-        child: Text(
-          '${session.sessionNumber}',
-          style: TextStyle(color: isDesktop ? context.colors.textMuted : context.colors.textSecondary, fontSize: 10, fontWeight: FontWeight.w700),
-        ),
+        child: date != null
+            ? _dateDotContent(date, isDesktop ? context.colors.textMuted : context.colors.textSecondary)
+            : Text('${session.sessionNumber}',
+                style: TextStyle(
+                  color: isDesktop ? context.colors.textMuted : context.colors.textSecondary,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                )),
       );
     }
 
@@ -2620,28 +2708,24 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
           children: [
             // Left vertical line + dot
             SizedBox(
-              width: 36,
+              width: 58,
               child: Column(
                 children: [
                   Expanded(
                     child: Container(
                       width: 2,
-                      color: index == 0
-                          ? Colors.transparent
-                          : (isDesktop
-                              ? context.colors.border
-                              : context.colors.border.withValues(alpha: 0.8)),
+                      color: showTopLine
+                          ? (isDesktop ? context.colors.border : context.colors.border.withValues(alpha: 0.8))
+                          : Colors.transparent,
                     ),
                   ),
                   dotWidget,
                   Expanded(
                     child: Container(
                       width: 2,
-                      color: index == totalCount - 1
-                          ? Colors.transparent
-                          : (isDesktop
-                              ? context.colors.border
-                              : context.colors.border.withValues(alpha: 0.8)),
+                      color: showBottomLine
+                          ? (isDesktop ? context.colors.border : context.colors.border.withValues(alpha: 0.8))
+                          : Colors.transparent,
                     ),
                   ),
                 ],
@@ -2767,7 +2851,10 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                       const SizedBox(width: 4),
                       Icon(Icons.chevron_right_rounded, color: isDesktop ? context.colors.textMuted : context.colors.textHint, size: 16),
                     ],
-                    if (effectiveStatus == SessionStatus.upcoming || effectiveStatus == SessionStatus.waiting || effectiveStatus == SessionStatus.inProgress) ...[
+                    if (effectiveStatus == SessionStatus.upcoming ||
+                        effectiveStatus == SessionStatus.waiting ||
+                        effectiveStatus == SessionStatus.inProgress ||
+                        effectiveStatus == SessionStatus.overdue) ...[
                       const SizedBox(width: 4),
                       GestureDetector(
                         onTap: () => _showSessionActions(session),
@@ -3005,14 +3092,6 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   }
 
   Future<void> _rescheduleSession(SessionModel session) async {
-    List<int>? workingDays;
-    try {
-      final pb = ref.read(pocketbaseProvider);
-      final docRec = await pb.collection('doctors').getOne(session.doctorId);
-      final doctor = DoctorModel.fromRecord(docRec);
-      workingDays = doctor.workingDays;
-    } catch (_) {}
-
     final dt = DateTime.tryParse(session.scheduledDate) ?? DateTime.now();
 
     // Determine minDate and prevTimeLimit based on previous session (Session N-1)
@@ -3042,39 +3121,38 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
 
     final initialDate = dt.isBefore(minDate) ? minDate : dt;
 
-    final newDate = await showAppDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: minDate,
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-      selectableDayPredicate: workingDays != null && workingDays.isNotEmpty
-          ? (day) => workingDays!.contains(day.weekday)
-          : null,
+    // Open the doctor's slot-picker (same UX as 'Add Session')
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AvailableSlotsScreen(
+          doctorId: session.doctorId,
+          clinicId: patient.clinicId ?? ref.read(authProvider).clinicId,
+          treatmentDuration: 30,
+          allowFutureDates: true,
+          initialDate: initialDate,
+          minDate: minDate,
+          minTime: prevTimeLimit,
+        ),
+      ),
     );
-    if (newDate == null || !mounted) return;
+    if (result == null || result is! Map<String, dynamic> || !mounted) return;
 
-    TimeOfDay initialTime = const TimeOfDay(hour: 10, minute: 0);
-    if (session.scheduledTime != null && session.scheduledTime!.contains(':')) {
-      final parts = session.scheduledTime!.split(':');
-      initialTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
-    }
+    final newDate = result['date'] as DateTime;
+    final newTimeStr = result['time'] as String;
+    final newDateStr = DateFormat('yyyy-MM-dd').format(newDate);
 
-    final newTime = await showTimePicker(context: context, initialTime: initialTime);
-    if (newTime == null || !mounted) return;
-
-    final newDateStr =
-        '${newDate.year}-${newDate.month.toString().padLeft(2, '0')}-${newDate.day.toString().padLeft(2, '0')}';
-    final newTimeStr =
-        '${newTime.hour.toString().padLeft(2, '0')}:${newTime.minute.toString().padLeft(2, '0')}';
-
-    // Validate same-day time boundary relative to previous session
-    if (DateUtils.isSameDay(newDate, minDate) && prevTimeLimit != null && prevTimeLimit.contains(':')) {
-      final newMin = newTime.hour * 60 + newTime.minute;
+    // Same-day time ordering guard
+    if (DateUtils.isSameDay(newDate, minDate) &&
+        prevTimeLimit != null &&
+        prevTimeLimit.contains(':')) {
+      final newParts = newTimeStr.split(':');
+      final newMin = int.parse(newParts[0]) * 60 + int.parse(newParts[1].split(' ').first);
       final prevParts = prevTimeLimit.split(':');
       final prevMin = int.parse(prevParts[0]) * 60 + int.parse(prevParts[1].split(' ').first);
       if (newMin <= prevMin) {
         AppToast.show(
-          'Session #${session.sessionNumber} must be scheduled after Session #${session.sessionNumber - 1} (${TimeUtils.formatStringTime(prevTimeLimit)})',
+          'Must be scheduled after Session #${session.sessionNumber - 1}',
           type: ToastType.warning,
         );
         return;
@@ -3083,9 +3161,10 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
 
     try {
       final service = ref.read(treatmentServiceProvider);
-      await service.rescheduleSession(sessionId: session.id, newDate: newDateStr, newTime: newTimeStr);
+      await service.rescheduleSession(
+          sessionId: session.id, newDate: newDateStr, newTime: newTimeStr);
       if (mounted) {
-        AppToast.show('Session ${session.sessionNumber} rescheduled & subsequent sessions updated \u2713', type: ToastType.success);
+        AppToast.show('Session rescheduled!', type: ToastType.success);
         final isMaintenance = session.isMaintenance;
         final planId = isMaintenance ? _maintenancePlan?.id : _treatmentPlan?.id;
         if (planId != null) await _loadSessions(planId, isMaintenance: isMaintenance);

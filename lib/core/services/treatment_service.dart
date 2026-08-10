@@ -570,7 +570,7 @@ class TreatmentService {
       } catch (_) {}
     }
 
-    // 2. Determine next session number
+    // 2. Determine a temporary session number (resequencing below will assign the real one)
     final existing = await pb.collection(PBCollections.sessions).getList(
       filter: 'treatment_plan = "$planId"',
       sort: '-session_number',
@@ -635,7 +635,60 @@ class TreatmentService {
       // Plan update failure is non-fatal
     }
 
+    // 5. Resequence all sessions so numbers always match chronological date order.
+    // Fixes: adding a same-day/back-to-back session no longer appears at the end
+    // of the list as "Session N" — it gets numbered by its actual visit position.
+    await resequenceSessions(planId);
+
     return session;
+  }
+
+  /// Resequences [session_number] for every session in [planId] so that numbers
+  /// always reflect chronological visit order (sorted by scheduled_date →
+  /// scheduled_time → created as tie-breaker).
+  ///
+  /// Only writes records where the number changed, minimising DB writes.
+  /// Non-fatal: a failure here never surfaces to the caller.
+  Future<void> resequenceSessions(String planId) async {
+    try {
+      final res = await pb.collection(PBCollections.sessions).getList(
+        filter: 'treatment_plan = "$planId"',
+        perPage: 200,
+      );
+      
+      final items = res.items.toList();
+      items.sort((a, b) {
+        // Compare dates (YYYY-MM-DD or full ISO)
+        final dateA = a.getStringValue('scheduled_date');
+        final dateB = b.getStringValue('scheduled_date');
+        final c1 = dateA.compareTo(dateB);
+        if (c1 != 0) return c1;
+        
+        // Compare times (HH:MM)
+        final timeA = a.getStringValue('scheduled_time');
+        final timeB = b.getStringValue('scheduled_time');
+        final c2 = timeA.compareTo(timeB);
+        if (c2 != 0) return c2;
+        
+        // Fallback to creation date
+        final createdA = DateTime.tryParse(a.created) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final createdB = DateTime.tryParse(b.created) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return createdA.compareTo(createdB);
+      });
+
+      for (int i = 0; i < items.length; i++) {
+        final item = items[i];
+        if (item.getIntValue('session_number') != i + 1) {
+          await pb.collection(PBCollections.sessions).update(
+            item.id,
+            body: {'session_number': i + 1},
+          );
+        }
+      }
+    } catch (e) {
+      // Print error to console for debugging if it happens again
+      print('Resequence failed: $e');
+    }
   }
 
   /// Get today's sessions for a doctor.
@@ -1085,6 +1138,12 @@ class TreatmentService {
       performedBy: performedBy,
       mode: mode,
     );
+    // After the cascade, resequence so session numbers reflect the new date order.
+    try {
+      final rec = await pb.collection(PBCollections.sessions).getOne(sessionId);
+      final planId = rec.getStringValue('treatment_plan');
+      if (planId.isNotEmpty) await resequenceSessions(planId);
+    } catch (_) {}
   }
 
   // ─── Pause / Resume ─────────────────────────────────────────
