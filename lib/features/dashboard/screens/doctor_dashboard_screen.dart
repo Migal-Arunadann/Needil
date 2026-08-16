@@ -157,9 +157,10 @@ class DoctorDashboardScreen extends ConsumerWidget {
               heroTag: null,
               onPressed: () => _showNewAppointmentTypeSelector(context),
               label: const Text('New Appointment',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-              icon: const Icon(Icons.add_rounded, color: Colors.white),
-              backgroundColor: const Color(0xFF3B82F6),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: -0.2)),
+              icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+              backgroundColor: context.colors.primary,
+              elevation: 4,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
             )
           : null,
@@ -171,7 +172,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
             onRefresh: () => ref.read(dashboardStatsProvider.notifier).load(),
             child: SingleChildScrollView(
               physics: const AlwaysScrollableScrollPhysics(),
-              padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 24, 20, isDesktop ? 36 : 24, 100),
+              padding: EdgeInsets.fromLTRB(isDesktop ? 36 : 20, 20, isDesktop ? 36 : 20, 120),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -376,9 +377,12 @@ class DoctorDashboardScreen extends ConsumerWidget {
                       "Today's Overview",
                       style: context.textStyles.h3.copyWith(
                         color: context.colors.textPrimary,
-                        ),
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.4,
+                      ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     DashboardOverviewSection(stats: stats),
                     const SizedBox(height: 24),
                     Text(
@@ -408,7 +412,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                         Text(
                           'Patients Waiting',
                           style: context.textStyles.h3.copyWith(
-                            color: Colors.white,
+                            color: context.colors.textPrimary,
                             fontSize: 16,
                           ),
                         ),
