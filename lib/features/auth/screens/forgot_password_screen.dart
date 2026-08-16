@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -63,9 +64,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen>
       return;
     }
 
-    Navigator.of(context).pushNamed(
+    context.push(
       '/auth/otp-verify',
-      arguments: {
+      extra: {
         'mode': OtpMode.forgotPassword,
         'email': email,
       },

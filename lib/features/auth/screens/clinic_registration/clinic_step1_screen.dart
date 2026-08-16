@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pms_app/core/constants/app_colors.dart';
 import 'package:pms_app/core/constants/app_text_styles.dart';
@@ -115,18 +116,17 @@ class _ClinicStep1ScreenState extends ConsumerState<ClinicStep1Screen> {
     await ref.read(authProvider.notifier).deleteShellAndRestart();
     if (!mounted) return;
 
-    // Pop all the way back to the root — app.dart will render LoginScreen
-    // because auth state is now unauthenticated.
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    // Navigate back to login
+    context.go('/login');
   }
 
   void _next() {
     if (_usernameError != null) return;
     if (!_formKey.currentState!.validate()) return;
 
-    Navigator.of(context).pushNamed(
+    context.push(
       '/register/clinic/step2',
-      arguments: {
+      extra: {
         'is_google': widget.isGoogleRegistration,
         'clinic_name': _nameController.text.trim(),
         'username': _usernameController.text.trim(),

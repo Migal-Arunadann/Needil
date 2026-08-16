@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:pms_app/core/utils/validators.dart';
@@ -84,9 +85,9 @@ class _ClinicStep0OtpScreenState extends ConsumerState<ClinicStep0OtpScreen>
 
       setState(() => _isChecking = false);
 
-      Navigator.of(context).pushNamed(
+      context.push(
         '/auth/otp-verify',
-        arguments: {
+        extra: {
           'mode': OtpMode.registration,
           'email': email,
           'clinic_data': const <String, dynamic>{},
@@ -392,8 +393,7 @@ class _ClinicStep0OtpScreenState extends ConsumerState<ClinicStep0OtpScreen>
                     alignment: PlaceholderAlignment.baseline,
                     baseline: TextBaseline.alphabetic,
                     child: GestureDetector(
-                      onTap: () =>
-                          Navigator.of(context).pushReplacementNamed('/login'),
+                      onTap: () => context.go('/login'),
                       child: Text(
                         'Sign In',
                         style: GoogleFonts.inter(

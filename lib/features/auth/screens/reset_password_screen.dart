@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pms_app/core/constants/app_colors.dart';
@@ -117,8 +118,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen>
     );
 
     if (!mounted) return;
-    // Pop all auth screens back to login
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (_) => false);
+    // Go to login screen
+    context.go('/login');
   }
 
   @override

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pms_app/core/providers/session_lifecycle_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
@@ -185,19 +186,19 @@ class _AutoSchedulingDashboardState
     // Close dashboard, then navigate to session form.
     // The session is still 'overdue' — the form detects this and
     // auto-completes it retroactively when the doctor saves.
-    nav.pop();
-    nav.pushNamed('/sessions/record', arguments: session);
+    Navigator.of(context).pop();
+    context.push('/sessions/record', extra: session);
   }
 
-  // ─── Patient Didn't Show ──────────────────────────────────────────────────
+  // ─── Patient Missed ──────────────────────────────────────────────────
 
-  Future<void> _onDidntShow(SessionModel session) async {
+  Future<void> _onPatientMissed(SessionModel session) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: context.colors.surface,
-        title: Text('Confirm Missed Session', style: context.textStyles.h3),
+        title: Text('Patient Missed', style: context.textStyles.h3),
         content: Text(
           'Mark Session ${session.sessionNumber} as missed on '
           '${_formatDate(session.scheduledDate)}?\n\n'
@@ -212,7 +213,7 @@ class _AutoSchedulingDashboardState
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: context.colors.error),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Confirm Miss'),
+            child: const Text('Confirm Missed'),
           ),
         ],
       ),
@@ -254,6 +255,8 @@ class _AutoSchedulingDashboardState
       if (mounted) setState(() { _isProcessing = false; _processingId = null; });
     }
   }
+
+  Future<void> _onDidntShow(SessionModel session) => _onPatientMissed(session);
 
   // ─── Clinic Was Closed ────────────────────────────────────────────────────
 
@@ -363,7 +366,7 @@ class _AutoSchedulingDashboardState
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: context.colors.surface,
-        title: Text('Pause Sessions for $patientName?', style: context.textStyles.h3),
+        title: Text('Pause Treatment for $patientName?', style: context.textStyles.h3),
         content: Text(
           'This will pause the treatment plan and all upcoming sessions for $patientName. '
           'No further sessions will be auto-scheduled until the plan is resumed.',
@@ -377,7 +380,7 @@ class _AutoSchedulingDashboardState
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: context.colors.warning),
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Pause Plan'),
+            child: const Text('Pause Treatment'),
           ),
         ],
       ),
@@ -684,7 +687,7 @@ class _AutoSchedulingDashboardState
                 Text(
                   totalItems == 0
                       ? 'All caught up!'
-                      : '$totalItems item${totalItems == 1 ? '' : 's'} need your review',
+                      : '$totalItems appointment${totalItems == 1 ? '' : 's'} needs review',
                   style: context.textStyles.bodySmall.copyWith(
                     color: context.colors.textSecondary,
                   ),
@@ -898,24 +901,6 @@ class _AutoSchedulingDashboardState
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
             child: Row(
               children: [
-                Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(
-                    color: context.colors.warning.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${session.sessionNumber}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: context.colors.warning,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -974,7 +959,7 @@ class _AutoSchedulingDashboardState
                 children: [
                   Expanded(
                     child: _actionButton(
-                      label: 'Patient Came',
+                      label: 'Patient Arrived',
                       icon: Icons.check_circle_rounded,
                       color: context.colors.success,
                       onTap: () => _onPatientCame(session),
@@ -983,16 +968,16 @@ class _AutoSchedulingDashboardState
                   const SizedBox(width: 8),
                   Expanded(
                     child: _actionButton(
-                      label: 'Didn\'t Show',
+                      label: 'Patient Missed',
                       icon: Icons.cancel_rounded,
                       color: context.colors.error,
-                      onTap: () => _onDidntShow(session),
+                      onTap: () => _onPatientMissed(session),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: _actionButton(
-                      label: 'We Were Closed',
+                      label: 'Clinic Closed',
                       icon: Icons.business_rounded,
                       color: context.colors.textSecondary,
                       onTap: () => _onClinicClosed(session),
@@ -1080,7 +1065,7 @@ class _AutoSchedulingDashboardState
                                     size: 11, color: context.colors.error),
                                 const SizedBox(width: 3),
                                 Text(
-                                  '$missCount misses',
+                                  '$missCount ${missCount == 1 ? 'Overdue' : 'Overdues'}',
                                   style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w700,
@@ -1094,7 +1079,9 @@ class _AutoSchedulingDashboardState
                       ),
                       const SizedBox(height: 3),
                       Text(
-                        '${sessions.first.treatmentModality.isNotEmpty ? sessions.first.treatmentModality : "Treatment"} · $missCount overdue session${missCount == 1 ? '' : 's'}',
+                        sessions.first.treatmentModality.isNotEmpty
+                            ? sessions.first.treatmentModality
+                            : "Treatment",
                         style: context.textStyles.bodySmall.copyWith(
                           color: context.colors.textSecondary,
                         ),
@@ -1118,7 +1105,7 @@ class _AutoSchedulingDashboardState
                     icon: Icon(Icons.pause_circle_outline_rounded,
                         size: 16, color: context.colors.warning),
                     label: Text(
-                      'Pause',
+                      'Pause Treatment',
                       style: TextStyle(
                         fontSize: 12,
                         color: context.colors.warning,
@@ -1156,25 +1143,6 @@ class _AutoSchedulingDashboardState
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: Row(
             children: [
-              // Session number bubble
-              Container(
-                width: 30, height: 30,
-                decoration: BoxDecoration(
-                  color: context.colors.warning.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Center(
-                  child: Text(
-                    '${session.sessionNumber}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: context.colors.warning,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   'Session ${session.sessionNumber} · ${_formatDate(session.scheduledDate)}'
@@ -1215,7 +1183,7 @@ class _AutoSchedulingDashboardState
               children: [
                 Expanded(
                   child: _actionButton(
-                    label: 'Patient Came',
+                    label: 'Patient Arrived',
                     icon: Icons.check_circle_rounded,
                     color: context.colors.success,
                     onTap: () => _onPatientCame(session),
@@ -1224,16 +1192,16 @@ class _AutoSchedulingDashboardState
                 const SizedBox(width: 8),
                 Expanded(
                   child: _actionButton(
-                    label: "Didn't Show",
+                    label: "Patient Missed",
                     icon: Icons.cancel_rounded,
                     color: context.colors.error,
-                    onTap: () => _onDidntShow(session),
+                    onTap: () => _onPatientMissed(session),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: _actionButton(
-                    label: 'We Were Closed',
+                    label: 'Clinic Closed',
                     icon: Icons.business_rounded,
                     color: context.colors.textSecondary,
                     onTap: () => _onClinicClosed(session),
@@ -1367,7 +1335,7 @@ class _AutoSchedulingDashboardState
               ? null
               : _dismissAllAsHoliday,
           icon: const Icon(Icons.business_rounded, size: 16),
-          label: Text('Dismiss All — We Were Closed (${_sessions.length})'),
+          label: Text('Dismiss All — Clinic Closed (${_sessions.length})'),
           style: OutlinedButton.styleFrom(
             foregroundColor: context.colors.textSecondary,
             side: BorderSide(color: context.colors.border),

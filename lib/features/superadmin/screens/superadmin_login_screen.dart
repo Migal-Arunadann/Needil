@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -162,10 +163,10 @@ class _SuperadminLoginScreenState extends ConsumerState<SuperadminLoginScreen>
       return;
     }
 
-    // OTP verified — update global auth state so app.dart routes to SuperadminShell
+    // OTP verified — update global auth state
     ref.read(authProvider.notifier).setSuperadminAuthenticated();
     if (mounted) {
-      Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+      context.go('/superadmin/dashboard');
     }
   }
 

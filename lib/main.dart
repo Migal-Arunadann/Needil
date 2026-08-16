@@ -6,9 +6,11 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:pms_app/app.dart';
 import 'package:pms_app/core/services/session_timer_service.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  usePathUrlStrategy(); // Clean web URLs: /appointments instead of /#/appointments
   tz.initializeTimeZones();
 
   // Allow runtime fetching fallback for unbundled font variants

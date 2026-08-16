@@ -1,17 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'dart:math';
 
 import 'package:pms_app/core/services/auth_service.dart';
-import 'package:pms_app/features/dashboard/screens/clinic_dashboard_screen.dart';
-import 'package:pms_app/features/dashboard/screens/doctor_dashboard_screen.dart';
-import 'package:pms_app/features/dashboard/screens/receptionist_dashboard_screen.dart';
-import 'package:pms_app/features/appointments/screens/appointment_list_screen.dart';
-import 'package:pms_app/features/settings/screens/settings_screen.dart';
 import 'package:pms_app/features/settings/widgets/pending_deletion_banner.dart';
-import 'package:pms_app/features/patients/screens/patient_list_screen.dart';
-import 'package:pms_app/features/analytics/screens/analytics_screen.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/features/appointments/providers/appointment_provider.dart';
 import 'package:pms_app/features/patients/providers/patient_provider.dart';
@@ -22,28 +16,29 @@ import 'package:pms_app/features/auth/providers/auth_provider.dart';
 final mainLayoutKey = GlobalKey<MainLayoutState>();
 
 class MainLayout extends ConsumerStatefulWidget {
-  MainLayout({Key? key}) : super(key: key ?? mainLayoutKey);
+  final StatefulNavigationShell? navigationShell;
+
+  MainLayout({Key? key, this.navigationShell}) : super(key: key ?? mainLayoutKey);
 
   @override
   ConsumerState<MainLayout> createState() => MainLayoutState();
 }
 
 class MainLayoutState extends ConsumerState<MainLayout> {
-  int _currentIndex = 0;
   String? _highlightAppointmentId;
-
-  @override
-  void initState() {
-    super.initState();
-  }
 
   /// Switch to a tab programmatically (e.g., from dashboard "Upcoming Today" tap).
   /// Optionally pass an appointment ID to highlight in the appointments tab.
   void switchToTab(int index, {String? highlightAppointmentId}) {
-    setState(() {
-      _currentIndex = index;
+    if (widget.navigationShell != null) {
+      widget.navigationShell!.goBranch(
+        index,
+        initialLocation: index == widget.navigationShell!.currentIndex,
+      );
+    }
+    if (highlightAppointmentId != null) {
       _highlightAppointmentId = highlightAppointmentId;
-    });
+    }
   }
 
   /// Called by AppointmentListScreen after it consumes the highlight ID.
@@ -59,66 +54,41 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   List<_TabConfig> _getTabsForRole(UserRole? role) {
     switch (role) {
       case UserRole.clinic:
-        return [
-          const _TabConfig(Icons.home_rounded, 'Home'),
-          const _TabConfig(Icons.calendar_today_rounded, 'Appts'),
-          const _TabConfig(Icons.analytics_rounded, 'Analytics'),
-          const _TabConfig(Icons.people_rounded, 'Patients'),
-          const _TabConfig(Icons.person_rounded, 'Profile'),
-        ];
       case UserRole.doctor:
-        return [
-          const _TabConfig(Icons.home_rounded, 'Home'),
-          const _TabConfig(Icons.calendar_today_rounded, 'Appts'),
-          const _TabConfig(Icons.analytics_rounded, 'Analytics'),
-          const _TabConfig(Icons.people_rounded, 'Patients'),
-          const _TabConfig(Icons.person_rounded, 'Profile'),
+        return const [
+          _TabConfig(Icons.home_rounded, 'Home', 0),
+          _TabConfig(Icons.calendar_today_rounded, 'Appts', 1),
+          _TabConfig(Icons.analytics_rounded, 'Analytics', 2),
+          _TabConfig(Icons.people_rounded, 'Patients', 3),
+          _TabConfig(Icons.person_rounded, 'Profile', 4),
         ];
       case UserRole.receptionist:
-        return [
-          const _TabConfig(Icons.home_rounded, 'Home'),
-          const _TabConfig(Icons.calendar_today_rounded, 'Appts'),
-          const _TabConfig(Icons.people_rounded, 'Patients'),
-          const _TabConfig(Icons.person_rounded, 'Profile'),
+        return const [
+          _TabConfig(Icons.home_rounded, 'Home', 0),
+          _TabConfig(Icons.calendar_today_rounded, 'Appts', 1),
+          _TabConfig(Icons.people_rounded, 'Patients', 3),
+          _TabConfig(Icons.person_rounded, 'Profile', 4),
         ];
       default:
-        return [
-          const _TabConfig(Icons.home_rounded, 'Home'),
-          const _TabConfig(Icons.person_rounded, 'Profile'),
+        return const [
+          _TabConfig(Icons.home_rounded, 'Home', 0),
+          _TabConfig(Icons.person_rounded, 'Profile', 4),
         ];
     }
   }
 
-  List<Widget> _getPagesForRole(UserRole? role) {
-    switch (role) {
-      case UserRole.clinic:
-        return [
-          const ClinicDashboardScreen(),
-          const AppointmentListScreen(),
-          const AnalyticsScreen(),
-          const PatientListScreen(),
-          const SettingsScreen(),
-        ];
-      case UserRole.doctor:
-        return [
-          const DoctorDashboardScreen(),
-          const AppointmentListScreen(),
-          const AnalyticsScreen(),
-          const PatientListScreen(),
-          const SettingsScreen(),
-        ];
-      case UserRole.receptionist:
-        return [
-          const ReceptionistDashboardScreen(),
-          const AppointmentListScreen(),
-          const PatientListScreen(),
-          const SettingsScreen(),
-        ];
-      default:
-        return [
-          const Center(child: Text('Unknown Role')),
-          const SettingsScreen(),
-        ];
+  void _onTabSelected(int branchIndex, String label) {
+    HapticFeedback.selectionClick();
+    if (widget.navigationShell != null) {
+      widget.navigationShell!.goBranch(
+        branchIndex,
+        initialLocation: branchIndex == widget.navigationShell!.currentIndex,
+      );
+    }
+    if (label == 'Appts') {
+      ref.read(appointmentListProvider.notifier).loadAppointments();
+    } else if (label == 'Patients') {
+      ref.read(patientListProvider.notifier).loadPatients();
     }
   }
 
@@ -126,7 +96,6 @@ class MainLayoutState extends ConsumerState<MainLayout> {
   Widget build(BuildContext context) {
     final role = ref.watch(authProvider).role;
     final tabs = _getTabsForRole(role);
-    final pages = _getPagesForRole(role);
     final width = MediaQuery.of(context).size.width;
     final isDesktop = width >= 900.0;
 
@@ -164,10 +133,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                               children: [
                                 const PendingDeletionBanner(),
                                 Expanded(
-                                  child: IndexedStack(
-                                    index: _currentIndex,
-                                    children: pages,
-                                  ),
+                                  child: widget.navigationShell ?? const SizedBox.shrink(),
                                 ),
                               ],
                             ),
@@ -190,10 +156,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         children: [
           const PendingDeletionBanner(),
           Expanded(
-            child: IndexedStack(
-              index: _currentIndex,
-              children: pages,
-            ),
+            child: widget.navigationShell ?? const SizedBox.shrink(),
           ),
         ],
       ),
@@ -213,9 +176,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: List.generate(tabs.length, (index) {
-                return _buildNavItem(index, tabs[index].icon, tabs[index].label);
-              }),
+              children: tabs.map((tab) => _buildNavItem(tab)).toList(),
             ),
           ),
         ),
@@ -321,7 +282,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
               itemCount: tabs.length,
               itemBuilder: (context, index) {
                 final tab = tabs[index];
-                final isSelected = _currentIndex == index;
+                final isSelected = (widget.navigationShell?.currentIndex ?? 0) == tab.branchIndex;
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   child: _SidebarNavItem(
@@ -329,17 +290,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                     label: tab.label == 'Appts' ? 'Appointments' : (tab.label == 'Profile' ? 'Profile' : tab.label),
                     isSelected: isSelected,
                     onTap: () {
-                      if (_currentIndex == index) return;
-                      HapticFeedback.selectionClick();
-                      setState(() => _currentIndex = index);
-                      final isApptsTab = tab.label == 'Appts';
-                      if (isApptsTab) {
-                        ref.read(appointmentListProvider.notifier).loadAppointments();
-                      }
-                      final isPatientsTab = tab.label == 'Patients';
-                      if (isPatientsTab) {
-                        ref.read(patientListProvider.notifier).loadPatients();
-                      }
+                      if (isSelected) return;
+                      _onTabSelected(tab.branchIndex, tab.label);
                     },
                   ),
                 );
@@ -352,10 +304,7 @@ class MainLayoutState extends ConsumerState<MainLayout> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: InkWell(
               onTap: () {
-                final profileIndex = tabs.indexWhere((t) => t.label == 'Profile');
-                if (profileIndex != -1) {
-                  setState(() => _currentIndex = profileIndex);
-                }
+                _onTabSelected(4, 'Profile');
               },
               borderRadius: BorderRadius.circular(20),
               child: Container(
@@ -496,26 +445,15 @@ class MainLayoutState extends ConsumerState<MainLayout> {
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
-    final isSelected = _currentIndex == index;
+  Widget _buildNavItem(_TabConfig tab) {
+    final isSelected = (widget.navigationShell?.currentIndex ?? 0) == tab.branchIndex;
     final color = isSelected ? context.colors.primary : context.colors.textHint;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
-        if (_currentIndex == index) return;
-        HapticFeedback.selectionClick();
-        setState(() => _currentIndex = index);
-        // Refresh appointments when switching to the Appts tab
-        final tabs = _getTabsForRole(ref.read(authProvider).role);
-        final isApptsTab = index < tabs.length && tabs[index].label == 'Appts';
-        if (isApptsTab) {
-          ref.read(appointmentListProvider.notifier).loadAppointments();
-        }
-        final isPatientsTab = index < tabs.length && tabs[index].label == 'Patients';
-        if (isPatientsTab) {
-          ref.read(patientListProvider.notifier).loadPatients();
-        }
+        if (isSelected) return;
+        _onTabSelected(tab.branchIndex, tab.label);
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 80),
@@ -529,10 +467,10 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 24),
+            Icon(tab.icon, color: color, size: 24),
             const SizedBox(height: 4),
             Text(
-              label,
+              tab.label,
               style: TextStyle(
                 color: color,
                 fontSize: 10,
@@ -639,7 +577,8 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
 class _TabConfig {
   final IconData icon;
   final String label;
-  const _TabConfig(this.icon, this.label);
+  final int branchIndex;
+  const _TabConfig(this.icon, this.label, this.branchIndex);
 }
 
 class AmbientBackground extends StatelessWidget {

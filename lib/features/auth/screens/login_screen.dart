@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -106,12 +107,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       }
       
       if (next.requiresGoogleRegistration && !(prev?.requiresGoogleRegistration ?? false)) {
-         final navigator = _nestedNavKey.currentState;
-         if (navigator != null) {
-            navigator.pushNamed('/register/clinic/step1', arguments: {'is_google': true});
-         } else {
-            Navigator.of(context).pushNamed('/register/clinic/step1', arguments: {'is_google': true});
-         }
+        context.push('/register/clinic/step1', extra: {'is_google': true});
       }
     });
 
@@ -295,7 +291,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           GestureDetector(
-            onLongPress: () => Navigator.of(context).pushNamed('/superadmin/login'),
+            onLongPress: () => context.push('/superadmin/login'),
             child: Text(
               'Welcome Back',
               style: GoogleFonts.cormorantGaramond(
@@ -341,7 +337,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           Align(
             alignment: Alignment.centerRight,
             child: GestureDetector(
-              onTap: () => Navigator.of(context).pushNamed('/auth/forgot-password'),
+              onTap: () => context.push('/auth/forgot-password'),
               child: Text(
                 'Forgot Password?',
                 style: GoogleFonts.inter(
@@ -459,7 +455,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 ),
                 GestureDetector(
-                  onTap: () => Navigator.of(context).pushNamed('/register/clinic'),
+                  onTap: () => context.push('/register/clinic'),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

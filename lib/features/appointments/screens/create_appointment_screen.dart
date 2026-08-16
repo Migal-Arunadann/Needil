@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -101,17 +102,23 @@ class _CreateAppointmentScreenState
     if (auth.role == UserRole.clinic && auth.userId != null) {
       final service = ref.read(appointmentServiceProvider);
       final docs = await service.getClinicDoctors(auth.userId!);
-      setState(() {
-        _doctors = docs;
-        if (_doctors.length == 1) {
-          _selectedDoctorId = _doctors.first['id'];
-        }
-      });
-    } else {
+      if (mounted) {
+        setState(() {
+          _doctors = docs;
+          if (_doctors.length == 1) {
+            _selectedDoctorId = _doctors.first['id'];
+          } else if (_selectedDoctorId == null && _doctors.isNotEmpty) {
+            _selectedDoctorId = _doctors.first['id'];
+          }
+        });
+      }
+    } else if (auth.role == UserRole.doctor) {
       // Doctor role — only themselves
-      setState(() {
-        _selectedDoctorId = auth.userId;
-      });
+      if (mounted) {
+        setState(() {
+          _selectedDoctorId = auth.userId;
+        });
+      }
     }
   }
 
@@ -370,6 +377,22 @@ class _CreateAppointmentScreenState
       AppToast.show('Please select a time slot first', type: ToastType.error);
       return;
     }
+
+    // Guard: phone matched existing patients but the picker was dismissed without a selection.
+    // We must not silently create a duplicate "Self" record — force the staff to pick.
+    if (_matchingPatients.isNotEmpty && _existingPatient == null && !_isNewFamilyMember) {
+      AppToast.show(
+        'This number has ${_matchingPatients.length} registered patient(s). '
+        'Please select who this appointment is for.',
+        type: ToastType.error,
+        duration: const Duration(seconds: 4),
+      );
+      // Re-open the family picker so they can make a choice
+      final phone = '$_selectedPhoneCode${_phoneCtrl.text.trim()}';
+      await _checkPhone(phone, forceShowScreen: true);
+      return;
+    }
+
     final auth = ref.read(authProvider);
     final doctorId = _selectedDoctorId ?? auth.userId;
     if (doctorId == null) return;
@@ -381,15 +404,23 @@ class _CreateAppointmentScreenState
     final phone = '$_selectedPhoneCode${_phoneCtrl.text.trim()}';
     final checkDate = _formatDate(_selectedDate ?? DateTime.now());
 
-    // For walk-ins: block if same phone already has any active appointment today (prevents
-    // dual registration of the same patient under a different name).
+    // For walk-ins: block if the SAME patient name AND phone already has an active appointment today.
+    // Different name = different family member sharing the phone = allow booking.
     if (!_isCallBy) {
-      final todayDuplicate = await service.findAnyActiveTodayByPhone(phone, doctorId);
+      final todayDuplicate = await service.findAnyActiveTodayByPhone(
+        phone, doctorId,
+        patientName: _nameCtrl.text.trim(),
+      );
       if (todayDuplicate != null && mounted) {
         final existingName = todayDuplicate.displayName;
-        AppToast.show('This phone number is already registered today as "$existingName". '
-              'A patient can only have one consultation per day. '
-              'Please find the existing appointment in the schedule.', type: ToastType.error, duration: const Duration(seconds: 6));
+        AppToast.show(
+          '"$existingName" is already registered today with this phone number. '
+          'A patient can only have one consultation per day. '
+          'Please find the existing appointment in the schedule.',
+          type: ToastType.error,
+          duration: const Duration(seconds: 6),
+        );
+        setState(() => _isSubmitting = false);
         return;
       }
     }
@@ -624,7 +655,11 @@ class _CreateAppointmentScreenState
         );
       }
       AppToast.show('${_isCallBy ? 'Call-by' : 'Walk-in'} appointment created!', type: ToastType.success);
-      navigator.pop();
+      if (context.canPop()) {
+        context.pop();
+      } else {
+        context.go('/appointments');
+      }
     } else if (mounted) {
       // Show error from provider state
       final err = ref.read(appointmentListProvider).error;
@@ -636,6 +671,12 @@ class _CreateAppointmentScreenState
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<AuthState>(authProvider, (prev, next) {
+      if (prev?.userId != next.userId || prev?.role != next.role || (prev?.isInitializing == true && !next.isInitializing)) {
+        _loadDoctors();
+      }
+    });
+
     final auth = ref.watch(authProvider);
     final isClinic = auth.role == UserRole.clinic;
 
@@ -650,7 +691,13 @@ class _CreateAppointmentScreenState
             final header = Row(
               children: [
                 GestureDetector(
-                  onTap: () => Navigator.pop(context),
+                  onTap: () {
+                    if (context.canPop()) {
+                      context.pop();
+                    } else {
+                      context.go('/appointments');
+                    }
+                  },
                   child: Container(
                     width: 40,
                     height: 40,

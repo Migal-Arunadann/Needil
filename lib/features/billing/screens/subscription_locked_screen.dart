@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -87,7 +88,7 @@ class SubscriptionLockedScreen extends ConsumerWidget {
                   if (kIsWeb)
                     ElevatedButton(
                       onPressed: () {
-                        Navigator.of(context).pushNamed('/billing');
+                        context.push('/billing');
                       },
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),

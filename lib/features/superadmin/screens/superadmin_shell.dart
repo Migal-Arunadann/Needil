@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/features/superadmin/screens/superadmin_dashboard_screen.dart';
 import 'package:pms_app/features/superadmin/screens/superadmin_clinics_screen.dart';
@@ -285,9 +286,9 @@ class _SuperadminShellState extends ConsumerState<SuperadminShell> {
                   ),
                 );
                 if (confirm == true) {
+                  ref.read(authProvider.notifier).logout();
                   if (context.mounted) {
-                    Navigator.of(context).pushNamedAndRemoveUntil('/superadmin/login', (_) => false);
-                    ref.read(authProvider.notifier).logout();
+                    context.go('/superadmin/login');
                   }
                 }
               },

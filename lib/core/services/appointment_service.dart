@@ -514,7 +514,7 @@ class AppointmentService {
 
   /// Check if an appointment with this phone number already exists today (any status except cancelled),
   /// used to prevent creating a second consultation for the same patient under a different name.
-  Future<AppointmentModel?> findAnyActiveTodayByPhone(String phone, String doctorId) async {
+  Future<AppointmentModel?> findAnyActiveTodayByPhone(String phone, String doctorId, {String? patientName}) async {
     try {
       final today = _todayString();
       final clean = phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
@@ -528,11 +528,26 @@ class AppointmentService {
 
       final result = await pb.collection(PBCollections.appointments).getList(
         filter: filterStr,
-        perPage: 1,
+        perPage: 50, // fetch all same-phone appointments today
       );
-      if (result.items.isNotEmpty) {
-        return AppointmentModel.fromRecord(result.items.first);
+      if (result.items.isEmpty) return null;
+
+      // If a patient name is provided, only block if the SAME name is already registered.
+      // A different name means a different family member sharing the same phone — allow it.
+      if (patientName != null && patientName.trim().isNotEmpty) {
+        final nameNorm = patientName.trim().toLowerCase();
+        for (final item in result.items) {
+          final apt = AppointmentModel.fromRecord(item);
+          final existingName = apt.displayName.trim().toLowerCase();
+          if (existingName == nameNorm) {
+            return apt; // Same person — block
+          }
+        }
+        return null; // Different name(s) only — allow booking
       }
+
+      // No name provided — fall back to original behaviour (block on any match)
+      return AppointmentModel.fromRecord(result.items.first);
     } catch (_) {}
     return null;
   }

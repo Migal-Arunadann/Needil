@@ -69,7 +69,10 @@ class SessionLifecycleService {
         sort: 'scheduled_date,session_number',
         expand: 'patient,doctor,treatment_plan',
       );
-      return result.map((r) => SessionModel.fromRecord(r)).toList();
+      return result
+          .where((r) => !_isPlanPaused(r))
+          .map((r) => SessionModel.fromRecord(r))
+          .toList();
     } catch (e) {
       debugPrint('[SessionLifecycleService] getOverdueSessions error: $e');
       return [];
@@ -103,7 +106,11 @@ class SessionLifecycleService {
           sort: 'scheduled_date,session_number',
           expand: 'patient,doctor,treatment_plan',
         );
-        allSessions.addAll(result.map((r) => SessionModel.fromRecord(r)));
+        allSessions.addAll(
+          result
+              .where((r) => !_isPlanPaused(r))
+              .map((r) => SessionModel.fromRecord(r)),
+        );
       }
 
       // Re-sort the merged results
@@ -118,6 +125,22 @@ class SessionLifecycleService {
       debugPrint('[SessionLifecycleService] getOverdueSessionsForClinic error: $e');
       return [];
     }
+  }
+
+  bool _isPlanPaused(RecordModel record) {
+    try {
+      final expandData = record.get<Map<String, dynamic>>('expand');
+      if (expandData.containsKey('treatment_plan')) {
+        final planData = expandData['treatment_plan'];
+        if (planData is Map) {
+          final status = planData['status'] as String?;
+          if (status == 'paused' || status == 'completed' || status == 'closed') {
+            return true;
+          }
+        }
+      }
+    } catch (_) {}
+    return false;
   }
 
   // ─── Human Confirmation Actions ───────────────────────────────────────────

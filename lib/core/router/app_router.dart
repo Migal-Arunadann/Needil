@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:pms_app/core/services/auth_service.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/features/auth/widgets/brand_panel.dart';
 import 'package:pms_app/features/auth/screens/login_screen.dart';
+import 'package:pms_app/features/auth/screens/clinic_deletion_screen.dart';
 import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step0_otp_screen.dart';
 import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step1_screen.dart';
 import 'package:pms_app/features/auth/screens/clinic_registration/clinic_step2_screen.dart';
@@ -12,6 +17,9 @@ import 'package:pms_app/features/auth/screens/otp_verification_screen.dart';
 import 'package:pms_app/features/auth/screens/forgot_password_screen.dart';
 import 'package:pms_app/features/auth/screens/reset_password_screen.dart';
 import 'package:pms_app/features/dashboard/screens/main_layout.dart';
+import 'package:pms_app/features/dashboard/screens/clinic_dashboard_screen.dart';
+import 'package:pms_app/features/dashboard/screens/doctor_dashboard_screen.dart';
+import 'package:pms_app/features/dashboard/screens/receptionist_dashboard_screen.dart';
 import 'package:pms_app/features/appointments/screens/appointment_list_screen.dart';
 import 'package:pms_app/features/appointments/screens/create_appointment_screen.dart';
 import 'package:pms_app/features/appointments/screens/patient_info_screen.dart';
@@ -25,208 +33,549 @@ import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/features/scheduling/screens/available_slots_screen.dart';
 import 'package:pms_app/features/settings/screens/settings_screen.dart';
 import 'package:pms_app/features/settings/screens/consent_screen.dart';
+import 'package:pms_app/features/patients/screens/patient_list_screen.dart';
 import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
 import 'package:pms_app/features/patients/models/patient_model.dart';
+import 'package:pms_app/features/analytics/screens/analytics_screen.dart';
 import 'package:pms_app/features/superadmin/screens/superadmin_login_screen.dart';
+import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
 import 'package:pms_app/features/superadmin/screens/superadmin_clinic_detail_screen.dart';
 import 'package:pms_app/features/billing/screens/billing_screen.dart';
 import 'package:pms_app/features/billing/screens/subscription_locked_screen.dart';
 import 'package:pms_app/features/scheduling/screens/scheduling_exceptions_screen.dart';
 import 'package:pms_app/features/scheduling/screens/scheduling_audit_history_screen.dart';
 
-/// Named route generator for the app.
-Route<dynamic>? generateRoute(RouteSettings settings) {
-  switch (settings.name) {
-    case '/':
-      return null;
-    case '/login':
-      return _fade(const LoginScreen(), settings);
+/// Global root navigator key
+final GlobalKey<NavigatorState> rootNavigatorKey =
+    GlobalKey<NavigatorState>(debugLabel: 'root');
 
-    // Register link now goes directly to clinic registration step 0
-    case '/register/clinic':
-    case '/register/clinic/step0':
-      return _slide(const AuthWebShell(child: ClinicStep0OtpScreen()), settings);
+/// Maintain appNavigatorKey alias for backwards compatibility
+GlobalKey<NavigatorState> get appNavigatorKey => rootNavigatorKey;
 
-    case '/register/clinic/step1':
-      return _slide(const AuthWebShell(child: ClinicStep1Screen()), settings);
+/// Listenable that notifies GoRouter whenever AuthState changes in Riverpod
+class RouterNotifier extends ChangeNotifier {
+  final Ref _ref;
 
-    case '/register/clinic/step2':
-      if (settings.arguments == null) return _fade(const LoginScreen(), settings);
-      final args = settings.arguments as Map<String, dynamic>;
-      return _slide(AuthWebShell(child: ClinicStep2Screen(clinicData: args)), settings);
-
-    case '/register/clinic/step3':
-      if (settings.arguments == null) return _fade(const LoginScreen(), settings);
-      final args = settings.arguments as Map<String, dynamic>;
-      return _slide(AuthWebShell(child: ClinicStep3Screen(clinicData: args)), settings);
-
-    case '/register/clinic/step4':
-      if (settings.arguments == null) return _fade(const LoginScreen(), settings);
-      final args = settings.arguments as Map<String, dynamic>;
-      return _slide(AuthWebShell(child: ClinicStep4Screen(clinicData: args)), settings);
-
-    case '/register/clinic/step5':
-      if (settings.arguments == null) return _fade(const LoginScreen(), settings);
-      final args = settings.arguments as Map<String, dynamic>;
-      return _slide(AuthWebShell(child: ClinicStep5Screen(clinicData: args)), settings);
-
-    case '/auth/otp-verify':
-      if (settings.arguments == null) return _fade(const LoginScreen(), settings);
-      final args = settings.arguments as Map<String, dynamic>;
-      return _slide(
-        AuthWebShell(
-          child: OtpVerificationScreen(
-            mode: args['mode'] as OtpMode,
-            email: args['email'] as String,
-            clinicData: args['clinic_data'] as Map<String, dynamic>?,
-          ),
-        ),
-        settings,
-      );
-
-    case '/auth/forgot-password':
-      return _slide(const AuthWebShell(child: ForgotPasswordScreen()), settings);
-
-    case '/auth/reset-password':
-      if (settings.arguments == null) return _fade(const LoginScreen(), settings);
-      final args = settings.arguments as Map<String, dynamic>;
-      return _slide(
-        AuthWebShell(
-          child: ResetPasswordScreen(
-            otpCode: args['otp_code'] as String,
-            otpId: args['otp_id'] as String?,
-          ),
-        ),
-        settings,
-      );
-
-    case '/dashboard':
-      return _fade(MainLayout(), settings);
-
-    case '/appointments':
-      return _slide(const AppointmentListScreen(), settings);
-
-    case '/appointments/create':
-      final args = settings.arguments as Map<String, dynamic>? ?? {};
-      return _slide(
-          CreateAppointmentScreen(initialIsCallBy: args['isCallBy'] ?? true),
-          settings);
-
-    case '/appointments/patient-info':
-      final apt = settings.arguments as AppointmentModel;
-      return _slide(PatientInfoScreen(appointment: apt), settings);
-
-    case '/consultation':
-      final args = settings.arguments as Map<String, dynamic>;
-      return _slide(
-        ConsultationScreen(
-          patientId: args['patientId'] as String,
-          patientName: args['patientName'] as String,
-          doctorId: args['doctorId'] as String,
-          consultationId: args['consultationId'] as String?,
-          isViewMode: args['isViewMode'] as bool? ?? false,
-        ),
-        settings,
-      );
-
-    case '/treatment-plan/create':
-      final args = settings.arguments as Map<String, dynamic>;
-      return _slide(
-        CreateTreatmentPlanScreen(
-          patientId: args['patientId'] as String,
-          patientName: args['patientName'] as String,
-          doctorId: args['doctorId'] as String,
-          consultationId: args['consultationId'] as String?,
-        ),
-        settings,
-      );
-
-    case '/treatment-plan/sessions':
-      final plan = settings.arguments as TreatmentPlanModel;
-      return _slide(SessionListScreen(plan: plan), settings);
-
-    case '/sessions/record':
-      if (settings.arguments is SessionModel) {
-        final session = settings.arguments as SessionModel;
-        return _slide(RecordSessionScreen(session: session), settings);
-      }
-      if (settings.arguments is Map<String, dynamic>) {
-        final args = settings.arguments as Map<String, dynamic>;
-        return _slide(
-          RecordSessionScreen(
-            session: args['session'] as SessionModel,
-            patientName: args['patientName'] as String?,
-          ),
-          settings,
-        );
-      }
-      return _fade(MainLayout(), settings);
-
-    case '/available-slots':
-      final args = settings.arguments as Map<String, dynamic>? ?? {};
-      return _slide(
-        AvailableSlotsScreen(
-          doctorId: args['doctorId'] ?? '',
-          clinicId: args['clinicId'],
-          treatmentDuration: args['treatmentDuration'] ?? 30,
-        ),
-        settings,
-      );
-
-    case '/patient-profile':
-      final patient = settings.arguments as PatientModel?;
-      if (patient == null) return _fade(MainLayout(), settings);
-      return _slide(PatientProfileScreen(patient: patient), settings);
-
-    case '/settings':
-      return _slide(const SettingsScreen(), settings);
-
-    case '/consent':
-      return _slide(const ConsentScreen(), settings);
-
-    case '/billing':
-      return _slide(const BillingScreen(), settings);
-
-    case '/subscription-locked':
-      return _fade(const SubscriptionLockedScreen(), settings);
-
-    case '/superadmin/login':
-      return _fade(const SuperadminLoginScreen(), settings);
-
-    case '/superadmin/clinic':
-      final clinicId = settings.arguments as String;
-      return _slide(SuperadminClinicDetailScreen(clinicId: clinicId), settings);
-
-    case '/scheduling/exceptions':
-      return _slide(const SchedulingExceptionsScreen(), settings);
-
-    case '/scheduling/audit':
-      final plan = settings.arguments;
-      if (plan is! TreatmentPlanModel) return _fade(const LoginScreen(), settings);
-      return _slide(SchedulingAuditHistoryScreen(plan: plan), settings);
-
-    default:
-      return _fade(const LoginScreen(), settings);
+  RouterNotifier(this._ref) {
+    _ref.listen<AuthState>(
+      authProvider,
+      (_, __) => notifyListeners(),
+    );
   }
 }
 
-// Route animations
-PageRouteBuilder _fade(Widget page, RouteSettings settings) {
-  return PageRouteBuilder(
-    settings: settings,
-    pageBuilder: (_, a, b) => page,
-    transitionsBuilder: (_, animation, secondaryAnim, child) {
+final routerNotifierProvider = Provider<RouterNotifier>((ref) {
+  return RouterNotifier(ref);
+});
+
+/// Riverpod provider for GoRouter
+final routerProvider = Provider<GoRouter>((ref) {
+  final routerNotifier = ref.watch(routerNotifierProvider);
+
+  return GoRouter(
+    navigatorKey: rootNavigatorKey,
+    refreshListenable: routerNotifier,
+    initialLocation: '/appointments',
+    redirect: (BuildContext context, GoRouterState state) {
+      final auth = ref.read(authProvider);
+
+      if (auth.isInitializing) {
+        return null; // Let the builder render splash while initializing
+      }
+
+      final loc = state.matchedLocation;
+      final isAuthRoute = loc == '/login' ||
+          loc.startsWith('/register') ||
+          loc.startsWith('/auth') ||
+          loc == '/superadmin/login';
+
+      if (!auth.isAuthenticated) {
+        return isAuthRoute ? null : '/login';
+      }
+
+      // Authenticated users
+      if (auth.role == UserRole.superadmin) {
+        if (loc == '/login' || loc == '/') {
+          return '/superadmin/dashboard';
+        }
+        return null;
+      }
+
+      if (auth.role == UserRole.clinic) {
+        if (auth.isPendingDeletion && loc != '/deletion') {
+          return '/deletion';
+        }
+        if (auth.clinic != null &&
+            auth.clinic!.name.isEmpty &&
+            !loc.startsWith('/register')) {
+          return '/register/clinic/step1';
+        }
+        if (auth.clinic != null &&
+            !auth.clinic!.isSubscriptionActive &&
+            loc != '/subscription-locked' &&
+            loc != '/billing') {
+          return '/subscription-locked';
+        }
+      }
+
+      // Logged in user hitting root or login -> redirect to /appointments
+      if (loc == '/' || loc == '/login') {
+        return '/appointments';
+      }
+
+      return null;
+    },
+    routes: [
+      // ── Auth & Onboarding Routes (No Shell) ───────────────────────────
+      GoRoute(
+        path: '/login',
+        pageBuilder: (context, state) => _fadePage(
+          state: state,
+          child: const LoginScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/register/clinic',
+        pageBuilder: (context, state) => _slidePage(
+          context: context,
+          state: state,
+          child: const AuthWebShell(child: ClinicStep0OtpScreen()),
+        ),
+      ),
+      GoRoute(
+        path: '/register/clinic/step0',
+        pageBuilder: (context, state) => _slidePage(
+          context: context,
+          state: state,
+          child: const AuthWebShell(child: ClinicStep0OtpScreen()),
+        ),
+      ),
+      GoRoute(
+        path: '/register/clinic/step1',
+        pageBuilder: (context, state) => _slidePage(
+          context: context,
+          state: state,
+          child: const AuthWebShell(child: ClinicStep1Screen()),
+        ),
+      ),
+      GoRoute(
+        path: '/register/clinic/step2',
+        pageBuilder: (context, state) {
+          final args = state.extra as Map<String, dynamic>? ?? {};
+          return _slidePage(
+            context: context,
+            state: state,
+            child: AuthWebShell(child: ClinicStep2Screen(clinicData: args)),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/register/clinic/step3',
+        pageBuilder: (context, state) {
+          final args = state.extra as Map<String, dynamic>? ?? {};
+          return _slidePage(
+            context: context,
+            state: state,
+            child: AuthWebShell(child: ClinicStep3Screen(clinicData: args)),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/register/clinic/step4',
+        pageBuilder: (context, state) {
+          final args = state.extra as Map<String, dynamic>? ?? {};
+          return _slidePage(
+            context: context,
+            state: state,
+            child: AuthWebShell(child: ClinicStep4Screen(clinicData: args)),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/register/clinic/step5',
+        pageBuilder: (context, state) {
+          final args = state.extra as Map<String, dynamic>? ?? {};
+          return _slidePage(
+            context: context,
+            state: state,
+            child: AuthWebShell(child: ClinicStep5Screen(clinicData: args)),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/auth/otp-verify',
+        pageBuilder: (context, state) {
+          final args = state.extra as Map<String, dynamic>? ?? {};
+          return _slidePage(
+            context: context,
+            state: state,
+            child: AuthWebShell(
+              child: OtpVerificationScreen(
+                mode: args['mode'] as OtpMode? ?? OtpMode.registration,
+                email: args['email'] as String? ?? '',
+                clinicData: args['clinic_data'] as Map<String, dynamic>?,
+              ),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/auth/forgot-password',
+        pageBuilder: (context, state) => _slidePage(
+          context: context,
+          state: state,
+          child: const AuthWebShell(child: ForgotPasswordScreen()),
+        ),
+      ),
+      GoRoute(
+        path: '/auth/reset-password',
+        pageBuilder: (context, state) {
+          final args = state.extra as Map<String, dynamic>? ?? {};
+          return _slidePage(
+            context: context,
+            state: state,
+            child: AuthWebShell(
+              child: ResetPasswordScreen(
+                otpCode: args['otp_code'] as String? ?? '',
+                otpId: args['otp_id'] as String?,
+              ),
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        path: '/deletion',
+        pageBuilder: (context, state) => _fadePage(
+          state: state,
+          child: const ClinicDeletionScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/subscription-locked',
+        pageBuilder: (context, state) => _fadePage(
+          state: state,
+          child: const SubscriptionLockedScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/superadmin/login',
+        pageBuilder: (context, state) => _fadePage(
+          state: state,
+          child: const SuperadminLoginScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/superadmin/dashboard',
+        pageBuilder: (context, state) => _fadePage(
+          state: state,
+          child: const SuperadminShell(),
+        ),
+      ),
+      GoRoute(
+        path: '/superadmin/clinic',
+        pageBuilder: (context, state) {
+          final clinicId = state.extra as String? ?? '';
+          return _slidePage(
+            context: context,
+            state: state,
+            child: SuperadminClinicDetailScreen(clinicId: clinicId),
+          );
+        },
+      ),
+
+      // ── Main Shell with Persistent Sidebar Tabs ────────────────────────
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return MainLayout(navigationShell: navigationShell);
+        },
+        branches: [
+          // Branch 0: Dashboard (Home)
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/dashboard',
+                pageBuilder: (context, state) => const NoTransitionPage(
+                  child: RoleDashboardWrapper(),
+                ),
+              ),
+            ],
+          ),
+          // Branch 1: Appointments
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/appointments',
+                pageBuilder: (context, state) => const NoTransitionPage(
+                  child: AppointmentListScreen(),
+                ),
+              ),
+            ],
+          ),
+          // Branch 2: Analytics
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/analytics',
+                pageBuilder: (context, state) => const NoTransitionPage(
+                  child: AnalyticsScreen(),
+                ),
+              ),
+            ],
+          ),
+          // Branch 3: Patients
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/patients',
+                pageBuilder: (context, state) => const NoTransitionPage(
+                  child: PatientListScreen(),
+                ),
+              ),
+            ],
+          ),
+          // Branch 4: Profile / Settings
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/profile',
+                pageBuilder: (context, state) => const NoTransitionPage(
+                  child: SettingsScreen(),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+
+      // ── Sub-Screens (Pushed over root navigator) ──────────────────────
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/appointments/create',
+        pageBuilder: (context, state) {
+          final args = state.extra as Map<String, dynamic>? ?? {};
+          return _slidePage(
+            context: context,
+            state: state,
+            child: CreateAppointmentScreen(
+              initialIsCallBy: args['isCallBy'] ?? true,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/appointments/patient-info',
+        pageBuilder: (context, state) {
+          final apt = state.extra as AppointmentModel;
+          return _slidePage(
+            context: context,
+            state: state,
+            child: PatientInfoScreen(appointment: apt),
+          );
+        },
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/consultation',
+        pageBuilder: (context, state) {
+          final args = state.extra as Map<String, dynamic>? ?? {};
+          return _slidePage(
+            context: context,
+            state: state,
+            child: ConsultationScreen(
+              patientId: args['patientId'] as String? ?? '',
+              patientName: args['patientName'] as String? ?? '',
+              doctorId: args['doctorId'] as String? ?? '',
+              consultationId: args['consultationId'] as String?,
+              isViewMode: args['isViewMode'] as bool? ?? false,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/treatment-plan/create',
+        pageBuilder: (context, state) {
+          final args = state.extra as Map<String, dynamic>? ?? {};
+          return _slidePage(
+            context: context,
+            state: state,
+            child: CreateTreatmentPlanScreen(
+              patientId: args['patientId'] as String? ?? '',
+              patientName: args['patientName'] as String? ?? '',
+              doctorId: args['doctorId'] as String? ?? '',
+              consultationId: args['consultationId'] as String?,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/treatment-plan/sessions',
+        pageBuilder: (context, state) {
+          final plan = state.extra as TreatmentPlanModel;
+          return _slidePage(
+            context: context,
+            state: state,
+            child: SessionListScreen(plan: plan),
+          );
+        },
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/sessions/record',
+        pageBuilder: (context, state) {
+          if (state.extra is SessionModel) {
+            return _slidePage(
+              context: context,
+              state: state,
+              child: RecordSessionScreen(
+                session: state.extra as SessionModel,
+              ),
+            );
+          }
+          final args = state.extra as Map<String, dynamic>? ?? {};
+          return _slidePage(
+            context: context,
+            state: state,
+            child: RecordSessionScreen(
+              session: args['session'] as SessionModel,
+              patientName: args['patientName'] as String?,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/available-slots',
+        pageBuilder: (context, state) {
+          final args = state.extra as Map<String, dynamic>? ?? {};
+          return _slidePage(
+            context: context,
+            state: state,
+            child: AvailableSlotsScreen(
+              doctorId: args['doctorId'] ?? '',
+              clinicId: args['clinicId'],
+              treatmentDuration: args['treatmentDuration'] ?? 30,
+            ),
+          );
+        },
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/patient-profile',
+        pageBuilder: (context, state) {
+          final patient = state.extra as PatientModel?;
+          if (patient == null) {
+            return _fadePage(
+              state: state,
+              child: const AppointmentListScreen(),
+            );
+          }
+          return _slidePage(
+            context: context,
+            state: state,
+            child: PatientProfileScreen(patient: patient),
+          );
+        },
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/settings',
+        pageBuilder: (context, state) => _slidePage(
+          context: context,
+          state: state,
+          child: const SettingsScreen(),
+        ),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/consent',
+        pageBuilder: (context, state) => _slidePage(
+          context: context,
+          state: state,
+          child: const ConsentScreen(),
+        ),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/billing',
+        pageBuilder: (context, state) => _slidePage(
+          context: context,
+          state: state,
+          child: const BillingScreen(),
+        ),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/scheduling/exceptions',
+        pageBuilder: (context, state) => _slidePage(
+          context: context,
+          state: state,
+          child: const SchedulingExceptionsScreen(),
+        ),
+      ),
+      GoRoute(
+        parentNavigatorKey: rootNavigatorKey,
+        path: '/scheduling/audit',
+        pageBuilder: (context, state) {
+          final plan = state.extra as TreatmentPlanModel;
+          return _slidePage(
+            context: context,
+            state: state,
+            child: SchedulingAuditHistoryScreen(plan: plan),
+          );
+        },
+      ),
+    ],
+  );
+});
+
+/// Wrapper that renders the active role's dashboard for branch 0
+class RoleDashboardWrapper extends ConsumerWidget {
+  const RoleDashboardWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final role = ref.watch(authProvider).role;
+    switch (role) {
+      case UserRole.clinic:
+        return const ClinicDashboardScreen();
+      case UserRole.doctor:
+        return const DoctorDashboardScreen();
+      case UserRole.receptionist:
+        return const ReceptionistDashboardScreen();
+      default:
+        return const Center(child: Text('Unknown Role'));
+    }
+  }
+}
+
+// ── Custom Page Transition Helpers ──────────────────────────────────────────
+Page<dynamic> _fadePage({
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 200),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
       return FadeTransition(opacity: animation, child: child);
     },
-    transitionDuration: const Duration(milliseconds: 200),
   );
 }
 
-PageRouteBuilder _slide(Widget page, RouteSettings settings) {
-  return PageRouteBuilder(
-    settings: settings,
-    pageBuilder: (_, a, b) => page,
-    transitionsBuilder: (context, animation, secondaryAnim, child) {
+Page<dynamic> _slidePage({
+  required BuildContext context,
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 200),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
       final width = MediaQuery.sizeOf(context).width;
       final isDesktop = width >= 900;
 
@@ -245,10 +594,10 @@ PageRouteBuilder _slide(Widget page, RouteSettings settings) {
         child: child,
       );
     },
-    transitionDuration: const Duration(milliseconds: 200),
   );
 }
 
+/// Web Shell for Auth Screens
 class AuthWebShell extends StatelessWidget {
   final Widget child;
 

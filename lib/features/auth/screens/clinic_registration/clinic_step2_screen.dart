@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pms_app/core/constants/app_colors.dart';
 import 'package:pms_app/core/constants/app_text_styles.dart';
@@ -20,9 +21,9 @@ class _ClinicStep2ScreenState extends State<ClinicStep2Screen> {
   int _bedCount = 1;
 
   void _next() {
-    Navigator.of(context).pushNamed(
+    context.push(
       '/register/clinic/step3',
-      arguments: {
+      extra: {
         ...widget.clinicData,
         'bed_count': _bedCount,
       },

@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pms_app/features/dashboard/providers/dashboard_provider.dart';
 import 'package:pms_app/features/dashboard/widgets/dashboard_widgets.dart';
@@ -51,10 +52,9 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                   subtitle: 'Schedule a pre-booked time slot via phone call',
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.pushNamed(
-                      context,
+                    context.push(
                       '/appointments/create',
-                      arguments: {'isCallBy': true},
+                      extra: {'isCallBy': true},
                     );
                   },
                 ),
@@ -67,10 +67,9 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                   subtitle: 'Register a patient waiting at the clinic',
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.pushNamed(
-                      context,
+                    context.push(
                       '/appointments/create',
-                      arguments: {'isCallBy': false},
+                      extra: {'isCallBy': false},
                     );
                   },
                 ),
@@ -447,10 +446,9 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
           side: BorderSide(color: context.colors.border.withValues(alpha: 0.5)),
         ),
         onSelected: (isCallBy) {
-          Navigator.pushNamed(
-            context,
+          context.push(
             '/appointments/create',
-            arguments: {'isCallBy': isCallBy},
+            extra: {'isCallBy': isCallBy},
           );
         },
         itemBuilder: (context) => [

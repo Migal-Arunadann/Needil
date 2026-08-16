@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/features/superadmin/screens/superadmin_shell.dart';
@@ -93,8 +94,10 @@ class SuperadminSettingsScreen extends ConsumerWidget {
                             ),
                           );
                           if (confirm == true) {
-                            Navigator.of(context).pushNamedAndRemoveUntil('/superadmin/login', (_) => false);
                             ref.read(authProvider.notifier).logout();
+                            if (context.mounted) {
+                              context.go('/superadmin/login');
+                            }
                           }
                         },
                         icon: const Icon(Icons.logout_rounded),

@@ -1,5 +1,5 @@
-// AUTO-GENERATED â€” Web-only layout.
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pms_app/core/scheduling/treatment_scheduler.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
@@ -641,7 +641,7 @@ class _AppointmentListScreenState
       final pb = ref.read(pocketbaseProvider);
       final record = await pb.collection(PBCollections.patients).getOne(apt.patientId!);
       final patient = PatientModel.fromRecord(record);
-      if (mounted) Navigator.pushNamed(context, '/patient-profile', arguments: patient);
+      if (mounted) context.push('/patient-profile', extra: patient);
     } catch (e) {
       if (mounted) _showError('Could not load patient: $e');
     }
@@ -702,11 +702,12 @@ class _AppointmentListScreenState
       final pb = ref.read(pocketbaseProvider);
       try {
         await pb.collection(PBCollections.consultations).getOne(consultationId);
-      } catch (_) {
-        // Consultation record is gone — full refresh to reconcile state
+      } catch (e) {
+        // Consultation record might be gone or there's an API rule/network error
         if (mounted) {
+          final errStr = e.toString().replaceAll('ClientException', 'CE');
           AppToast.show(
-            'This consultation no longer exists. Refreshing data...',
+            'Cannot open plan: $errStr (ID: $consultationId)',
             type: ToastType.error,
           );
           ref.read(appointmentListProvider.notifier).loadAppointments();
@@ -849,10 +850,9 @@ class _AppointmentListScreenState
 
       // Navigate immediately
       if (session != null && mounted) {
-        await Navigator.pushNamed(
-          context,
+        await context.push(
           '/sessions/record',
-          arguments: {
+          extra: {
             'session': session,
             'patientName': apt.displayName,
           },
@@ -1011,10 +1011,9 @@ class _AppointmentListScreenState
         return;
       }
       if (mounted) {
-        await Navigator.pushNamed(
-          context,
+        await context.push(
           '/sessions/record',
-          arguments: {
+          extra: {
             'session': session,
             'patientName': apt.displayName,
           },
@@ -1359,10 +1358,9 @@ class _AppointmentListScreenState
     );
     if (confirmed != true || !mounted) return;
 
-    await Navigator.pushNamed(
-      context,
+    await context.push(
       '/sessions/record',
-      arguments: {
+      extra: {
         'session': session,
         'patientName': apt.displayName,
       },
@@ -1611,10 +1609,9 @@ class _AppointmentListScreenState
   Widget _buildNewAppointmentButton({bool compact = false}) {
     return PopupMenuButton<bool>(
       onSelected: (isCallBy) {
-        Navigator.pushNamed(
-          context,
+        context.push(
           '/appointments/create',
-          arguments: {'isCallBy': isCallBy},
+          extra: {'isCallBy': isCallBy},
         ).then((_) {
           ref.read(appointmentListProvider.notifier).loadAppointments();
           _loadQuickLinkCounts();
@@ -1803,10 +1800,9 @@ class _AppointmentListScreenState
   }
 
   void _navigateToCreateAppointment(bool isCallBy) {
-    Navigator.pushNamed(
-      context,
+    context.push(
       '/appointments/create',
-      arguments: {'isCallBy': isCallBy},
+      extra: {'isCallBy': isCallBy},
     ).then((_) {
       ref.read(appointmentListProvider.notifier).loadAppointments();
       _loadQuickLinkCounts();
@@ -3087,6 +3083,31 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
 
   Future<void> _loadPlanInfo() async {
     try {
+      // Prefer the direct linked consultation ID stored on the appointment
+      final linkedId = widget.apt.linkedConsultationId;
+      if (linkedId != null && linkedId.isNotEmpty) {
+        // We have a direct ID — just check if a plan already exists for it
+        final pb = ref.read(pocketbaseProvider);
+        bool hasPlan = false;
+        try {
+          final plans = await pb.collection(PBCollections.treatmentPlans).getList(
+            filter: 'consultation = "$linkedId"',
+            perPage: 1,
+            query: {'skipTotal': '1'},
+          );
+          hasPlan = plans.items.isNotEmpty;
+        } catch (_) {}
+        if (mounted) {
+          setState(() {
+            _planInfoLoaded = true;
+            _hasPlan = hasPlan;
+            _consultationId = linkedId;
+          });
+        }
+        return;
+      }
+
+      // Fallback: list query (for older appointments without linkedConsultationId)
       final service = ref.read(appointmentServiceProvider);
       final info = await service.getConsultationPlanInfo(
           widget.apt.patientId!, widget.apt.doctorId);
@@ -3609,7 +3630,27 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
         icon: planIcon,
         color: context.colors.primary,
         onTap: () async {
-          await Future.microtask(() => widget.onCreatePlan(consultationId ?? ''));
+          // Prefer the direct link stored on the appointment record
+          String? cid = widget.apt.linkedConsultationId?.isNotEmpty == true
+              ? widget.apt.linkedConsultationId
+              : _consultationId;
+          if (cid == null || cid.isEmpty) {
+            final service = ref.read(appointmentServiceProvider);
+            final info = await service.getConsultationPlanInfo(widget.apt.patientId!, widget.apt.doctorId);
+            cid = info?['consultationId'] as String?;
+            if (mounted) {
+              setState(() {
+                _consultationId = cid;
+                _hasPlan = info?['hasPlan'] as bool? ?? false;
+                _planInfoLoaded = true;
+              });
+            }
+          }
+          if ((cid == null || cid.isEmpty) && mounted) {
+            AppToast.show('Consultation not found. Please try again.', type: ToastType.error);
+            return;
+          }
+          await Future.microtask(() => widget.onCreatePlan(cid!));
           if (mounted) {
             setState(() {
               _planInfoLoaded = false;
@@ -4273,8 +4314,10 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                                             icon: planIcon,
                                             color: context.colors.primary,
                                              onTap: () async {
-                                              // Fetch _consultationId on-demand if not yet loaded
-                                              String? cid = _consultationId;
+                                              // Prefer the direct link stored on the appointment record
+                                              String? cid = widget.apt.linkedConsultationId?.isNotEmpty == true
+                                                  ? widget.apt.linkedConsultationId
+                                                  : _consultationId;
                                               if (cid == null || cid.isEmpty) {
                                                 final service = ref.read(appointmentServiceProvider);
                                                 final info = await service.getConsultationPlanInfo(widget.apt.patientId!, widget.apt.doctorId);
@@ -4580,7 +4623,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
             children: [
               Expanded(
                 child: _ActionButton(
-                  label: 'Patient Came',
+                  label: 'Patient Arrived',
                   icon: Icons.check_circle_rounded,
                   color: context.colors.success,
                   onTap: () => widget.onOverdueCame(_sessionId),
@@ -4848,7 +4891,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
 
     if (isOverdue) {
       buttons.add(_ActionButton(
-        label: 'We Were Closed',
+        label: 'Clinic Closed',
         icon: Icons.business_rounded,
         color: context.colors.textSecondary,
         onTap: () => widget.onOverdueClosed(_sessionId),

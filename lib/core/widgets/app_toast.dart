@@ -35,6 +35,7 @@ class AppToast {
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
 
+    messenger.clearSnackBars();
     messenger.showSnackBar(
       SnackBar(
         content: Text(

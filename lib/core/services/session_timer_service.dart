@@ -5,10 +5,11 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:pms_app/app.dart';
+import 'package:pms_app/core/router/app_router.dart';
 import 'package:pms_app/core/constants/app_colors.dart';
 import 'package:pms_app/core/constants/app_text_styles.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
@@ -217,10 +218,10 @@ class SessionTimerService {
     if (sessionId == null) return;
     final entry = _timers[sessionId];
     if (entry == null) return;
-    final ctx = appNavigatorKey.currentContext;
+    final ctx = rootNavigatorKey.currentContext;
     if (ctx == null) return;
     if (entry.routeArgs != null) {
-      Navigator.of(ctx).pushNamed('/sessions/record', arguments: entry.routeArgs);
+      ctx.push('/sessions/record', extra: entry.routeArgs);
     }
   }
 

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pms_app/core/scheduling/treatment_scheduler.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:pms_app/core/scheduling/treatment_scheduler.dart' show RescheduleMode;
 import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
@@ -328,7 +328,7 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
     }
 
     void navigateToRecord(SessionModel session) {
-      Navigator.pushNamed(context, '/sessions/record', arguments: session).then(
+      context.push('/sessions/record', extra: session).then(
         (_) {
           ref.read(sessionsProvider.notifier).loadPlanSessions(widget.plan.id);
         },

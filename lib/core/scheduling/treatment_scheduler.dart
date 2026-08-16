@@ -496,10 +496,10 @@ class TreatmentScheduler {
       // (skips paused plans) and to resumePlan (queries only paused sessions).
       final version = await _currentVersion(planId);
 
-      // Pause all pending sessions (upcoming + missed — not completed/cancelled)
+      // Pause all pending sessions (upcoming + missed + waiting + overdue — not completed/cancelled)
       final sessRes = await pb.collection(PBCollections.sessions).getList(
         filter:
-            'treatment_plan = "$planId" && (status = "upcoming" || status = "missed" || status = "waiting")',
+            'treatment_plan = "$planId" && (status = "upcoming" || status = "missed" || status = "waiting" || status = "overdue")',
         sort: 'session_number',
         perPage: 200,
       );

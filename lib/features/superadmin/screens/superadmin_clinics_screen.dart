@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:pocketbase/pocketbase.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
@@ -126,8 +127,8 @@ class _SuperadminClinicsScreenState extends ConsumerState<SuperadminClinicsScree
                                 separatorBuilder: (_, __) => const SizedBox(height: 10),
                                 itemBuilder: (ctx, i) => _ClinicListCard(
                                   record: clinics[i],
-                                  onTap: () => Navigator.of(context)
-                                      .pushNamed('/superadmin/clinic', arguments: clinics[i].id)
+                                  onTap: () => context
+                                      .push('/superadmin/clinic', extra: clinics[i].id)
                                       .then((_) => ref.invalidate(_allClinicsProvider)),
                                 ),
                               ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -421,7 +422,7 @@ class _SuperadminDashboardScreenState
                 style: context.textStyles.caption.copyWith(color: SAColors.textHint, fontSize: 10)),
           ],
         ),
-        onTap: () => Navigator.of(context).pushNamed('/superadmin/clinic', arguments: clinic.id),
+        onTap: () => context.push('/superadmin/clinic', extra: clinic.id),
       ),
     );
   }

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:pms_app/core/services/data_export_service.dart';
@@ -156,19 +157,23 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   @override
   Widget build(BuildContext context) {
     if (widget.isCompact) {
-      return Scaffold(
-        backgroundColor: context.colors.background,
-        appBar: AppBar(
-          title: Text(
-            widget.patient.fullName.isNotEmpty ? widget.patient.fullName : 'Patient',
-            style: context.textStyles.h3.copyWith(fontWeight: FontWeight.bold),
-          ),
-          centerTitle: false,
-          automaticallyImplyLeading: false,
-          elevation: 0,
-          backgroundColor: context.colors.background,
+      return Container(
+        color: context.colors.background,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
+              child: Text(
+                widget.patient.fullName.isNotEmpty ? widget.patient.fullName : 'Patient',
+                style: context.textStyles.h3.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+            Expanded(
+              child: _buildTreatmentsTab(),
+            ),
+          ],
         ),
-        body: _buildTreatmentsTab(),
       );
     }
 
@@ -1845,10 +1850,9 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: () async {
-                        await Navigator.pushNamed(
-                          context,
+                        await context.push(
                           '/consultation',
-                          arguments: {
+                          extra: {
                             'patientId': patient.id,
                             'patientName': patient.fullName,
                             'doctorId': patient.doctorId,
@@ -1935,10 +1939,9 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 width: double.infinity,
                 child: OutlinedButton.icon(
                   onPressed: () async {
-                    await Navigator.pushNamed(
-                      context,
+                    await context.push(
                       '/consultation',
-                      arguments: {
+                      extra: {
                         'patientId': patient.id,
                         'patientName': patient.fullName,
                         'doctorId': patient.doctorId,
@@ -2687,7 +2690,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
           }
         }
 
-        await Navigator.pushNamed(context, '/sessions/record', arguments: {
+        await context.push('/sessions/record', extra: {
           'session': session,
           'patientName': patient.fullName,
         });
@@ -3009,7 +3012,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       await treatmentService.startSessionRecord(session.id);
       
       if (mounted) {
-        await Navigator.pushNamed(context, '/sessions/record', arguments: {
+        await context.push('/sessions/record', extra: {
           'session': session,
           'patientName': patient.fullName,
         });
