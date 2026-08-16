@@ -595,6 +595,15 @@ class _AutoSchedulingDashboardState
       ],
     );
 
+    if (!isDesktop) {
+      return Dialog.fullscreen(
+        backgroundColor: context.colors.background,
+        child: SafeArea(
+          child: dashboardContent,
+        ),
+      );
+    }
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       backgroundColor: context.colors.background,
@@ -602,7 +611,7 @@ class _AutoSchedulingDashboardState
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
-        width: hasSelection ? width * 0.9 : (isDesktop ? 650 : width * 0.95),
+        width: hasSelection ? width * 0.9 : 650,
         constraints: BoxConstraints(
           maxHeight: MediaQuery.of(context).size.height * 0.85,
         ),
