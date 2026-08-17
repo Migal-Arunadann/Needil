@@ -86,38 +86,52 @@ class PatientService {
     return lastVisits;
   }
 
-  /// Fetch patients who have an appointment with 'arrived' status today.
+  /// Fetch patients who have an active arrived, waiting, in-progress, or completed visit today.
   Future<Set<String>> getArrivedPatientIds(List<String> patientIds) async {
     if (patientIds.isEmpty) return {};
 
     final Set<String> arrivedIds = {};
     const chunkSize = 50;
+    final now = DateTime.now();
+    final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
     for (var i = 0; i < patientIds.length; i += chunkSize) {
       final chunk = patientIds.sublist(i, (i + chunkSize).clamp(0, patientIds.length));
       final idsFilter = chunk.map((id) => 'patient = "$id"').join(' || ');
-      final filter = 'status = "arrived" && ($idsFilter)';
+      final filter = '(date ~ "$todayStr" || date = "$todayStr") && (status = "waiting" || status = "in_progress" || status = "completed" || status = "arrived") && ($idsFilter)';
 
       try {
         final records = await pb.collection(PBCollections.appointments).getFullList(
           filter: filter,
-          fields: 'patient,date',
+          fields: 'patient,date,status',
         );
 
-        final now = DateTime.now();
         for (final r in records) {
           final pId = r.getStringValue('patient');
-          final dateStr = r.getStringValue('date');
-          if (pId.isNotEmpty && dateStr.isNotEmpty) {
-            final dt = DateTime.tryParse(dateStr);
-            // Consider it arrived if the appointment is today
-            if (dt != null && dt.year == now.year && dt.month == now.month && dt.day == now.day) {
-              arrivedIds.add(pId);
-            }
+          if (pId.isNotEmpty) {
+            arrivedIds.add(pId);
           }
         }
       } catch (_) {
-        // Continue to next chunk
+        // Fallback with simpler query if compound filter fails
+        try {
+          final fallbackRecords = await pb.collection(PBCollections.appointments).getFullList(
+            filter: '(status = "waiting" || status = "in_progress" || status = "completed" || status = "arrived") && ($idsFilter)',
+            fields: 'patient,date,status',
+          );
+          for (final r in fallbackRecords) {
+            final pId = r.getStringValue('patient');
+            final dateStr = r.getStringValue('date');
+            if (pId.isNotEmpty && dateStr.isNotEmpty) {
+              final dt = DateTime.tryParse(dateStr);
+              if (dt != null && dt.year == now.year && dt.month == now.month && dt.day == now.day) {
+                arrivedIds.add(pId);
+              } else if (dateStr.startsWith(todayStr)) {
+                arrivedIds.add(pId);
+              }
+            }
+          }
+        } catch (_) {}
       }
     }
 

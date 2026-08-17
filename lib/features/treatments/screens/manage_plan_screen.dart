@@ -263,13 +263,16 @@ class _ManagePlanScreenState extends ConsumerState<ManagePlanScreen> {
                     final didSlotChange = (session.scheduledDate != originalSession.scheduledDate) || (session.scheduledTime != originalSession.scheduledTime);
                     final isLast = index == _editableSessions.length - 1;
                     
+                    final isDesktop = MediaQuery.of(context).size.width >= 650;
+                    final timelineWidth = isDesktop ? 60.0 : 44.0;
+                    
                     return IntrinsicHeight(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           // Timeline Node
                           SizedBox(
-                            width: 60,
+                            width: timelineWidth,
                             child: Stack(
                               alignment: Alignment.topCenter,
                               children: [
@@ -301,8 +304,8 @@ class _ManagePlanScreenState extends ConsumerState<ManagePlanScreen> {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 24.0),
                                   child: Container(
-                                    width: 36,
-                                    height: 36,
+                                    width: isDesktop ? 36 : 32,
+                                    height: isDesktop ? 36 : 32,
                                     decoration: BoxDecoration(
                                       color: context.colors.primary,
                                       shape: BoxShape.circle,
@@ -317,7 +320,7 @@ class _ManagePlanScreenState extends ConsumerState<ManagePlanScreen> {
                                     alignment: Alignment.center,
                                     child: Text(
                                       '${session.sessionNumber}',
-                                      style: context.textStyles.h4.copyWith(color: Colors.white),
+                                      style: (isDesktop ? context.textStyles.h4 : context.textStyles.label).copyWith(color: Colors.white, fontWeight: FontWeight.bold),
                                     ),
                                   ),
                                 ),
@@ -327,7 +330,7 @@ class _ManagePlanScreenState extends ConsumerState<ManagePlanScreen> {
                           // Content Card
                           Expanded(
                             child: Padding(
-                              padding: const EdgeInsets.only(bottom: 24.0),
+                              padding: const EdgeInsets.only(bottom: 20.0),
                               child: Container(
                                 decoration: BoxDecoration(
                                   color: context.colors.surface,
@@ -345,161 +348,66 @@ class _ManagePlanScreenState extends ConsumerState<ManagePlanScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                   onTap: () {},
                                   child: Padding(
-                                    padding: const EdgeInsets.all(20),
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.center,
-                                      children: [
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                    padding: EdgeInsets.all(isDesktop ? 20 : 14),
+                                    child: isDesktop
+                                        ? Row(
+                                            crossAxisAlignment: CrossAxisAlignment.center,
                                             children: [
-                                              Text(
-                                                _fmtDay(session.scheduledDate),
-                                                style: context.textStyles.caption.copyWith(
-                                                  color: context.colors.textHint,
-                                                  letterSpacing: 1.2,
-                                                  fontWeight: FontWeight.w600,
+                                              Expanded(
+                                                child: _buildSessionInfoContent(
+                                                  session: session,
+                                                  originalSession: originalSession,
+                                                  didSlotChange: didSlotChange,
+                                                  getSlotStr: getSlotStr,
+                                                  index: index,
                                                 ),
                                               ),
-                                              const SizedBox(height: 4),
-                                              if (didSlotChange)
-                                                Wrap(
-                                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                                  children: [
-                                                    Text(
-                                                      '[${getSlotStr(originalSession, short: true)}]',
-                                                      style: context.textStyles.h3.copyWith(fontSize: 14, color: context.colors.textHint, decoration: TextDecoration.lineThrough),
-                                                    ),
-                                                    const Padding(
-                                                      padding: EdgeInsets.symmetric(horizontal: 4),
-                                                      child: Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF059669)),
-                                                    ),
-                                                    Text(
-                                                      '[${getSlotStr(session, short: true)}]',
-                                                      style: context.textStyles.h3.copyWith(fontSize: 15, color: const Color(0xFF059669)),
-                                                    ),
-                                                  ],
-                                                )
-                                              else if (!getSlotStr(session).contains('Time pending'))
-                                                Text(
-                                                  getSlotStr(session, useAt: true),
-                                                  style: context.textStyles.h3.copyWith(fontSize: 18),
-                                                )
-                                              else
-                                                RichText(
-                                                  text: TextSpan(
-                                                    text: '${_fmtDateMain(session.scheduledDate)} ',
-                                                    style: context.textStyles.h3.copyWith(fontSize: 18, color: context.colors.textPrimary),
-                                                    children: [
-                                                      WidgetSpan(
-                                                        alignment: PlaceholderAlignment.middle,
-                                                        child: Container(
-                                                          margin: const EdgeInsets.only(left: 4),
-                                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                                          decoration: BoxDecoration(
-                                                            color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
-                                                            borderRadius: BorderRadius.circular(6),
-                                                          ),
-                                                          child: Row(
-                                                            mainAxisSize: MainAxisSize.min,
-                                                            children: [
-                                                              const Icon(Icons.schedule_rounded, size: 14, color: Color(0xFFD97706)),
-                                                              const SizedBox(width: 4),
-                                                              Text(
-                                                                'Time pending',
-                                                                style: context.textStyles.caption.copyWith(
-                                                                  color: const Color(0xFFD97706),
-                                                                  fontWeight: FontWeight.bold,
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
+                                              const SizedBox(width: 16),
+                                              OutlinedButton.icon(
+                                                onPressed: () => _changeSlot(index),
+                                                icon: Icon(Icons.edit_calendar_rounded, size: 18, color: context.colors.primary),
+                                                label: Text('Change Slot', style: TextStyle(color: context.colors.primary)),
+                                                style: OutlinedButton.styleFrom(
+                                                  side: BorderSide(color: context.colors.primary.withValues(alpha: 0.3)),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                                 ),
+                                              ),
+                                            ],
+                                          )
+                                        : Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              _buildSessionInfoContent(
+                                                session: session,
+                                                originalSession: originalSession,
+                                                didSlotChange: didSlotChange,
+                                                getSlotStr: getSlotStr,
+                                                index: index,
+                                              ),
                                               const SizedBox(height: 12),
-                                              Wrap(
-                                                spacing: 8,
-                                                runSpacing: 8,
-                                                children: [
-                                                // Treatment / Maintenance pill (fixed/read-only)
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                  decoration: BoxDecoration(
-                                                    color: session.isMaintenance
-                                                        ? const Color(0xFF10B981).withValues(alpha: 0.1)
-                                                        : context.colors.primary.withValues(alpha: 0.1),
-                                                    borderRadius: BorderRadius.circular(8),
-                                                  ),
-                                                  child: Text(
-                                                    session.isMaintenance ? 'Maintenance Session' : 'Treatment Session',
-                                                    style: context.textStyles.caption.copyWith(
-                                                      color: session.isMaintenance
-                                                          ? const Color(0xFF059669)
-                                                          : context.colors.primary,
-                                                      fontWeight: FontWeight.bold,
+                                              SizedBox(
+                                                width: double.infinity,
+                                                child: OutlinedButton.icon(
+                                                  onPressed: () => _changeSlot(index),
+                                                  icon: Icon(Icons.edit_calendar_rounded, size: 16, color: context.colors.primary),
+                                                  label: Text(
+                                                    'Change Slot',
+                                                    style: TextStyle(
+                                                      color: context.colors.primary,
+                                                      fontWeight: FontWeight.w600,
+                                                      fontSize: 13,
                                                     ),
+                                                  ),
+                                                  style: OutlinedButton.styleFrom(
+                                                    side: BorderSide(color: context.colors.primary.withValues(alpha: 0.3)),
+                                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                                    padding: const EdgeInsets.symmetric(vertical: 9),
                                                   ),
                                                 ),
-                                                // Treatment Modality Dropdown
-                                                PopupMenuButton<String>(
-                                                  initialValue: session.treatmentModality.isNotEmpty
-                                                      ? session.treatmentModality
-                                                      : widget.plan.treatmentType,
-                                                  tooltip: 'Change Treatment Type',
-                                                  onSelected: (val) => _changeModality(index, val),
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                                  color: context.colors.surface,
-                                                  itemBuilder: (context) => _treatmentTypes.map((type) {
-                                                    return PopupMenuItem<String>(
-                                                      value: type,
-                                                      child: Text(type, style: context.textStyles.bodyMedium),
-                                                    );
-                                                  }).toList(),
-                                                  child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                    decoration: BoxDecoration(
-                                                      color: context.colors.surface,
-                                                      border: Border.all(color: context.colors.border.withValues(alpha: 0.5)),
-                                                      borderRadius: BorderRadius.circular(8),
-                                                    ),
-                                                    child: Row(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        Text(
-                                                          session.treatmentModality.isNotEmpty
-                                                              ? session.treatmentModality
-                                                              : widget.plan.treatmentType,
-                                                          style: context.textStyles.caption.copyWith(
-                                                            color: context.colors.textSecondary,
-                                                            fontWeight: FontWeight.w600,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(width: 4),
-                                                        Icon(Icons.arrow_drop_down_rounded, size: 16, color: context.colors.textHint),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                ),
-                                                ],
                                               ),
                                             ],
                                           ),
-                                        ),
-                                        OutlinedButton.icon(
-                                          onPressed: () => _changeSlot(index),
-                                          icon: Icon(Icons.edit_calendar_rounded, size: 18, color: context.colors.primary),
-                                          label: Text('Change Slot', style: TextStyle(color: context.colors.primary)),
-                                          style: OutlinedButton.styleFrom(
-                                            side: BorderSide(color: context.colors.primary.withValues(alpha: 0.3)),
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
                                   ),
                                 ),
                               ),
@@ -531,6 +439,152 @@ class _ManagePlanScreenState extends ConsumerState<ManagePlanScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSessionInfoContent({
+    required SessionModel session,
+    required SessionModel originalSession,
+    required bool didSlotChange,
+    required String Function(SessionModel, {bool short, bool useAt}) getSlotStr,
+    required int index,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _fmtDay(session.scheduledDate),
+          style: context.textStyles.caption.copyWith(
+            color: context.colors.textHint,
+            letterSpacing: 1.2,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        if (didSlotChange)
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                '[${getSlotStr(originalSession, short: true)}]',
+                style: context.textStyles.h3.copyWith(fontSize: 14, color: context.colors.textHint, decoration: TextDecoration.lineThrough),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Icon(Icons.arrow_forward_rounded, size: 14, color: Color(0xFF059669)),
+              ),
+              Text(
+                '[${getSlotStr(session, short: true)}]',
+                style: context.textStyles.h3.copyWith(fontSize: 15, color: const Color(0xFF059669)),
+              ),
+            ],
+          )
+        else if (!getSlotStr(session).contains('Time pending'))
+          Text(
+            getSlotStr(session, useAt: true),
+            style: context.textStyles.h3.copyWith(fontSize: 16),
+          )
+        else
+          RichText(
+            text: TextSpan(
+              text: '${_fmtDateMain(session.scheduledDate)} ',
+              style: context.textStyles.h3.copyWith(fontSize: 16, color: context.colors.textPrimary),
+              children: [
+                WidgetSpan(
+                  alignment: PlaceholderAlignment.middle,
+                  child: Container(
+                    margin: const EdgeInsets.only(left: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.schedule_rounded, size: 14, color: Color(0xFFD97706)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Time pending',
+                          style: context.textStyles.caption.copyWith(
+                            color: const Color(0xFFD97706),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            // Treatment / Maintenance pill (fixed/read-only)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              decoration: BoxDecoration(
+                color: session.isMaintenance
+                    ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                    : context.colors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                session.isMaintenance ? 'Maintenance Session' : 'Treatment Session',
+                style: context.textStyles.caption.copyWith(
+                  color: session.isMaintenance
+                      ? const Color(0xFF059669)
+                      : context.colors.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            // Treatment Modality Dropdown
+            PopupMenuButton<String>(
+              initialValue: session.treatmentModality.isNotEmpty
+                  ? session.treatmentModality
+                  : widget.plan.treatmentType,
+              tooltip: 'Change Treatment Type',
+              onSelected: (val) => _changeModality(index, val),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              color: context.colors.surface,
+              itemBuilder: (context) => _treatmentTypes.map((type) {
+                return PopupMenuItem<String>(
+                  value: type,
+                  child: Text(type, style: context.textStyles.bodyMedium),
+                );
+              }).toList(),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: context.colors.surface,
+                  border: Border.all(color: context.colors.border.withValues(alpha: 0.5)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      session.treatmentModality.isNotEmpty
+                          ? session.treatmentModality
+                          : widget.plan.treatmentType,
+                      style: context.textStyles.caption.copyWith(
+                        color: context.colors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(Icons.arrow_drop_down_rounded, size: 16, color: context.colors.textHint),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }

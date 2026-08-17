@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/foundation.dart' show AsyncCallback, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -78,6 +79,7 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
 
     // Filter by Status
     if (_statusFilter != 'all') {
+      final now = DateTime.now();
       result = result.where((p) {
         final lastVisit = _lastVisitDates[p.id];
         if (_statusFilter == 'active') {
@@ -85,7 +87,12 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
         } else if (_statusFilter == 'new') {
           return lastVisit == null;
         } else if (_statusFilter == 'arrived') {
-          return _arrivedPatientIds.contains(p.id);
+          final isArrived = _arrivedPatientIds.contains(p.id);
+          final isVisitedToday = lastVisit != null &&
+              lastVisit.year == now.year &&
+              lastVisit.month == now.month &&
+              lastVisit.day == now.day;
+          return isArrived || isVisitedToday;
         }
         return true;
       }).toList();
@@ -118,12 +125,12 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
       case 'a-z':
         result = List.of(result)
           ..sort((a, b) =>
-              a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase()));
+              a.fullName.trim().toLowerCase().compareTo(b.fullName.trim().toLowerCase()));
         break;
       case 'z-a':
         result = List.of(result)
           ..sort((a, b) =>
-              b.fullName.toLowerCase().compareTo(a.fullName.toLowerCase()));
+              b.fullName.trim().toLowerCase().compareTo(a.fullName.trim().toLowerCase()));
         break;
       case 'phone':
         result = List.of(result)
@@ -139,10 +146,16 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
           ..sort((a, b) => (_lastVisitDates[a.id] ?? DateTime(2000))
               .compareTo(_lastVisitDates[b.id] ?? DateTime(2000)));
         break;
+      case 'recent':
       default:
         result = List.of(result)
-          ..sort((a, b) => (b.created ?? DateTime(2000))
-              .compareTo(a.created ?? DateTime(2000)));
+          ..sort((a, b) {
+            final bTime = b.created ?? b.updated ?? DateTime(2000);
+            final aTime = a.created ?? a.updated ?? DateTime(2000);
+            final cmp = bTime.compareTo(aTime);
+            if (cmp != 0) return cmp;
+            return b.id.compareTo(a.id);
+          });
     }
     return result;
   }
@@ -214,12 +227,17 @@ class _PatientListScreenState extends ConsumerState<PatientListScreen> {
         searchCtrl: _searchCtrl,
         searchQuery: _searchQuery,
         sortMode: _sortMode,
+        statusFilter: _statusFilter,
         filtered: _filtered,
         onSearchChanged: (v) => setState(() {
           _searchQuery = v;
         }),
         onSortChanged: (m) => setState(() {
           _sortMode = m;
+          _statusFilter = 'all';
+        }),
+        onStatusFilterChanged: (s) => setState(() {
+          _statusFilter = s;
         }),
         onNavigateToAppointment: (isCallBy) {
           context.push(
@@ -1883,9 +1901,11 @@ class _AppPatientScreen extends ConsumerWidget {
   final TextEditingController searchCtrl;
   final String searchQuery;
   final String sortMode;
+  final String statusFilter;
   final List<PatientModel> Function(List<PatientModel>) filtered;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<String> onSortChanged;
+  final ValueChanged<String> onStatusFilterChanged;
   final ValueChanged<bool> onNavigateToAppointment;
   final VoidCallback onRetry;
   final AsyncCallback onRefresh;
@@ -1895,14 +1915,66 @@ class _AppPatientScreen extends ConsumerWidget {
     required this.searchCtrl,
     required this.searchQuery,
     required this.sortMode,
+    required this.statusFilter,
     required this.filtered,
     required this.onSearchChanged,
     required this.onSortChanged,
+    required this.onStatusFilterChanged,
     required this.onNavigateToAppointment,
     required this.onRetry,
     required this.onRefresh,
     required this.onOpenProfile,
   });
+
+  static const List<List<Color>> _avatarGradients = [
+    [Color(0xFF0D9488), Color(0xFF14B8A6)], // Emerald / Teal
+    [Color(0xFF2563EB), Color(0xFF60A5FA)], // Royal Blue
+    [Color(0xFF7C3AED), Color(0xFFA78BFA)], // Violet
+    [Color(0xFFD97706), Color(0xFFFBBF24)], // Amber
+    [Color(0xFF0284C7), Color(0xFF38BDF8)], // Cyan
+    [Color(0xFFE11D48), Color(0xFFFB7185)], // Rose
+    [Color(0xFF059669), Color(0xFF34D399)], // Jade Green
+    [Color(0xFF4F46E5), Color(0xFF818CF8)], // Indigo
+  ];
+
+  static List<Color> _getAvatarGradient(String name) {
+    if (name.isEmpty) return _avatarGradients[0];
+    final hash = name.codeUnits.fold(0, (prev, elem) => prev + elem);
+    return _avatarGradients[hash % _avatarGradients.length];
+  }
+
+  String _formatPhoneNumber(String raw) {
+    if (raw.isEmpty) return raw;
+    final cleaned = raw.replaceAll(' ', '');
+    if (cleaned.startsWith('+91') && cleaned.length == 13) {
+      return '+91 ${cleaned.substring(3, 8)} ${cleaned.substring(8)}';
+    } else if (cleaned.length == 10 && !cleaned.startsWith('+')) {
+      return '${cleaned.substring(0, 5)} ${cleaned.substring(5)}';
+    }
+    return raw;
+  }
+
+  String _formatLastVisit(DateTime? dt, DateTime? createdDt) {
+    if (dt == null) {
+      if (createdDt != null) {
+        return 'Added ${DateFormat('d MMM yyyy').format(createdDt)}';
+      }
+      return 'New Patient · No visits yet';
+    }
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final visitDay = DateTime(dt.year, dt.month, dt.day);
+    final diffDays = today.difference(visitDay).inDays;
+
+    if (diffDays == 0) return 'Visited today';
+    if (diffDays == 1) return 'Visited yesterday';
+    if (diffDays < 7) return 'Visited $diffDays days ago';
+    if (diffDays < 30) {
+      final weeks = (diffDays / 7).floor();
+      return 'Visited $weeks ${weeks == 1 ? 'week' : 'weeks'} ago';
+    }
+    return 'Last visit: ${DateFormat('d MMM yyyy').format(dt)}';
+  }
 
   Future<void> _makePhoneCall(String phone) async {
     if (phone.isEmpty) return;
@@ -2043,7 +2115,7 @@ class _AppPatientScreen extends ConsumerWidget {
         shape: const CircleBorder(),
         backgroundColor: context.colors.primary,
         onPressed: () => _showAppointmentTypeSelector(context),
-        child: Icon(Icons.add, color: context.colors.textPrimary, size: 24),
+        child: const Icon(Icons.add, color: Colors.white, size: 24),
       ),
       body: SafeArea(
         child: RefreshIndicator(
@@ -2054,46 +2126,85 @@ class _AppPatientScreen extends ConsumerWidget {
             slivers: [
               // Header & Controls
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 0),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    Text(
-                      'Patients',
-                      style: context.textStyles.h1.copyWith(
-                        fontSize: 32,
-                      ),
+                    // Title & Count Badge Pill
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Patients',
+                          style: context.textStyles.h1.copyWith(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
+                          decoration: BoxDecoration(
+                            color: context.colors.primary.withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: context.colors.primary.withValues(alpha: 0.22),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            '${state.patients.length} Registered',
+                            style: TextStyle(
+                              color: context.colors.primary,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${state.patients.length} total registered',
+                      'Search and manage patient records',
                       style: context.textStyles.bodyMedium.copyWith(
                         color: context.colors.textSecondary,
+                        fontSize: 13,
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    // Search bar
+                    const SizedBox(height: 16),
+
+                    // Modern Search bar
                     Container(
-                      height: 48,
+                      height: 46,
                       decoration: BoxDecoration(
                         color: context.colors.surface,
-                        borderRadius: BorderRadius.circular(24),
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: context.colors.border.withValues(alpha: 0.6),
+                          color: context.colors.border.withValues(alpha: 0.7),
+                          width: 1,
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.02),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
                       child: Row(
                         children: [
-                          Icon(Icons.search_rounded, color: context.colors.textHint),
+                          Icon(Icons.search_rounded, color: context.colors.textHint, size: 20),
                           const SizedBox(width: 10),
                           Expanded(
                             child: TextField(
                               controller: searchCtrl,
-                              style: context.textStyles.bodyMedium,
+                              style: context.textStyles.bodyMedium.copyWith(fontSize: 14),
                               decoration: InputDecoration(
                                 hintText: 'Search by name or phone...',
                                 hintStyle: context.textStyles.bodyMedium.copyWith(
                                   color: context.colors.textHint,
+                                  fontSize: 14,
                                 ),
                                 border: InputBorder.none,
                                 isDense: true,
@@ -2104,44 +2215,69 @@ class _AppPatientScreen extends ConsumerWidget {
                           if (searchQuery.isNotEmpty)
                             GestureDetector(
                               onTap: () {
+                                HapticFeedback.lightImpact();
                                 searchCtrl.clear();
                                 onSearchChanged('');
                               },
-                              child: Icon(Icons.close_rounded, color: context.colors.textHint),
+                              child: Padding(
+                                padding: const EdgeInsets.all(4),
+                                child: Icon(Icons.close_rounded, color: context.colors.textSecondary, size: 18),
+                              ),
                             ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    // Sort Chips
+                    const SizedBox(height: 14),
+
+                    // Smart Filter & Sort Chips
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
                       child: Row(
                         children: [
                           _AppSortChip(
                             label: 'Recent',
                             icon: Icons.schedule_rounded,
-                            isActive: sortMode == 'recent',
-                            onTap: () => onSortChanged('recent'),
+                            isActive: sortMode == 'recent' && statusFilter == 'all',
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              onSortChanged('recent');
+                            },
                           ),
                           const SizedBox(width: 8),
                           _AppSortChip(
-                            label: 'A-Z',
+                            label: 'Arrived Today',
+                            icon: Icons.directions_walk_rounded,
+                            isActive: statusFilter == 'arrived',
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              onStatusFilterChanged(statusFilter == 'arrived' ? 'all' : 'arrived');
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _AppSortChip(
+                            label: 'New Patients',
+                            icon: Icons.fiber_new_rounded,
+                            isActive: statusFilter == 'new',
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              onStatusFilterChanged(statusFilter == 'new' ? 'all' : 'new');
+                            },
+                          ),
+                          const SizedBox(width: 8),
+                          _AppSortChip(
+                            label: 'A–Z',
                             icon: Icons.sort_by_alpha_rounded,
-                            isActive: sortMode == 'a-z',
-                            onTap: () => onSortChanged('a-z'),
-                          ),
-                          const SizedBox(width: 8),
-                          _AppSortChip(
-                            label: 'Phone',
-                            icon: Icons.phone_rounded,
-                            isActive: sortMode == 'phone',
-                            onTap: () => onSortChanged('phone'),
+                            isActive: sortMode == 'a-z' && statusFilter == 'all',
+                            onTap: () {
+                              HapticFeedback.selectionClick();
+                              onSortChanged('a-z');
+                            },
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                   ]),
                 ),
               ),
@@ -2162,11 +2298,56 @@ class _AppPatientScreen extends ConsumerWidget {
                 )
               else if (filteredList.isEmpty)
                 SliverFillRemaining(
-                  child: _WebEmptyView(hasQuery: searchQuery.isNotEmpty),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            searchQuery.isNotEmpty
+                                ? Icons.search_off_rounded
+                                : (statusFilter == 'arrived'
+                                    ? Icons.directions_walk_rounded
+                                    : Icons.people_outline_rounded),
+                            size: 48,
+                            color: context.colors.textHint.withValues(alpha: 0.4),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            searchQuery.isNotEmpty
+                                ? 'No matches for "$searchQuery"'
+                                : (statusFilter == 'arrived'
+                                    ? 'No patients marked arrived today'
+                                    : (statusFilter == 'new'
+                                        ? 'No new patients without visits'
+                                        : 'No patients found')),
+                            style: context.textStyles.bodyMedium.copyWith(
+                              color: context.colors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (statusFilter != 'all' || searchQuery.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            TextButton.icon(
+                              onPressed: () {
+                                HapticFeedback.lightImpact();
+                                searchCtrl.clear();
+                                onSearchChanged('');
+                                onSortChanged('recent');
+                              },
+                              icon: const Icon(Icons.refresh_rounded, size: 16),
+                              label: const Text('Reset filters'),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
                 )
               else
                 SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, index) {
@@ -2174,135 +2355,261 @@ class _AppPatientScreen extends ConsumerWidget {
                         final initials = patient.fullName.isNotEmpty
                             ? patient.fullName[0].toUpperCase()
                             : '?';
+                        final lastVisit = state.lastVisitDates[patient.id];
+                        final lastVisitStr = _formatLastVisit(lastVisit, patient.created);
+                        final gradient = _getAvatarGradient(patient.fullName);
+
                         return _AnimatedCard(
                           index: index,
-                          child: GestureDetector(
-                            onTap: () => onOpenProfile(patient),
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 12),
-                              decoration: BoxDecoration(
-                                color: context.colors.surface,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: context.colors.border.withValues(alpha: 0.4),
-                                ),
+                          child: Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            decoration: BoxDecoration(
+                              color: context.colors.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: context.colors.border.withValues(alpha: 0.65),
+                                width: 1.0,
                               ),
-                              padding: const EdgeInsets.all(16),
-                              child: Row(
-                                children: [
-                                  // Avatar
-                                  Container(
-                                    width: 48,
-                                    height: 48,
-                                    decoration: const BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      gradient: LinearGradient(
-                                        colors: [Color(0xFF1E88E5), Color(0xFF64B5F6)],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      initials,
-                                      style: TextStyle(
-                                        color: context.colors.textPrimary,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 14),
-                                  // Name and Phone
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          patient.fullName,
-                                          style: context.textStyles.bodyMedium.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.02),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () => onOpenProfile(patient),
+                                borderRadius: BorderRadius.circular(16),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      // Deterministic Avatar
+                                      Container(
+                                        width: 44,
+                                        height: 44,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          gradient: LinearGradient(
+                                            colors: gradient,
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
                                           ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: gradient.first.withValues(alpha: 0.25),
+                                              blurRadius: 6,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
                                         ),
-                                        if (patient.phone.isNotEmpty) ...[
-                                          const SizedBox(height: 4),
-                                          Row(
-                                            children: [
-                                              Icon(
-                                                Icons.phone_rounded,
-                                                size: 14,
-                                                color: context.colors.textSecondary,
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                patient.phone,
-                                                style: context.textStyles.bodySmall.copyWith(
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          initials,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.w800,
+                                            letterSpacing: -0.5,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+
+                                      // Patient Info Column
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            // Row 1: Name + Demographics Badge
+                                            Row(
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    patient.fullName,
+                                                    style: context.textStyles.bodyMedium.copyWith(
+                                                      fontWeight: FontWeight.w700,
+                                                      fontSize: 15,
+                                                      letterSpacing: -0.2,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                if (patient.age != null && patient.age! > 0) ...[
+                                                  const SizedBox(width: 5),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.5),
+                                                    decoration: BoxDecoration(
+                                                      color: context.colors.divider.withValues(alpha: 0.35),
+                                                      borderRadius: BorderRadius.circular(4),
+                                                    ),
+                                                    child: Text(
+                                                      '${patient.age}y${patient.gender != null && patient.gender!.isNotEmpty ? '·${patient.gender![0].toUpperCase()}' : ''}',
+                                                      style: TextStyle(
+                                                        fontSize: 9.5,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: context.colors.textSecondary,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                            const SizedBox(height: 2.5),
+
+                                            // Row 2: Phone number & Patient ID Tag
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.phone_rounded,
+                                                  size: 12,
                                                   color: context.colors.textSecondary,
                                                 ),
+                                                const SizedBox(width: 4),
+                                                Flexible(
+                                                  child: Text(
+                                                    _formatPhoneNumber(patient.phone),
+                                                    style: context.textStyles.bodySmall.copyWith(
+                                                      color: context.colors.textSecondary,
+                                                      fontSize: 12,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                if (patient.patientId != null && patient.patientId!.isNotEmpty) ...[
+                                                  Padding(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                                                    child: Text(
+                                                      '·',
+                                                      style: TextStyle(
+                                                        color: context.colors.textHint,
+                                                        fontWeight: FontWeight.bold,
+                                                        fontSize: 11,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    '#${patient.patientId}',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: context.colors.textHint,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                            const SizedBox(height: 2.5),
+
+                                            // Row 3: Last visit / Registration metadata
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.history_rounded,
+                                                  size: 11.5,
+                                                  color: context.colors.textHint,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Flexible(
+                                                  child: Text(
+                                                    lastVisitStr,
+                                                    style: context.textStyles.caption.copyWith(
+                                                      color: context.colors.textHint,
+                                                      fontSize: 10.5,
+                                                      fontWeight: FontWeight.w500,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+
+                                      // Micro-Action Buttons
+                                      if (patient.phone.isNotEmpty) ...[
+                                        // WhatsApp Button
+                                        Material(
+                                          color: Colors.transparent,
+                                          child: InkWell(
+                                            onTap: () {
+                                              HapticFeedback.lightImpact();
+                                              WhatsAppHelper.openChat(patient.phone);
+                                            },
+                                            borderRadius: BorderRadius.circular(10),
+                                            child: Ink(
+                                              width: 35,
+                                              height: 35,
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFF25D366).withValues(alpha: 0.10),
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: const Color(0xFF25D366).withValues(alpha: 0.3),
+                                                  width: 1.0,
+                                                ),
                                               ),
-                                            ],
+                                              child: const Center(
+                                                child: Icon(
+                                                  Icons.message_rounded,
+                                                  color: Color(0xFF25D366),
+                                                  size: 16.5,
+                                                ),
+                                              ),
+                                            ),
                                           ),
-                                        ],
+                                        ),
+                                        const SizedBox(width: 6),
+                                        // Call Button
+                                        Material(
+                                          color: Colors.transparent,
+                                          child: InkWell(
+                                            onTap: () {
+                                              HapticFeedback.lightImpact();
+                                              _makePhoneCall(patient.phone);
+                                            },
+                                            borderRadius: BorderRadius.circular(10),
+                                            child: Ink(
+                                              width: 35,
+                                              height: 35,
+                                              decoration: BoxDecoration(
+                                                color: context.colors.primary.withValues(alpha: 0.09),
+                                                borderRadius: BorderRadius.circular(10),
+                                                border: Border.all(
+                                                  color: context.colors.primary.withValues(alpha: 0.3),
+                                                  width: 1.0,
+                                                ),
+                                              ),
+                                              child: Center(
+                                                child: Icon(
+                                                  Icons.phone_rounded,
+                                                  color: context.colors.primary,
+                                                  size: 16.5,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
                                       ],
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  // Action Buttons & Chevron
-                                  if (patient.phone.isNotEmpty) ...[
-                                    // WhatsApp Button
-                                    GestureDetector(
-                                      onTap: () => WhatsAppHelper.openChat(patient.phone),
-                                      child: Container(
-                                        width: 40,
-                                        height: 40,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF25D366).withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: const Color(0xFF25D366).withValues(alpha: 0.4),
-                                            width: 1.5,
-                                          ),
-                                        ),
-                                        child: const Icon(
-                                          Icons.message_rounded,
-                                          color: Color(0xFF25D366),
-                                          size: 18,
-                                        ),
+                                      Icon(
+                                        Icons.arrow_forward_ios_rounded,
+                                        color: context.colors.textHint.withValues(alpha: 0.6),
+                                        size: 12,
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    // Dial/Phone Button
-                                    GestureDetector(
-                                      onTap: () => _makePhoneCall(patient.phone),
-                                      child: Container(
-                                        width: 40,
-                                        height: 40,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF00BFA5).withValues(alpha: 0.1),
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: const Color(0xFF00BFA5).withValues(alpha: 0.4),
-                                            width: 1.5,
-                                          ),
-                                        ),
-                                        child: const Icon(
-                                          Icons.phone_rounded,
-                                          color: Color(0xFF00BFA5),
-                                          size: 18,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                  ],
-                                  Icon(
-                                    Icons.chevron_right_rounded,
-                                    color: context.colors.textHint,
-                                    size: 20,
+                                    ],
                                   ),
-                                ],
+                                ),
                               ),
                             ),
                           ),
@@ -2340,34 +2647,44 @@ class _AppSortChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6.5),
         decoration: BoxDecoration(
           color: isActive
-              ? context.colors.primary.withValues(alpha: 0.12)
+              ? context.colors.primary
               : context.colors.surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: isActive
                 ? context.colors.primary
-                : context.colors.border.withValues(alpha: 0.6),
-            width: 1.5,
+                : context.colors.border.withValues(alpha: 0.7),
+            width: 1.0,
           ),
+          boxShadow: [
+            if (isActive)
+              BoxShadow(
+                color: context.colors.primary.withValues(alpha: 0.25),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+          ],
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
-              size: 16,
-              color: isActive ? context.colors.primary : context.colors.textSecondary,
+              size: 14,
+              color: isActive ? Colors.white : context.colors.textSecondary,
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             Text(
               label,
-              style: context.textStyles.bodyMedium.copyWith(
-                fontWeight: isActive ? FontWeight.bold : FontWeight.w500,
-                color: isActive ? context.colors.primary : context.colors.textSecondary,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                color: isActive ? Colors.white : context.colors.textSecondary,
               ),
             ),
           ],
@@ -2395,7 +2712,7 @@ class _NewAppointmentCTAButtonState extends State<_NewAppointmentCTAButton> {
       onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        transform: Matrix4.identity()..scale(_isHovered ? 1.03 : 1.0),
+        transform: Matrix4.diagonal3Values(_isHovered ? 1.03 : 1.0, _isHovered ? 1.03 : 1.0, 1.0),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           boxShadow: [

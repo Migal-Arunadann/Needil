@@ -251,31 +251,24 @@ class SessionLifecycleService {
     String? newTime,
     required String performedBy,
   }) async {
-    final body = <String, dynamic>{'status': 'upcoming'};
     if (newDate != null && newDate.isNotEmpty) {
-      body['scheduled_date'] = newDate;
-    }
-    if (newTime != null && newTime.isNotEmpty) {
-      body['scheduled_time'] = newTime;
+      await _scheduler.rescheduleSession(
+        sessionId,
+        newDate: newDate,
+        newTime: newTime ?? '10:00',
+        performedBy: performedBy,
+        trigger: 'clinic_closed',
+      );
+      return;
     }
 
+    final body = <String, dynamic>{'status': 'upcoming'};
     await _pb.collection(PBCollections.sessions).update(sessionId, body: body);
 
     final sessionRec = await _pb.collection(PBCollections.sessions).getOne(sessionId);
     final session = SessionModel.fromRecord(sessionRec);
     final planId = session.treatmentPlanId;
-    if (newDate != null && newDate.isNotEmpty) {
-      await _appointmentSync.updateForSession(
-        session: session,
-        newDate: newDate,
-        newTime: newTime ?? session.scheduledTime ?? '09:00',
-        clinicId: null,
-        sessionType: session.sessionType,
-        isRescheduled: true,
-      );
-    } else {
-      await _appointmentSync.syncStatus(session, 'scheduled');
-    }
+    await _appointmentSync.syncStatus(session, 'scheduled');
 
     await _auditLogger.log(
       sessionId: sessionId,
@@ -330,6 +323,7 @@ class SessionLifecycleService {
     String performedBy = 'system',
     RescheduleMode mode = RescheduleMode.cascadeAll,
     bool applyTimeToAll = false,
+    int? overrideIntervalDays,
   }) =>
       _scheduler.generateRescheduleProposal(
         sessionId,
@@ -339,6 +333,7 @@ class SessionLifecycleService {
         trigger: performedBy == 'system' ? 'system' : 'doctor_manual',
         mode: mode,
         applyTimeToAll: applyTimeToAll,
+        overrideIntervalDays: overrideIntervalDays,
       );
 
   Future<void> commitRescheduleProposal(ReschedulePreview preview) =>

@@ -729,46 +729,26 @@ class _SessionListScreenState extends ConsumerState<SessionListScreen> {
         
         if (!mounted) return;
         
-        final confirmedPreview = await showModalBottomSheet<ReschedulePreview?>(
+        final confirmedPreview = await CascadePreviewSheet.show(
           context: context,
-          isScrollControlled: true,
-          backgroundColor: Colors.transparent,
-          builder: (ctx) {
-            bool applyTimeToAll = false;
-            bool isRegenerating = false;
-            var currentPreview = preview;
-
-            return StatefulBuilder(
-              builder: (BuildContext context, StateSetter setState) {
-                return Padding(
-                  padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + kToolbarHeight),
-                  child: CascadePreviewSheet(
-                    preview: currentPreview,
-                    newTime: newTime,
-                    applyTimeToAll: applyTimeToAll,
-                    isRegenerating: isRegenerating,
-                    onToggleApplyTimeToAll: (val) async {
-                      setState(() {
-                        applyTimeToAll = val;
-                        isRegenerating = true;
-                      });
-                      final newPreview = await lifecycle.previewRescheduleSessionAndCascade(
-                        sessionId: session.id,
-                        newDate: newDate,
-                        newTime: newTime,
-                        performedBy: _currentUserId,
-                        applyTimeToAll: val,
-                      );
-                      setState(() {
-                        currentPreview = newPreview;
-                        isRegenerating = false;
-                      });
-                    },
-                    onConfirm: () => Navigator.pop(ctx, currentPreview),
-                    onCancel: () => Navigator.pop(ctx, null),
-                  ),
-                );
-              },
+          preview: preview,
+          newTime: newTime,
+          doctorId: session.doctorId.isNotEmpty ? session.doctorId : widget.plan.doctorId,
+          clinicId: ref.read(authProvider).clinicId,
+          onRegenerate: ({
+            required sessionId,
+            required newDate,
+            newTime,
+            applyTimeToAll = false,
+            overrideIntervalDays,
+          }) {
+            return lifecycle.previewRescheduleSessionAndCascade(
+              sessionId: session.id,
+              newDate: newDate,
+              newTime: newTime,
+              performedBy: _currentUserId,
+              applyTimeToAll: applyTimeToAll,
+              overrideIntervalDays: overrideIntervalDays,
             );
           },
         );

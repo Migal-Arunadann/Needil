@@ -153,12 +153,50 @@ class ConsultationModel {
       pulseDiagnosis: record.getStringValue('pulse_diagnosis'),
       coronaVaccinated: record.getBoolValue('corona_vaccinated'),
       photos: record.getListValue<String>('photos'),
-      created: DateTime.tryParse(record.getStringValue('created')),
-      updated: DateTime.tryParse(record.getStringValue('updated')),
+      created: _parseDate(record, 'created'),
+      updated: _parseDate(record, 'updated'),
       isDeleted: record.getBoolValue('is_deleted'),
       deletedAt: DateTime.tryParse(record.getStringValue('deleted_at')),
       patientName: patientName,
     );
+  }
+
+  static DateTime? _parseDate(RecordModel record, String field) {
+    try {
+      final val = record.get<String>(field);
+      if (val.isNotEmpty) {
+        final parsed = DateTime.tryParse(val);
+        if (parsed != null) return parsed.toLocal();
+      }
+    } catch (_) {}
+
+    try {
+      final raw = record.data[field]?.toString();
+      if (raw != null && raw.isNotEmpty) {
+        final parsed = DateTime.tryParse(raw);
+        if (parsed != null) return parsed.toLocal();
+      }
+    } catch (_) {}
+
+    try {
+      if (field == 'created') {
+        // ignore: deprecated_member_use
+        final val = record.created;
+        if (val.isNotEmpty) {
+          final parsed = DateTime.tryParse(val);
+          if (parsed != null) return parsed.toLocal();
+        }
+      } else if (field == 'updated') {
+        // ignore: deprecated_member_use
+        final val = record.updated;
+        if (val.isNotEmpty) {
+          final parsed = DateTime.tryParse(val);
+          if (parsed != null) return parsed.toLocal();
+        }
+      }
+    } catch (_) {}
+
+    return null;
   }
 
   Map<String, dynamic> toJson() {

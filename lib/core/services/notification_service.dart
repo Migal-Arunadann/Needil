@@ -23,6 +23,22 @@ class NotificationService {
 
   NotificationService(this._pb, this._ref);
 
+  /// Resolves the patient's display name, looking up the patient record if needed.
+  Future<String> _resolvePatientName(RecordModel record) async {
+    final direct = record.getStringValue('patient_name').trim();
+    if (direct.isNotEmpty) return direct;
+
+    final patientId = record.getStringValue('patient').trim();
+    if (patientId.isNotEmpty) {
+      try {
+        final patRec = await _pb.collection('patients').getOne(patientId);
+        final patName = patRec.getStringValue('full_name').trim();
+        if (patName.isNotEmpty) return patName;
+      } catch (_) {}
+    }
+    return 'Patient';
+  }
+
   /// Subscribes to real-time PocketBase appointment updates for the logged in clinic.
   Future<void> subscribeToRealtime(String clinicId, UserRole? role, String? doctorId) async {
     if (_isSubscribed && _subscribedClinicId == clinicId) return;
@@ -49,21 +65,25 @@ class NotificationService {
 
         // Get user preferences
         final prefs = await SharedPreferences.getInstance();
-        final patientName = record.getStringValue('patient_name').isNotEmpty 
-            ? record.getStringValue('patient_name') 
-            : 'Unknown Patient';
 
         if (e.action == 'create') {
           // Schedule future late reminders and appointment reminders for the new booking
           await scheduleRemindersForAppointment(record, prefs);
         } else if (e.action == 'update') {
           final status = record.getStringValue('status');
+          final type = record.getStringValue('type');
           final consultationEndTime = record.getStringValue('consultation_end_time');
           final checkInTime = record.getStringValue('check_in_time');
+          final isSession = type == 'session' ||
+              record.getStringValue('linked_session_id').isNotEmpty ||
+              record.getStringValue('linked_treatment_plan_id').isNotEmpty;
 
           if (status == 'cancelled') {
+            // Only send cancellation push alert for primary patient appointments (consultations/walk-ins/call-bys).
+            // Do NOT spam push notifications when treatment plan sessions are released/paused/rescheduled.
             final notifyCancelled = prefs.getBool('notif_appointment_cancelled') ?? true;
-            if (notifyCancelled) {
+            if (notifyCancelled && !isSession) {
+              final patientName = await _resolvePatientName(record);
               await _showNotification(
                 id: record.id.hashCode + 1,
                 title: '❌ Appointment Cancelled',
@@ -137,9 +157,7 @@ class NotificationService {
     final parsedDateTime = DateTime.tryParse('$dateStr $timeStr');
     if (parsedDateTime == null) return;
 
-    final patientName = record.getStringValue('patient_name').isNotEmpty 
-        ? record.getStringValue('patient_name') 
-        : 'Unknown Patient';
+    final patientName = await _resolvePatientName(record);
 
     const androidDetails = AndroidNotificationDetails(
       'scheduled_reminders',

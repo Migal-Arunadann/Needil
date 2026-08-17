@@ -1,9 +1,12 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:pms_app/core/utils/whatsapp_helper.dart';
 import 'package:pms_app/core/services/data_export_service.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -78,7 +81,88 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
+    _refreshPatientRecord();
+    _loadPatientRegistrationDate();
     _checkOngoingConsultation();
+  }
+
+  DateTime? _registrationDate;
+
+  Future<void> _refreshPatientRecord() async {
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final record = await pb.collection(PBCollections.patients).getOne(_patient.id);
+      final fresh = PatientModel.fromRecord(record);
+      if (mounted) {
+        setState(() {
+          _patient = fresh;
+          if (fresh.created != null) {
+            _registrationDate = _registrationDate == null || fresh.created!.isBefore(_registrationDate!)
+                ? fresh.created
+                : _registrationDate;
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadPatientRegistrationDate() async {
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      DateTime? earliest = _patient.created;
+
+      // 1. Check oldest appointment / visit history
+      try {
+        final oldestApt = await pb.collection(PBCollections.appointments).getList(
+          filter: 'patient = "${_patient.id}"',
+          sort: '+date,+created',
+          perPage: 1,
+          page: 1,
+        );
+        if (oldestApt.items.isNotEmpty) {
+          final rec = oldestApt.items.first;
+          final dateStr = rec.getStringValue('date');
+          if (dateStr.isNotEmpty) {
+            final aptDate = DateTime.tryParse(dateStr);
+            if (aptDate != null) {
+              if (earliest == null || aptDate.isBefore(earliest)) {
+                earliest = aptDate;
+              }
+            }
+          }
+          final aptCreated = PatientModel.parseDate(rec, 'created');
+          if (aptCreated != null) {
+            if (earliest == null || aptCreated.isBefore(earliest)) {
+              earliest = aptCreated;
+            }
+          }
+        }
+      } catch (_) {}
+
+      // 2. Check oldest consultation
+      try {
+        final oldestConsult = await pb.collection(PBCollections.consultations).getList(
+          filter: 'patient = "${_patient.id}"',
+          sort: '+created',
+          perPage: 1,
+          page: 1,
+        );
+        if (oldestConsult.items.isNotEmpty) {
+          final cCreated = PatientModel.parseDate(oldestConsult.items.first, 'created');
+          if (cCreated != null) {
+            if (earliest == null || cCreated.isBefore(earliest)) {
+              earliest = cCreated;
+            }
+          }
+        }
+      } catch (_) {}
+
+      if (mounted && earliest != null) {
+        setState(() {
+          _registrationDate = earliest;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _checkOngoingConsultation() async {
@@ -255,7 +339,14 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     return Scaffold(
       backgroundColor: context.colors.background,
       appBar: AppBar(
-        title: Text('Patient Profile', style: context.textStyles.h4),
+        title: Text(
+          'Patient Profile',
+          style: context.textStyles.h3.copyWith(
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.3,
+          ),
+        ),
         centerTitle: true,
         actions: [
           IconButton(
@@ -281,30 +372,312 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
             onPressed: _openEditPatientDialog,
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: context.colors.primary,
-          unselectedLabelColor: context.colors.textHint,
-          indicatorColor: context.colors.primary,
-          indicatorWeight: 3,
-          labelStyle: context.textStyles.h4,
-          unselectedLabelStyle: context.textStyles.bodyMedium,
-          tabs: const [
-            Tab(text: 'Treatments'),
-            Tab(text: 'History'),
-            Tab(text: 'Patient Details'),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Column(
         children: [
-          _buildTreatmentsTab(),
-          _buildHistoryTab(),
-          _buildBasicDetailsTab(),
+          _buildMobileHeaderBanner(),
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: context.colors.border.withValues(alpha: 0.5),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              labelColor: context.colors.primary,
+              unselectedLabelColor: context.colors.textHint,
+              indicatorColor: context.colors.primary,
+              indicatorWeight: 2.5,
+              labelStyle: context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700),
+              unselectedLabelStyle: context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500),
+              tabs: const [
+                Tab(text: 'Treatments'),
+                Tab(text: 'History'),
+                Tab(text: 'Details'),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildTreatmentsTab(),
+                _buildHistoryTab(),
+                _buildBasicDetailsTab(),
+              ],
+            ),
+          ),
         ],
       ),
       floatingActionButton: _buildFAB(hasOngoing),
+    );
+  }
+
+  static const List<List<Color>> _avatarGradients = [
+    [Color(0xFF0D9488), Color(0xFF14B8A6)], // Emerald / Teal
+    [Color(0xFF2563EB), Color(0xFF60A5FA)], // Royal Blue
+    [Color(0xFF7C3AED), Color(0xFFA78BFA)], // Violet
+    [Color(0xFFD97706), Color(0xFFFBBF24)], // Amber
+    [Color(0xFF0284C7), Color(0xFF38BDF8)], // Cyan
+    [Color(0xFFE11D48), Color(0xFFFB7185)], // Rose
+    [Color(0xFF059669), Color(0xFF34D399)], // Jade Green
+    [Color(0xFF4F46E5), Color(0xFF818CF8)], // Indigo
+  ];
+
+  static List<Color> _getAvatarGradient(String name) {
+    if (name.isEmpty) return _avatarGradients[0];
+    final hash = name.codeUnits.fold(0, (prev, elem) => prev + elem);
+    return _avatarGradients[hash % _avatarGradients.length];
+  }
+
+  String _capitalize(String text) {
+    if (text.isEmpty) return text;
+    return text.trim().split(RegExp(r'\s+')).map((w) {
+      if (w.isEmpty) return w;
+      return '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}';
+    }).join(' ');
+  }
+
+  String _formatPhoneNumber(String raw) {
+    if (raw.isEmpty) return raw;
+    final cleaned = raw.replaceAll(' ', '');
+    if (cleaned.startsWith('+91') && cleaned.length == 13) {
+      return '+91 ${cleaned.substring(3, 8)} ${cleaned.substring(8)}';
+    } else if (cleaned.length == 10 && !cleaned.startsWith('+')) {
+      return '${cleaned.substring(0, 5)} ${cleaned.substring(5)}';
+    }
+    return raw;
+  }
+
+  Future<void> _makePhoneCall(String phone) async {
+    if (phone.isEmpty) return;
+    final url = Uri.parse('tel:$phone');
+    try {
+      await launchUrl(url);
+    } catch (e) {
+      debugPrint('Could not launch phone call: $e');
+    }
+  }
+
+  Widget _buildMobileHeaderBanner() {
+    final p = _patient;
+    final displayName = _capitalize(p.fullName);
+    final initials = displayName.split(' ')
+        .where((s) => s.isNotEmpty)
+        .take(2)
+        .map((s) => s[0].toUpperCase())
+        .join();
+    final gradient = _getAvatarGradient(p.fullName);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.65)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Deterministic Avatar
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: gradient,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: gradient.first.withValues(alpha: 0.25),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              initials.isNotEmpty ? initials : '?',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // Patient Details
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        displayName,
+                        style: context.textStyles.bodyMedium.copyWith(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (p.age != null && p.age! > 0) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: context.colors.divider.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '${p.age}y${p.gender != null && p.gender!.isNotEmpty ? ' · ${p.gender![0].toUpperCase()}' : ''}',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: context.colors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.phone_rounded,
+                      size: 12,
+                      color: context.colors.textSecondary,
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        _formatPhoneNumber(p.phone),
+                        style: context.textStyles.bodySmall.copyWith(
+                          color: context.colors.textSecondary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (p.patientId != null && p.patientId!.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: Text(
+                          '·',
+                          style: TextStyle(
+                            color: context.colors.textHint,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '#${p.patientId}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: context.colors.textHint,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Micro-Action Buttons
+          if (p.phone.isNotEmpty) ...[
+            // WhatsApp Button
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  WhatsAppHelper.openChat(p.phone);
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Ink(
+                  width: 35,
+                  height: 35,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF25D366).withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFF25D366).withValues(alpha: 0.3),
+                      width: 1.0,
+                    ),
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.message_rounded,
+                      color: Color(0xFF25D366),
+                      size: 16.5,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            // Call Button
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  _makePhoneCall(p.phone);
+                },
+                borderRadius: BorderRadius.circular(10),
+                child: Ink(
+                  width: 35,
+                  height: 35,
+                  decoration: BoxDecoration(
+                    color: context.colors.primary.withValues(alpha: 0.09),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: context.colors.primary.withValues(alpha: 0.3),
+                      width: 1.0,
+                    ),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.phone_rounded,
+                      color: context.colors.primary,
+                      size: 16.5,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -458,19 +831,28 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         ? 'Resume Consult'
         : (hasCompletedCurrent
             ? 'View / Edit Consult'
-            : (_hasAnyConsultation ? '+ New Consultation' : 'Start Consult'));
+            : (_hasAnyConsultation ? 'New Consultation' : 'Start Consult'));
     
     final buttonIcon = hasOngoing 
         ? Icons.play_arrow_rounded 
-        : (hasCompletedCurrent ? Icons.edit_document : Icons.add_comment_rounded);
+        : (hasCompletedCurrent ? Icons.edit_document : Icons.add_rounded);
 
     return FloatingActionButton.extended(
       heroTag: null,
-      onPressed: _startConsultation,
+      onPressed: () {
+        HapticFeedback.lightImpact();
+        _startConsultation();
+      },
       backgroundColor: context.colors.primary,
-      icon: Icon(buttonIcon, color: context.colors.textPrimary),
-      label: Text(buttonLabel,
-          style: TextStyle(color: context.colors.textPrimary, fontWeight: FontWeight.bold)),
+      icon: Icon(buttonIcon, color: Colors.white, size: 20),
+      label: Text(
+        buttonLabel,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+        ),
+      ),
     );
   }
 
@@ -861,16 +1243,65 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         final entries = snapshot.data ?? [];
         if (entries.isEmpty) {
           return Center(
-            child: Text('No consultations yet.',
-                style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: context.colors.primary.withValues(alpha: 0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.medical_information_outlined,
+                      size: 34,
+                      color: context.colors.primary,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No Consultations Yet',
+                    style: context.textStyles.h4.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Start a new consultation or treatment plan for this patient.',
+                    style: context.textStyles.bodySmall.copyWith(
+                      color: context.colors.textSecondary,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      _startConsultation();
+                    },
+                    icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
+                    label: const Text('Start Consultation', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: context.colors.primary,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           );
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: entries.length,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
+          itemCount: entries.length + 1,
           itemBuilder: (context, index) {
-            final entry = entries[index];
+            if (index == 0) {
+              return _buildClinicalSummaryStrip(entries);
+            }
+            final entry = entries[index - 1];
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _ConsultationCard(
@@ -884,6 +1315,133 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
           },
         );
       },
+    );
+  }
+
+  Widget _buildClinicalSummaryStrip(List<_ConsultationEntry> entries) {
+    final int totalConsults = entries.length;
+    final int planCount = entries.where((e) => e.appointment?.linkedTreatmentPlanId != null || e.consultation.chiefComplaint != null).length;
+    
+    DateTime? regDate = _registrationDate ?? _patient.created;
+    if (regDate == null && entries.isNotEmpty) {
+      for (final e in entries) {
+        final cDate = e.consultation.created;
+        if (cDate != null) {
+          if (regDate == null || cDate.isBefore(regDate)) {
+            regDate = cDate;
+          }
+        }
+        final aDateStr = e.appointment?.date;
+        if (aDateStr != null && aDateStr.isNotEmpty) {
+          final aDate = DateTime.tryParse(aDateStr);
+          if (aDate != null) {
+            if (regDate == null || aDate.isBefore(regDate)) {
+              regDate = aDate;
+            }
+          }
+        }
+      }
+    }
+
+    final regFormatted = regDate != null
+        ? DateFormat('dd MMM yyyy').format(regDate.toLocal())
+        : (entries.isNotEmpty && entries.first.consultation.created != null
+            ? DateFormat('dd MMM yyyy').format(entries.first.consultation.created!.toLocal())
+            : '—');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: context.colors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: context.colors.border.withValues(alpha: 0.65),
+        ),
+      ),
+      child: Row(
+        children: [
+          _buildSummaryItem(
+            icon: Icons.assignment_outlined,
+            value: '$totalConsults',
+            label: totalConsults == 1 ? 'Consultation' : 'Consultations',
+            valueFontSize: 13,
+          ),
+          Container(
+            height: 28,
+            width: 1,
+            color: context.colors.border.withValues(alpha: 0.5),
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+          ),
+          _buildSummaryItem(
+            icon: Icons.healing_outlined,
+            value: '$planCount',
+            label: planCount == 1 ? 'Treatment Plan' : 'Treatment Plans',
+            valueFontSize: 13,
+          ),
+          Container(
+            height: 28,
+            width: 1,
+            color: context.colors.border.withValues(alpha: 0.5),
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+          ),
+          _buildSummaryItem(
+            icon: Icons.calendar_today_outlined,
+            value: regFormatted,
+            label: 'Registered',
+            valueFontSize: 11.5,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryItem({
+    required IconData icon,
+    required String value,
+    required String label,
+    double valueFontSize = 13,
+  }) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 14, color: context.colors.primary),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: valueFontSize,
+                    fontWeight: FontWeight.w800,
+                    color: context.colors.textPrimary,
+                    letterSpacing: -0.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              color: context.colors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 
@@ -1059,11 +1617,15 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
               Container(
                 width: 88, height: 88,
                 decoration: BoxDecoration(
-                  gradient: context.colors.heroGradient,
+                  gradient: LinearGradient(
+                    colors: _getAvatarGradient(p.fullName),
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: context.colors.primary.withValues(alpha: 0.3),
+                      color: _getAvatarGradient(p.fullName).first.withValues(alpha: 0.3),
                       blurRadius: 18,
                       offset: const Offset(0, 6),
                     ),
@@ -1072,7 +1634,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                 child: Center(
                   child: Text(
                     initials.isNotEmpty ? initials : '?',
-                    style: TextStyle(color: context.colors.textPrimary, fontSize: 32, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800),
                   ),
                 ),
               ),
@@ -1084,7 +1646,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                 children: [
                   Icon(Icons.phone_rounded, size: 14, color: context.colors.textSecondary),
                   const SizedBox(width: 4),
-                  Text(p.phone, style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
+                  Text(_formatPhoneNumber(p.phone), style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
                 ],
               ),
             ],
@@ -1492,8 +2054,10 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
+                      margin: const EdgeInsets.only(top: 2),
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: activeColor.withValues(alpha: 0.12),
@@ -1515,43 +2079,33 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                               Expanded(
                                 child: Text(
                                   c.chiefComplaint?.isNotEmpty == true
-                                      ? c.chiefComplaint!
+                                      ? _capitalize(c.chiefComplaint!)
                                       : 'General Consultation',
-                                  style: TextStyle(color: context.colors.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
+                                  style: TextStyle(
+                                    color: context.colors.textPrimary,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                               _statusChip(),
+                              const SizedBox(width: 8),
+                              Icon(
+                                _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                                color: context.colors.textSecondary,
+                              ),
                             ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            c.created != null
-                                ? DateFormat('MMM d, yyyy · h:mm a').format(c.created!.toLocal())
-                                : '—',
-                            style: TextStyle(color: context.colors.textSecondary, fontSize: 12),
-                          ),
+                          _buildDateOrMetaRow(),
                           if (_planLoaded && _treatmentPlan != null) ...[
-                            const SizedBox(height: 4),
-                            Builder(builder: (_) {
-                              final activeSessions = _treatmentSessions.where((s) => _displayStatus(s) != SessionStatus.cancelled).toList();
-                              final doneCount = activeSessions.where((s) => _displayStatus(s) == SessionStatus.completed).length;
-                              final mActiveSessions = _maintenanceSessions.where((s) => _displayStatus(s) != SessionStatus.cancelled).toList();
-                              final mDoneCount = mActiveSessions.where((s) => _displayStatus(s) == SessionStatus.completed).length;
-                              return Text(
-                                '$doneCount/${activeSessions.length} treatment sessions done'
-                                '${_maintenancePlan != null ? ' · $mDoneCount/${mActiveSessions.length} maintenance' : ''}',
-                                style: TextStyle(color: context.colors.primary, fontSize: 11, fontWeight: FontWeight.w600),
-                              );
-                            }),
+                            const SizedBox(height: 8),
+                            _buildProgressBar(),
+                            _buildNextSessionBadge(),
                           ],
                         ],
                       ),
-                    ),
-                    Icon(
-                      _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                      color: context.colors.textSecondary,
                     ),
                   ],
                 ),
@@ -1601,8 +2155,10 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
+                    margin: const EdgeInsets.only(top: 2),
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: _cardColor.withValues(alpha: 0.1),
@@ -1624,44 +2180,34 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                             Expanded(
                               child: Text(
                                 c.chiefComplaint?.isNotEmpty == true
-                                    ? c.chiefComplaint!
+                                    ? _capitalize(c.chiefComplaint!)
                                     : 'General Consultation',
-                                style: context.textStyles.h4,
+                                style: context.textStyles.h4.copyWith(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.2,
+                                ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             _statusChip(),
+                            const SizedBox(width: 6),
+                            Icon(
+                              _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
+                              color: context.colors.textHint,
+                              size: 22,
+                            ),
                           ],
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          c.created != null
-                              ? DateFormat('MMM d, yyyy · h:mm a').format(c.created!.toLocal())
-                              : '—',
-                          style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
-                        ),
-                        if (_planLoaded) ...[
-                          if (_treatmentPlan != null) ...[
-                            Builder(builder: (_) {
-                              final activeSessions = _treatmentSessions.where((s) => _displayStatus(s) != SessionStatus.cancelled).toList();
-                              final doneCount = activeSessions.where((s) => _displayStatus(s) == SessionStatus.completed).length;
-                              final mActiveSessions = _maintenanceSessions.where((s) => _displayStatus(s) != SessionStatus.cancelled).toList();
-                              final mDoneCount = mActiveSessions.where((s) => _displayStatus(s) == SessionStatus.completed).length;
-                              return Text(
-                                '$doneCount/${activeSessions.length} treatment sessions done'
-                                '${_maintenancePlan != null ? ' · $mDoneCount/${mActiveSessions.length} maintenance' : ''}',
-                                style: context.textStyles.caption.copyWith(color: context.colors.primary),
-                              );
-                            }),
-                          ],
+                        _buildDateOrMetaRow(),
+                        if (_planLoaded && _treatmentPlan != null) ...[
+                          const SizedBox(height: 8),
+                          _buildProgressBar(),
+                          _buildNextSessionBadge(),
                         ],
                       ],
                     ),
-                  ),
-                  Icon(
-                    _expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                    color: context.colors.textHint,
                   ),
                 ],
               ),
@@ -1682,11 +2228,179 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     );
   }
 
-  Widget _buildDeleteButton(bool isDesktop) {
+  String _capitalize(String text) {
+    if (text.isEmpty) return text;
+    return text.trim().split(RegExp(r'\s+')).map((w) {
+      if (w.isEmpty) return w;
+      return '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}';
+    }).join(' ');
+  }
+
+  Widget _buildDateOrMetaRow() {
+    String? dateStr;
+    if (c.created != null) {
+      dateStr = DateFormat('dd MMM yyyy').format(c.created!.toLocal());
+    } else if (widget.entry.appointment?.date != null && widget.entry.appointment!.date.isNotEmpty) {
+      final aptDt = DateTime.tryParse(widget.entry.appointment!.date);
+      dateStr = aptDt != null ? DateFormat('dd MMM yyyy').format(aptDt) : widget.entry.appointment!.date;
+    }
+
+    final List<Widget> items = [];
+    if (dateStr != null && dateStr.isNotEmpty) {
+      items.add(
+        Text(
+          dateStr,
+          style: TextStyle(
+            color: context.colors.textSecondary,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      );
+    }
+
+    if (_planLoaded && _treatmentPlan != null && _treatmentPlan!.intervalDays > 0) {
+      if (items.isNotEmpty) {
+        items.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 5),
+            child: Text('·', style: TextStyle(color: context.colors.textHint, fontWeight: FontWeight.bold, fontSize: 11)),
+          ),
+        );
+      }
+      final int days = _treatmentPlan!.intervalDays;
+      items.add(
+        Text(
+          'Every $days ${days == 1 ? 'Day' : 'Days'}',
+          style: TextStyle(
+            color: context.colors.textSecondary,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isDesktop ? 20 : 16),
-      child: Align(
-        alignment: Alignment.centerRight,
+      padding: const EdgeInsets.only(top: 2),
+      child: Row(
+        children: items,
+      ),
+    );
+  }
+
+  Widget _buildProgressBar() {
+    final activeSessions = _treatmentSessions.where((s) => _displayStatus(s) != SessionStatus.cancelled).toList();
+    final doneCount = activeSessions.where((s) => _displayStatus(s) == SessionStatus.completed).length;
+    final total = activeSessions.length;
+    final progress = total > 0 ? (doneCount / total).clamp(0.0, 1.0) : 0.0;
+    final isComplete = _treatmentPlan!.status == TreatmentPlanStatus.completed || (doneCount == total && total > 0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '$doneCount of $total sessions done',
+              style: TextStyle(
+                color: isComplete ? const Color(0xFF10B981) : context.colors.primary,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            Text(
+              '${(progress * 100).toInt()}%',
+              style: TextStyle(
+                color: context.colors.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 5),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 5,
+            backgroundColor: context.colors.border.withValues(alpha: 0.5),
+            valueColor: AlwaysStoppedAnimation<Color>(
+              isComplete ? const Color(0xFF10B981) : context.colors.primary,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNextSessionBadge() {
+    final upcomingList = _treatmentSessions.where(
+      (s) => _displayStatus(s) != SessionStatus.completed &&
+             _displayStatus(s) != SessionStatus.cancelled &&
+             _displayStatus(s) != SessionStatus.missed,
+    ).toList();
+
+    if (upcomingList.isEmpty) return const SizedBox.shrink();
+    final nextSession = upcomingList.first;
+
+    String dateFormatted = nextSession.scheduledDate;
+    final parsedDt = DateTime.tryParse(nextSession.scheduledDate);
+    if (parsedDt != null) {
+      dateFormatted = DateFormat('dd MMM yyyy').format(parsedDt.toLocal());
+    }
+    final timeFormatted = nextSession.scheduledTime != null && nextSession.scheduledTime!.isNotEmpty
+        ? ' · ${nextSession.scheduledTime}'
+        : '';
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: context.colors.primary.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(
+          color: context.colors.primary.withValues(alpha: 0.22),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.event_available_rounded,
+            size: 13,
+            color: context.colors.primary,
+          ),
+          const SizedBox(width: 5),
+          Flexible(
+            child: Text(
+              'Next: Session ${nextSession.sessionNumber} · $dateFormatted$timeFormatted',
+              style: TextStyle(
+                color: context.colors.primary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeleteButton(bool isDesktop) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 16),
         child: TextButton.icon(
           onPressed: () async {
             final confirm = await showDialog<bool>(
@@ -1719,8 +2433,13 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               }
             }
           },
-          icon: Icon(Icons.delete_outline_rounded, color: context.colors.error, size: 18),
-          label: Text('Delete Consultation', style: TextStyle(color: context.colors.error)),
+          icon: Icon(Icons.delete_outline_rounded,
+              size: 16, color: context.colors.error),
+          label: Text('Delete Consultation',
+              style: TextStyle(
+                  color: context.colors.error,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600)),
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
@@ -1738,53 +2457,57 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   }
 
   Widget _statusChip() {
-    final isDesktop = MediaQuery.of(context).size.width >= 900;
     final String label;
     final Color color;
-    if (!_isOngoing) {
-      label = 'Completed'; color = context.colors.success;
+
+    if (_planLoaded && _treatmentPlan != null) {
+      switch (_treatmentPlan!.status) {
+        case TreatmentPlanStatus.active:
+          label = 'Active';
+          color = const Color(0xFF0D9488);
+          break;
+        case TreatmentPlanStatus.completed:
+          label = 'Completed';
+          color = const Color(0xFF10B981);
+          break;
+        case TreatmentPlanStatus.paused:
+          label = 'Paused';
+          color = const Color(0xFFF59E0B);
+          break;
+        case TreatmentPlanStatus.manualReview:
+          label = 'Needs Review';
+          color = const Color(0xFFEF4444);
+          break;
+        case TreatmentPlanStatus.closed:
+          label = 'Closed';
+          color = context.colors.textHint;
+          break;
+      }
+    } else if (!_isOngoing) {
+      label = 'Completed';
+      color = const Color(0xFF10B981);
     } else if (!_formFilled) {
-      label = 'In Progress'; color = context.colors.warning;
-    } else if (_planLoaded && _treatmentPlan != null) {
-      label = 'Ongoing'; color = context.colors.info;
+      label = 'In Progress';
+      color = const Color(0xFFF59E0B);
     } else {
-      label = 'Plan Needed'; color = context.colors.primary;
-    }
-    
-    if (isDesktop) {
-      return Container(
-        margin: const EdgeInsets.only(left: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: color.withValues(alpha: 0.25), width: 1),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: color,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      );
+      label = 'Plan Needed';
+      color = context.colors.primary;
     }
 
     return Container(
       margin: const EdgeInsets.only(left: 8),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3), width: 1),
       ),
       child: Text(
         label,
-        style: context.textStyles.caption.copyWith(
+        style: TextStyle(
           color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
+          fontSize: 10.5,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -2165,13 +2888,17 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       children: [
         Icon(icon, size: 16, color: color),
         const SizedBox(width: 6),
-        Text(
-          label,
-          style: isDesktop
-              ? TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)
-              : context.textStyles.label.copyWith(fontSize: 13, color: color),
+        Flexible(
+          child: Text(
+            label,
+            style: isDesktop
+                ? TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.bold)
+                : context.textStyles.label.copyWith(fontSize: 13, color: color),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 6),
         // Status badge
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
@@ -2189,49 +2916,107 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
           ),
         ),
         const Spacer(),
-        Text(
-          '₹${plan.sessionFee.toInt()}/session',
-          style: isDesktop
-              ? TextStyle(color: context.colors.textMuted, fontSize: 11)
-              : context.textStyles.caption.copyWith(color: context.colors.textSecondary),
-        ),
-        const SizedBox(width: 8),
-        IconButton(
-          tooltip: 'Schedule History',
-          icon: Icon(Icons.history_rounded, size: 18, color: context.colors.textHint),
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => SchedulingAuditHistoryScreen(plan: plan),
-            ),
+        if (plan.sessionFee > 0) ...[
+          Text(
+            '₹${plan.sessionFee.toInt()}/session',
+            style: isDesktop
+                ? TextStyle(color: context.colors.textMuted, fontSize: 11)
+                : context.textStyles.caption.copyWith(color: context.colors.textSecondary),
           ),
-        ),
-        // ⋮ Close Treatment menu
-        if (canClose) ...[
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
+        ],
+        if (isDesktop) ...[
           IconButton(
-            tooltip: 'Manage Plan (Edit Sessions)',
-            icon: Icon(Icons.edit_calendar_rounded, size: 18, color: context.colors.primary),
+            tooltip: 'Schedule History',
+            icon: Icon(Icons.history_rounded, size: 18, color: context.colors.textHint),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
-            onPressed: () => _openManagePlan(plan),
-          ),
-          const SizedBox(width: 8),
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert_rounded, size: 16, color: context.colors.textHint),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            onSelected: (v) { if (v == 'close') _closeTreatment(plan); },
-            itemBuilder: (ctx) => [
-              PopupMenuItem(
-                value: 'close',
-                child: Row(children: [
-                  Icon(Icons.cancel_outlined, size: 16, color: context.colors.error),
-                  const SizedBox(width: 8),
-                  Text('Close Treatment', style: TextStyle(color: context.colors.error, fontSize: 13)),
-                ]),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SchedulingAuditHistoryScreen(plan: plan),
               ),
+            ),
+          ),
+          if (canClose) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Manage Plan (Edit Sessions)',
+              icon: Icon(Icons.edit_calendar_rounded, size: 18, color: context.colors.primary),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: () => _openManagePlan(plan),
+            ),
+            const SizedBox(width: 8),
+            PopupMenuButton<String>(
+              icon: Icon(Icons.more_vert_rounded, size: 16, color: context.colors.textHint),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              onSelected: (v) { if (v == 'close') _closeTreatment(plan); },
+              itemBuilder: (ctx) => [
+                PopupMenuItem(
+                  value: 'close',
+                  child: Row(children: [
+                    Icon(Icons.cancel_outlined, size: 16, color: context.colors.error),
+                    const SizedBox(width: 8),
+                    Text('Close Treatment', style: TextStyle(color: context.colors.error, fontSize: 13)),
+                  ]),
+                ),
+              ],
+            ),
+          ],
+        ] else ...[
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert_rounded, size: 18, color: context.colors.textHint),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            onSelected: (v) {
+              if (v == 'history') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SchedulingAuditHistoryScreen(plan: plan),
+                  ),
+                );
+              } else if (v == 'edit') {
+                _openManagePlan(plan);
+              } else if (v == 'close') {
+                _closeTreatment(plan);
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'history',
+                child: Row(
+                  children: [
+                    Icon(Icons.history_rounded, size: 16),
+                    SizedBox(width: 8),
+                    Text('Schedule History', style: TextStyle(fontSize: 13)),
+                  ],
+                ),
+              ),
+              if (canClose) ...[
+                PopupMenuItem(
+                  value: 'edit',
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_calendar_rounded, size: 16, color: context.colors.primary),
+                      SizedBox(width: 8),
+                      Text('Manage Plan (Edit Sessions)', style: TextStyle(fontSize: 13)),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'close',
+                  child: Row(
+                    children: [
+                      Icon(Icons.cancel_outlined, size: 16, color: context.colors.error),
+                      SizedBox(width: 8),
+                      Text('Close Treatment', style: TextStyle(color: context.colors.error, fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ],

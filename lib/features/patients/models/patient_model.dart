@@ -102,10 +102,48 @@ class PatientModel {
       consentDate: record.getStringValue('consent_date'),
       privacyPolicyAccepted: record.getBoolValue('privacy_policy_accepted'),
       privacyPolicyAcceptedDate: record.getStringValue('privacy_policy_accepted_date'),
-      created: DateTime.tryParse(record.getStringValue('created')),
-      updated: DateTime.tryParse(record.getStringValue('updated')),
+      created: parseDate(record, 'created'),
+      updated: parseDate(record, 'updated'),
       requiresPatientDetailsUpdate: record.getBoolValue('requires_patient_details_update'),
     );
+  }
+
+  static DateTime? parseDate(RecordModel record, String field) {
+    try {
+      final val = record.get<String>(field);
+      if (val.isNotEmpty) {
+        final parsed = DateTime.tryParse(val);
+        if (parsed != null) return parsed.toLocal();
+      }
+    } catch (_) {}
+
+    try {
+      final raw = record.data[field]?.toString();
+      if (raw != null && raw.isNotEmpty) {
+        final parsed = DateTime.tryParse(raw);
+        if (parsed != null) return parsed.toLocal();
+      }
+    } catch (_) {}
+
+    try {
+      if (field == 'created') {
+        // ignore: deprecated_member_use
+        final val = record.created;
+        if (val.isNotEmpty) {
+          final parsed = DateTime.tryParse(val);
+          if (parsed != null) return parsed.toLocal();
+        }
+      } else if (field == 'updated') {
+        // ignore: deprecated_member_use
+        final val = record.updated;
+        if (val.isNotEmpty) {
+          final parsed = DateTime.tryParse(val);
+          if (parsed != null) return parsed.toLocal();
+        }
+      }
+    } catch (_) {}
+
+    return null;
   }
 
   Map<String, dynamic> toJson() {

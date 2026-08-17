@@ -806,8 +806,8 @@ class _ConfirmPanel extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.18),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(Icons.check_rounded,
-                      color: context.colors.textPrimary, size: 22),
+                  child: const Icon(Icons.check_rounded,
+                      color: Colors.white, size: 22),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
@@ -816,8 +816,8 @@ class _ConfirmPanel extends StatelessWidget {
                     children: [
                       Text(
                         TimeUtils.formatStringTime(selectedSlot),
-                        style: TextStyle(
-                          color: context.colors.textPrimary,
+                        style: const TextStyle(
+                          color: Colors.white,
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
                           letterSpacing: -0.3,
@@ -826,7 +826,7 @@ class _ConfirmPanel extends StatelessWidget {
                       Text(
                         DateFormat('EEEE, d MMM').format(selectedDate),
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.78),
+                          color: Colors.white.withValues(alpha: 0.85),
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -838,13 +838,13 @@ class _ConfirmPanel extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16, vertical: 9),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
+                    color: Colors.white.withValues(alpha: 0.22),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(
+                  child: const Text(
                     'Confirm',
                     style: TextStyle(
-                      color: context.colors.textPrimary,
+                      color: Colors.white,
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),

@@ -15,6 +15,8 @@ import 'package:pms_app/features/patients/models/patient_model.dart';
 import 'package:pms_app/features/patients/providers/patient_provider.dart';
 import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
 import 'package:pms_app/features/scheduling/screens/available_slots_screen.dart';
+import 'package:pms_app/features/treatments/widgets/cascade_preview_sheet.dart';
+import 'package:pms_app/core/scheduling/treatment_scheduler.dart';
 
 /// Needs Attention Dashboard.
 ///
@@ -56,16 +58,33 @@ class AutoSchedulingDashboard extends ConsumerStatefulWidget {
   }) async {
     notificationDismissed.value = true;
     AppToast.dismiss(context);
-    await showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) => AutoSchedulingDashboard(
-        overdueSessions: overdueSessions,
-        overdueConsultations: overdueConsultations,
-        manualReviewPlans: plans ?? manualReviewPlans,
-        onRefresh: onRefresh,
-      ),
-    );
+    final width = MediaQuery.of(context).size.width;
+    final isDesktop = width >= 900;
+
+    if (isDesktop) {
+      await showDialog(
+        context: context,
+        barrierDismissible: true,
+        builder: (context) => AutoSchedulingDashboard(
+          overdueSessions: overdueSessions,
+          overdueConsultations: overdueConsultations,
+          manualReviewPlans: plans ?? manualReviewPlans,
+          onRefresh: onRefresh,
+        ),
+      );
+    } else {
+      await Navigator.of(context, rootNavigator: true).push(
+        MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (context) => AutoSchedulingDashboard(
+            overdueSessions: overdueSessions,
+            overdueConsultations: overdueConsultations,
+            manualReviewPlans: plans ?? manualReviewPlans,
+            onRefresh: onRefresh,
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -256,83 +275,83 @@ class _AutoSchedulingDashboardState
     }
   }
 
-  Future<void> _onDidntShow(SessionModel session) => _onPatientMissed(session);
-
-  // ─── Clinic Was Closed ────────────────────────────────────────────────────
 
   Future<void> _onClinicClosed(SessionModel session) async {
-    final sessionDate = DateTime.tryParse(session.scheduledDate);
-    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
-    final isPastDate = sessionDate != null && sessionDate.isBefore(today);
-
-    // For past-date sessions, force a new date to prevent the infinite overdue loop.
-    // (leaving it on the same past date = tomorrow's sweep catches it again)
-    DateTime? pickedDate;
-    String? pickedTime;
-    if (isPastDate && mounted) {
-      final result = await Navigator.push<Map<String, dynamic>>(
-        context,
-        MaterialPageRoute(
-          builder: (_) => AvailableSlotsScreen(
-            doctorId: session.doctorId,
-            treatmentDuration: 30, // Default duration, slots will be fetched
-          ),
+    // 1. Pick Anchor Date & Time Slot
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AvailableSlotsScreen(
+          doctorId: session.doctorId,
+          treatmentDuration: 30,
         ),
-      );
-      if (!mounted) return;
-      if (result == null || result['date'] == null || result['time'] == null) {
-        AppToast.show('Date and time required — session stays as overdue.', type: ToastType.warning);
-        return;
-      }
-      pickedDate = result['date'] as DateTime;
-      pickedTime = result['time'] as String;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: context.colors.surface,
-        title: Text('Clinic Was Closed', style: context.textStyles.h3),
-        content: Text(
-          'Session ${session.sessionNumber} on ${_formatDate(session.scheduledDate)} '
-          'will be reverted to Upcoming with no miss penalty.\n\n'
-          + (pickedDate != null
-              ? 'New slot: ${_formatDate(pickedDate.toIso8601String().substring(0, 10))} at $pickedTime'
-              : 'The session stays on the same date.'),
-          style: context.textStyles.bodyMedium,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Dismiss — No Penalty'),
-          ),
-        ],
       ),
     );
-    if (confirmed != true || !mounted) return;
+    if (!mounted) return;
+    if (result == null || result['date'] == null || result['time'] == null) {
+      AppToast.show('Date and time required — session remains in review.', type: ToastType.warning);
+      return;
+    }
+    final pickedDate = result['date'] as DateTime;
+    final pickedTime = result['time'] as String;
+    final newDateStr = '${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}';
 
+    // 2. Generate Initial Cascade Reschedule Proposal
     setState(() { _isProcessing = true; _processingId = session.id; });
+    final ReschedulePreview preview;
     try {
       final lifecycle = ref.read(sessionLifecycleServiceProvider);
-      final newDateStr = pickedDate != null
-          ? '${pickedDate.year}-${pickedDate.month.toString().padLeft(2, '0')}-${pickedDate.day.toString().padLeft(2, '0')}'
-          : null;
-      await lifecycle.dismissAsClinicHoliday(
-        session.id,
+      preview = await lifecycle.previewRescheduleSessionAndCascade(
+        sessionId: session.id,
         newDate: newDateStr,
         newTime: pickedTime,
         performedBy: _currentUserId,
       );
+    } catch (e) {
+      if (mounted) AppToast.show('Error generating schedule: $e', type: ToastType.error);
+      return;
+    } finally {
+      if (mounted) setState(() { _isProcessing = false; _processingId = null; });
+    }
 
+    if (!mounted) return;
+
+    // 3. Show Interactive Cascade Preview Sheet (Dialog on Desktop, Sheet on Mobile)
+    final confirmedPreview = await CascadePreviewSheet.show(
+      context: context,
+      preview: preview,
+      newTime: pickedTime,
+      doctorId: session.doctorId,
+      clinicId: ref.read(authProvider).clinicId,
+      onRegenerate: ({
+        required sessionId,
+        required newDate,
+        newTime,
+        applyTimeToAll = false,
+        overrideIntervalDays,
+      }) {
+        return ref.read(sessionLifecycleServiceProvider).previewRescheduleSessionAndCascade(
+          sessionId: sessionId,
+          newDate: newDate,
+          newTime: newTime,
+          performedBy: _currentUserId,
+          applyTimeToAll: applyTimeToAll,
+          overrideIntervalDays: overrideIntervalDays,
+        );
+      },
+    );
+
+    if (confirmedPreview == null || !mounted) return;
+
+    // 4. Commit Proposal to PocketBase
+    setState(() { _isProcessing = true; _processingId = session.id; });
+    try {
+      final lifecycle = ref.read(sessionLifecycleServiceProvider);
+      await lifecycle.commitRescheduleProposal(confirmedPreview);
 
       if (mounted) {
         setState(() {
-          _sessions.removeWhere((s) => s.id == session.id);
+          _sessions.removeWhere((s) => s.treatmentPlanId == session.treatmentPlanId || s.id == session.id);
           if (_selectedPatientId == session.patientId) {
             _selectedPatientId = null;
             _highlightSessionId = null;
@@ -340,15 +359,15 @@ class _AutoSchedulingDashboardState
         });
         widget.onRefresh();
         AppToast.show(
-          pickedDate != null
-              ? 'Session rescheduled — no miss penalty applied ✓'
-              : 'Session reverted to upcoming ✓',
+          'Session ${session.sessionNumber} and subsequent sessions rescheduled ✓',
           type: ToastType.success,
         );
-        if (_sessions.isEmpty && _consultations.isEmpty && _manualPlans.isEmpty) Navigator.of(context).pop();
+        if (_sessions.isEmpty && _consultations.isEmpty && _manualPlans.isEmpty) {
+          Navigator.of(context).pop();
+        }
       }
     } catch (e) {
-      if (mounted) AppToast.show('Error: $e', type: ToastType.error);
+      if (mounted) AppToast.show('Error saving schedule: $e', type: ToastType.error);
     } finally {
       if (mounted) setState(() { _isProcessing = false; _processingId = null; });
     }
@@ -505,55 +524,6 @@ class _AutoSchedulingDashboardState
     }
   }
 
-  // ─── Dismiss All as Holiday ───────────────────────────────────────────────
-
-  Future<void> _dismissAllAsHoliday() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: context.colors.surface,
-        title: Text('Dismiss All — Clinic Holiday', style: context.textStyles.h3),
-        content: Text(
-          'All ${_sessions.length} overdue sessions will be reverted to Upcoming '
-          'with no miss penalty applied to any patient.',
-          style: context.textStyles.bodyMedium,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Dismiss All'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-
-    setState(() { _isProcessing = true; _processingId = '__all__'; });
-    try {
-      final lifecycle = ref.read(sessionLifecycleServiceProvider);
-      for (final session in List<SessionModel>.from(_sessions)) {
-        await lifecycle.dismissAsClinicHoliday(
-          session.id,
-          performedBy: _currentUserId,
-        );
-      }
-      if (mounted) {
-        setState(() => _sessions.clear());
-        widget.onRefresh();
-        AppToast.show('All sessions dismissed ✓', type: ToastType.success);
-        if (_sessions.isEmpty && _consultations.isEmpty && _manualPlans.isEmpty) Navigator.of(context).pop();
-      }
-    } catch (e) {
-      if (mounted) AppToast.show('Error: $e', type: ToastType.error);
-    } finally {
-      if (mounted) setState(() { _isProcessing = false; _processingId = null; });
-    }
-  }
 
   // ─── Build ────────────────────────────────────────────────────────────────
 
@@ -565,7 +535,6 @@ class _AutoSchedulingDashboardState
     final hasSelection = isDesktop && _selectedPatientId != null;
 
     Widget dashboardContent = Column(
-      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _buildHeader(totalItems),
@@ -581,7 +550,7 @@ class _AutoSchedulingDashboardState
               Tab(text: 'Manual Reschedule (${_manualPlans.length})'),
           ],
         ),
-        Flexible(
+        Expanded(
           child: TabBarView(
             controller: _tabController,
             children: [
@@ -591,14 +560,13 @@ class _AutoSchedulingDashboardState
             ],
           ),
         ),
-        if (_sessions.isNotEmpty) _buildFooter(),
       ],
     );
 
     if (!isDesktop) {
-      return Dialog.fullscreen(
+      return Scaffold(
         backgroundColor: context.colors.background,
-        child: SafeArea(
+        body: SafeArea(
           child: dashboardContent,
         ),
       );
@@ -612,9 +580,7 @@ class _AutoSchedulingDashboardState
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
         width: hasSelection ? width * 0.9 : 650,
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-        ),
+        height: MediaQuery.of(context).size.height * 0.85,
         child: hasSelection
             ? Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1329,30 +1295,6 @@ class _AutoSchedulingDashboardState
     );
   }
 
-  Widget _buildFooter() {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: context.colors.border.withValues(alpha: 0.5)),
-        ),
-      ),
-      child: SizedBox(
-        width: double.infinity,
-        child: OutlinedButton.icon(
-          onPressed: (_isProcessing && _processingId == '__all__')
-              ? null
-              : _dismissAllAsHoliday,
-          icon: const Icon(Icons.business_rounded, size: 16),
-          label: Text('Dismiss All — Clinic Closed (${_sessions.length})'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: context.colors.textSecondary,
-            side: BorderSide(color: context.colors.border),
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _buildEmptyState({
     required IconData icon,

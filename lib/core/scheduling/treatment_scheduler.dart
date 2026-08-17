@@ -48,6 +48,29 @@ class ProposedSlot {
     this.statusRestored = false,
     this.isTarget = false,
   });
+  ProposedSlot copyWith({
+    String? sessionId,
+    int? sessionNumber,
+    String? oldDate,
+    String? oldTime,
+    String? newDate,
+    String? newTime,
+    bool? wasPinned,
+    bool? statusRestored,
+    bool? isTarget,
+  }) {
+    return ProposedSlot(
+      sessionId: sessionId ?? this.sessionId,
+      sessionNumber: sessionNumber ?? this.sessionNumber,
+      oldDate: oldDate ?? this.oldDate,
+      oldTime: oldTime ?? this.oldTime,
+      newDate: newDate ?? this.newDate,
+      newTime: newTime ?? this.newTime,
+      wasPinned: wasPinned ?? this.wasPinned,
+      statusRestored: statusRestored ?? this.statusRestored,
+      isTarget: isTarget ?? this.isTarget,
+    );
+  }
 }
 
 /// A complete in-memory schedule proposal for a plan rebuild.
@@ -63,6 +86,8 @@ class ScheduleProposal {
   /// Number of non-pinned sessions submitted for scheduling.
   /// Used by [TreatmentScheduler._validateProposal] to detect partial builds.
   final int totalExpected;
+  final int? updatedIntervalDays;
+  final int currentIntervalDays;
 
   const ScheduleProposal({
     required this.planId,
@@ -73,7 +98,35 @@ class ScheduleProposal {
     this.clinicId,
     required this.sessionType,
     required this.totalExpected,
+    this.updatedIntervalDays,
+    this.currentIntervalDays = 1,
   });
+
+  ScheduleProposal copyWith({
+    String? planId,
+    List<ProposedSlot>? slots,
+    int? newScheduleVersion,
+    String? trigger,
+    String? performedBy,
+    String? clinicId,
+    String? sessionType,
+    int? totalExpected,
+    int? updatedIntervalDays,
+    int? currentIntervalDays,
+  }) {
+    return ScheduleProposal(
+      planId: planId ?? this.planId,
+      slots: slots ?? this.slots,
+      newScheduleVersion: newScheduleVersion ?? this.newScheduleVersion,
+      trigger: trigger ?? this.trigger,
+      performedBy: performedBy ?? this.performedBy,
+      clinicId: clinicId ?? this.clinicId,
+      sessionType: sessionType ?? this.sessionType,
+      totalExpected: totalExpected ?? this.totalExpected,
+      updatedIntervalDays: updatedIntervalDays ?? this.updatedIntervalDays,
+      currentIntervalDays: currentIntervalDays ?? this.currentIntervalDays,
+    );
+  }
 }
 
 /// The result of validating a [ScheduleProposal].
@@ -205,6 +258,7 @@ class TreatmentScheduler {
     required String trigger,
     RescheduleMode mode = RescheduleMode.cascadeAll,
     bool applyTimeToAll = false,
+    int? overrideIntervalDays,
   }) async {
     final sessionRec = await pb.collection(PBCollections.sessions).getOne(sessionId);
     final targetSession = SessionModel.fromRecord(sessionRec);
@@ -214,6 +268,7 @@ class TreatmentScheduler {
     final planRec = await pb.collection(PBCollections.treatmentPlans).getOne(planId);
     final newVersion = planRec.getIntValue('schedule_version');
     final sessionType = planRec.getStringValue('treatment_type');
+    final activeInterval = overrideIntervalDays ?? (planRec.getIntValue('interval_days') > 0 ? planRec.getIntValue('interval_days') : 1);
     
     // Simulate target session being pinned and moved
     final targetProposedSlot = ProposedSlot(
@@ -224,7 +279,9 @@ class TreatmentScheduler {
       newDate: newDate,
       newTime: newTime,
       wasPinned: true, // target session is pinned
-      statusRestored: targetSession.status == SessionStatus.missed || targetSession.status == SessionStatus.paused,
+      statusRestored: targetSession.status == SessionStatus.missed ||
+          targetSession.status == SessionStatus.paused ||
+          targetSession.status == SessionStatus.overdue,
       isTarget: true,
     );
     
@@ -238,7 +295,8 @@ class TreatmentScheduler {
               !s.isPinned &&
               (s.status == SessionStatus.upcoming ||
                   s.status == SessionStatus.missed ||
-                  s.status == SessionStatus.paused))
+                  s.status == SessionStatus.paused ||
+                  s.status == SessionStatus.overdue))
           .toList()
         ..sort((a, b) => a.sessionNumber.compareTo(b.sessionNumber));
 
@@ -253,6 +311,7 @@ class TreatmentScheduler {
           performedBy: performedBy,
           planId: planId,
           anchorIsOffset: true,
+          overrideIntervalDays: activeInterval,
         );
         slots.addAll(cascadeProposal.slots);
       }
@@ -266,7 +325,8 @@ class TreatmentScheduler {
               !s.isPinned &&
               (s.status == SessionStatus.upcoming ||
                   s.status == SessionStatus.missed ||
-                  s.status == SessionStatus.paused))
+                  s.status == SessionStatus.paused ||
+                  s.status == SessionStatus.overdue))
           .length;
     }
     
@@ -279,6 +339,8 @@ class TreatmentScheduler {
       clinicId: context.clinicId,
       sessionType: sessionType,
       totalExpected: expectedCascade,
+      updatedIntervalDays: overrideIntervalDays,
+      currentIntervalDays: activeInterval,
     );
     
     return ReschedulePreview(proposal, _validateProposal(proposal));
@@ -759,9 +821,10 @@ class TreatmentScheduler {
     required String performedBy,
     required String planId,
     bool anchorIsOffset = false, // if true, cascade starts at anchorDate + interval
+    int? overrideIntervalDays,
   }) async {
     final planRec = await pb.collection(PBCollections.treatmentPlans).getOne(planId);
-    final intervalDays = planRec.getIntValue('interval_days');
+    final intervalDays = overrideIntervalDays ?? (planRec.getIntValue('interval_days') > 0 ? planRec.getIntValue('interval_days') : 1);
     final sessionType = planRec.getStringValue('treatment_type');
     final newVersion = planRec.getIntValue('schedule_version');
 
@@ -935,6 +998,17 @@ class TreatmentScheduler {
       }
     }
 
+    // If interval was modified, persist to treatment_plans
+    if (proposal.updatedIntervalDays != null && proposal.updatedIntervalDays! > 0) {
+      try {
+        await pb.collection(PBCollections.treatmentPlans).update(proposal.planId, body: {
+          'interval_days': proposal.updatedIntervalDays,
+        });
+      } catch (e) {
+        debugPrint('[TreatmentScheduler] update interval_days error: $e');
+      }
+    }
+
     // Increment schedule_version
     final newVersion = await lifecycle.incrementScheduleVersion(proposal.planId);
 
@@ -969,7 +1043,7 @@ class TreatmentScheduler {
   }) async {
     final filter = includeMissed
         ? 'treatment_plan = "$planId" && '
-            '(status = "upcoming" || status = "missed" || status = "waiting")'
+            '(status = "upcoming" || status = "missed" || status = "waiting" || status = "overdue" || status = "paused")'
         : 'treatment_plan = "$planId" && '
             '(status = "upcoming" || status = "waiting")';
     final res = await pb.collection(PBCollections.sessions).getList(
