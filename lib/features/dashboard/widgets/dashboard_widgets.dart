@@ -343,6 +343,7 @@ class DashboardOverviewSection extends StatelessWidget {
       title: "Today's Consultations",
       icon: Icons.calendar_today_rounded,
       color: const Color(0xFF0F5D4F),
+      onTap: () => mainLayoutKey.currentState?.switchToTab(1),
       children: [
         DashboardOverviewItem(
           label: "Total Scheduled",
@@ -368,6 +369,7 @@ class DashboardOverviewSection extends StatelessWidget {
       title: "Today's Sessions",
       icon: Icons.personal_injury_outlined,
       color: const Color(0xFF0F5D4F),
+      onTap: () => mainLayoutKey.currentState?.switchToTab(1),
       children: [
         DashboardOverviewItem(
           label: "Scheduled",
@@ -393,11 +395,24 @@ class DashboardOverviewSection extends StatelessWidget {
       title: "Patients Seen Today",
       icon: Icons.group_outlined,
       color: const Color(0xFF4F46E5),
+      onTap: () => mainLayoutKey.currentState?.switchToTab(1),
       children: [
         DashboardOverviewItem(
-          label: "Unique patients visited",
+          label: "Visited",
           value: '${stats.patientsSeenToday}',
           color: const Color(0xFF4F46E5),
+        ),
+        const DashboardOverviewDivider(),
+        DashboardOverviewItem(
+          label: "Expected",
+          value: '${stats.patientsExpectedToday}',
+          color: const Color(0xFF0F5D4F),
+        ),
+        const DashboardOverviewDivider(),
+        DashboardOverviewItem(
+          label: "Remaining",
+          value: '${stats.patientsRemainingToday}',
+          color: const Color(0xFFD97706),
         ),
       ],
     );
@@ -406,6 +421,7 @@ class DashboardOverviewSection extends StatelessWidget {
       title: "Today's Revenue",
       icon: Icons.payments_outlined,
       color: const Color(0xFFD97706),
+      onTap: () => mainLayoutKey.currentState?.switchToTab(2),
       children: [
         DashboardOverviewItem(
           label: "Total Collected",
@@ -471,6 +487,7 @@ class DashboardOverviewCard extends StatefulWidget {
   final IconData icon;
   final Color color;
   final List<Widget> children;
+  final VoidCallback? onTap;
 
   const DashboardOverviewCard({
     super.key,
@@ -478,6 +495,7 @@ class DashboardOverviewCard extends StatefulWidget {
     required this.icon,
     required this.color,
     required this.children,
+    this.onTap,
   });
 
   @override
@@ -485,55 +503,85 @@ class DashboardOverviewCard extends StatefulWidget {
 }
 
 class _DashboardOverviewCardState extends State<DashboardOverviewCard> {
+  bool _isHovered = false;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-      decoration: BoxDecoration(
-        color: context.colors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: context.colors.border.withValues(alpha: 0.5),
-          width: 1.0,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: context.colors.shadowColor.withValues(alpha: 0.04),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: widget.color.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(widget.icon, color: widget.color, size: 16),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                widget.title,
-                style: context.textStyles.h3.copyWith(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: context.colors.textPrimary,
-                ),
+    return MouseRegion(
+      cursor: widget.onTap != null ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          transform: Matrix4.translationValues(0, _isHovered ? -2.0 : 0.0, 0),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          decoration: BoxDecoration(
+            color: context.colors.surface,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _isHovered
+                  ? widget.color.withValues(alpha: 0.35)
+                  : context.colors.border.withValues(alpha: 0.5),
+              width: 1.0,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: _isHovered
+                    ? widget.color.withValues(alpha: 0.08)
+                    : context.colors.shadowColor.withValues(alpha: 0.04),
+                blurRadius: _isHovered ? 28 : 24,
+                offset: Offset(0, _isHovered ? 10 : 8),
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          Row(
-            children: widget.children,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: widget.color.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(widget.icon, color: widget.color, size: 16),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: context.textStyles.h3.copyWith(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: context.colors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (widget.onTap != null)
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 150),
+                      opacity: _isHovered ? 0.8 : 0.0,
+                      child: Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 14,
+                        color: widget.color,
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: widget.children,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

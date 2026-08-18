@@ -10,6 +10,11 @@ import 'package:pms_app/core/widgets/responsive_wrapper.dart';
 import 'package:pms_app/features/dashboard/screens/main_layout.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/core/providers/session_lifecycle_provider.dart';
+import 'package:pms_app/core/services/appointment_reconciliation_service.dart';
+import 'package:pms_app/features/appointments/models/appointment_model.dart';
+import 'package:pms_app/features/appointments/screens/auto_scheduling_dashboard.dart';
+import 'package:pms_app/features/treatments/models/session_model.dart';
 
 class ReceptionistDashboardScreen extends ConsumerWidget {
   const ReceptionistDashboardScreen({super.key});
@@ -298,6 +303,8 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                               ),
                               const SizedBox(height: 18),
                               DashboardOverviewSection(stats: stats),
+                              const SizedBox(height: 18),
+                              const _ConsecutiveMissesAlertCard(),
                             ],
                           ),
                         ),
@@ -374,6 +381,8 @@ class ReceptionistDashboardScreen extends ConsumerWidget {
                     ),
                     const SizedBox(height: 12),
                     DashboardOverviewSection(stats: stats),
+                    const SizedBox(height: 12),
+                    const _ConsecutiveMissesAlertCard(),
                     const SizedBox(height: 24),
                     Text(
                       'Practice Overview',
@@ -529,7 +538,7 @@ class _HeaderCTAButtonState extends State<_HeaderCTAButton> {
       onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        transform: Matrix4.identity()..scale(_isHovered ? 1.03 : 1.0),
+        transform: Matrix4.diagonal3Values(_isHovered ? 1.03 : 1.0, _isHovered ? 1.03 : 1.0, 1.0),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
@@ -582,6 +591,124 @@ class _HeaderCTAButtonState extends State<_HeaderCTAButton> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dashboard card that shows the count of overdue sessions and consultations.
+/// Tapping opens the Needs Attention / Auto-Scheduling Dashboard.
+class _ConsecutiveMissesAlertCard extends ConsumerStatefulWidget {
+  const _ConsecutiveMissesAlertCard();
+
+  @override
+  ConsumerState<_ConsecutiveMissesAlertCard> createState() =>
+      _ConsecutiveMissesAlertCardState();
+}
+
+class _ConsecutiveMissesAlertCardState
+    extends ConsumerState<_ConsecutiveMissesAlertCard> {
+  List<SessionModel>? _plans;
+  List<AppointmentModel>? _consultations;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final auth = ref.read(authProvider);
+      final lifecycle = ref.read(sessionLifecycleServiceProvider);
+      final reconciliation = ref.read(appointmentReconciliationServiceProvider);
+      final clinicId = auth.clinicId ?? '';
+      final sessions = await lifecycle.getOverdueSessionsForClinic(clinicId);
+      final consultations = await reconciliation.getOverdueConsultations(clinicId, isClinic: true);
+      if (mounted) {
+        setState(() {
+          _plans = sessions;
+          _consultations = consultations;
+          _loading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() { _loading = false; _plans = []; _consultations = []; });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) return const SizedBox.shrink();
+    final plans = _plans ?? [];
+    final consultations = _consultations ?? [];
+    final totalCount = plans.length + consultations.length;
+    if (totalCount == 0) return const SizedBox.shrink();
+
+    return InkWell(
+      onTap: () => AutoSchedulingDashboard.show(
+        context,
+        overdueSessions: plans,
+        overdueConsultations: consultations,
+        onRefresh: _load,
+      ),
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: context.colors.warning.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: context.colors.warning.withValues(alpha: 0.35),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: context.colors.warning.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.notifications_active_rounded,
+                color: context.colors.warning,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Needs Attention',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: context.colors.warning,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$totalCount overdue item${totalCount == 1 ? '' : 's'} need your review',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: context.colors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: context.colors.warning,
+              size: 18,
+            ),
+          ],
         ),
       ),
     );

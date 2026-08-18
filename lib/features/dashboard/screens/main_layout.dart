@@ -26,6 +26,8 @@ class MainLayout extends ConsumerStatefulWidget {
 
 class MainLayoutState extends ConsumerState<MainLayout> {
   String? _highlightAppointmentId;
+  static final ValueNotifier<String?> pendingHighlightAppointmentId = ValueNotifier<String?>(null);
+  static final ValueNotifier<int> apptsTabActivated = ValueNotifier<int>(0);
 
   /// Switch to a tab programmatically (e.g., from dashboard "Upcoming Today" tap).
   /// Optionally pass an appointment ID to highlight in the appointments tab.
@@ -36,14 +38,19 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         initialLocation: index == widget.navigationShell!.currentIndex,
       );
     }
+    if (index == 1) {
+      apptsTabActivated.value++;
+    }
     if (highlightAppointmentId != null) {
       _highlightAppointmentId = highlightAppointmentId;
+      pendingHighlightAppointmentId.value = highlightAppointmentId;
     }
   }
 
   /// Called by AppointmentListScreen after it consumes the highlight ID.
   void clearHighlight() {
     _highlightAppointmentId = null;
+    pendingHighlightAppointmentId.value = null;
   }
 
   /// Get current highlight appointment ID (consumed by appointments tab).
@@ -85,7 +92,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
         initialLocation: branchIndex == widget.navigationShell!.currentIndex,
       );
     }
-    if (label == 'Appts') {
+    if (label == 'Appts' || branchIndex == 1) {
+      apptsTabActivated.value++;
       ref.read(appointmentListProvider.notifier).loadAppointments();
     } else if (label == 'Patients') {
       ref.read(patientListProvider.notifier).loadPatients();
@@ -408,19 +416,19 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                   ref.read(authProvider.notifier).logout();
                 }
               },
-              borderRadius: BorderRadius.circular(99),
+              borderRadius: BorderRadius.circular(12),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(99),
-                  border: Border.all(color: Colors.redAccent.withValues(alpha: 0.15)),
+                  color: Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.logout_rounded,
-                      color: Colors.redAccent,
+                      color: Colors.white.withValues(alpha: 0.7),
                       size: 18,
                     ),
                     const SizedBox(width: 12),
@@ -428,8 +436,8 @@ class MainLayoutState extends ConsumerState<MainLayout> {
                       child: Text(
                         'Sign Out',
                         style: context.textStyles.bodyMedium.copyWith(
-                          color: Colors.redAccent,
-                          fontWeight: FontWeight.bold,
+                          color: Colors.white.withValues(alpha: 0.75),
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
@@ -582,7 +590,7 @@ class _TabConfig {
 }
 
 class AmbientBackground extends StatelessWidget {
-  const AmbientBackground({Key? key}) : super(key: key);
+  const AmbientBackground({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -124,15 +124,28 @@ class _AppButtonState extends State<AppButton> {
 
     if (widget.icon != null) {
       return Row(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(widget.icon, size: 20, color: color),
           const SizedBox(width: 8),
-          Text(widget.label, style: context.textStyles.buttonLarge.copyWith(color: color)),
+          Flexible(
+            child: Text(
+              widget.label,
+              style: context.textStyles.buttonLarge.copyWith(color: color),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
         ],
       );
     }
 
-    return Text(widget.label, style: context.textStyles.buttonLarge.copyWith(color: color));
+    return Text(
+      widget.label,
+      style: context.textStyles.buttonLarge.copyWith(color: color),
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+    );
   }
 }

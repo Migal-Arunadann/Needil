@@ -8,8 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:pms_app/core/constants/app_colors.dart';
-import 'package:pms_app/core/constants/app_text_styles.dart';
 import 'package:pms_app/features/appointments/models/appointment_model.dart';
 import 'package:pms_app/features/appointments/providers/appointment_provider.dart';
 import 'package:pms_app/core/utils/time_utils.dart';
@@ -38,9 +36,9 @@ import 'package:pms_app/core/utils/whatsapp_helper.dart';
 import 'package:pms_app/core/services/audit_service.dart';
 import 'package:pms_app/core/widgets/responsive_wrapper.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
-import 'package:pms_app/core/scheduling/treatment_scheduler.dart' show RescheduleMode;
+import 'dart:math' show sin, pi;
 import 'package:pms_app/features/treatments/widgets/cascade_preview_sheet.dart';
-import 'package:pms_app/features/appointments/widgets/conflict_warning_dialog.dart';
+import 'package:pms_app/features/dashboard/screens/main_layout.dart';
 
 class AppointmentListScreen extends ConsumerStatefulWidget {
   const AppointmentListScreen({super.key});
@@ -62,7 +60,6 @@ class _AppointmentListScreenState
   String _lifecycleCheckedDate = '';
   List<SessionModel> _overdueSessionsList = [];
   List<AppointmentModel> _overdueConsultationsList = [];
-  bool _didAutoPopupDashboard = false;
   bool _showOverdueBanner = false;
 
   String get _overdueBannerText {
@@ -84,16 +81,100 @@ class _AppointmentListScreenState
   String _searchQuery = '';
   final _searchCtrl = TextEditingController();
 
+  String? _highlightTargetId;
+  final Map<String, GlobalKey> _cardKeys = {};
+
+  GlobalKey _getCardKey(String aptId) => _cardKeys.putIfAbsent(aptId, () => GlobalKey());
+
   void _onNotificationDismissedChanged() {
     if (AutoSchedulingDashboard.notificationDismissed.value && _showOverdueBanner) {
       if (mounted) setState(() => _showOverdueBanner = false);
     }
   }
 
+  void _onApptsTabActivated() {
+    if (!mounted) return;
+    if (MainLayoutState.pendingHighlightAppointmentId.value != null) return;
+
+    final now = DateTime.now();
+    final isAlreadyToday = DateUtils.isSameDay(_selectedDate, now);
+    if (!isAlreadyToday) {
+      _selectedDate = now;
+      _generateDates();
+      ref.read(appointmentListProvider.notifier).changeDate(_formatDate(now));
+      if (mounted) setState(() {});
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToSelectedDate();
+    });
+  }
+
+  void _onPendingHighlightChanged() {
+    final targetId = MainLayoutState.pendingHighlightAppointmentId.value;
+    if (targetId == null || !mounted) return;
+
+    final now = DateTime.now();
+    final isAlreadyToday = DateUtils.isSameDay(_selectedDate, now);
+    if (!isAlreadyToday) {
+      _selectedDate = now;
+      ref.read(appointmentListProvider.notifier).changeDate(_formatDate(now));
+      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToSelectedDate());
+    }
+    if (_selectedListFilter != 'all') {
+      if (mounted) setState(() => _selectedListFilter = 'all');
+    }
+    if (_activeQuickFilter != 'today') {
+      if (mounted) setState(() => _activeQuickFilter = 'today');
+    }
+    if (_searchQuery.isNotEmpty) {
+      _searchCtrl.clear();
+      if (mounted) setState(() => _searchQuery = '');
+    }
+
+    if (mounted) {
+      setState(() {
+        _highlightTargetId = targetId;
+      });
+    }
+
+    _scrollToHighlightedCard();
+  }
+
+  void _scrollToHighlightedCard() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _highlightTargetId == null) return;
+      final key = _cardKeys[_highlightTargetId];
+      final keyCtx = key?.currentContext;
+      if (keyCtx != null) {
+        Scrollable.ensureVisible(
+          keyCtx,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeInOutCubic,
+          alignment: 0.25,
+        );
+      } else {
+        Future.delayed(const Duration(milliseconds: 120), () {
+          if (!mounted || _highlightTargetId == null) return;
+          final retryCtx = _cardKeys[_highlightTargetId]?.currentContext;
+          if (retryCtx != null) {
+            Scrollable.ensureVisible(
+              retryCtx,
+              duration: const Duration(milliseconds: 450),
+              curve: Curves.easeInOutCubic,
+              alignment: 0.25,
+            );
+          }
+        });
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     AutoSchedulingDashboard.notificationDismissed.addListener(_onNotificationDismissedChanged);
+    MainLayoutState.pendingHighlightAppointmentId.addListener(_onPendingHighlightChanged);
+    MainLayoutState.apptsTabActivated.addListener(_onApptsTabActivated);
     WidgetsBinding.instance.addObserver(this);
     _selectedDate = DateTime.now();
     _generateDates();
@@ -103,6 +184,7 @@ class _AppointmentListScreenState
       _checkMultipleDoctors();
       _loadClinicLocation();
       _loadQuickLinkCounts();
+      _onPendingHighlightChanged();
     });
   }
 
@@ -121,7 +203,6 @@ class _AppointmentListScreenState
     final todayStr = _todayDateKey();
     if (_lifecycleCheckedDate == todayStr) return; // already swept today
     _lifecycleCheckedDate = todayStr;
-    _didAutoPopupDashboard = false; // allow re-popup on new day
     AutoSchedulingDashboard.notificationDismissed.value = false; // reset notification state on new day
 
     final auth = ref.read(authProvider);
@@ -161,14 +242,6 @@ class _AppointmentListScreenState
             if (mounted) _openNeedsAttentionDashboard();
           },
         );
-      }
-
-      // Auto-popup if there are overdue sessions and dashboard hasn't shown yet
-      if (_overdueSessionsList.isNotEmpty && !_didAutoPopupDashboard) {
-        _didAutoPopupDashboard = true;
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) _openNeedsAttentionDashboard();
-        });
       }
     }
   }
@@ -321,14 +394,31 @@ class _AppointmentListScreenState
   }
 
   void _scrollToSelectedDate() {
-    if (!_dateScrollCtrl.hasClients) return;
-    // Scroll so yesterday is first visible (today is second)
-    final offset = ((_selectedDate.day - 2) * 76.0);
-    _dateScrollCtrl.animateTo(
-      offset.clamp(0.0, _dateScrollCtrl.position.maxScrollExtent),
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
+    if (!_dateScrollCtrl.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _dateScrollCtrl.hasClients) {
+          _scrollToSelectedDate();
+        }
+      });
+      return;
+    }
+    // Each date tile is width 68 + margin 10 = 78.0px
+    const itemPitch = 78.0;
+    // Scroll so yesterday (day - 2) is the first visible card on screen, today is second
+    final targetDay = _selectedDate.day;
+    final offset = (targetDay - 2) * itemPitch;
+    final maxScroll = _dateScrollCtrl.position.maxScrollExtent;
+    final clampedOffset = offset.clamp(0.0, maxScroll);
+
+    if (_dateScrollCtrl.position.hasContentDimensions) {
+      _dateScrollCtrl.animateTo(
+        clampedOffset,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      _dateScrollCtrl.jumpTo(clampedOffset);
+    }
   }
 
   /// Reset to today and scroll to default position (yesterday first, today second).
@@ -345,6 +435,8 @@ class _AppointmentListScreenState
   @override
   void dispose() {
     AutoSchedulingDashboard.notificationDismissed.removeListener(_onNotificationDismissedChanged);
+    MainLayoutState.pendingHighlightAppointmentId.removeListener(_onPendingHighlightChanged);
+    MainLayoutState.apptsTabActivated.removeListener(_onApptsTabActivated);
     WidgetsBinding.instance.removeObserver(this);
     _dateScrollCtrl.dispose();
     _searchCtrl.dispose();
@@ -1376,10 +1468,10 @@ class _AppointmentListScreenState
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: context.colors.surface,
-        title: Text('Record Retroactive Session', style: context.textStyles.h3),
+        title: Text('Record Overdue Session', style: context.textStyles.h3),
         content: Text(
           'Session ${session.sessionNumber} on '
-          '${_formatDate(DateTime.tryParse(session.scheduledDate) ?? DateTime.now())} will open for retroactive recording.\n\n'
+          '${_formatDate(DateTime.tryParse(session.scheduledDate) ?? DateTime.now())} will open to record the respective overdue session.\n\n'
           'Fill in the clinical details and hit Save to complete it.',
           style: context.textStyles.bodyMedium,
         ),
@@ -1856,6 +1948,9 @@ class _AppointmentListScreenState
     ref.listen<AppointmentListState>(appointmentListProvider, (previous, next) {
       if (previous?.isLoading == true && next.isLoading == false) {
         _loadQuickLinkCounts();
+        if (_highlightTargetId != null) {
+          _scrollToHighlightedCard();
+        }
       }
     });
 
@@ -2164,8 +2259,11 @@ class _AppointmentListScreenState
                                   const SizedBox(height: 20),
                                   Builder(
                                     builder: (context) {
-                                      final arrivedCount = (consultations.where((a) => a.status == AppointmentStatus.waiting || a.status == AppointmentStatus.inProgress).length) +
-                                          (sessions.where((a) => a.status == AppointmentStatus.waiting || a.status == AppointmentStatus.inProgress).length);
+                                      final isPast = _selectedDate.isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day));
+                                      final arrivedCount = !isPast
+                                          ? ((consultations.where((a) => a.status == AppointmentStatus.waiting || a.status == AppointmentStatus.inProgress).length) +
+                                             (sessions.where((a) => a.status == AppointmentStatus.waiting || a.status == AppointmentStatus.inProgress).length))
+                                          : 0;
                                       final completedCount = (consultations.where((a) => a.status == AppointmentStatus.completed).length) +
                                           (sessions.where((a) => a.status == AppointmentStatus.completed).length);
                                       final missedCount = (consultations.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length) +
@@ -2250,33 +2348,44 @@ class _AppointmentListScreenState
                           Row(
                             children: [
                               // Today button
-                              GestureDetector(
-                                onTap: _goToToday,
-                                child: Container(
-                                  height: 44,
-                                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                                  decoration: BoxDecoration(
-                                    gradient: context.colors.primaryGradient,
-                                    borderRadius: BorderRadius.circular(14),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: context.colors.primary.withValues(alpha: 0.2),
-                                        blurRadius: 8,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: const Center(
-                                    child: Text('Today',
+                              Builder(builder: (context) {
+                                final isSelectedToday = DateUtils.isSameDay(_selectedDate, DateTime.now());
+                                return GestureDetector(
+                                  onTap: _goToToday,
+                                  child: Container(
+                                    height: 44,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                                    decoration: BoxDecoration(
+                                      color: isSelectedToday ? context.colors.surface : null,
+                                      gradient: isSelectedToday ? null : context.colors.primaryGradient,
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: isSelectedToday
+                                          ? Border.all(color: context.colors.border.withValues(alpha: 0.8))
+                                          : null,
+                                      boxShadow: isSelectedToday
+                                          ? null
+                                          : [
+                                              BoxShadow(
+                                                color: context.colors.primary.withValues(alpha: 0.25),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        'Today',
                                         style: TextStyle(
-                                          color: Colors.white,
+                                          color: isSelectedToday ? context.colors.textSecondary : Colors.white,
                                           fontSize: 13,
-                                          fontWeight: FontWeight.w700,
-                                        )),
+                                          fontWeight: isSelectedToday ? FontWeight.w600 : FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
-                              SizedBox(width: 8),
+                                );
+                              }),
+                              const SizedBox(width: 8),
                               // Calendar button
                               GestureDetector(
                                 onTap: _pickDate,
@@ -2298,7 +2407,7 @@ class _AppointmentListScreenState
                     ),
                     const SizedBox(height: 24),
 
-                    // Ã¢â€â‚¬Ã¢â€â‚¬ Horizontal Date Strip Ã¢â€â‚¬Ã¢â€â‚¬
+                    // ── Horizontal Date Strip ──
                     SizedBox(
                       height: 84,
                       child: ListView.builder(
@@ -2323,8 +2432,8 @@ class _AppointmentListScreenState
                             },
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
-                              width: 64,
-                              margin: const EdgeInsets.only(right: 12),
+                              width: 68,
+                              margin: const EdgeInsets.only(right: 10),
                               decoration: BoxDecoration(
                                 color: isSelected ? context.colors.primary : Colors.transparent,
                                 borderRadius: BorderRadius.circular(16),
@@ -2332,23 +2441,34 @@ class _AppointmentListScreenState
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  Text(dayLabel, style: context.textStyles.caption.copyWith(
-                                    color: isSelected ? Colors.white : context.colors.textSecondary,
-                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                                  )),
+                                  Text(
+                                    dayLabel,
+                                    style: TextStyle(
+                                      color: isSelected ? Colors.white : context.colors.textSecondary,
+                                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                      fontSize: 12,
+                                      letterSpacing: -0.1,
+                                    ),
+                                    maxLines: 1,
+                                    softWrap: false,
+                                  ),
                                   const SizedBox(height: 6),
-                                  Text(d.day.toString(), style: context.textStyles.h2.copyWith(
-                                    color: isSelected ? Colors.white : context.colors.textPrimary,
-                                    height: 1,
-                                  )),
+                                  Text(
+                                    d.day.toString(),
+                                    style: context.textStyles.h2.copyWith(
+                                      color: isSelected ? Colors.white : context.colors.textPrimary,
+                                      height: 1,
+                                    ),
+                                  ),
                                   const SizedBox(height: 6),
                                   Container(
-                                    width: 4, height: 4,
+                                    width: 4,
+                                    height: 4,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
-                                      color: isSelected
-                                          ? Colors.white.withValues(alpha: 0.5)
-                                          : isToday ? context.colors.primary : Colors.transparent,
+                                      color: (isToday && !isSelected)
+                                          ? context.colors.primary
+                                          : Colors.transparent,
                                     ),
                                   ),
                                 ],
@@ -2363,21 +2483,93 @@ class _AppointmentListScreenState
                       padding: const EdgeInsets.symmetric(horizontal: 20),
                       child: Divider(color: context.colors.border.withValues(alpha: 0.5), height: 1),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 8),
+
+                    // ── Top Inline Needs Attention Banner (Zero FAB Collision) ──
+                    if (_showOverdueBanner && _overdueBannerText.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.notifications_active_rounded, color: Color(0xFFD97706), size: 18),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  _overdueBannerText,
+                                  style: TextStyle(
+                                    color: context.colors.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                              InkWell(
+                                onTap: () {
+                                  setState(() => _showOverdueBanner = false);
+                                  _openNeedsAttentionDashboard();
+                                },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF59E0B),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Text(
+                                    'Review',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              IconButton(
+                                icon: const Icon(Icons.close_rounded, size: 16),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                color: context.colors.textSecondary,
+                                onPressed: () => setState(() => _showOverdueBanner = false),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                    ],
 
                     // ── Mobile Quick Filter Chips with Zero-Overflow Animated Search Pill ──
                     if (consultations.isNotEmpty || sessions.isNotEmpty || _searchQuery.isNotEmpty) ...[
-                      _buildMobileFilterChips(
-                        totalCount: consultations.length + sessions.length,
-                        waitingCount: consultations.where((a) => a.status == AppointmentStatus.waiting).length +
-                            sessions.where((a) => a.status == AppointmentStatus.waiting).length,
-                        inProgressCount: consultations.where((a) => a.status == AppointmentStatus.inProgress).length +
-                            sessions.where((a) => a.status == AppointmentStatus.inProgress).length,
-                        completedCount: consultations.where((a) => a.status == AppointmentStatus.completed).length +
-                            sessions.where((a) => a.status == AppointmentStatus.completed).length,
-                        missedCount: consultations.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length +
-                            sessions.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length,
-                      ),
+                      Builder(builder: (context) {
+                        final isPast = _selectedDate.isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day));
+                        return _buildMobileFilterChips(
+                          totalCount: consultations.length + sessions.length,
+                          waitingCount: !isPast
+                              ? (consultations.where((a) => a.status == AppointmentStatus.waiting).length +
+                                  sessions.where((a) => a.status == AppointmentStatus.waiting).length)
+                              : 0,
+                          inProgressCount: !isPast
+                              ? (consultations.where((a) => a.status == AppointmentStatus.inProgress).length +
+                                  sessions.where((a) => a.status == AppointmentStatus.inProgress).length)
+                              : 0,
+                          completedCount: consultations.where((a) => a.status == AppointmentStatus.completed).length +
+                              sessions.where((a) => a.status == AppointmentStatus.completed).length,
+                          missedCount: consultations.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length +
+                              sessions.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length,
+                        );
+                      }),
                       const SizedBox(height: 10),
                     ],
 
@@ -2407,57 +2599,6 @@ class _AppointmentListScreenState
                 ),
         ),
       ),
-          // Custom Needs Attention Banner
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            bottom: _showOverdueBanner ? 24 : -100,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 24),
-                constraints: const BoxConstraints(maxWidth: 500),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF59E0B),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.notifications_active_rounded, color: Colors.white, size: 20),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _overdueBannerText,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                      ),
-                    ),
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        backgroundColor: Colors.white.withValues(alpha: 0.2),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
-                      onPressed: () {
-                        setState(() => _showOverdueBanner = false);
-                        _openNeedsAttentionDashboard();
-                      },
-                      child: const Text('Review', style: TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -2473,7 +2614,7 @@ class _AppointmentListScreenState
     return ListView(
       padding: padding,
       children: [
-        // Ã¢â€â‚¬Ã¢â€â‚¬ Consultations Section Ã¢â€â‚¬Ã¢â€â‚¬
+        // ── Consultations Section ──
         _sectionHeader('Consultations', Icons.assignment_ind_rounded, consultations.length, context.colors.info),
         const SizedBox(height: 12),
         if (consultations.isEmpty)
@@ -2483,12 +2624,19 @@ class _AppointmentListScreenState
             Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: _ScheduleCard(
-                key: ValueKey(e.value.id),
+                key: _getCardKey(e.value.id),
                 index: e.key,
                 apt: e.value,
                 isLate: _isLate(e.value),
                 isFutureDate: _isFutureDate(e.value),
                 isMissed: _isMissed(e.value),
+                isHighlighted: _highlightTargetId == e.value.id,
+                onHighlightComplete: () {
+                  if (_highlightTargetId == e.value.id && mounted) {
+                    setState(() => _highlightTargetId = null);
+                    mainLayoutKey.currentState?.clearHighlight();
+                  }
+                },
                 showDoctorName: showDoctorName,
                 clinicLocation: clinicLocation,
                 onArrived: () => _markArrived(e.value),
@@ -2528,11 +2676,11 @@ class _AppointmentListScreenState
             ),
           ),
 
-        SizedBox(height: 24),
+        const SizedBox(height: 24),
         Divider(color: context.colors.border),
         const SizedBox(height: 16),
 
-        // Ã¢â€â‚¬Ã¢â€â‚¬ Treatment Sessions Section Ã¢â€â‚¬Ã¢â€â‚¬
+        // ── Treatment Sessions Section ──
         _sectionHeader('Treatment Sessions', Icons.healing_rounded, sessions.length, context.colors.primary),
         const SizedBox(height: 12),
         if (sessions.isEmpty)
@@ -2542,12 +2690,19 @@ class _AppointmentListScreenState
             Padding(
               padding: const EdgeInsets.only(bottom: 14),
               child: _SessionCard(
-                key: ValueKey('s_${e.value.id}'),
+                key: _getCardKey(e.value.id),
                 index: e.key,
                 apt: e.value,
                 isLate: _isLate(e.value),
                 isFutureDate: _isFutureDate(e.value),
                 isMissed: _isMissed(e.value),
+                isHighlighted: _highlightTargetId == e.value.id,
+                onHighlightComplete: () {
+                  if (_highlightTargetId == e.value.id && mounted) {
+                    setState(() => _highlightTargetId = null);
+                    mainLayoutKey.currentState?.clearHighlight();
+                  }
+                },
                 showDoctorName: showDoctorName,
                 clinicLocation: clinicLocation,
                 onArrived: () => _markSessionArrived(e.value),
@@ -2664,20 +2819,44 @@ class _AppointmentListScreenState
   }
 
   Widget _sectionHeader(String title, IconData icon, int count, Color color) {
+    final hasItems = count > 0;
+    final badgeBg = hasItems ? color.withValues(alpha: 0.12) : context.colors.surface;
+    final badgeBorder = hasItems ? color.withValues(alpha: 0.28) : context.colors.border.withValues(alpha: 0.5);
+    final badgeTextColor = hasItems ? color : context.colors.textSecondary;
+
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-          child: Icon(icon, size: 16, color: color),
+          decoration: BoxDecoration(
+            color: hasItems ? color.withValues(alpha: 0.1) : context.colors.border.withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 16, color: hasItems ? color : context.colors.textSecondary),
         ),
         const SizedBox(width: 10),
-        Text(title, style: context.textStyles.h3),
+        Text(
+          title,
+          style: context.textStyles.h3.copyWith(
+            color: hasItems ? context.colors.textPrimary : context.colors.textSecondary,
+          ),
+        ),
         const Spacer(),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
-          child: Text('$count', style: context.textStyles.caption.copyWith(color: color, fontWeight: FontWeight.w700)),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+          decoration: BoxDecoration(
+            color: badgeBg,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: badgeBorder, width: hasItems ? 1.2 : 1.0),
+          ),
+          child: Text(
+            '$count',
+            style: context.textStyles.caption.copyWith(
+              color: badgeTextColor,
+              fontWeight: hasItems ? FontWeight.w800 : FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
         ),
       ],
     );
@@ -2685,23 +2864,24 @@ class _AppointmentListScreenState
 
   Widget _emptySectionLabel(String text) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 12),
-      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+      margin: const EdgeInsets.only(top: 4, bottom: 12),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
       decoration: BoxDecoration(
-        color: context.colors.surface.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+        color: context.colors.surface.withValues(alpha: 0.4),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.coffee_rounded, size: 20, color: context.colors.textHint.withValues(alpha: 0.8)),
-          const SizedBox(width: 10),
+          Icon(Icons.coffee_rounded, size: 15, color: context.colors.textHint.withValues(alpha: 0.6)),
+          const SizedBox(width: 8),
           Text(
             text,
-            style: context.textStyles.bodyMedium.copyWith(
-              color: context.colors.textSecondary,
+            style: context.textStyles.caption.copyWith(
+              color: context.colors.textSecondary.withValues(alpha: 0.8),
               fontWeight: FontWeight.w500,
+              fontSize: 12,
             ),
           ),
         ],
@@ -3056,7 +3236,7 @@ class _AppointmentListScreenState
         ],
 
         if (showSessions) ...[
-          // Ã¢â€â‚¬Ã¢â€â‚¬ Treatment Sessions Section Ã¢â€â‚¬Ã¢â€â‚¬
+          // ── Treatment Sessions Section ──
           _sectionHeader('Treatment Sessions', Icons.healing_rounded, sessions.length, context.colors.primary),
           const SizedBox(height: 12),
           if (sessions.isEmpty)
@@ -3066,12 +3246,19 @@ class _AppointmentListScreenState
               Padding(
                 padding: const EdgeInsets.only(bottom: 14),
                 child: _SessionCard(
-                  key: ValueKey('s_${e.value.id}'),
+                  key: _getCardKey(e.value.id),
                   index: e.key,
                   apt: e.value,
                   isLate: _isLate(e.value),
                   isFutureDate: _isFutureDate(e.value),
                   isMissed: _isMissed(e.value),
+                  isHighlighted: _highlightTargetId == e.value.id,
+                  onHighlightComplete: () {
+                    if (_highlightTargetId == e.value.id && mounted) {
+                      setState(() => _highlightTargetId = null);
+                      mainLayoutKey.currentState?.clearHighlight();
+                    }
+                  },
                   showDoctorName: showDoctorName,
                   clinicLocation: clinicLocation,
                   onArrived: () => _markSessionArrived(e.value),
@@ -3200,10 +3387,6 @@ class _FilterTabButtonState extends State<_FilterTabButton> {
   }
 }
 
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-// Consultation Schedule Card (call_by + walk_in)
-// Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-
 class _ScheduleCard extends ConsumerStatefulWidget {
   final AppointmentModel apt;
   final int index;
@@ -3221,6 +3404,8 @@ class _ScheduleCard extends ConsumerStatefulWidget {
   final VoidCallback onLongPress;
   final bool showDoctorName;
   final String? clinicLocation;
+  final bool isHighlighted;
+  final VoidCallback? onHighlightComplete;
 
   const _ScheduleCard({
     super.key,
@@ -3240,18 +3425,21 @@ class _ScheduleCard extends ConsumerStatefulWidget {
     required this.onLongPress,
     this.showDoctorName = false,
     this.clinicLocation,
+    this.isHighlighted = false,
+    this.onHighlightComplete,
   });
 
   @override
   ConsumerState<_ScheduleCard> createState() => _ScheduleCardState();
 }
 
-class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerProviderStateMixin {
+class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
   late final Animation<Offset> _slide;
+  late final AnimationController _glowCtrl;
 
-  // Plan info Ã¢â‚¬â€ only loaded when consultation has started (consultationStartTime != null)
+  // Plan info — only loaded when consultation has started (consultationStartTime != null)
   bool _planInfoLoaded = false;
   bool _hasPlan = false;
   String? _consultationId;
@@ -3263,9 +3451,23 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
     _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
     _slide = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _glowCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 750),
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          widget.onHighlightComplete?.call();
+        }
+      });
+
     Future.delayed(Duration(milliseconds: widget.index * 60), () {
       if (mounted) _ctrl.forward();
     });
+    if (widget.isHighlighted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _glowCtrl.forward(from: 0.0);
+      });
+    }
     // If consultation form already saved, fetch plan info once on init
     if (widget.apt.consultationFormSaved &&
         widget.apt.patientId != null &&
@@ -3321,6 +3523,9 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
   @override
   void didUpdateWidget(_ScheduleCard old) {
     super.didUpdateWidget(old);
+    if (widget.isHighlighted && !old.isHighlighted) {
+      _glowCtrl.forward(from: 0.0);
+    }
     // Re-check plan when consultation form is newly saved
     if (!old.apt.consultationFormSaved &&
         widget.apt.consultationFormSaved &&
@@ -3344,6 +3549,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
   @override
   void dispose() {
     _ctrl.dispose();
+    _glowCtrl.dispose();
     super.dispose();
   }
 
@@ -3910,18 +4116,28 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
   }
 
   Widget _buildWaitingContextBar(BuildContext context, AppointmentModel apt) {
-    final diff = apt.checkInTime != null
-        ? DateTime.now().difference(apt.checkInTime!).inMinutes
-        : 0;
-    final isOverdue = diff >= 30;
-    final waitText = diff <= 0
-        ? 'Just checked in'
-        : diff < 60
-            ? 'Waiting for $diff mins'
-            : 'Waiting for ${diff ~/ 60}h ${diff % 60}m';
-    final timeStr = apt.checkInTime != null
-        ? DateFormat('h:mm a').format(apt.checkInTime!.toLocal())
-        : '';
+    final checkIn = apt.checkInTime?.toLocal();
+    final now = DateTime.now();
+    final isPast = checkIn != null && (checkIn.year < now.year || checkIn.month < now.month || checkIn.day < now.day);
+
+    final diff = checkIn != null ? now.difference(checkIn).inMinutes : 0;
+    final isOverdue = isPast || diff >= 30;
+
+    String bannerText;
+    if (isPast) {
+      final dateStr = DateFormat('MMM d').format(checkIn);
+      final timeStr = DateFormat('h:mm a').format(checkIn);
+      bannerText = 'Checked in at $timeStr ($dateStr) · Uncompleted session';
+    } else {
+      final waitText = diff <= 0
+          ? 'Just checked in'
+          : diff < 60
+              ? 'Waiting for $diff mins'
+              : 'Waiting for ${diff ~/ 60}h ${diff % 60}m';
+      final timeStr = checkIn != null ? DateFormat('h:mm a').format(checkIn) : '';
+      bannerText = 'Checked in at $timeStr · $waitText${isOverdue ? ' (Overdue)' : ''}';
+    }
+
     final barColor = isOverdue ? const Color(0xFFD97706) : const Color(0xFFF59E0B);
 
     return Container(
@@ -3944,7 +4160,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              'Checked in at $timeStr · $waitText${isOverdue ? ' (Overdue)' : ''}',
+              bannerText,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: isOverdue ? FontWeight.w700 : FontWeight.w600,
@@ -4262,39 +4478,79 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
         position: _slide,
         child: Opacity(
           opacity: widget.isMissed || apt.status == AppointmentStatus.cancelled ? 0.65 : 1.0,
-          child: Container(
-            decoration: isDesktop
-                ? BoxDecoration(
-                    color: context.colors.surface,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: context.colors.border.withValues(alpha: 0.4),
-                      width: 1.0,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: context.colors.shadowColor.withValues(alpha: 0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, 8),
+          child: AnimatedBuilder(
+            animation: _glowCtrl,
+            builder: (context, child) {
+              final t = _glowCtrl.value;
+              final glow = _glowCtrl.isAnimating ? ((sin(t * 6 * pi - pi / 2) + 1) / 2) : 0.0;
+              return Container(
+                decoration: isDesktop
+                    ? BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: glow > 0.01
+                              ? Color.lerp(context.colors.border.withValues(alpha: 0.4), const Color(0xFF0F5D4F), glow)!
+                              : context.colors.border.withValues(alpha: 0.4),
+                          width: 1.0 + (glow * 1.5),
+                        ),
+                        boxShadow: [
+                          if (glow > 0.01) ...[
+                            BoxShadow(
+                              color: const Color(0xFF0F5D4F).withValues(alpha: 0.45 * glow),
+                              blurRadius: 18 * glow,
+                              spreadRadius: 2.5 * glow,
+                            ),
+                            BoxShadow(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.3 * glow),
+                              blurRadius: 10 * glow,
+                              spreadRadius: 1.5 * glow,
+                            ),
+                          ],
+                          BoxShadow(
+                            color: context.colors.shadowColor.withValues(alpha: 0.1),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                          BoxShadow(
+                            color: accentColor.withValues(alpha: 0.05),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      )
+                    : BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(18),
+                        border: glow > 0.01
+                            ? Border.all(
+                                color: Color.lerp(context.colors.border.withValues(alpha: 0.4), const Color(0xFF0F5D4F), glow)!,
+                                width: 1.0 + (glow * 1.5),
+                              )
+                            : null,
+                        boxShadow: [
+                          if (glow > 0.01) ...[
+                            BoxShadow(
+                              color: const Color(0xFF0F5D4F).withValues(alpha: 0.45 * glow),
+                              blurRadius: 18 * glow,
+                              spreadRadius: 2.5 * glow,
+                            ),
+                            BoxShadow(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.3 * glow),
+                              blurRadius: 10 * glow,
+                              spreadRadius: 1.5 * glow,
+                            ),
+                          ],
+                          BoxShadow(
+                            color: accentColor.withValues(alpha: 0.07),
+                            blurRadius: 16,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
                       ),
-                      BoxShadow(
-                        color: accentColor.withValues(alpha: 0.05),
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  )
-                : BoxDecoration(
-                    color: context.colors.surface,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accentColor.withValues(alpha: 0.07),
-                        blurRadius: 16,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
+                child: child,
+              );
+            },
             child: ClipRRect(
               borderRadius: BorderRadius.circular(isDesktop ? 24 : 18),
               child: BackdropFilter(
@@ -4528,104 +4784,103 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with SingleTickerP
                               : Column(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    // ── Zone 1: Header Row (Time, Patient Name [Marquee], Menu) ──
-                                    Row(
-                                      crossAxisAlignment: CrossAxisAlignment.center,
-                                      children: [
-                                        // High-Legibility Time Capsule
-                                        Builder(builder: (_) {
-                                          final timeFormatted = TimeUtils.formatStringTime(apt.time);
-                                          final parts = timeFormatted.split(' ');
-                                          final timeDigits = parts[0];
-                                          final amPm = parts.length > 1 ? parts[1] : '';
-                                          return Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5.5),
-                                            decoration: BoxDecoration(
-                                              color: accentColor.withValues(alpha: 0.1),
-                                              borderRadius: BorderRadius.circular(9),
-                                              border: Border.all(
-                                                color: accentColor.withValues(alpha: 0.25),
-                                                width: 1.2,
-                                              ),
-                                            ),
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                                              textBaseline: TextBaseline.alphabetic,
-                                              children: [
-                                                Text(
-                                                  timeDigits,
-                                                  style: TextStyle(
-                                                    color: accentColor,
-                                                    fontSize: 14.5,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: -0.3,
-                                                  ),
-                                                ),
-                                                if (amPm.isNotEmpty) ...[
-                                                  const SizedBox(width: 3),
-                                                  Text(
-                                                    amPm,
-                                                    style: TextStyle(
-                                                      color: accentColor.withValues(alpha: 0.9),
-                                                      fontSize: 10.5,
-                                                      fontWeight: FontWeight.w800,
-                                                      letterSpacing: 0.2,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          );
-                                        }),
-                                        const SizedBox(width: 10),
-                                        // Patient Name with Train Marquee Animation if overflowing
-                                        Expanded(
-                                          child: MarqueeText(
-                                            text: _toTitleCase(apt.displayName),
-                                            style: context.textStyles.h3.copyWith(
-                                              fontSize: 15.5,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 6),
-                                        // 3-Dot Overflow Menu
-                                        _buildMobileSecondaryMenu(
-                                          context: context,
-                                          showRescheduleBtn: !widget.isFutureDate && !(!showArrivedBtn && !showFillDetailsBtn && !effectiveShowStartConsultation && !effectiveShowPlanSection && !showEndedBtn) && showRescheduleBtn,
-                                          showCancelBtn: !widget.isMissed && apt.status != AppointmentStatus.cancelled,
-                                          showUndoArrivalBtn: isCallBy && isActive && apt.checkInTime != null && !apt.patientDetailsSaved && !apt.consultationFormSaved,
-                                        ),
-                                      ],
-                                    ),
+                                     // ── Zone 1: Header Micro-Bar (Time Capsule, Visit Type, Overflow Menu) ──
+                                     Row(
+                                       crossAxisAlignment: CrossAxisAlignment.center,
+                                       children: [
+                                         // High-Legibility Time Capsule
+                                         Builder(builder: (_) {
+                                           final timeFormatted = TimeUtils.formatStringTime(apt.time);
+                                           final parts = timeFormatted.split(' ');
+                                           final timeDigits = parts[0];
+                                           final amPm = parts.length > 1 ? parts[1] : '';
+                                           return Container(
+                                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                             decoration: BoxDecoration(
+                                               color: accentColor.withValues(alpha: 0.1),
+                                               borderRadius: BorderRadius.circular(8),
+                                               border: Border.all(
+                                                 color: accentColor.withValues(alpha: 0.25),
+                                                 width: 1.2,
+                                               ),
+                                             ),
+                                             child: Row(
+                                               mainAxisSize: MainAxisSize.min,
+                                               crossAxisAlignment: CrossAxisAlignment.baseline,
+                                               textBaseline: TextBaseline.alphabetic,
+                                               children: [
+                                                 Text(
+                                                   timeDigits,
+                                                   style: TextStyle(
+                                                     color: accentColor,
+                                                     fontSize: 13,
+                                                     fontWeight: FontWeight.w800,
+                                                     letterSpacing: -0.3,
+                                                   ),
+                                                 ),
+                                                 if (amPm.isNotEmpty) ...[
+                                                   const SizedBox(width: 3),
+                                                   Text(
+                                                     amPm,
+                                                     style: TextStyle(
+                                                       color: accentColor.withValues(alpha: 0.9),
+                                                       fontSize: 10,
+                                                       fontWeight: FontWeight.w800,
+                                                       letterSpacing: 0.2,
+                                                     ),
+                                                   ),
+                                                 ],
+                                               ],
+                                             ),
+                                           );
+                                         }),
+                                         const SizedBox(width: 6),
+                                         _Pill(label: typeLabel, icon: typeIcon, color: typeColor),
+                                         const Spacer(),
+                                         // 3-Dot Overflow Menu
+                                         _buildMobileSecondaryMenu(
+                                           context: context,
+                                           showRescheduleBtn: !widget.isFutureDate && !(!showArrivedBtn && !showFillDetailsBtn && !effectiveShowStartConsultation && !effectiveShowPlanSection && !showEndedBtn) && showRescheduleBtn,
+                                           showCancelBtn: !widget.isMissed && apt.status != AppointmentStatus.cancelled,
+                                           showUndoArrivalBtn: isCallBy && isActive && apt.checkInTime != null && !apt.patientDetailsSaved && !apt.consultationFormSaved,
+                                         ),
+                                       ],
+                                     ),
 
-                                    // ── Zone 1: Subtitle Row (Status Pill, Doctor Name, Visit Type, Rescheduled) ──
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      children: [
-                                        _Pill(label: statusStr, icon: statusIcon, color: statusColor),
-                                        const SizedBox(width: 6),
-                                        if (widget.showDoctorName && apt.doctorName != null && apt.doctorName!.trim().isNotEmpty) ...[
-                                          Icon(Icons.person_outline_rounded, size: 12, color: context.colors.textHint),
-                                          const SizedBox(width: 3),
-                                          Text(
-                                            'Dr. ${_toTitleCase(apt.doctorName!)}',
-                                            style: context.textStyles.caption.copyWith(
-                                              fontSize: 11,
-                                              color: context.colors.textSecondary,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                        ],
-                                        _Pill(label: typeLabel, icon: typeIcon, color: typeColor),
-                                        if (apt.isRescheduled) ...[
-                                          const SizedBox(width: 6),
-                                          const _Pill(label: 'Rescheduled', icon: Icons.event_repeat_rounded, color: Color(0xFFF59E0B)),
-                                        ],
-                                      ],
-                                    ),
+                                     // ── Zone 1: Patient Name Headline (Spacious & Uncramped) ──
+                                     const SizedBox(height: 6),
+                                     MarqueeText(
+                                       text: _toTitleCase(apt.displayName),
+                                       style: context.textStyles.h3.copyWith(
+                                         fontSize: 16.0,
+                                         fontWeight: FontWeight.w700,
+                                         color: context.colors.textPrimary,
+                                       ),
+                                     ),
+
+                                     // ── Zone 1: Subtitle Row (Status Pill, Doctor Name, Rescheduled) ──
+                                     const SizedBox(height: 6),
+                                     Row(
+                                       children: [
+                                         _Pill(label: statusStr, icon: statusIcon, color: statusColor),
+                                         const SizedBox(width: 6),
+                                         if (widget.showDoctorName && apt.doctorName != null && apt.doctorName!.trim().isNotEmpty) ...[
+                                           Icon(Icons.person_outline_rounded, size: 12, color: context.colors.textHint),
+                                           const SizedBox(width: 3),
+                                           Text(
+                                             'Dr. ${_toTitleCase(apt.doctorName!)}',
+                                             style: context.textStyles.caption.copyWith(
+                                               fontSize: 11,
+                                               color: context.colors.textSecondary,
+                                               fontWeight: FontWeight.w500,
+                                             ),
+                                           ),
+                                           const SizedBox(width: 8),
+                                         ],
+                                         if (apt.isRescheduled)
+                                           const _Pill(label: 'Rescheduled', icon: Icons.event_repeat_rounded, color: Color(0xFFF59E0B)),
+                                       ],
+                                     ),
 
                                     // ── Zone 2: Dynamic Live Context Strip ──
                                     if (isWaiting && apt.checkInTime != null) ...[
@@ -4792,6 +5047,8 @@ class _SessionCard extends ConsumerStatefulWidget {
   /// Pre-loaded session info from parent batch-load — skips per-card PB query.
   final Map<String, dynamic>? preloadedSessionInfo;
   final String? clinicLocation;
+  final bool isHighlighted;
+  final VoidCallback? onHighlightComplete;
 
   const _SessionCard({
     super.key,
@@ -4813,16 +5070,19 @@ class _SessionCard extends ConsumerStatefulWidget {
     this.showDoctorName = false,
     this.preloadedSessionInfo,
     this.clinicLocation,
+    this.isHighlighted = false,
+    this.onHighlightComplete,
   });
 
   @override
   ConsumerState<_SessionCard> createState() => _SessionCardState();
 }
 
-class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerProviderStateMixin {
+class _SessionCardState extends ConsumerState<_SessionCard> with TickerProviderStateMixin {
   late final AnimationController _ctrl;
   late final Animation<double> _fade;
   late final Animation<Offset> _slide;
+  late final AnimationController _glowCtrl;
 
   int _sessionNumber = 0;
   int _totalSessions = 0;
@@ -4838,9 +5098,23 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
     _slide = Tween<Offset>(begin: const Offset(0, 0.15), end: Offset.zero)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _glowCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 750),
+    )..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          widget.onHighlightComplete?.call();
+        }
+      });
+
     Future.delayed(Duration(milliseconds: widget.index * 60), () {
       if (mounted) _ctrl.forward();
     });
+    if (widget.isHighlighted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _glowCtrl.forward(from: 0.0);
+      });
+    }
     _loadSessionInfo();
     SessionTimerService.instance.addGlobalListener(_onTimerChanged);
   }
@@ -4916,6 +5190,14 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
   }
 
   @override
+  void didUpdateWidget(_SessionCard old) {
+    super.didUpdateWidget(old);
+    if (widget.isHighlighted && !old.isHighlighted) {
+      _glowCtrl.forward(from: 0.0);
+    }
+  }
+
+  @override
   void dispose() {
     SessionTimerService.instance.removeGlobalListener(_onTimerChanged);
     if (_sessionId != null) {
@@ -4925,6 +5207,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
       } catch (_) {}
     }
     _ctrl.dispose();
+    _glowCtrl.dispose();
     super.dispose();
   }
 
@@ -5002,31 +5285,6 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
         iconColor: context.colors.error,
         title: 'Overdue',
         subtitle: 'Action required',
-        action: Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Expanded(
-                child: _ActionButton(
-                  label: 'Patient Arrived',
-                  icon: Icons.check_circle_rounded,
-                  color: context.colors.success,
-                  onTap: () => widget.onOverdueCame(_sessionId),
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _ActionButton(
-                  label: 'Patient Missed',
-                  icon: Icons.cancel_rounded,
-                  color: context.colors.error,
-                  onTap: () => widget.onOverdueMissed(_sessionId),
-                ),
-              ),
-            ],
-          ),
-        ),
       );
     } else if (isCompleted) {
       String timeStr = '';
@@ -5202,7 +5460,12 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     );
   }
 
-  Widget _buildContactButtons(BuildContext context, AppointmentModel apt) {
+  Widget _buildContactButtons(BuildContext context, AppointmentModel apt, {bool isCompact = false}) {
+    final size = isCompact ? 34.0 : 40.0;
+    final iconSize = isCompact ? 16.0 : 18.0;
+    final gap = isCompact ? 5.0 : 8.0;
+    final radius = isCompact ? 10.0 : 12.0;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -5218,21 +5481,21 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
             clinicLocation: widget.clinicLocation,
           ),
           child: Container(
-            width: 40,
-            height: 40,
+            width: size,
+            height: size,
             decoration: BoxDecoration(
               color: const Color(0xFF25D366).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(radius),
               border: Border.all(
                 color: const Color(0xFF25D366).withValues(alpha: 0.4),
                 width: 1.5,
               ),
             ),
-            child: const Icon(Icons.chat_rounded,
-                color: Color(0xFF25D366), size: 18),
+            child: Icon(Icons.chat_rounded,
+                color: const Color(0xFF25D366), size: iconSize),
           ),
         ),
-        const SizedBox(width: 8),
+        SizedBox(width: gap),
         GestureDetector(
           onTap: () async {
             if (apt.effectivePhone == null || apt.effectivePhone!.isEmpty) return;
@@ -5244,18 +5507,18 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
             }
           },
           child: Container(
-            width: 40,
-            height: 40,
+            width: size,
+            height: size,
             decoration: BoxDecoration(
               color: const Color(0xFF00BFA5).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(radius),
               border: Border.all(
                 color: const Color(0xFF00BFA5).withValues(alpha: 0.4),
                 width: 1.5,
               ),
             ),
-            child: const Icon(Icons.phone_rounded,
-                color: Color(0xFF00BFA5), size: 18),
+            child: Icon(Icons.phone_rounded,
+                color: const Color(0xFF00BFA5), size: iconSize),
           ),
         ),
       ],
@@ -5267,25 +5530,59 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     final isScheduled = apt.status == AppointmentStatus.scheduled;
     final isWaiting = apt.status == AppointmentStatus.waiting;
     final isInProgress = apt.status == AppointmentStatus.inProgress;
+    final hasArrived = apt.checkInTime != null || isWaiting || isInProgress;
 
     final isPastDate = apt.date.compareTo(DateFormat('yyyy-MM-dd').format(DateTime.now())) < 0;
     final isOverdue = apt.status == AppointmentStatus.overdue || (isPastDate && !widget.isMissed && apt.status != AppointmentStatus.completed && apt.status != AppointmentStatus.cancelled);
 
+    // Only show overdue confirmation actions (Arrived/Missed/Closed) if patient never checked in
+    final showOverdueReconcile = isOverdue && !hasArrived;
+
     final showArrivedBtn = isScheduled && !widget.isFutureDate && !widget.isMissed && !isOverdue;
-    final showStartBtn   = isWaiting && !widget.isFutureDate && !isOverdue;
-    final showResumeBtn  = isInProgress && !isOverdue; 
-    final showEndedBtn   = isInProgress && !isOverdue;
+    final showStartBtn   = isWaiting && !widget.isMissed;
+    final showResumeBtn  = isInProgress && !widget.isMissed; 
+    final showEndedBtn   = isInProgress && !widget.isMissed;
+
+    if (showOverdueReconcile) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _ActionButton(
+                  label: 'Patient Arrived',
+                  icon: Icons.check_circle_rounded,
+                  color: context.colors.success,
+                  onTap: () => widget.onOverdueCame(_sessionId),
+                  isSolid: false,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _ActionButton(
+                  label: 'Patient Missed',
+                  icon: Icons.cancel_rounded,
+                  color: context.colors.error,
+                  onTap: () => widget.onOverdueMissed(_sessionId),
+                  isSolid: false,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _ActionButton(
+            label: 'Clinic Closed',
+            icon: Icons.business_rounded,
+            color: context.colors.textSecondary,
+            onTap: () => widget.onOverdueClosed(_sessionId),
+          ),
+        ],
+      );
+    }
 
     final List<Widget> buttons = [];
-
-    if (isOverdue) {
-      buttons.add(_ActionButton(
-        label: 'Clinic Closed',
-        icon: Icons.business_rounded,
-        color: context.colors.textSecondary,
-        onTap: () => widget.onOverdueClosed(_sessionId),
-      ));
-    }
 
     if (showArrivedBtn) {
       buttons.add(_ActionButton(
@@ -5297,12 +5594,41 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     }
 
     if (showStartBtn) {
+      if (apt.checkInTime != null) {
+        buttons.add(_ActionButton(
+          label: 'Undo Arrival',
+          icon: Icons.undo_rounded,
+          color: context.colors.textSecondary,
+          onTap: widget.onUndoArrived,
+          isSolid: false,
+        ));
+      }
+      final isRetroactiveOverdue = (isOverdue || isPastDate);
       final needsDetails = !apt.isEffectivePatientDetailsSaved;
+
+      String actionLabel;
+      IconData actionIcon;
+      VoidCallback actionTap;
+
+      if (isRetroactiveOverdue) {
+        actionLabel = 'Fill Out Details';
+        actionIcon = Icons.edit_note_rounded;
+        actionTap = () => _handleRetroactiveEntry(apt);
+      } else if (needsDetails) {
+        actionLabel = 'Fill Patient Details';
+        actionIcon = Icons.badge_rounded;
+        actionTap = () => _handleRetroactiveEntry(apt);
+      } else {
+        actionLabel = 'Start Session';
+        actionIcon = Icons.play_arrow_rounded;
+        actionTap = () => widget.onStartSession(_sessionId);
+      }
+
       buttons.add(_ActionButton(
-        label: needsDetails ? 'Fill Patient Details' : 'Start Session',
-        icon: needsDetails ? Icons.badge_rounded : Icons.play_arrow_rounded,
+        label: actionLabel,
+        icon: actionIcon,
         color: context.colors.primary,
-        onTap: () => needsDetails ? _handleRetroactiveEntry(apt) : widget.onStartSession(_sessionId),
+        onTap: actionTap,
         isSolid: true,
         showTrailingChevron: true,
       ));
@@ -5426,18 +5752,28 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
   }
 
   Widget _buildWaitingContextBar(BuildContext context, AppointmentModel apt) {
-    final diff = apt.checkInTime != null
-        ? DateTime.now().difference(apt.checkInTime!).inMinutes
-        : 0;
-    final isOverdue = diff >= 30;
-    final waitText = diff <= 0
-        ? 'Just arrived'
-        : diff < 60
-            ? 'Waiting for $diff mins'
-            : 'Waiting for ${diff ~/ 60}h ${diff % 60}m';
-    final timeStr = apt.checkInTime != null
-        ? DateFormat('h:mm a').format(apt.checkInTime!.toLocal())
-        : '';
+    final checkIn = apt.checkInTime?.toLocal();
+    final now = DateTime.now();
+    final isPast = checkIn != null && (checkIn.year < now.year || checkIn.month < now.month || checkIn.day < now.day);
+
+    final diff = checkIn != null ? now.difference(checkIn).inMinutes : 0;
+    final isOverdue = isPast || diff >= 30;
+
+    String bannerText;
+    if (isPast) {
+      final dateStr = DateFormat('MMM d').format(checkIn);
+      final timeStr = DateFormat('h:mm a').format(checkIn);
+      bannerText = 'Arrived at $timeStr ($dateStr) · Uncompleted session';
+    } else {
+      final waitText = diff <= 0
+          ? 'Just arrived'
+          : diff < 60
+              ? 'Waiting for $diff mins'
+              : 'Waiting for ${diff ~/ 60}h ${diff % 60}m';
+      final timeStr = checkIn != null ? DateFormat('h:mm a').format(checkIn) : '';
+      bannerText = 'Arrived at $timeStr · $waitText${isOverdue ? ' (Overdue)' : ''}';
+    }
+
     final barColor = isOverdue ? const Color(0xFFD97706) : const Color(0xFFF59E0B);
 
     return Container(
@@ -5460,7 +5796,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              'Arrived at $timeStr · $waitText${isOverdue ? ' (Overdue)' : ''}',
+              bannerText,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: isOverdue ? FontWeight.w700 : FontWeight.w600,
@@ -5591,24 +5927,33 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
               icon: Icons.check_circle_rounded,
               color: context.colors.success,
               onTap: () => widget.onOverdueCame(_sessionId),
+              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+              fontSize: 11.5,
+              iconSize: 13.5,
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 5),
           Expanded(
             child: _ActionButton(
               label: 'Missed',
               icon: Icons.cancel_rounded,
               color: context.colors.error,
               onTap: () => widget.onOverdueMissed(_sessionId),
+              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+              fontSize: 11.5,
+              iconSize: 13.5,
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 5),
           Expanded(
             child: _ActionButton(
               label: 'Closed',
               icon: Icons.business_rounded,
               color: context.colors.textSecondary,
               onTap: () => widget.onOverdueClosed(_sessionId),
+              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+              fontSize: 11.5,
+              iconSize: 13.5,
             ),
           ),
         ],
@@ -5624,14 +5969,66 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
       );
     }
     if (showStartBtn) {
-      return _ActionButton(
-        label: !apt.isEffectivePatientDetailsSaved ? 'Fill Details' : 'Start Session',
-        icon: !apt.isEffectivePatientDetailsSaved ? Icons.badge_rounded : Icons.play_arrow_rounded,
+      final isPastDate = apt.date.compareTo(DateFormat('yyyy-MM-dd').format(DateTime.now())) < 0;
+      final isOverdue = apt.status == AppointmentStatus.overdue || (isPastDate && apt.status != AppointmentStatus.completed && apt.status != AppointmentStatus.cancelled);
+      final isRetroactiveOverdue = (isOverdue || isPastDate);
+      final needsDetails = !apt.isEffectivePatientDetailsSaved;
+
+      String actionLabel;
+      IconData actionIcon;
+      VoidCallback actionTap;
+
+      if (isRetroactiveOverdue) {
+        actionLabel = 'Fill Out Details';
+        actionIcon = Icons.edit_note_rounded;
+        actionTap = () => _handleRetroactiveEntry(apt);
+      } else if (needsDetails) {
+        actionLabel = 'Fill Details';
+        actionIcon = Icons.badge_rounded;
+        actionTap = () => _handleRetroactiveEntry(apt);
+      } else {
+        actionLabel = 'Start Session';
+        actionIcon = Icons.play_arrow_rounded;
+        actionTap = () => widget.onStartSession(_sessionId);
+      }
+
+      final startBtn = _ActionButton(
+        label: actionLabel,
+        icon: actionIcon,
         color: context.colors.primary,
-        onTap: () => !apt.isEffectivePatientDetailsSaved ? _handleRetroactiveEntry(apt) : widget.onStartSession(_sessionId),
+        onTap: actionTap,
         isSolid: true,
         showTrailingChevron: true,
+        padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 6),
+        fontSize: 11.5,
+        iconSize: 13.5,
       );
+
+      if (apt.checkInTime != null) {
+        return Row(
+          children: [
+            Expanded(
+              flex: 4,
+              child: _ActionButton(
+                label: 'Undo Arrival',
+                icon: Icons.undo_rounded,
+                color: context.colors.textSecondary,
+                onTap: widget.onUndoArrived,
+                isSolid: false,
+                padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 6),
+                fontSize: 11.5,
+                iconSize: 13.5,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              flex: 6,
+              child: startBtn,
+            ),
+          ],
+        );
+      }
+      return startBtn;
     }
     // In progress state: Render both End Session and Resume Session side by side
     if (showResumeBtn && showEndedBtn) {
@@ -5709,6 +6106,8 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     final bool isCompleted = apt.status == AppointmentStatus.completed;
     final isPastDate = apt.date.compareTo(DateFormat('yyyy-MM-dd').format(DateTime.now())) < 0;
     final isOverdue = apt.status == AppointmentStatus.overdue || (isPastDate && !widget.isMissed && !isCompleted && !isCancelled);
+    final hasArrived = apt.checkInTime != null || isWaiting || isInProgress;
+    final isUnconfirmedOverdue = isOverdue && !hasArrived;
 
     const kWaiting = Color(0xFFF59E0B);
     Color statusColor;
@@ -5721,7 +6120,9 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     } else if (isCompleted) {
       statusColor = context.colors.success; statusStr = 'Completed'; statusIcon = Icons.check_circle_rounded;
     } else if (isOverdue) {
-      statusColor = context.colors.error; statusStr = 'Overdue'; statusIcon = Icons.error_outline_rounded;
+      statusColor = context.colors.error;
+      statusStr = isWaiting ? 'Overdue (Waiting)' : isInProgress ? 'Overdue (In Progress)' : 'Overdue';
+      statusIcon = Icons.error_outline_rounded;
     } else if (isInProgress) {
       statusColor = context.colors.warning; statusStr = 'In Progress'; statusIcon = Icons.sync_rounded;
     } else if (isWaiting) {
@@ -5731,11 +6132,11 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
     }
 
     final showArrivedBtn = isScheduled && !widget.isFutureDate && !widget.isMissed && !isOverdue;
-    final showStartBtn   = isWaiting && !widget.isFutureDate && !isOverdue;
-    final showResumeBtn  = isInProgress && !isOverdue; 
-    final showEndedBtn   = isInProgress && !isOverdue;
+    final showStartBtn   = isWaiting && !widget.isMissed;
+    final showResumeBtn  = isInProgress && !widget.isMissed; 
+    final showEndedBtn   = isInProgress && !widget.isMissed;
     final showRescheduleBtn = !isOverdue && (isScheduled && (widget.isFutureDate || !widget.isMissed) || widget.isMissed && !isInProgress);
-    final showOverdueActions = isOverdue;
+    final showOverdueActions = isUnconfirmedOverdue;
 
     const sessionAccent = Color(0xFF7C3AED);
     final accentColor = widget.isMissed || isCancelled || isOverdue
@@ -5817,39 +6218,79 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
         position: _slide,
         child: Opacity(
           opacity: (widget.isMissed || isCancelled || isCompleted) ? 0.65 : 1.0,
-          child: Container(
-            decoration: isDesktop
-                ? BoxDecoration(
-                    color: context.colors.surface,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: context.colors.border.withValues(alpha: 0.4),
-                      width: 1.0,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: context.colors.shadowColor.withValues(alpha: 0.05),
-                        blurRadius: 24,
-                        offset: const Offset(0, 8),
+          child: AnimatedBuilder(
+            animation: _glowCtrl,
+            builder: (context, child) {
+              final t = _glowCtrl.value;
+              final glow = _glowCtrl.isAnimating ? ((sin(t * 6 * pi - pi / 2) + 1) / 2) : 0.0;
+              return Container(
+                decoration: isDesktop
+                    ? BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: glow > 0.01
+                              ? Color.lerp(context.colors.border.withValues(alpha: 0.4), const Color(0xFF0F5D4F), glow)!
+                              : context.colors.border.withValues(alpha: 0.4),
+                          width: 1.0 + (glow * 1.5),
+                        ),
+                        boxShadow: [
+                          if (glow > 0.01) ...[
+                            BoxShadow(
+                              color: const Color(0xFF0F5D4F).withValues(alpha: 0.45 * glow),
+                              blurRadius: 18 * glow,
+                              spreadRadius: 2.5 * glow,
+                            ),
+                            BoxShadow(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.3 * glow),
+                              blurRadius: 10 * glow,
+                              spreadRadius: 1.5 * glow,
+                            ),
+                          ],
+                          BoxShadow(
+                            color: context.colors.shadowColor.withValues(alpha: 0.05),
+                            blurRadius: 24,
+                            offset: const Offset(0, 8),
+                          ),
+                          BoxShadow(
+                            color: accentColor.withValues(alpha: 0.03),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      )
+                    : BoxDecoration(
+                        color: context.colors.surface,
+                        borderRadius: BorderRadius.circular(18),
+                        border: glow > 0.01
+                            ? Border.all(
+                                color: Color.lerp(context.colors.border.withValues(alpha: 0.4), const Color(0xFF0F5D4F), glow)!,
+                                width: 1.0 + (glow * 1.5),
+                              )
+                            : null,
+                        boxShadow: [
+                          if (glow > 0.01) ...[
+                            BoxShadow(
+                              color: const Color(0xFF0F5D4F).withValues(alpha: 0.45 * glow),
+                              blurRadius: 18 * glow,
+                              spreadRadius: 2.5 * glow,
+                            ),
+                            BoxShadow(
+                              color: const Color(0xFF10B981).withValues(alpha: 0.3 * glow),
+                              blurRadius: 10 * glow,
+                              spreadRadius: 1.5 * glow,
+                            ),
+                          ],
+                          BoxShadow(
+                            color: accentColor.withValues(alpha: 0.07),
+                            blurRadius: 16,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
                       ),
-                      BoxShadow(
-                        color: accentColor.withValues(alpha: 0.03),
-                        blurRadius: 16,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  )
-                : BoxDecoration(
-                    color: context.colors.surface,
-                    borderRadius: BorderRadius.circular(18),
-                    boxShadow: [
-                      BoxShadow(
-                        color: accentColor.withValues(alpha: 0.07),
-                        blurRadius: 16,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
+                child: child,
+              );
+            },
             child: ClipRRect(
               borderRadius: BorderRadius.circular(isDesktop ? 24 : 18),
               child: IntrinsicHeight(
@@ -6027,7 +6468,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                           children: [
                                             if (!isActive) ...[
                                               Row(
-                                                mainAxisAlignment: MainAxisAlignment.center,
+                                                mainAxisAlignment: MainAxisAlignment.end,
                                                 children: [
                                                   if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty) ...[
                                                     _buildContactButtons(context, apt),
@@ -6110,13 +6551,13 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                   : Column(
                                       crossAxisAlignment: CrossAxisAlignment.stretch,
                                       children: [
-                                        // ── Zone 1: Header Row (Session#, Time, Patient Name [Marquee], Menu) ──
+                                        // ── Zone 1: Header Micro-Bar (Session#, Time Capsule, Overflow Menu) ──
                                         Row(
                                           crossAxisAlignment: CrossAxisAlignment.center,
                                           children: [
-                                            // Session number badge (with total progress e.g. S#1/5)
+                                            // Session number badge
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4.5),
+                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                                               decoration: BoxDecoration(
                                                 color: (_sessionType == 'maintenance'
                                                     ? context.colors.success
@@ -6140,7 +6581,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                                   color: _sessionType == 'maintenance'
                                                       ? context.colors.success
                                                       : sessionAccent,
-                                                  fontSize: 12.5,
+                                                  fontSize: 12,
                                                   fontWeight: FontWeight.w800,
                                                   letterSpacing: -0.2,
                                                 ),
@@ -6154,7 +6595,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                               final timeDigits = parts[0];
                                               final amPm = parts.length > 1 ? parts[1] : '';
                                               return Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4.5),
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                                 decoration: BoxDecoration(
                                                   color: accentColor.withValues(alpha: 0.1),
                                                   borderRadius: BorderRadius.circular(8),
@@ -6172,7 +6613,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                                       timeDigits,
                                                       style: TextStyle(
                                                         color: accentColor,
-                                                        fontSize: 13.5,
+                                                        fontSize: 13,
                                                         fontWeight: FontWeight.w800,
                                                         letterSpacing: -0.3,
                                                       ),
@@ -6193,18 +6634,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                                 ),
                                               );
                                             }),
-                                            const SizedBox(width: 8),
-                                            // Patient Name with Train Marquee Animation if overflowing
-                                            Expanded(
-                                              child: MarqueeText(
-                                                text: _toTitleCase(apt.displayName),
-                                                style: context.textStyles.h3.copyWith(
-                                                  fontSize: 15.5,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(width: 6),
+                                            const Spacer(),
                                             // 3-Dot Overflow Menu
                                             _buildMobileSecondaryMenu(
                                               context: context,
@@ -6213,6 +6643,17 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                               showUndoArrivalBtn: isWaiting && apt.checkInTime != null,
                                             ),
                                           ],
+                                        ),
+
+                                        // ── Zone 1: Patient Name Headline (Spacious & Uncramped) ──
+                                        const SizedBox(height: 6),
+                                        MarqueeText(
+                                          text: _toTitleCase(apt.displayName),
+                                          style: context.textStyles.h3.copyWith(
+                                            fontSize: 16.0,
+                                            fontWeight: FontWeight.w700,
+                                            color: context.colors.textPrimary,
+                                          ),
                                         ),
 
                                         // ── Zone 1: Subtitle Row (Status Pill, Doctor, Modality [Teal], Rescheduled) ──
@@ -6340,8 +6781,8 @@ class _SessionCardState extends ConsumerState<_SessionCard> with SingleTickerPro
                                           Row(
                                             children: [
                                               if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty && !isActive && !isCompleted && !isCancelled) ...[
-                                                _buildContactButtons(context, apt),
-                                                const SizedBox(width: 8),
+                                                _buildContactButtons(context, apt, isCompact: showOverdueActions),
+                                                SizedBox(width: showOverdueActions ? 5 : 8),
                                               ],
                                               Expanded(
                                                 child: _buildMobileHeroAction(
@@ -6777,6 +7218,9 @@ class _ActionButton extends StatelessWidget {
   final VoidCallback onTap;
   final bool isSolid;
   final bool showTrailingChevron;
+  final EdgeInsetsGeometry? padding;
+  final double? fontSize;
+  final double? iconSize;
 
   const _ActionButton({
     required this.label,
@@ -6785,6 +7229,9 @@ class _ActionButton extends StatelessWidget {
     required this.onTap,
     this.isSolid = false,
     this.showTrailingChevron = false,
+    this.padding,
+    this.fontSize,
+    this.iconSize,
   });
 
   @override
@@ -6803,7 +7250,7 @@ class _ActionButton extends StatelessWidget {
         },
         borderRadius: BorderRadius.circular(11),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 12),
+          padding: padding ?? const EdgeInsets.symmetric(vertical: 11, horizontal: 10),
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(11),
@@ -6814,28 +7261,29 @@ class _ActionButton extends StatelessWidget {
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 15, color: foregroundColor),
-              const SizedBox(width: 7),
+              Icon(icon, size: iconSize ?? 15, color: foregroundColor),
+              const SizedBox(width: 4),
               Flexible(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
+                  alignment: Alignment.center,
                   child: Text(
                     label,
                     style: TextStyle(
                       color: foregroundColor,
-                      fontSize: 12,
+                      fontSize: fontSize ?? 12,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: -0.1,
+                      letterSpacing: -0.2,
                     ),
                     maxLines: 1,
                   ),
                 ),
               ),
               if (showTrailingChevron) ...[
-                const SizedBox(width: 7),
-                Icon(Icons.chevron_right_rounded, size: 15, color: foregroundColor),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right_rounded, size: iconSize ?? 15, color: foregroundColor),
               ],
             ],
           ),

@@ -32,6 +32,8 @@ class DashboardStats {
   final int sessionsPendingToday;
 
   final int patientsSeenToday;
+  final int patientsExpectedToday;
+  final int patientsRemainingToday;
 
   final int feesTotalToday;
   final int feesOnlyConsultationToday;
@@ -47,6 +49,7 @@ class DashboardStats {
   final AppointmentModel? nextAppointment;
 
   final List<AppointmentModel> todayAppointments;
+  final Map<String, String> appointmentTreatmentTypes;
 
   final bool isLoading;
 
@@ -66,6 +69,8 @@ class DashboardStats {
     this.sessionsCompletedToday = 0,
     this.sessionsPendingToday = 0,
     this.patientsSeenToday = 0,
+    this.patientsExpectedToday = 0,
+    this.patientsRemainingToday = 0,
     this.feesTotalToday = 0,
     this.feesOnlyConsultationToday = 0,
     this.feesConsultationAndSessionToday = 0,
@@ -75,6 +80,7 @@ class DashboardStats {
     this.patientsWithActiveSessions = 0,
     this.nextAppointment,
     this.todayAppointments = const [],
+    this.appointmentTreatmentTypes = const {},
     this.isLoading = false,
   });
 
@@ -94,6 +100,8 @@ class DashboardStats {
     int? sessionsCompletedToday,
     int? sessionsPendingToday,
     int? patientsSeenToday,
+    int? patientsExpectedToday,
+    int? patientsRemainingToday,
     int? feesTotalToday,
     int? feesOnlyConsultationToday,
     int? feesConsultationAndSessionToday,
@@ -103,6 +111,7 @@ class DashboardStats {
     int? patientsWithActiveSessions,
     AppointmentModel? nextAppointment,
     List<AppointmentModel>? todayAppointments,
+    Map<String, String>? appointmentTreatmentTypes,
     bool? clearNextAppointment,
     bool? isLoading,
   }) {
@@ -122,6 +131,8 @@ class DashboardStats {
       sessionsCompletedToday: sessionsCompletedToday ?? this.sessionsCompletedToday,
       sessionsPendingToday: sessionsPendingToday ?? this.sessionsPendingToday,
       patientsSeenToday: patientsSeenToday ?? this.patientsSeenToday,
+      patientsExpectedToday: patientsExpectedToday ?? this.patientsExpectedToday,
+      patientsRemainingToday: patientsRemainingToday ?? this.patientsRemainingToday,
       feesTotalToday: feesTotalToday ?? this.feesTotalToday,
       feesOnlyConsultationToday: feesOnlyConsultationToday ?? this.feesOnlyConsultationToday,
       feesConsultationAndSessionToday: feesConsultationAndSessionToday ?? this.feesConsultationAndSessionToday,
@@ -131,6 +142,7 @@ class DashboardStats {
       patientsWithActiveSessions: patientsWithActiveSessions ?? this.patientsWithActiveSessions,
       nextAppointment: clearNextAppointment == true ? null : (nextAppointment ?? this.nextAppointment),
       todayAppointments: todayAppointments ?? this.todayAppointments,
+      appointmentTreatmentTypes: appointmentTreatmentTypes ?? this.appointmentTreatmentTypes,
       isLoading: isLoading ?? this.isLoading,
     );
   }
@@ -252,21 +264,25 @@ class DashboardStatsNotifier extends StateNotifier<DashboardStats> {
         .length;
     final pendingConsultations = consultationsPendingToday;
 
-    // 3. Unique patients seen today
+    // 3. Unique patients seen today & total expected
     final seenPatients = <String>{};
+    final allExpectedPatients = <String>{};
     for (final appt in todayAppointments) {
+      final pKey = appt.patientId ?? appt.effectivePhone ?? appt.displayName;
+      if (pKey.trim().isNotEmpty && appt.status != AppointmentStatus.cancelled) {
+        allExpectedPatients.add(pKey.trim());
+      }
       final isSeen = appt.status == AppointmentStatus.completed ||
                      appt.status == AppointmentStatus.inProgress ||
                      appt.status == AppointmentStatus.waiting ||
                      appt.checkInTime != null;
-      if (isSeen) {
-        final pKey = appt.patientId ?? appt.effectivePhone ?? appt.displayName;
-        if (pKey.trim().isNotEmpty) {
-          seenPatients.add(pKey.trim());
-        }
+      if (isSeen && pKey.trim().isNotEmpty) {
+        seenPatients.add(pKey.trim());
       }
     }
     final patientsSeenToday = seenPatients.length;
+    final patientsExpectedToday = allExpectedPatients.length;
+    final patientsRemainingToday = (patientsExpectedToday - patientsSeenToday).clamp(0, 999);
 
     // 4. Calculate fee collections today
     final completedConsultationIds = todayAppointments
@@ -296,15 +312,59 @@ class DashboardStatsNotifier extends StateNotifier<DashboardStats> {
       }
     }
 
-    final completedSessionsList = <RecordModel>[];
+    final todaySessionsList = <RecordModel>[];
     try {
       final res = await pb.collection(PBCollections.sessions).getList(
-        filter: '$sessionOwnerFilter && status = "completed" && scheduled_date >= "$today 00:00:00.000Z" && scheduled_date <= "$today 23:59:59.999Z"',
-        perPage: 100,
+        filter: '$sessionOwnerFilter && scheduled_date >= "$today 00:00:00.000Z" && scheduled_date <= "$today 23:59:59.999Z"',
+        perPage: 500,
+        expand: 'treatment_plan',
       );
-      completedSessionsList.addAll(res.items);
+      todaySessionsList.addAll(res.items);
     } catch (e) {
-      debugPrint('[DashboardStats] Error fetching completed sessions: $e');
+      debugPrint('[DashboardStats] Error fetching today sessions: $e');
+    }
+
+    final completedSessionsList = todaySessionsList.where((s) => s.getStringValue('status') == 'completed').toList();
+
+    final treatmentTypesMap = <String, String>{};
+    for (final appt in todayAppointments) {
+      if (appt.type == AppointmentType.callBy) {
+        treatmentTypesMap[appt.id] = 'Consultation';
+      } else if (appt.type == AppointmentType.walkIn) {
+        treatmentTypesMap[appt.id] = 'Walk-in';
+      } else if (appt.type == AppointmentType.session) {
+        RecordModel? match;
+        if (appt.linkedSessionId != null && appt.linkedSessionId!.isNotEmpty) {
+          match = todaySessionsList.cast<RecordModel?>().firstWhere((s) => s?.id == appt.linkedSessionId, orElse: () => null);
+        }
+        if (match == null && appt.patientId != null && appt.patientId!.isNotEmpty) {
+          match = todaySessionsList.cast<RecordModel?>().firstWhere(
+            (s) => s != null && s.getStringValue('patient') == appt.patientId,
+            orElse: () => null,
+          );
+        }
+
+        String modality = '';
+        String sType = appt.sessionType ?? 'treatment';
+        if (match != null) {
+          modality = match.getStringValue('treatment_type');
+          if (modality.isEmpty) {
+            final plans = match.get<List<RecordModel>>('expand.treatment_plan');
+            final planRec = plans.isNotEmpty ? plans.first : null;
+            modality = planRec?.getStringValue('treatment_type') ?? '';
+          }
+          final recType = match.getStringValue('session_type');
+          if (recType.isNotEmpty) sType = recType;
+        }
+
+        if (modality.trim().isNotEmpty) {
+          treatmentTypesMap[appt.id] = modality.trim();
+        } else if (sType == 'maintenance') {
+          treatmentTypesMap[appt.id] = 'Maintenance';
+        } else {
+          treatmentTypesMap[appt.id] = 'Treatment';
+        }
+      }
     }
 
     final planIds = completedSessionsList
@@ -439,6 +499,8 @@ class DashboardStatsNotifier extends StateNotifier<DashboardStats> {
       sessionsCompletedToday: sessionsCompletedToday,
       sessionsPendingToday: sessionsPendingToday,
       patientsSeenToday: patientsSeenToday,
+      patientsExpectedToday: patientsExpectedToday,
+      patientsRemainingToday: patientsRemainingToday,
       feesTotalToday: feesTotalToday,
       feesOnlyConsultationToday: feesOnlyConsultationToday,
       feesConsultationAndSessionToday: feesConsultationAndSessionToday,
@@ -448,6 +510,7 @@ class DashboardStatsNotifier extends StateNotifier<DashboardStats> {
       patientsWithActiveSessions: patientsWithActiveSessions,
       nextAppointment: nextAppt,
       todayAppointments: todayAppointments,
+      appointmentTreatmentTypes: treatmentTypesMap,
       isLoading: false,
     );
   }

@@ -151,33 +151,40 @@ class BrandPanel extends StatelessWidget {
                       subtitle: 'Insights to grow your practice',
                     ),
 
-                    const SizedBox(height: 40),
+                    const SizedBox(height: 22),
 
                     // ── Trust Badge ──
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
+                        horizontal: 14,
+                        vertical: 7,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.5),
+                        color: Colors.white.withValues(alpha: 0.8),
                         borderRadius: BorderRadius.circular(100),
                         border: Border.all(
-                          color: const Color(0xFFE8E6E2),
+                          color: const Color(0xFFE2DDD5),
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.03),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.lock_outline_rounded,
-                              size: 16, color: _textMuted),
-                          const SizedBox(width: 8),
+                          const Icon(Icons.shield_outlined,
+                              size: 15, color: _primary),
+                          const SizedBox(width: 6),
                           Text(
                             'Secure  ·  Reliable  ·  Private',
                             style: GoogleFonts.inter(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: _textMuted,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _textDark,
                             ),
                           ),
                         ],

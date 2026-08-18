@@ -44,6 +44,10 @@ import 'package:pms_app/features/billing/screens/billing_screen.dart';
 import 'package:pms_app/features/billing/screens/subscription_locked_screen.dart';
 import 'package:pms_app/features/scheduling/screens/scheduling_exceptions_screen.dart';
 import 'package:pms_app/features/scheduling/screens/scheduling_audit_history_screen.dart';
+import 'package:pms_app/core/providers/session_lifecycle_provider.dart';
+import 'package:pms_app/core/services/appointment_reconciliation_service.dart';
+import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/features/appointments/screens/auto_scheduling_dashboard.dart';
 
 /// Global root navigator key
 final GlobalKey<NavigatorState> rootNavigatorKey =
@@ -59,7 +63,7 @@ class RouterNotifier extends ChangeNotifier {
   RouterNotifier(this._ref) {
     _ref.listen<AuthState>(
       authProvider,
-      (_, __) => notifyListeners(),
+      (prev, next) => notifyListeners(),
     );
   }
 }
@@ -75,7 +79,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: rootNavigatorKey,
     refreshListenable: routerNotifier,
-    initialLocation: '/appointments',
+    initialLocation: '/dashboard',
     redirect: (BuildContext context, GoRouterState state) {
       final auth = ref.read(authProvider);
 
@@ -118,9 +122,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
       }
 
-      // Logged in user hitting root or login -> redirect to /appointments
+      // Logged in user hitting root or login -> redirect to /dashboard (Home)
       if (loc == '/' || loc == '/login') {
-        return '/appointments';
+        return '/dashboard';
       }
 
       return null;
@@ -531,12 +535,113 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Wrapper that renders the active role's dashboard for branch 0
-class RoleDashboardWrapper extends ConsumerWidget {
+/// Wrapper that renders the active role's dashboard for branch 0,
+/// and handles the initial / resumed overdue lifecycle check + auto-opening Needs Attention on the home page.
+class RoleDashboardWrapper extends ConsumerStatefulWidget {
   const RoleDashboardWrapper({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RoleDashboardWrapper> createState() => _RoleDashboardWrapperState();
+}
+
+class _RoleDashboardWrapperState extends ConsumerState<RoleDashboardWrapper>
+    with WidgetsBindingObserver {
+  String? _lifecycleCheckedDate;
+  bool _didAutoPopupDashboard = false;
+
+  String _todayDateKey() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _runLifecycleCheck();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      _runLifecycleCheck();
+    }
+  }
+
+  Future<void> _runLifecycleCheck() async {
+    final todayStr = _todayDateKey();
+    if (_lifecycleCheckedDate == todayStr) return;
+    _lifecycleCheckedDate = todayStr;
+    _didAutoPopupDashboard = false;
+
+    final auth = ref.read(authProvider);
+    if (!auth.isAuthenticated) return;
+
+    final pb = ref.read(pocketbaseProvider);
+    final lifecycle = ref.read(sessionLifecycleServiceProvider);
+    final reconciliation = ref.read(appointmentReconciliationServiceProvider);
+
+    if ((auth.role == UserRole.clinic || auth.role == UserRole.receptionist) &&
+        auth.clinicId != null) {
+      try {
+        final docs = await pb.collection('doctors').getList(
+          filter: 'clinic = "${auth.clinicId}"',
+          perPage: 50,
+        );
+        for (final doc in docs.items) {
+          await lifecycle.flagOverdueSessions(doc.id);
+        }
+      } catch (_) {}
+    } else if (auth.userId != null) {
+      await lifecycle.flagOverdueSessions(auth.userId!);
+    }
+
+    // Load overdue items
+    List<SessionModel> overdueSessions = [];
+    List<AppointmentModel> overdueConsultations = [];
+    try {
+      if ((auth.role == UserRole.clinic || auth.role == UserRole.receptionist) &&
+          auth.clinicId != null) {
+        overdueSessions = await lifecycle.getOverdueSessionsForClinic(auth.clinicId!);
+        overdueConsultations = await reconciliation.getOverdueConsultations(auth.clinicId!, isClinic: true);
+      } else if (auth.userId != null) {
+        overdueSessions = await lifecycle.getOverdueSessions(auth.userId!);
+        overdueConsultations = await reconciliation.getOverdueConsultations(auth.userId!);
+      }
+    } catch (_) {}
+
+    if (mounted) {
+      if ((overdueSessions.isNotEmpty || overdueConsultations.isNotEmpty) &&
+          !_didAutoPopupDashboard &&
+          !AutoSchedulingDashboard.notificationDismissed.value) {
+        _didAutoPopupDashboard = true;
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            AutoSchedulingDashboard.show(
+              context,
+              overdueSessions: overdueSessions,
+              overdueConsultations: overdueConsultations,
+              onRefresh: () {
+                _lifecycleCheckedDate = null;
+                _runLifecycleCheck();
+              },
+            );
+          }
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final role = ref.watch(authProvider).role;
     switch (role) {
       case UserRole.clinic:

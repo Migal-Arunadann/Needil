@@ -1106,7 +1106,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // ── Retroactive Recording Banner ──
+                  // ── Overdue Recording Banner ──
                   if (session.status == SessionStatus.overdue) ...[  
                     Container(
                       width: double.infinity,
@@ -1125,7 +1125,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Recording retroactively for ${_fmtDateTime(session.scheduledDate, session.scheduledTime)}',
+                              'Recording overdue session for ${_fmtDateTime(session.scheduledDate, session.scheduledTime)}',
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
@@ -1345,12 +1345,14 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                     const SizedBox(height: 20),
 
                     // ── Timer — visible for all active sessions ──
-                    _SessionTimerWidget(
-                      sessionId: session.id,
-                      patientName: widget.patientName ?? 'Patient',
-                      routeArgs: {'session': session, 'patientName': widget.patientName ?? 'Patient'},
-                    ),
-                    const SizedBox(height: 20),
+                    if (session.status != SessionStatus.overdue) ...[
+                      _SessionTimerWidget(
+                        sessionId: session.id,
+                        patientName: widget.patientName ?? 'Patient',
+                        routeArgs: {'session': session, 'patientName': widget.patientName ?? 'Patient'},
+                      ),
+                      const SizedBox(height: 20),
+                    ],
 
                     // Session Notes
                     Text(
@@ -1429,17 +1431,19 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
                     const SizedBox(height: 20),
 
                     // ── Timer usage summary log ──
-                    _TimerLogRow(sessionId: session.id),
-                    const SizedBox(height: 20),
+                    if (session.status != SessionStatus.overdue) ...[
+                      _TimerLogRow(sessionId: session.id),
+                      const SizedBox(height: 20),
+                    ],
 
                     Center(
                       child: SizedBox(
-                        width: isDesktop ? 320 : double.infinity,
+                        width: isDesktop ? 340 : double.infinity,
                         child: AppButton(
                           label: _liveSession.status == SessionStatus.completed
                               ? 'Save Edits'
                               : _liveSession.status == SessionStatus.overdue
-                                  ? 'Save & Complete Retroactively'
+                                  ? 'Complete Overdue Session'
                                   : 'Save Session Details',
                           isLoading: _isSubmitting,
                           icon: Icons.check_circle_outline_rounded,

@@ -168,10 +168,10 @@ class _AutoSchedulingDashboardState
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: context.colors.surface,
-        title: Text('Record Retroactive Session', style: context.textStyles.h3),
+        title: Text('Record Overdue Session', style: context.textStyles.h3),
         content: Text(
           'Session ${session.sessionNumber} on '
-          '${_formatDate(session.scheduledDate)} will open for retroactive recording.\n\n'
+          '${_formatDate(session.scheduledDate)} will open to record the respective overdue session.\n\n'
           'Fill in the clinical details and hit Save to complete it.',
           style: context.textStyles.bodyMedium,
         ),
@@ -482,7 +482,7 @@ class _AutoSchedulingDashboardState
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         backgroundColor: context.colors.surface,
-        title: Text('Retroactively Record Consultation', style: context.textStyles.h3),
+        title: Text('Record Overdue Consultation', style: context.textStyles.h3),
         content: Text(
           'Open the form to record details for ${apt.patientName ?? "Unknown"}?',
           style: context.textStyles.bodyMedium,
