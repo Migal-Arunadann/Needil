@@ -24,19 +24,15 @@ import 'package:pms_app/features/treatments/screens/session_list_screen.dart' sh
 import 'package:pms_app/features/treatments/screens/manage_plan_screen.dart';
 import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
-import 'package:pms_app/core/utils/date_picker_helper.dart';
-import 'package:pms_app/features/dashboard/widgets/dashboard_widgets.dart';
+import 'package:pocketbase/pocketbase.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
-import 'package:pms_app/core/widgets/app_text_field.dart';
-import 'package:pms_app/features/patients/providers/patient_provider.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/core/services/auth_service.dart';
 import 'package:pms_app/features/scheduling/screens/available_slots_screen.dart';
 import 'package:pms_app/core/utils/time_utils.dart';
-import 'package:pms_app/features/patients/screens/family_member_selection_screen.dart';
 import 'package:pms_app/core/widgets/reschedule_anchor_dialog.dart';
-import 'package:pms_app/features/auth/models/doctor_model.dart';
 import 'package:pms_app/features/scheduling/screens/scheduling_audit_history_screen.dart';
+import 'package:pms_app/features/patients/screens/edit_patient_screen.dart';
 
 class PatientProfileScreen extends ConsumerStatefulWidget {
   final PatientModel patient;
@@ -682,15 +678,29 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   }
 
   Future<void> _openEditPatientDialog() async {
-    final result = await showDialog<PatientModel>(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) => _EditPatientDialog(patient: _patient),
-    );
+    final width = MediaQuery.of(context).size.width;
+    final isMobile = width < 600;
+
+    PatientModel? result;
+    if (isMobile) {
+      result = await Navigator.push<PatientModel>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EditPatientScreen(patient: _patient),
+        ),
+      );
+    } else {
+      result = await showDialog<PatientModel>(
+        context: context,
+        barrierDismissible: true,
+        builder: (context) => EditPatientScreen(patient: _patient, isDialogMode: true),
+      );
+    }
 
     if (result != null && mounted) {
+      final updated = result;
       setState(() {
-        _patient = result;
+        _patient = updated;
       });
     }
   }
@@ -732,19 +742,13 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   /// same clinic (excludes the current patient).
   Future<List<PatientModel>> _fetchFamilyMembers() async {
     try {
-      final pb = ref.read(pocketbaseProvider);
-      final phone = _patient.phone;
-      final clinicId = _patient.clinicId;
-      final doctorId = _patient.doctorId;
-      final filter = clinicId != null && clinicId.isNotEmpty
-          ? 'phone = "$phone" && clinic = "$clinicId" && id != "${_patient.id}"'
-          : 'phone = "$phone" && doctor = "$doctorId" && id != "${_patient.id}"';
-      final result = await pb.collection(PBCollections.patients).getList(
-        filter: filter,
-        perPage: 20,
-        sort: 'created',
+      final aptService = ref.read(appointmentServiceProvider);
+      final all = await aptService.findAllPatientsByPhone(
+        _patient.phone,
+        _patient.doctorId,
+        clinicId: _patient.clinicId,
       );
-      return result.items.map((r) => PatientModel.fromRecord(r)).toList();
+      return all.where((p) => p.id != _patient.id).toList();
     } catch (_) {
       return [];
     }
@@ -1448,14 +1452,9 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   // ─── HISTORY TAB ─────────────────────────────────────────────────────────────
 
   Widget _buildHistoryTab() {
-    final pb = ref.read(pocketbaseProvider);
-    final patientId = _patient.id;
-
-    return FutureBuilder(
-      future: pb.collection(PBCollections.appointments).getList(
-        filter: 'patient = "$patientId"',
-        sort: '-date,-time',
-      ),
+    return FutureBuilder<List<_HistoryEvent>>(
+      key: ValueKey('history_$_refreshKey'),
+      future: _loadPatientHistory(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Center(child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 3));
@@ -1464,136 +1463,675 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
           return Center(child: Text('Error loading history: ${snapshot.error}', style: context.textStyles.bodyMedium));
         }
 
-        final appointments = snapshot.data!.items;
-        final events = <_HistoryEvent>[];
-
-        for (var a in appointments) {
-          final status = a.getStringValue('status');
-          final checkInStr = a.getStringValue('check_in_time');
-          final detailsFilledStr = a.getStringValue('patient_details_filled_time');
-          final startConsultStr = a.getStringValue('consultation_start_time');
-          final endConsultStr = a.getStringValue('consultation_end_time');
-          final checkOutStr = a.getStringValue('check_out_time');
-          if (status == 'scheduled' && checkInStr.isEmpty) continue;
-
-          final dateStr = a.getStringValue('date');
-          final timeStr = a.getStringValue('time');
-          final typeVal = a.getStringValue('type');
-          final sessionTypeVal = a.getStringValue('session_type');
-          final dt = DateTime.tryParse('$dateStr $timeStr') ??
-              DateTime.tryParse(a.getStringValue('created'));
-
-          String title = 'Scheduled Appointment';
-          if (typeVal == 'walk_in') title = 'Walk-In Patient';
-          if (typeVal == 'session') {
-            title = sessionTypeVal == 'maintenance' ? 'Maintenance Session' : 'Treatment Session';
-          }
-
-          final List<String> timeline = [];
-          if (checkInStr.isNotEmpty) {
-            timeline.add('Patient Arrived: ${DateFormat("h:mm a").format(DateTime.parse(checkInStr).toLocal())}');
-          }
-          if (detailsFilledStr.isNotEmpty) {
-            timeline.add('Details Filled: ${DateFormat("h:mm a").format(DateTime.parse(detailsFilledStr).toLocal())}');
-          }
-          if (startConsultStr.isNotEmpty) {
-            final label = typeVal == 'session' ? 'Session Started' : 'Consultation Started';
-            timeline.add('$label: ${DateFormat("h:mm a").format(DateTime.parse(startConsultStr).toLocal())}');
-          }
-          if (endConsultStr.isNotEmpty) {
-            final label = typeVal == 'session' ? 'Session Ended' : 'Consultation Ended';
-            timeline.add('$label: ${DateFormat("h:mm a").format(DateTime.parse(endConsultStr).toLocal())}');
-          }
-          final patientLeftStr = a.getStringValue('patient_left_at');
-          if (patientLeftStr.isNotEmpty) {
-            final label = typeVal == 'session' ? 'Session Ended' : 'Patient Left At';
-            timeline.add('$label: ${DateFormat("h:mm a").format(DateTime.parse(patientLeftStr).toLocal())}');
-          } else if (checkOutStr.isNotEmpty && endConsultStr.isEmpty) {
-            final label = typeVal == 'session' ? 'Session Ended' : 'Patient Left At';
-            timeline.add('$label: ${DateFormat("h:mm a").format(DateTime.parse(checkOutStr).toLocal())}');
-          }
-
-          events.add(_HistoryEvent(
-            type: 'Appointment',
-            date: dt ?? DateTime.now(),
-            icon: typeVal == 'session'
-                ? (sessionTypeVal == 'maintenance'
-                    ? Icons.autorenew_rounded
-                    : Icons.healing_rounded)
-                : Icons.event_available_rounded,
-            color: typeVal == 'session' && sessionTypeVal == 'maintenance'
-                ? context.colors.success
-                : context.colors.primary,
-            title: title,
-            subtitle: 'Time: $timeStr | Status: $status',
-            detailsTimeline: timeline,
-          ));
-        }
-
-        events.sort((a, b) => b.date.compareTo(a.date));
-
+        final events = snapshot.data ?? [];
         if (events.isEmpty) {
           return Center(
-            child: Text('No history found.',
-                style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      color: context.colors.primary.withValues(alpha: 0.08),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.history_rounded, size: 30, color: context.colors.primary),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('No History Recorded', style: context.textStyles.h4.copyWith(fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Visits, completed consultations, and recorded sessions will appear here chronologically.',
+                    style: context.textStyles.bodySmall.copyWith(color: context.colors.textSecondary),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
           );
         }
 
         return ListView.builder(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 80),
           itemCount: events.length,
           itemBuilder: (context, index) {
             final e = events[index];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: e.color.withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(e.icon, size: 20, color: e.color),
-                      ),
-                      if (index != events.length - 1)
-                        Container(width: 2, height: 40, color: context.colors.border),
-                    ],
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(DateFormat('MMM d, yyyy').format(e.date), style: context.textStyles.caption),
-                        const SizedBox(height: 4),
-                        Text(e.title, style: context.textStyles.h4),
-                        const SizedBox(height: 4),
-                        Text(e.subtitle,
-                            style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
-                        if (e.detailsTimeline.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          for (final d in e.detailsTimeline)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Text(d,
-                                  style: context.textStyles.bodyMedium
-                                      .copyWith(fontSize: 13, color: context.colors.primary)),
-                            ),
-                        ],
-                      ],
+            final isLast = index == events.length - 1;
+
+            return Stack(
+              children: [
+                // ── Continuous Vertical Timeline Line ──
+                if (!isLast)
+                  Positioned(
+                    left: 17,
+                    top: 36,
+                    bottom: 0,
+                    child: Container(
+                      width: 2,
+                      color: context.colors.border.withValues(alpha: 0.65),
                     ),
                   ),
-                ],
-              ),
+
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Timeline Node Icon ──
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: e.color.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: e.color.withValues(alpha: 0.35), width: 1.5),
+                        ),
+                        child: Icon(e.icon, size: 18, color: e.color),
+                      ),
+                      const SizedBox(width: 12),
+
+                      // ── Event Content Card ──
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: context.colors.surface,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: context.colors.border.withValues(alpha: 0.7),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.02),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // ── Header: Date/Time + Status Badges ──
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.calendar_today_outlined, size: 12, color: context.colors.textSecondary),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            '${DateFormat('EEE, dd MMM yyyy').format(e.date)}${e.time12 != null && e.time12!.isNotEmpty ? " · ${e.time12}" : ""}',
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.w600,
+                                              color: context.colors.textSecondary,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Wrap(
+                                    spacing: 4,
+                                    runSpacing: 4,
+                                    alignment: WrapAlignment.end,
+                                    children: [
+                                      if (e.isLateEntry) _buildLateEntryBadge(),
+                                      _buildHistoryStatusPill(e.status),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+
+                              // ── Title: Full Width ──
+                              Text(
+                                e.title,
+                                style: context.textStyles.h4.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.2,
+                                  fontSize: 14.5,
+                                ),
+                              ),
+
+                              // ── Doctor Subtitle ──
+                              if (e.doctorName != null && e.doctorName!.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.person_outline_rounded, size: 13, color: context.colors.primary),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      e.doctorName!,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w700,
+                                        color: context.colors.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+
+                              // ── Clinical Vitals Strip ──
+                              if ((e.bpLevel != null && e.bpLevel!.isNotEmpty) || (e.pulse != null && e.pulse! > 0)) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: context.colors.background,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: context.colors.border.withValues(alpha: 0.5)),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.favorite_rounded, size: 13, color: context.colors.error),
+                                      const SizedBox(width: 5),
+                                      Text(
+                                        'Vitals: ${e.bpLevel != null && e.bpLevel!.isNotEmpty ? "BP ${e.bpLevel}" : ""}${e.bpLevel != null && e.bpLevel!.isNotEmpty && e.pulse != null && e.pulse! > 0 ? " · " : ""}${e.pulse != null && e.pulse! > 0 ? "Pulse ${e.pulse} bpm" : ""}',
+                                        style: TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w600,
+                                          color: context.colors.textPrimary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+
+                              // ── Deduplicated Timeline Milestones ──
+                              if (e.detailsTimeline.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
+                                  decoration: BoxDecoration(
+                                    color: context.colors.primary.withValues(alpha: 0.04),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: context.colors.primary.withValues(alpha: 0.12)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      for (final d in e.detailsTimeline)
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 2),
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 5,
+                                                height: 5,
+                                                decoration: BoxDecoration(
+                                                  color: context.colors.primary,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 7),
+                                              Expanded(
+                                                child: Text(
+                                                  d,
+                                                  style: TextStyle(
+                                                    fontSize: 11.5,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: context.colors.primary,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             );
           },
         );
       },
     );
+  }
+
+  Widget _buildHistoryStatusPill(String status) {
+    Color bg;
+    Color fg;
+    String label;
+    IconData icon;
+
+    switch (status.toLowerCase()) {
+      case 'completed':
+        bg = const Color(0xFF10B981).withValues(alpha: 0.12);
+        fg = const Color(0xFF10B981);
+        label = 'Completed';
+        icon = Icons.check_circle_rounded;
+        break;
+      case 'in_progress':
+      case 'inprogress':
+        bg = const Color(0xFF0284C7).withValues(alpha: 0.12);
+        fg = const Color(0xFF0284C7);
+        label = 'In Progress';
+        icon = Icons.play_circle_fill_rounded;
+        break;
+      case 'waiting':
+      case 'arrived':
+        bg = const Color(0xFFF59E0B).withValues(alpha: 0.12);
+        fg = const Color(0xFFF59E0B);
+        label = 'Waiting';
+        icon = Icons.hourglass_top_rounded;
+        break;
+      case 'missed':
+        bg = const Color(0xFFEF4444).withValues(alpha: 0.12);
+        fg = const Color(0xFFEF4444);
+        label = 'Missed';
+        icon = Icons.event_busy_rounded;
+        break;
+      case 'overdue':
+        bg = const Color(0xFFDC2626).withValues(alpha: 0.12);
+        fg = const Color(0xFFDC2626);
+        label = 'Overdue';
+        icon = Icons.warning_amber_rounded;
+        break;
+      case 'cancelled':
+        bg = const Color(0xFF6B7280).withValues(alpha: 0.12);
+        fg = const Color(0xFF6B7280);
+        label = 'Cancelled';
+        icon = Icons.cancel_outlined;
+        break;
+      default:
+        bg = const Color(0xFF6366F1).withValues(alpha: 0.12);
+        fg = const Color(0xFF6366F1);
+        label = 'Scheduled';
+        icon = Icons.calendar_today_rounded;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: fg.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: fg),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: fg,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLateEntryBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F5D4F).withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFF0F5D4F).withValues(alpha: 0.35)),
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.history_toggle_off_rounded, size: 11, color: Color(0xFF0F5D4F)),
+          SizedBox(width: 4),
+          Text(
+            'Late Entry',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF0F5D4F),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<List<_HistoryEvent>> _loadPatientHistory() async {
+    final pb = ref.read(pocketbaseProvider);
+    final patientId = _patient.id;
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+    // Concurrently fetch appointments, consultations, sessions, and doctors
+    final results = await Future.wait([
+      pb.collection(PBCollections.appointments).getFullList(
+        filter: 'patient = "$patientId"',
+        sort: '-date,-time',
+      ).catchError((_) => <RecordModel>[]),
+      pb.collection(PBCollections.consultations).getFullList(
+        filter: 'patient = "$patientId" && is_deleted = false',
+        sort: '-created',
+      ).catchError((_) => <RecordModel>[]),
+      pb.collection(PBCollections.sessions).getFullList(
+        filter: 'patient = "$patientId" && is_deleted = false',
+        sort: '-scheduled_date,-scheduled_time',
+      ).catchError((_) => <RecordModel>[]),
+      pb.collection(PBCollections.doctors).getFullList().catchError((_) => <RecordModel>[]),
+    ]);
+
+    final aptRecords = results[0];
+    final consultRecords = results[1];
+    final sessionRecords = results[2];
+    final doctorRecords = results[3];
+
+    // Build doctor lookup map
+    final Map<String, String> doctorMap = {};
+    for (final d in doctorRecords) {
+      final name = d.getStringValue('name');
+      if (name.isNotEmpty) doctorMap[d.id] = name;
+    }
+
+    // Build consultation lookup map
+    final Map<String, ConsultationModel> consultMap = {};
+    for (final c in consultRecords) {
+      consultMap[c.id] = ConsultationModel.fromRecord(c);
+    }
+
+    // Build session lookup map
+    final Map<String, SessionModel> sessionMap = {};
+    for (final s in sessionRecords) {
+      sessionMap[s.id] = SessionModel.fromRecord(s);
+    }
+
+    final events = <_HistoryEvent>[];
+    final Set<String> processedSessionIds = {};
+    final Set<String> processedConsultationIds = {};
+
+    // ── 1. Process Appointments ──
+    for (final a in aptRecords) {
+      final status = a.getStringValue('status');
+      final checkInStr = a.getStringValue('check_in_time');
+      final detailsFilledStr = a.getStringValue('patient_details_filled_time');
+      final startConsultStr = a.getStringValue('consultation_start_time');
+      final endConsultStr = a.getStringValue('consultation_end_time');
+      final checkOutStr = a.getStringValue('check_out_time');
+      final patientLeftStr = a.getStringValue('patient_left_at');
+      final dateStr = a.getStringValue('date');
+      final rawTime = a.getStringValue('time');
+      final typeVal = a.getStringValue('type');
+      final sessionTypeVal = a.getStringValue('session_type');
+      final reconReason = a.getStringValue('reconciliation_reason');
+      final docId = a.getStringValue('doctor');
+      final linkedSessionId = a.getStringValue('linked_session_id');
+      final linkedConsultId = a.getStringValue('linked_consultation_id');
+
+      final isPast = dateStr.isNotEmpty && dateStr.compareTo(todayStr) < 0;
+      final isFuture = dateStr.isNotEmpty && dateStr.compareTo(todayStr) > 0;
+
+      // Skip future scheduled bookings from history tab
+      if (status == 'scheduled' && checkInStr.isEmpty && isFuture) {
+        continue;
+      }
+
+      // Determine effective status
+      String effectiveStatus = status;
+      if (status == 'scheduled' && checkInStr.isEmpty && isPast) {
+        effectiveStatus = 'overdue';
+      }
+
+      // Formatted 12-hour time
+      final time12 = rawTime.isNotEmpty ? TimeUtils.formatStringTime(rawTime) : null;
+
+      // Accurate Local DateTime parsing
+      DateTime dt;
+      try {
+        if (dateStr.isNotEmpty) {
+          final parts = dateStr.split('-');
+          if (parts.length == 3) {
+            final y = int.parse(parts[0]);
+            final m = int.parse(parts[1]);
+            final d = int.parse(parts[2]);
+            int hour = 0, minute = 0;
+            if (rawTime.isNotEmpty) {
+              final tParts = rawTime.split(':');
+              if (tParts.isNotEmpty) hour = int.tryParse(tParts[0]) ?? 0;
+              if (tParts.length > 1) minute = int.tryParse(tParts[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+            }
+            dt = DateTime(y, m, d, hour, minute);
+          } else {
+            dt = DateTime.parse(a.getStringValue('created')).toLocal();
+          }
+        } else {
+          dt = DateTime.parse(a.getStringValue('created')).toLocal();
+        }
+      } catch (_) {
+        dt = DateTime.now();
+      }
+
+      // Linked session lookup
+      SessionModel? session;
+      if (linkedSessionId.isNotEmpty && sessionMap.containsKey(linkedSessionId)) {
+        session = sessionMap[linkedSessionId];
+        processedSessionIds.add(linkedSessionId);
+      }
+      // Linked consultation lookup
+      ConsultationModel? consult;
+      if (linkedConsultId.isNotEmpty && consultMap.containsKey(linkedConsultId)) {
+        consult = consultMap[linkedConsultId];
+        processedConsultationIds.add(linkedConsultId);
+      }
+
+      final isLateEntry = reconReason == 'late_entry' ||
+          (session?.remarks?.contains('[Filled Afterwards]') ?? false);
+
+      // Title & Icon & Color determination
+      String title = 'Appointment';
+      IconData icon = Icons.event_available_rounded;
+      Color color = context.colors.primary;
+
+      if (typeVal == 'walk_in') {
+        title = 'Walk-In Consultation';
+        icon = Icons.directions_walk_rounded;
+        color = const Color(0xFF0284C7);
+      } else if (typeVal == 'session' || session != null) {
+        final isMaint = sessionTypeVal == 'maintenance' || (session?.isMaintenance ?? false);
+        final sNum = session?.sessionNumber;
+        final modality = session?.treatmentModality ?? '';
+        final sNumPrefix = sNum != null && sNum > 0 ? 'Session #$sNum' : 'Session';
+        final modalitySuffix = modality.isNotEmpty ? ' · $modality' : '';
+        title = isMaint ? 'Maintenance $sNumPrefix$modalitySuffix' : 'Treatment $sNumPrefix$modalitySuffix';
+        icon = isMaint ? Icons.autorenew_rounded : Icons.healing_rounded;
+        color = isMaint ? context.colors.success : const Color(0xFF0F5D4F);
+      } else if (consult != null || typeVal == 'consultation') {
+        title = 'Doctor Consultation';
+        icon = Icons.assignment_ind_rounded;
+        color = const Color(0xFF6366F1);
+      }
+
+      // Doctor name
+      String? doctorName = doctorMap[docId] ?? session?.doctorName ?? consult?.doctorId;
+      if (doctorName != null && doctorMap.containsKey(doctorName)) {
+        doctorName = doctorMap[doctorName];
+      }
+      if (doctorName != null && doctorName.isNotEmpty && !doctorName.startsWith('Dr.') && !doctorName.startsWith('Dr ')) {
+        doctorName = 'Dr. $doctorName';
+      }
+
+      // Deduplicated Timeline milestones
+      final List<String> timeline = [];
+      if (checkInStr.isNotEmpty) {
+        try {
+          timeline.add('Patient Arrived: ${DateFormat("h:mm a").format(DateTime.parse(checkInStr).toLocal())}');
+        } catch (_) {}
+      }
+      if (detailsFilledStr.isNotEmpty) {
+        try {
+          timeline.add('Details Filled: ${DateFormat("h:mm a").format(DateTime.parse(detailsFilledStr).toLocal())}');
+        } catch (_) {}
+      }
+      if (startConsultStr.isNotEmpty) {
+        try {
+          final label = typeVal == 'session' ? 'Session Started' : 'Consultation Started';
+          timeline.add('$label: ${DateFormat("h:mm a").format(DateTime.parse(startConsultStr).toLocal())}');
+        } catch (_) {}
+      }
+      if (endConsultStr.isNotEmpty) {
+        try {
+          final label = typeVal == 'session' ? 'Session Completed' : 'Consultation Completed';
+          timeline.add('$label: ${DateFormat("h:mm a").format(DateTime.parse(endConsultStr).toLocal())}');
+        } catch (_) {}
+      }
+      if (patientLeftStr.isNotEmpty && patientLeftStr != endConsultStr) {
+        try {
+          timeline.add('Checked Out: ${DateFormat("h:mm a").format(DateTime.parse(patientLeftStr).toLocal())}');
+        } catch (_) {}
+      } else if (checkOutStr.isNotEmpty && checkOutStr != endConsultStr && patientLeftStr.isEmpty) {
+        try {
+          timeline.add('Checked Out: ${DateFormat("h:mm a").format(DateTime.parse(checkOutStr).toLocal())}');
+        } catch (_) {}
+      }
+
+      events.add(_HistoryEvent(
+        id: a.id,
+        eventType: typeVal.isNotEmpty ? typeVal : 'appointment',
+        date: dt,
+        time12: time12,
+        icon: icon,
+        color: color,
+        title: title,
+        doctorName: doctorName,
+        status: effectiveStatus,
+        isLateEntry: isLateEntry,
+        detailsTimeline: timeline,
+        notes: session?.notes ?? consult?.notes,
+        remarks: session?.remarks,
+        bpLevel: session?.bpLevel ?? consult?.bpLevel,
+        pulse: session?.pulse ?? consult?.pulse,
+        modality: session?.treatmentModality,
+        sessionNumber: session?.sessionNumber,
+        chiefComplaint: consult?.chiefComplaint,
+        diagnosis: consult?.acupunctureDiagnosis ?? consult?.pulseDiagnosis,
+        photos: session?.photos ?? consult?.photos ?? const [],
+      ));
+    }
+
+    // ── 2. Standalone Sessions ──
+    for (final s in sessionMap.values) {
+      if (processedSessionIds.contains(s.id)) continue;
+      if (s.status == SessionStatus.upcoming && s.scheduledDate.compareTo(todayStr) > 0) continue;
+
+      DateTime dt;
+      try {
+        final parts = s.scheduledDate.split('-');
+        if (parts.length == 3) {
+          final y = int.parse(parts[0]);
+          final m = int.parse(parts[1]);
+          final d = int.parse(parts[2]);
+          int hour = 0, minute = 0;
+          if (s.scheduledTime != null && s.scheduledTime!.isNotEmpty) {
+            final tParts = s.scheduledTime!.split(':');
+            if (tParts.isNotEmpty) hour = int.tryParse(tParts[0]) ?? 0;
+            if (tParts.length > 1) minute = int.tryParse(tParts[1].replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+          }
+          dt = DateTime(y, m, d, hour, minute);
+        } else {
+          dt = s.created?.toLocal() ?? DateTime.now();
+        }
+      } catch (_) {
+        dt = DateTime.now();
+      }
+
+      final time12 = s.scheduledTime != null && s.scheduledTime!.isNotEmpty
+          ? TimeUtils.formatStringTime(s.scheduledTime!)
+          : null;
+
+      final sNum = s.sessionNumber;
+      final modality = s.treatmentModality;
+      final sNumPrefix = sNum > 0 ? 'Session #$sNum' : 'Session';
+      final modalitySuffix = modality.isNotEmpty ? ' · $modality' : '';
+      final title = s.isMaintenance ? 'Maintenance $sNumPrefix$modalitySuffix' : 'Treatment $sNumPrefix$modalitySuffix';
+
+      String statusStr = s.status.name;
+      if (s.status == SessionStatus.upcoming && s.scheduledDate.compareTo(todayStr) < 0) {
+        statusStr = 'overdue';
+      }
+
+      final isLate = s.remarks?.contains('[Filled Afterwards]') ?? false;
+      String? docName = doctorMap[s.doctorId] ?? s.doctorName;
+      if (docName != null && docName.isNotEmpty && !docName.startsWith('Dr.') && !docName.startsWith('Dr ')) {
+        docName = 'Dr. $docName';
+      }
+
+      events.add(_HistoryEvent(
+        id: s.id,
+        eventType: 'session',
+        date: dt,
+        time12: time12,
+        icon: s.isMaintenance ? Icons.autorenew_rounded : Icons.healing_rounded,
+        color: s.isMaintenance ? context.colors.success : const Color(0xFF0F5D4F),
+        title: title,
+        doctorName: docName,
+        status: statusStr,
+        isLateEntry: isLate,
+        notes: s.notes,
+        remarks: s.remarks,
+        bpLevel: s.bpLevel,
+        pulse: s.pulse,
+        modality: s.treatmentModality,
+        sessionNumber: s.sessionNumber,
+        photos: s.photos,
+      ));
+    }
+
+    // ── 3. Standalone Consultations ──
+    for (final c in consultMap.values) {
+      if (processedConsultationIds.contains(c.id)) continue;
+      final dt = c.created?.toLocal() ?? DateTime.now();
+      String? docName = doctorMap[c.doctorId];
+      if (docName != null && docName.isNotEmpty && !docName.startsWith('Dr.') && !docName.startsWith('Dr ')) {
+        docName = 'Dr. $docName';
+      }
+
+      events.add(_HistoryEvent(
+        id: c.id,
+        eventType: 'consultation',
+        date: dt,
+        time12: DateFormat('h:mm a').format(dt),
+        icon: Icons.assignment_ind_rounded,
+        color: const Color(0xFF6366F1),
+        title: 'Doctor Consultation',
+        doctorName: docName,
+        status: c.status == ConsultationStatus.completed ? 'completed' : 'in_progress',
+        chiefComplaint: c.chiefComplaint,
+        diagnosis: c.acupunctureDiagnosis ?? c.pulseDiagnosis,
+        bpLevel: c.bpLevel,
+        pulse: c.pulse,
+        notes: c.notes,
+        photos: c.photos,
+      ));
+    }
+
+    // Sort chronologically descending
+    events.sort((a, b) => b.date.compareTo(a.date));
+    return events;
   }
 
   // ─── PATIENT DETAILS TAB ─────────────────────────────────────────────────────
@@ -1671,6 +2209,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
             title: 'Contact & Location',
             icon: Icons.location_on_rounded,
             children: [
+              if (p.pincode?.isNotEmpty == true) _profileDetailRow('Pincode', p.pincode!),
               if (p.city?.isNotEmpty == true) _profileDetailRow('City', p.city!),
               if (p.area?.isNotEmpty == true) _profileDetailRow('Area', p.area!),
               if (p.email?.isNotEmpty == true) _profileDetailRow('Email', p.email!),
@@ -1678,18 +2217,24 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
           ),
           const SizedBox(height: 14),
 
-          // ── Medical & Emergency Card ──────────────────────────────────────
-          _profileInfoCard(
-            title: 'Medical & Emergency',
-            icon: Icons.health_and_safety_rounded,
-            children: [
-              if (p.allergiesConditions?.isNotEmpty == true)
-                _profileDetailRow('Allergies/Conditions', p.allergiesConditions!),
-              if (p.emergencyContact?.isNotEmpty == true)
-                _profileDetailRow('Emergency Contact', p.emergencyContact!),
-            ],
-          ),
-          const SizedBox(height: 14),
+          // ── Referral & Notes Card ─────────────────────────────────────────
+          if ((p.howDidYouHear?.isNotEmpty == true) ||
+              (p.reference?.isNotEmpty == true) ||
+              (p.personalNotes?.isNotEmpty == true)) ...[
+            _profileInfoCard(
+              title: 'Referral & Notes',
+              icon: Icons.campaign_rounded,
+              children: [
+                if (p.howDidYouHear?.isNotEmpty == true)
+                  _profileDetailRow('How Did You Know Us', p.howDidYouHear!),
+                if (p.reference?.isNotEmpty == true)
+                  _profileDetailRow('Reference', p.reference!),
+                if (p.personalNotes?.isNotEmpty == true)
+                  _profileDetailRow('Personal Notes', p.personalNotes!),
+              ],
+            ),
+            const SizedBox(height: 14),
+          ],
 
           // ── Family Members Card ───────────────────────────────────────────
           FutureBuilder<List<PatientModel>>(
@@ -1787,20 +2332,6 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
           Expanded(
             child: Text(value, style: context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w600, fontSize: 13)),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _detailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: context.textStyles.label.copyWith(color: context.colors.primary)),
-          const SizedBox(height: 4),
-          Text(value, style: context.textStyles.bodyMedium),
         ],
       ),
     );
@@ -4431,550 +4962,51 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
 // ─── Supporting models ────────────────────────────────────────────────────────
 
 class _HistoryEvent {
-  final String type;
+  final String id;
+  final String eventType; // 'consultation', 'session', 'appointment', 'walk_in'
   final DateTime date;
+  final String? time12;
   final IconData icon;
   final Color color;
   final String title;
-  final String subtitle;
+  final String? subtitle;
+  final String? doctorName;
+  final String status; // 'completed', 'missed', 'cancelled', 'in_progress', 'waiting', 'overdue', 'scheduled'
+  final bool isLateEntry;
   final List<String> detailsTimeline;
+  final String? notes;
+  final String? remarks;
+  final String? bpLevel;
+  final int? pulse;
+  final String? modality;
+  final int? sessionNumber;
+  final String? chiefComplaint;
+  final String? diagnosis;
+  final List<String> photos;
 
   _HistoryEvent({
-    required this.type,
+    required this.id,
+    required this.eventType,
     required this.date,
+    this.time12,
     required this.icon,
     required this.color,
     required this.title,
-    required this.subtitle,
+    this.subtitle,
+    this.doctorName,
+    required this.status,
+    this.isLateEntry = false,
     this.detailsTimeline = const [],
+    this.notes,
+    this.remarks,
+    this.bpLevel,
+    this.pulse,
+    this.modality,
+    this.sessionNumber,
+    this.chiefComplaint,
+    this.diagnosis,
+    this.photos = const [],
   });
-}
-
-class _EditPatientDialog extends ConsumerStatefulWidget {
-  final PatientModel patient;
-
-  const _EditPatientDialog({super.key, required this.patient});
-
-  @override
-  ConsumerState<_EditPatientDialog> createState() => _EditPatientDialogState();
-}
-
-class _EditPatientDialogState extends ConsumerState<_EditPatientDialog> {
-  final _formKey = GlobalKey<FormState>();
-  late TextEditingController _nameCtrl;
-  late TextEditingController _phoneCtrl;
-  late TextEditingController _dobCtrl;
-  late TextEditingController _pincodeCtrl;
-  late TextEditingController _cityCtrl;
-  late TextEditingController _areaCtrl;
-  late TextEditingController _occupationCtrl;
-  late TextEditingController _emailCtrl;
-  late TextEditingController _allergiesCtrl;
-  late TextEditingController _emergencyContactCtrl;
-
-  String? _selectedGender;
-  bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final p = widget.patient;
-    _nameCtrl = TextEditingController(text: p.fullName);
-    _phoneCtrl = TextEditingController(text: p.phone);
-    _dobCtrl = TextEditingController(text: p.dateOfBirth ?? '');
-    _pincodeCtrl = TextEditingController(text: p.pincode ?? '');
-    _cityCtrl = TextEditingController(text: p.city ?? '');
-    _areaCtrl = TextEditingController(text: p.area ?? '');
-    _occupationCtrl = TextEditingController(text: p.occupation ?? '');
-    _emailCtrl = TextEditingController(text: p.email ?? '');
-    _allergiesCtrl = TextEditingController(text: p.allergiesConditions ?? '');
-    _emergencyContactCtrl = TextEditingController(text: p.emergencyContact ?? '');
-    _selectedGender = p.gender;
-  }
-
-  @override
-  void dispose() {
-    _nameCtrl.dispose();
-    _phoneCtrl.dispose();
-    _dobCtrl.dispose();
-    _pincodeCtrl.dispose();
-    _cityCtrl.dispose();
-    _areaCtrl.dispose();
-    _occupationCtrl.dispose();
-    _emailCtrl.dispose();
-    _allergiesCtrl.dispose();
-    _emergencyContactCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickDob() async {
-    DateTime initial = DateTime(1990);
-    if (_dobCtrl.text.isNotEmpty) {
-      final parsed = DateTime.tryParse(_dobCtrl.text);
-      if (parsed != null) initial = parsed;
-    }
-    final picked = await showAppDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(1920),
-      lastDate: DateTime.now(),
-    );
-    if (picked != null) {
-      setState(() {
-        _dobCtrl.text =
-            '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-      });
-    }
-  }
-
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedGender == null) {
-      AppToast.show('Please select gender', type: ToastType.error);
-      return;
-    }
-
-    setState(() => _isSaving = true);
-
-    try {
-      final patientService = ref.read(patientServiceProvider);
-
-      // Auto-calculate age from DoB if entered
-      int? calculatedAge;
-      if (_dobCtrl.text.isNotEmpty) {
-        final dob = DateTime.tryParse(_dobCtrl.text);
-        if (dob != null) {
-          final today = DateTime.now();
-          calculatedAge = today.year - dob.year;
-          if (today.month < dob.month || (today.month == dob.month && today.day < dob.day)) {
-            calculatedAge--;
-          }
-          if (calculatedAge < 0) calculatedAge = null;
-        }
-      }
-
-      final body = {
-        'full_name': _nameCtrl.text.trim(),
-        'phone': _phoneCtrl.text.trim(),
-        'gender': _selectedGender,
-        'date_of_birth': _dobCtrl.text.trim(),
-        'age': calculatedAge,
-        'pincode': _pincodeCtrl.text.trim(),
-        'city': _cityCtrl.text.trim(),
-        'area': _areaCtrl.text.trim(),
-        'occupation': _occupationCtrl.text.trim(),
-        'email': _emailCtrl.text.trim(),
-        'allergies_conditions': _allergiesCtrl.text.trim(),
-        'emergency_contact': _emergencyContactCtrl.text.trim(),
-      };
-
-      final updated = await patientService.updatePatient(widget.patient.id, body);
-      
-      // Also refresh lists
-      ref.read(patientListProvider.notifier).loadPatients();
-      ref.read(appointmentListProvider.notifier).loadAppointments();
-
-      if (mounted) {
-        Navigator.pop(context, updated);
-      }
-    } catch (e) {
-      if (mounted) {
-        AppToast.show('Error saving: $e', type: ToastType.error);
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
-    }
-  }
-
-  Widget _buildGenderDropdown(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        RichText(
-          text: TextSpan(children: [
-            TextSpan(text: 'Gender ', style: context.textStyles.label),
-            const TextSpan(
-              text: '*',
-              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-            ),
-          ]),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          height: 52,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: context.colors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: context.colors.border.withValues(alpha: 0.5),
-              width: 0.8,
-            ),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: _selectedGender,
-              isExpanded: true,
-              dropdownColor: context.colors.surface,
-              style: context.textStyles.bodyLarge.copyWith(color: context.colors.textPrimary),
-              hint: Text('Select Gender', style: context.textStyles.bodyMedium.copyWith(color: context.colors.textHint)),
-              items: ['Male', 'Female', 'Other']
-                  .map((g) => DropdownMenuItem(
-                        value: g,
-                        child: Text(g, style: TextStyle(color: context.colors.textPrimary)),
-                      ))
-                  .toList(),
-              onChanged: (v) => setState(() => _selectedGender = v),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDobField(BuildContext context) {
-    String displayDate = '';
-    if (_dobCtrl.text.isNotEmpty) {
-      final parsed = DateTime.tryParse(_dobCtrl.text);
-      if (parsed != null) {
-        displayDate = '${parsed.day.toString().padLeft(2, '0')}/${parsed.month.toString().padLeft(2, '0')}/${parsed.year}';
-      }
-    }
-
-    return AppTextField(
-      controller: TextEditingController(text: displayDate),
-      label: 'Date of Birth',
-      hint: 'DD/MM/YYYY',
-      readOnly: true,
-      onTap: _pickDob,
-      suffixIcon: GestureDetector(
-        onTap: _pickDob,
-        child: Icon(Icons.calendar_month_rounded, color: context.colors.primary),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-    final isMobile = width < 600;
-
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      backgroundColor: context.colors.background,
-      clipBehavior: Clip.antiAlias,
-      child: Container(
-        width: isMobile ? width * 0.95 : 650,
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              decoration: BoxDecoration(
-                color: context.colors.surface,
-                border: Border(
-                  bottom: BorderSide(
-                    color: context.colors.border.withValues(alpha: 0.5),
-                  ),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: context.colors.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.edit_rounded,
-                      color: context.colors.primary,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Text(
-                      'Edit Patient Details',
-                      style: context.textStyles.h2,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(Icons.close_rounded, color: context.colors.textSecondary),
-                    onPressed: _isSaving ? null : () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-
-            // Form Content
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(24),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (isMobile) ...[
-                        AppTextField(
-                          controller: _nameCtrl,
-                          label: 'Full Name *',
-                          hint: 'e.g. John Doe',
-                          validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                        ),
-                        const SizedBox(height: 16),
-                        AppTextField(
-                          controller: _phoneCtrl,
-                          label: 'Phone Number *',
-                          hint: 'e.g. +91 98765 43210',
-                          keyboardType: TextInputType.phone,
-                          validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildGenderDropdown(context),
-                        const SizedBox(height: 16),
-                        _buildDobField(context),
-                        const SizedBox(height: 16),
-                        AppTextField(
-                          controller: _emailCtrl,
-                          label: 'Email',
-                          hint: 'e.g. name@example.com',
-                          keyboardType: TextInputType.emailAddress,
-                        ),
-                        const SizedBox(height: 16),
-                        AppTextField(
-                          controller: _occupationCtrl,
-                          label: 'Occupation',
-                          hint: 'e.g. Engineer, Business',
-                        ),
-                      ] else ...[
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: AppTextField(
-                                controller: _nameCtrl,
-                                label: 'Full Name *',
-                                hint: 'e.g. John Doe',
-                                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: AppTextField(
-                                controller: _phoneCtrl,
-                                label: 'Phone Number *',
-                                hint: 'e.g. +91 98765 43210',
-                                keyboardType: TextInputType.phone,
-                                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(child: _buildGenderDropdown(context)),
-                            const SizedBox(width: 16),
-                            Expanded(child: _buildDobField(context)),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: AppTextField(
-                                controller: _emailCtrl,
-                                label: 'Email',
-                                hint: 'e.g. name@example.com',
-                                keyboardType: TextInputType.emailAddress,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: AppTextField(
-                                controller: _occupationCtrl,
-                                label: 'Occupation',
-                                hint: 'e.g. Engineer, Business',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-
-                      const SizedBox(height: 24),
-                      Divider(color: context.colors.border.withValues(alpha: 0.5)),
-                      const SizedBox(height: 16),
-
-                      Text('Contact & Address', style: context.textStyles.h3),
-                      const SizedBox(height: 16),
-
-                      if (isMobile) ...[
-                        AppTextField(
-                          controller: _pincodeCtrl,
-                          label: 'Pincode',
-                          hint: 'e.g. 560001',
-                          keyboardType: TextInputType.number,
-                        ),
-                        const SizedBox(height: 16),
-                        AppTextField(
-                          controller: _cityCtrl,
-                          label: 'City',
-                          hint: 'e.g. Bangalore',
-                        ),
-                        const SizedBox(height: 16),
-                        AppTextField(
-                          controller: _areaCtrl,
-                          label: 'Area / Locality',
-                          hint: 'e.g. Indiranagar',
-                        ),
-                      ] else ...[
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: AppTextField(
-                                controller: _pincodeCtrl,
-                                label: 'Pincode',
-                                hint: 'e.g. 560001',
-                                keyboardType: TextInputType.number,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: AppTextField(
-                                controller: _cityCtrl,
-                                label: 'City',
-                                hint: 'e.g. Bangalore',
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: AppTextField(
-                                controller: _areaCtrl,
-                                label: 'Area / Locality',
-                                hint: 'e.g. Indiranagar',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-
-                      const SizedBox(height: 24),
-                      Divider(color: context.colors.border.withValues(alpha: 0.5)),
-                      const SizedBox(height: 16),
-
-                      Text('Medical & Emergency', style: context.textStyles.h3),
-                      const SizedBox(height: 16),
-
-                      if (isMobile) ...[
-                        AppTextField(
-                          controller: _allergiesCtrl,
-                          label: 'Allergies & Conditions',
-                          hint: 'e.g. Peanut allergy, Hypertension',
-                          maxLines: 2,
-                        ),
-                        const SizedBox(height: 16),
-                        AppTextField(
-                          controller: _emergencyContactCtrl,
-                          label: 'Emergency Contact',
-                          hint: 'e.g. Name (Relation) - Phone',
-                        ),
-                      ] else ...[
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: AppTextField(
-                                controller: _allergiesCtrl,
-                                label: 'Allergies & Conditions',
-                                hint: 'e.g. Peanut allergy, Hypertension',
-                                maxLines: 2,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: AppTextField(
-                                controller: _emergencyContactCtrl,
-                                label: 'Emergency Contact',
-                                hint: 'e.g. Name (Relation) - Phone',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Footer
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: context.colors.surface,
-                border: Border(
-                  top: BorderSide(
-                    color: context.colors.border.withValues(alpha: 0.5),
-                  ),
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _isSaving ? null : () => Navigator.pop(context),
-                    child: Text(
-                      'Cancel',
-                      style: TextStyle(color: context.colors.textSecondary),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: _isSaving ? null : _save,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: context.colors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Text('Save Changes', style: TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class RecentlyDeletedSheet extends ConsumerStatefulWidget {

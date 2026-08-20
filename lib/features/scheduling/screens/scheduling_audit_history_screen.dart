@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:pms_app/core/constants/pb_collections.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 import 'package:pms_app/core/utils/error_formatter.dart';
+import 'package:pms_app/core/utils/time_utils.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 
@@ -248,7 +249,7 @@ class _SchedulingAuditHistoryScreenState
                           size: 13, color: context.colors.textHint),
                       const SizedBox(width: 4),
                       Text(
-                        '$oldDate${oldTime.isNotEmpty ? " $oldTime" : ""} → $newDate${newTime.isNotEmpty ? " $newTime" : ""}',
+                        '$oldDate${oldTime.isNotEmpty ? " ${TimeUtils.formatStringTime(oldTime)}" : ""} → $newDate${newTime.isNotEmpty ? " ${TimeUtils.formatStringTime(newTime)}" : ""}',
                         style: context.textStyles.caption.copyWith(
                           color: context.colors.textSecondary,
                           fontSize: 11,

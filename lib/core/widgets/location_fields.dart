@@ -423,6 +423,12 @@ class _DropdownField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveValue = (value != null && items.contains(value))
+        ? value
+        : (value != null && items.any((i) => i.toLowerCase() == value!.toLowerCase()))
+            ? items.firstWhere((i) => i.toLowerCase() == value!.toLowerCase())
+            : null;
+
     final width = MediaQuery.sizeOf(context).width;
     final isDesktop = width >= 900;
 
@@ -456,7 +462,7 @@ class _DropdownField extends StatelessWidget {
               ),
             ),
             child: DropdownButtonFormField<String>(
-              value: value,
+              value: effectiveValue,
               decoration: InputDecoration(
                 prefixIcon: Icon(icon, color: const Color(0xFF999999), size: 20),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
@@ -491,7 +497,7 @@ class _DropdownField extends StatelessWidget {
     }
 
     return DropdownButtonFormField<String>(
-      value: value,
+      value: effectiveValue,
       decoration: InputDecoration(
         label: AppLabel(
           text: label,

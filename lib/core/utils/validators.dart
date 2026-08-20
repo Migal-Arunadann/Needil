@@ -130,4 +130,10 @@ class PhoneParser {
     
     return ('+91', clean);
   }
+
+  static String normalize(String? fullPhone) {
+    if (fullPhone == null || fullPhone.isEmpty) return '';
+    final parsed = parse(fullPhone);
+    return '${parsed.$1}${parsed.$2}';
+  }
 }

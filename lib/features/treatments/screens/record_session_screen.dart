@@ -848,17 +848,18 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
     // Flush any pending auto-save first
     _autoSaveTimer?.cancel();
     setState(() => _isSubmitting = true);
-    // A session that is 'overdue' came from the Needs Attention dashboard's
-    // "Patient Came" flow. The doctor never pre-recorded it, so we auto-complete
-    // it here — this is the single correct point of completion (no double-increment).
-    final isRetroactive = _liveSession.status == SessionStatus.overdue;
+    // A session that is 'overdue' or on a past date came from the Needs Attention / Overdue flow.
+    // The doctor never pre-recorded it, so we auto-complete it here on save.
+    final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final isPastSession = _liveSession.scheduledDate.compareTo(todayStr) < 0;
+    final isRetroactive = _liveSession.status == SessionStatus.overdue || (isPastSession && _liveSession.status != SessionStatus.completed);
     final isAlreadyCompleted = _liveSession.status == SessionStatus.completed;
     try {
       final service = ref.read(treatmentServiceProvider);
       
       String finalRemarks = _remarksCtrl.text.trim();
       if (isRetroactive) {
-        finalRemarks = finalRemarks.isEmpty ? '[Recorded Late]' : '$finalRemarks\n[Recorded Late]';
+        finalRemarks = finalRemarks.isEmpty ? '[Filled Afterwards]' : '$finalRemarks\n[Filled Afterwards]';
       }
 
       final result = await service.recordSession(
@@ -869,7 +870,7 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
         remarks: finalRemarks,
         photos: _photos,
         // Retroactive sessions auto-complete on save (single point of completion).
-        // Regular Save button never completes — only End Session on the card does.
+        // Regular today's session Save button never completes — only End Session on the card does.
         isCompleted: isAlreadyCompleted || isRetroactive,
         treatmentModality: _selectedTreatmentType,
         doctorId: _selectedDoctorId,
@@ -908,10 +909,10 @@ class _RecordSessionScreenState extends ConsumerState<RecordSessionScreen> {
       });
       if (mounted) {
         final label = isRetroactive
-            ? 'Session ${_liveSession.sessionNumber} recorded late ✓'
+            ? 'Session ${_liveSession.sessionNumber} details saved ✓'
             : 'Session ${_liveSession.sessionNumber} details saved ✓';
         AppToast.show(label, type: ToastType.success);
-        navigator.pop();
+        navigator.pop(true);
       }
     } catch (e) {
       setState(() => _isSubmitting = false);

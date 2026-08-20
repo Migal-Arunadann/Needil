@@ -478,6 +478,15 @@ class _AppointmentListScreenState
     return apt.status == AppointmentStatus.missed;
   }
 
+  bool _isOverdue(AppointmentModel apt) {
+    if (apt.status == AppointmentStatus.overdue) return true;
+    final isPastDate = apt.date.compareTo(_formatDate(DateTime.now())) < 0;
+    return isPastDate &&
+        apt.status != AppointmentStatus.completed &&
+        apt.status != AppointmentStatus.cancelled &&
+        apt.status != AppointmentStatus.missed;
+  }
+
   bool _isFutureDate(AppointmentModel apt) {
     return apt.date.compareTo(_formatDate(DateTime.now())) > 0;
   }
@@ -1496,6 +1505,28 @@ class _AppointmentListScreenState
         'patientName': apt.displayName,
       },
     );
+    // Explicitly check and sync appointment status to completed if session was completed
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      final freshSessionRec = await pb.collection(PBCollections.sessions).getOne(session.id);
+      final freshSession = SessionModel.fromRecord(freshSessionRec);
+      if (freshSession.status == SessionStatus.completed) {
+        final now = DateTime.now().toUtc().toIso8601String();
+        await pb.collection(PBCollections.appointments).update(apt.id, body: {
+          'status': 'completed',
+          'check_out_time': now,
+          'patient_left_at': now,
+          'reconciliation_reason': 'late_entry',
+        });
+        ref.read(appointmentListProvider.notifier).updateOneAppointment(
+          apt.copyWith(
+            status: AppointmentStatus.completed,
+            checkOutTime: DateTime.now(),
+            reconciliationReason: 'late_entry',
+          ),
+        );
+      }
+    } catch (_) {}
     ref.read(appointmentListProvider.notifier).loadAppointments();
     _loadOverdueItems();
   }
@@ -1536,6 +1567,20 @@ class _AppointmentListScreenState
 
     try {
       final auth = ref.read(authProvider);
+      final pb = ref.read(pocketbaseProvider);
+
+      // Explicitly update appointment in PB
+      try {
+        await pb.collection(PBCollections.appointments).update(apt.id, body: {
+          'status': 'missed',
+        });
+      } catch (_) {}
+
+      // Optimistically update Riverpod list
+      ref.read(appointmentListProvider.notifier).updateOneAppointment(
+        apt.copyWith(status: AppointmentStatus.missed),
+      );
+
       final lifecycle = ref.read(sessionLifecycleServiceProvider);
       final newConsecutive = await lifecycle.confirmSessionMissed(
         session.id,
@@ -1568,6 +1613,8 @@ class _AppointmentListScreenState
       return;
     }
 
+    final bannerText = 'Clinic was closed — select a new date to reschedule Session ${session.sessionNumber} for "${apt.displayName}"';
+
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
@@ -1575,6 +1622,7 @@ class _AppointmentListScreenState
           doctorId: session.doctorId,
           clinicId: null,
           treatmentDuration: 30,
+          contextBannerText: bannerText,
         ),
       ),
     );
@@ -2260,25 +2308,65 @@ class _AppointmentListScreenState
                                   Builder(
                                     builder: (context) {
                                       final isPast = _selectedDate.isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day));
-                                      final arrivedCount = !isPast
-                                          ? ((consultations.where((a) => a.status == AppointmentStatus.waiting || a.status == AppointmentStatus.inProgress).length) +
-                                             (sessions.where((a) => a.status == AppointmentStatus.waiting || a.status == AppointmentStatus.inProgress).length))
+                                      final waitingCount = !isPast
+                                          ? ((consultations.where((a) => a.status == AppointmentStatus.waiting).length) +
+                                             (sessions.where((a) => a.status == AppointmentStatus.waiting).length))
+                                          : 0;
+                                      final inProgressCount = !isPast
+                                          ? ((consultations.where((a) => a.status == AppointmentStatus.inProgress).length) +
+                                             (sessions.where((a) => a.status == AppointmentStatus.inProgress).length))
                                           : 0;
                                       final completedCount = (consultations.where((a) => a.status == AppointmentStatus.completed).length) +
                                           (sessions.where((a) => a.status == AppointmentStatus.completed).length);
+                                      final overdueCount = (consultations.where((a) => _isOverdue(a)).length) +
+                                          (sessions.where((a) => _isOverdue(a)).length);
                                       final missedCount = (consultations.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length) +
                                           (sessions.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length);
-                                          
+                                      final cancelledCount = (consultations.where((a) => a.status == AppointmentStatus.cancelled).length) +
+                                          (sessions.where((a) => a.status == AppointmentStatus.cancelled).length);
+                                      final totalCount = consultations.length + sessions.length;
+
+                                      // Auto-reset filter if active category count drops to 0
+                                      final activeCount = _selectedListFilter == 'all'
+                                          ? totalCount
+                                          : _selectedListFilter == 'arrived'
+                                              ? waitingCount
+                                              : _selectedListFilter == 'in_progress'
+                                                  ? inProgressCount
+                                                  : _selectedListFilter == 'completed'
+                                                      ? completedCount
+                                                      : _selectedListFilter == 'overdue'
+                                                          ? overdueCount
+                                                          : _selectedListFilter == 'missed'
+                                                              ? missedCount
+                                                              : _selectedListFilter == 'cancelled'
+                                                                  ? cancelledCount
+                                                                  : 0;
+                                      if (_selectedListFilter != 'all' && activeCount == 0) {
+                                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                                          if (mounted && _selectedListFilter != 'all') {
+                                            setState(() => _selectedListFilter = 'all');
+                                          }
+                                        });
+                                      }
+
                                       final filterPills = Wrap(
                                         spacing: 6,
                                         runSpacing: 8,
                                         children: [
-                                          _filterTabItem('All', 'all', consultations.length + sessions.length),
-                                          _filterTabItem('Consultations', 'consultations', consultations.length, color: context.colors.info),
-                                          _filterTabItem('Sessions', 'sessions', sessions.length, color: context.colors.primary),
-                                          _filterTabItem('Arrived', 'arrived', arrivedCount, color: context.colors.warning),
-                                          _filterTabItem('Completed', 'completed', completedCount, color: context.colors.success),
-                                          _filterTabItem('Missed', 'missed', missedCount, color: context.colors.error),
+                                          _filterTabItem('All', 'all', totalCount),
+                                          if (waitingCount > 0)
+                                            _filterTabItem('Waiting', 'arrived', waitingCount, color: const Color(0xFFF59E0B)),
+                                          if (inProgressCount > 0)
+                                            _filterTabItem('In Progress', 'in_progress', inProgressCount, color: const Color(0xFF0284C7)),
+                                          if (completedCount > 0)
+                                            _filterTabItem('Completed', 'completed', completedCount, color: context.colors.success),
+                                          if (overdueCount > 0)
+                                            _filterTabItem('Overdue', 'overdue', overdueCount, color: const Color(0xFFDC2626)),
+                                          if (missedCount > 0)
+                                            _filterTabItem('Missed', 'missed', missedCount, color: context.colors.error),
+                                          if (cancelledCount > 0)
+                                            _filterTabItem('Cancelled', 'cancelled', cancelledCount, color: const Color(0xFFEF4444)),
                                         ],
                                       );
 
@@ -2554,20 +2642,56 @@ class _AppointmentListScreenState
                     if (consultations.isNotEmpty || sessions.isNotEmpty || _searchQuery.isNotEmpty) ...[
                       Builder(builder: (context) {
                         final isPast = _selectedDate.isBefore(DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day));
+                        final waitingCount = !isPast
+                            ? (consultations.where((a) => a.status == AppointmentStatus.waiting).length +
+                                sessions.where((a) => a.status == AppointmentStatus.waiting).length)
+                            : 0;
+                        final inProgressCount = !isPast
+                            ? (consultations.where((a) => a.status == AppointmentStatus.inProgress).length +
+                                sessions.where((a) => a.status == AppointmentStatus.inProgress).length)
+                            : 0;
+                        final completedCount = consultations.where((a) => a.status == AppointmentStatus.completed).length +
+                            sessions.where((a) => a.status == AppointmentStatus.completed).length;
+                        final overdueCount = consultations.where((a) => _isOverdue(a)).length +
+                            sessions.where((a) => _isOverdue(a)).length;
+                        final missedCount = consultations.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length +
+                            sessions.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length;
+                        final cancelledCount = consultations.where((a) => a.status == AppointmentStatus.cancelled).length +
+                            sessions.where((a) => a.status == AppointmentStatus.cancelled).length;
+                        final totalCount = consultations.length + sessions.length;
+
+                        // Auto-reset filter if active category count drops to 0
+                        final activeCount = _selectedListFilter == 'all'
+                            ? totalCount
+                            : _selectedListFilter == 'arrived'
+                                ? waitingCount
+                                : _selectedListFilter == 'in_progress'
+                                    ? inProgressCount
+                                    : _selectedListFilter == 'completed'
+                                        ? completedCount
+                                        : _selectedListFilter == 'overdue'
+                                            ? overdueCount
+                                            : _selectedListFilter == 'missed'
+                                                ? missedCount
+                                                : _selectedListFilter == 'cancelled'
+                                                    ? cancelledCount
+                                                    : 0;
+                        if (_selectedListFilter != 'all' && activeCount == 0) {
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted && _selectedListFilter != 'all') {
+                              setState(() => _selectedListFilter = 'all');
+                            }
+                          });
+                        }
+
                         return _buildMobileFilterChips(
-                          totalCount: consultations.length + sessions.length,
-                          waitingCount: !isPast
-                              ? (consultations.where((a) => a.status == AppointmentStatus.waiting).length +
-                                  sessions.where((a) => a.status == AppointmentStatus.waiting).length)
-                              : 0,
-                          inProgressCount: !isPast
-                              ? (consultations.where((a) => a.status == AppointmentStatus.inProgress).length +
-                                  sessions.where((a) => a.status == AppointmentStatus.inProgress).length)
-                              : 0,
-                          completedCount: consultations.where((a) => a.status == AppointmentStatus.completed).length +
-                              sessions.where((a) => a.status == AppointmentStatus.completed).length,
-                          missedCount: consultations.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length +
-                              sessions.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).length,
+                          totalCount: totalCount,
+                          waitingCount: waitingCount,
+                          inProgressCount: inProgressCount,
+                          completedCount: completedCount,
+                          overdueCount: overdueCount,
+                          missedCount: missedCount,
+                          cancelledCount: cancelledCount,
                         );
                       }),
                       const SizedBox(height: 10),
@@ -2727,7 +2851,9 @@ class _AppointmentListScreenState
     required int waitingCount,
     required int inProgressCount,
     required int completedCount,
+    required int overdueCount,
     required int missedCount,
+    required int cancelledCount,
   }) {
     final chips = <Map<String, dynamic>>[
       {'label': 'All', 'value': 'all', 'count': totalCount, 'color': context.colors.primary},
@@ -2737,8 +2863,12 @@ class _AppointmentListScreenState
         {'label': 'In Progress', 'value': 'in_progress', 'count': inProgressCount, 'color': const Color(0xFF0284C7)},
       if (completedCount > 0)
         {'label': 'Completed', 'value': 'completed', 'count': completedCount, 'color': context.colors.success},
+      if (overdueCount > 0)
+        {'label': 'Overdue', 'value': 'overdue', 'count': overdueCount, 'color': const Color(0xFFDC2626)},
       if (missedCount > 0)
         {'label': 'Missed', 'value': 'missed', 'count': missedCount, 'color': context.colors.error},
+      if (cancelledCount > 0)
+        {'label': 'Cancelled', 'value': 'cancelled', 'count': cancelledCount, 'color': const Color(0xFFEF4444)},
     ];
 
     return SizedBox(
@@ -3126,9 +3256,15 @@ class _AppointmentListScreenState
     } else if (_selectedListFilter == 'completed') {
       consultations = consultations.where((a) => a.status == AppointmentStatus.completed).toList();
       sessions = sessions.where((a) => a.status == AppointmentStatus.completed).toList();
+    } else if (_selectedListFilter == 'overdue') {
+      consultations = consultations.where((a) => _isOverdue(a)).toList();
+      sessions = sessions.where((a) => _isOverdue(a)).toList();
     } else if (_selectedListFilter == 'missed') {
       consultations = consultations.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).toList();
       sessions = sessions.where((a) => a.status == AppointmentStatus.missed || _isMissed(a)).toList();
+    } else if (_selectedListFilter == 'cancelled') {
+      consultations = consultations.where((a) => a.status == AppointmentStatus.cancelled).toList();
+      sessions = sessions.where((a) => a.status == AppointmentStatus.cancelled).toList();
     }
 
     if (_searchQuery.isNotEmpty) {
@@ -4176,9 +4312,13 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
   }
 
   Widget _buildCompletedContextBar(BuildContext context, AppointmentModel apt) {
+    final isLateFilled = apt.reconciliationReason == 'late_entry';
     final timeStr = apt.checkOutTime != null
         ? 'at ${DateFormat('h:mm a').format(apt.checkOutTime!.toLocal())}'
         : '';
+    final label = isLateFilled
+        ? 'Consultation completed · Filled afterwards'
+        : 'Consultation completed $timeStr';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -4188,11 +4328,15 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
       ),
       child: Row(
         children: [
-          Icon(Icons.check_circle_rounded, size: 14, color: context.colors.success),
+          Icon(
+            isLateFilled ? Icons.history_rounded : Icons.check_circle_rounded,
+            size: 14,
+            color: context.colors.success,
+          ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              'Consultation completed $timeStr',
+              label,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -5812,9 +5956,13 @@ class _SessionCardState extends ConsumerState<_SessionCard> with TickerProviderS
   }
 
   Widget _buildCompletedContextBar(BuildContext context, AppointmentModel apt) {
+    final isLateFilled = apt.reconciliationReason == 'late_entry';
     final timeStr = apt.checkOutTime != null
         ? 'at ${DateFormat('h:mm a').format(apt.checkOutTime!.toLocal())}'
         : '';
+    final label = isLateFilled
+        ? 'Session completed · Filled afterwards'
+        : 'Session completed $timeStr';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -5824,11 +5972,15 @@ class _SessionCardState extends ConsumerState<_SessionCard> with TickerProviderS
       ),
       child: Row(
         children: [
-          Icon(Icons.check_circle_rounded, size: 14, color: context.colors.success),
+          Icon(
+            isLateFilled ? Icons.history_rounded : Icons.check_circle_rounded,
+            size: 14,
+            color: context.colors.success,
+          ),
           const SizedBox(width: 6),
           Expanded(
             child: Text(
-              'Session completed $timeStr',
+              label,
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,

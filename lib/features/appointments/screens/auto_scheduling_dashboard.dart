@@ -12,7 +12,6 @@ import 'package:pms_app/features/appointments/models/appointment_model.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 import 'package:pms_app/features/treatments/providers/treatment_provider.dart';
 import 'package:pms_app/features/patients/models/patient_model.dart';
-import 'package:pms_app/features/patients/providers/patient_provider.dart';
 import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
 import 'package:pms_app/features/scheduling/screens/available_slots_screen.dart';
 import 'package:pms_app/features/treatments/widgets/cascade_preview_sheet.dart';
@@ -37,6 +36,7 @@ class AutoSchedulingDashboard extends ConsumerStatefulWidget {
   final List<AppointmentModel> overdueConsultations;
   final List<TreatmentPlanModel> manualReviewPlans;
   final VoidCallback onRefresh;
+  final int? initialTabIndex;
 
   const AutoSchedulingDashboard({
     super.key,
@@ -44,6 +44,7 @@ class AutoSchedulingDashboard extends ConsumerStatefulWidget {
     this.overdueConsultations = const [],
     this.manualReviewPlans = const [],
     required this.onRefresh,
+    this.initialTabIndex,
   });
 
   static Future<void> show(
@@ -55,6 +56,7 @@ class AutoSchedulingDashboard extends ConsumerStatefulWidget {
     // Legacy compat: old callers pass `plans` (TreatmentPlanModel list).
     // Those are routed to manualReviewPlans.
     List<TreatmentPlanModel>? plans,
+    int? initialTabIndex,
   }) async {
     notificationDismissed.value = true;
     AppToast.dismiss(context);
@@ -70,6 +72,7 @@ class AutoSchedulingDashboard extends ConsumerStatefulWidget {
           overdueConsultations: overdueConsultations,
           manualReviewPlans: plans ?? manualReviewPlans,
           onRefresh: onRefresh,
+          initialTabIndex: initialTabIndex,
         ),
       );
     } else {
@@ -81,6 +84,7 @@ class AutoSchedulingDashboard extends ConsumerStatefulWidget {
             overdueConsultations: overdueConsultations,
             manualReviewPlans: plans ?? manualReviewPlans,
             onRefresh: onRefresh,
+            initialTabIndex: initialTabIndex,
           ),
         ),
       );
@@ -117,9 +121,22 @@ class _AutoSchedulingDashboardState
     // We now have 3 potential tabs: Consultations, Sessions, Manual Review
     int tabCount = 2; // Consultations and Sessions
     if (_manualPlans.isNotEmpty) tabCount++;
+
+    // Smart default tab:
+    // 1. If no overdue consultations but overdue sessions exist -> Sessions tab (1)
+    // 2. If no consultations and no sessions, but manual review plans exist -> Manual Review tab (2)
+    // 3. If overdue consultations exist (only consultations, or both) -> Consultations tab (0)
+    int initialTab = widget.initialTabIndex ??
+        (_consultations.isEmpty && _sessions.isNotEmpty
+            ? 1
+            : (_consultations.isEmpty && _sessions.isEmpty && _manualPlans.isNotEmpty)
+                ? 2
+                : 0);
+    if (initialTab >= tabCount) initialTab = 0;
     
     _tabController = TabController(
       length: tabCount,
+      initialIndex: initialTab,
       vsync: this,
     );
   }
@@ -188,9 +205,6 @@ class _AutoSchedulingDashboardState
       ),
     );
     if (confirmed != true || !mounted) return;
-
-    // Capture the root navigator BEFORE popping the dialog
-    final nav = Navigator.of(context, rootNavigator: true);
 
     // Optimistically remove from list and refresh badge
     setState(() {
@@ -278,12 +292,18 @@ class _AutoSchedulingDashboardState
 
   Future<void> _onClinicClosed(SessionModel session) async {
     // 1. Pick Anchor Date & Time Slot
+    final patientName = (session.patientName != null && session.patientName!.isNotEmpty)
+        ? session.patientName!
+        : 'Patient';
+    final bannerText = 'Clinic was closed — select a new date to reschedule Session ${session.sessionNumber} for "$patientName"';
+
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (_) => AvailableSlotsScreen(
           doctorId: session.doctorId,
           treatmentDuration: 30,
+          contextBannerText: bannerText,
         ),
       ),
     );

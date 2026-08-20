@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:pms_app/core/services/scheduling_service.dart';
 import 'package:pms_app/features/scheduling/providers/scheduling_provider.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
@@ -19,6 +20,7 @@ class AvailableSlotsScreen extends ConsumerStatefulWidget {
   final DateTime? initialDate;
   final DateTime? minDate;
   final String? minTime;
+  final String? contextBannerText;
 
   const AvailableSlotsScreen({
     super.key,
@@ -31,6 +33,7 @@ class AvailableSlotsScreen extends ConsumerStatefulWidget {
     this.initialDate,
     this.minDate,
     this.minTime,
+    this.contextBannerText,
   });
 
   @override
@@ -143,6 +146,50 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
     } catch (_) {
       return 0;
     }
+  }
+
+  Widget _buildContextBanner(BuildContext context, String text, {bool isDesktop = false}) {
+    return Container(
+      margin: EdgeInsets.fromLTRB(isDesktop ? 0 : 20, 0, isDesktop ? 0 : 20, 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F5D4F).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFF0F5D4F).withValues(alpha: 0.20),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F5D4F).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.edit_calendar_rounded,
+              color: Color(0xFF0F5D4F),
+              size: 18,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF0F5D4F),
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   void _confirmSlot() {
@@ -383,6 +430,10 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           headerSection,
+                          if (widget.contextBannerText != null) ...[
+                            const SizedBox(height: 12),
+                            _buildContextBanner(context, widget.contextBannerText!, isDesktop: true),
+                          ],
                           const SizedBox(height: 24),
                           desktopBody,
                           if (_selectedSlot != null) ...[
@@ -441,7 +492,9 @@ class _AvailableSlotsScreenState extends ConsumerState<AvailableSlotsScreen>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       headerSection,
-                      const SizedBox(height: 14),
+                      if (widget.contextBannerText != null)
+                        _buildContextBanner(context, widget.contextBannerText!, isDesktop: false),
+                      const SizedBox(height: 10),
                       AnimatedCrossFade(
                         duration: const Duration(milliseconds: 280),
                         crossFadeState: _calendarExpanded
