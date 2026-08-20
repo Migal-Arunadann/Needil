@@ -183,6 +183,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  /// Cancel Google OAuth login flow (if user aborted or returned to app).
+  void cancelOAuth() {
+    _authService.cancelOAuth();
+    if (state.isLoading) {
+      state = state.copyWith(isLoading: false);
+    }
+  }
+
   /// Login with Google
   Future<void> loginWithGoogle() async {
     state = state.copyWith(isLoading: true, error: null, requiresGoogleRegistration: false);

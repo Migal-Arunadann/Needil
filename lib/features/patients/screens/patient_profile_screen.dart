@@ -2557,6 +2557,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     if (isDesktop) {
       final activeColor = _cardColor;
       return Container(
+        width: double.infinity,
         decoration: BoxDecoration(
           color: context.colors.cardBackground,
           borderRadius: BorderRadius.circular(20),
@@ -2577,6 +2578,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
           ],
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Tappable header
             GestureDetector(
@@ -2658,6 +2660,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
+      width: double.infinity,
       decoration: BoxDecoration(
         color: context.colors.surface,
         borderRadius: BorderRadius.circular(16),
@@ -2678,6 +2681,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── Tappable header ──
           GestureDetector(
@@ -2872,58 +2876,141 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   }
 
   Widget _buildNextSessionBadge() {
-    final upcomingList = _treatmentSessions.where(
-      (s) => _displayStatus(s) != SessionStatus.completed &&
-             _displayStatus(s) != SessionStatus.cancelled &&
-             _displayStatus(s) != SessionStatus.missed,
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // 1. Identify Overdue sessions (past date and not completed/cancelled/missed)
+    final overdueList = _treatmentSessions.where(
+      (s) => _displayStatus(s) == SessionStatus.overdue,
     ).toList();
 
-    if (upcomingList.isEmpty) return const SizedBox.shrink();
-    final nextSession = upcomingList.first;
+    // 2. Identify True Next/Upcoming sessions (today or future dates)
+    final upcomingList = _treatmentSessions.where((s) {
+      final status = _displayStatus(s);
+      if (status == SessionStatus.completed ||
+          status == SessionStatus.cancelled ||
+          status == SessionStatus.missed ||
+          status == SessionStatus.overdue) {
+        return false;
+      }
+      return true;
+    }).toList();
 
-    String dateFormatted = nextSession.scheduledDate;
-    final parsedDt = DateTime.tryParse(nextSession.scheduledDate);
-    if (parsedDt != null) {
-      dateFormatted = DateFormat('dd MMM yyyy').format(parsedDt.toLocal());
-    }
-    final timeFormatted = nextSession.scheduledTime != null && nextSession.scheduledTime!.isNotEmpty
-        ? ' · ${nextSession.scheduledTime}'
-        : '';
+    if (overdueList.isEmpty && upcomingList.isEmpty) return const SizedBox.shrink();
 
-    return Container(
-      margin: const EdgeInsets.only(top: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: context.colors.primary.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(
-          color: context.colors.primary.withValues(alpha: 0.22),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.event_available_rounded,
-            size: 13,
-            color: context.colors.primary,
-          ),
-          const SizedBox(width: 5),
-          Flexible(
-            child: Text(
-              'Next: Session ${nextSession.sessionNumber} · $dateFormatted$timeFormatted',
-              style: TextStyle(
-                color: context.colors.primary,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+    final badges = <Widget>[];
+
+    // Overdue badge (amber / warning)
+    if (overdueList.isNotEmpty) {
+      final firstOverdue = overdueList.first;
+      String overdueDate = firstOverdue.scheduledDate;
+      final parsed = DateTime.tryParse(firstOverdue.scheduledDate);
+      if (parsed != null) {
+        overdueDate = DateFormat('dd MMM yyyy').format(parsed.toLocal());
+      }
+      final overdueLabel = overdueList.length > 1
+          ? '${overdueList.length} Sessions Overdue (from $overdueDate)'
+          : 'Session ${firstOverdue.sessionNumber} Overdue · $overdueDate';
+
+      badges.add(
+        Container(
+          margin: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF59E0B).withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(
+              color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
+              width: 1,
             ),
           ),
-        ],
-      ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.warning_amber_rounded,
+                size: 13,
+                color: Color(0xFFD97706),
+              ),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  overdueLabel,
+                  style: const TextStyle(
+                    color: Color(0xFFD97706),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Next upcoming badge
+    if (upcomingList.isNotEmpty) {
+      final nextSession = upcomingList.first;
+      String dateFormatted = nextSession.scheduledDate;
+      final parsedDt = DateTime.tryParse(nextSession.scheduledDate);
+      if (parsedDt != null) {
+        final sessionDay = DateTime(parsedDt.toLocal().year, parsedDt.toLocal().month, parsedDt.toLocal().day);
+        final isToday = sessionDay.isAtSameMomentAs(today);
+        dateFormatted = isToday
+            ? 'Today · ${DateFormat('dd MMM yyyy').format(parsedDt.toLocal())}'
+            : DateFormat('dd MMM yyyy').format(parsedDt.toLocal());
+      }
+      final timeFormatted = nextSession.scheduledTime != null && nextSession.scheduledTime!.isNotEmpty
+          ? ' · ${nextSession.scheduledTime}'
+          : '';
+
+      badges.add(
+        Container(
+          margin: const EdgeInsets.only(top: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: context.colors.primary.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(7),
+            border: Border.all(
+              color: context.colors.primary.withValues(alpha: 0.22),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.event_available_rounded,
+                size: 13,
+                color: context.colors.primary,
+              ),
+              const SizedBox(width: 5),
+              Flexible(
+                child: Text(
+                  'Next: Session ${nextSession.sessionNumber} · $dateFormatted$timeFormatted',
+                  style: TextStyle(
+                    color: context.colors.primary,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (badges.length == 1) return badges.first;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: badges,
     );
   }
 
@@ -3052,7 +3139,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
           ? const EdgeInsets.fromLTRB(20, 16, 20, 12)
           : const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // ── Case 1: Form not yet filled → show Resume button ──
           if (_isOngoing && !_formFilled) ...[
@@ -3236,7 +3323,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
           ? const EdgeInsets.fromLTRB(20, 0, 20, 8)
           : const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Divider(height: 1, color: isDesktop ? context.colors.border : context.colors.border),
           const SizedBox(height: 12),

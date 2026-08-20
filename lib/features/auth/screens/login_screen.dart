@@ -25,7 +25,7 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> with WidgetsBindingObserver {
   final _formKey = GlobalKey<FormState>();
   final GlobalKey<NavigatorState> _nestedNavKey = GlobalKey<NavigatorState>();
   final _emailCtrl = TextEditingController();
@@ -35,17 +35,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscure = true;
   bool _rememberMe = true;
   bool _isCapsLockOn = false;
+  bool _isGoogleLoginActive = false;
+  bool _isEmailLoginActive = false;
 
   static const _bg = Color(0xFFF8F0EA);
   static const _surface = Color(0xFFFFFFFF);
   static const _primary = Color(0xFF0F5D4F);
   static const _textDark = Color(0xFF161616);
   static const _textMuted = Color(0xFF6F6F6F);
-  static const _border = Color(0xFFE8E6E2);
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _emailFocusNode.addListener(() => setState(() {}));
     _passwordFocusNode.addListener(() {
       if (_passwordFocusNode.hasFocus) {
@@ -64,12 +66,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
     _emailFocusNode.dispose();
     _passwordFocusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _isGoogleLoginActive) {
+      // If user came back to the app without completing Google auth in external browser
+      Future.delayed(const Duration(milliseconds: 1500), () {
+        if (mounted && _isGoogleLoginActive) {
+          final auth = ref.read(authProvider);
+          if (!auth.isAuthenticated && !auth.requiresGoogleRegistration) {
+            ref.read(authProvider.notifier).cancelOAuth();
+            setState(() {
+              _isGoogleLoginActive = false;
+            });
+          }
+        }
+      });
+    }
   }
 
   bool _handleKeyEvent(KeyEvent event) {
@@ -82,19 +103,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return false;
   }
 
-  void _login() {
+  void _login() async {
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
     TextInput.finishAutofillContext();
-    ref.read(authProvider.notifier).loginAny(
-          _emailCtrl.text.trim(),
-          _passwordCtrl.text.trim(),
-        );
+    setState(() => _isEmailLoginActive = true);
+    try {
+      await ref.read(authProvider.notifier).loginAny(
+            _emailCtrl.text.trim(),
+            _passwordCtrl.text.trim(),
+          );
+    } finally {
+      if (mounted) {
+        setState(() => _isEmailLoginActive = false);
+      }
+    }
   }
 
-  void _loginWithGoogle() {
+  void _loginWithGoogle() async {
     FocusScope.of(context).unfocus();
-    ref.read(authProvider.notifier).loginWithGoogle();
+    setState(() => _isGoogleLoginActive = true);
+    try {
+      await ref.read(authProvider.notifier).loginWithGoogle();
+    } finally {
+      if (mounted) {
+        setState(() => _isGoogleLoginActive = false);
+      }
+    }
   }
 
   void _showAccountExistsDialog() {
@@ -144,7 +179,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: isDesktop ? _bg : _surface,
       body: isDesktop
           ? Row(
               children: [
@@ -282,55 +317,71 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Widget _buildMobileLayout(AuthState authState) {
-    return SafeArea(
-      child: Container(
-        color: _bg,
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Card(
-                color: _surface,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: const BorderSide(color: _border),
+    return Container(
+      color: _surface,
+      child: Stack(
+        children: [
+          // Subtle ambient emerald mint glow at the top
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 220,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    const Color(0xFFE6F4F0).withValues(alpha: 0.85),
+                    const Color(0xFFF2FAF7).withValues(alpha: 0.4),
+                    Colors.white.withValues(alpha: 0.0),
+                  ],
+                  stops: const [0.0, 0.6, 1.0],
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      const SizedBox(height: 8),
                       Image.asset(
                         'assets/images/needil_logo_cropped.png',
-                        height: 28,
+                        height: 30,
                         fit: BoxFit.contain,
                       ),
                       const SizedBox(height: 6),
                       Text(
                         '— CLINIC MANAGEMENT —',
                         style: GoogleFonts.inter(
-                          fontSize: 8,
+                          fontSize: 8.5,
                           fontWeight: FontWeight.w600,
                           letterSpacing: 2,
                           color: _textMuted,
                         ),
                       ),
                       const SizedBox(height: 32),
-                      _buildForm(authState),
+                      _buildForm(authState, isMobile: true),
                     ],
                   ),
                 ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildForm(AuthState authState) {
+  Widget _buildForm(AuthState authState, {bool isMobile = false}) {
     return AutofillGroup(
       child: Form(
         key: _formKey,
@@ -338,29 +389,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            GestureDetector(
-              onLongPress: () => context.push('/superadmin/login'),
-              child: Text(
-                'Welcome Back',
-                style: GoogleFonts.cormorantGaramond(
-                  fontSize: 52,
-                  fontWeight: FontWeight.w700,
-                  color: _textDark,
-                  height: 0.95,
-                  letterSpacing: -0.5,
-                ),
+            Center(
+              child: Column(
+                children: [
+                  GestureDetector(
+                    onLongPress: () => context.push('/superadmin/login'),
+                    child: Text(
+                      'Welcome Back',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.cormorantGaramond(
+                        fontSize: isMobile ? 44 : 52,
+                        fontWeight: FontWeight.w700,
+                        color: _textDark,
+                        height: 1.0,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Sign in to continue managing your clinic',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w400,
+                      color: const Color(0xFF555555),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Sign in to continue managing your clinic',
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w400,
-                color: const Color(0xFF555555),
-              ),
-            ),
-            const SizedBox(height: 36),
+            const SizedBox(height: 32),
             _label('Email or Username'),
             const SizedBox(height: 8),
             _input(
@@ -373,7 +432,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               onFieldSubmitted: (_) => _passwordFocusNode.requestFocus(),
               validator: (v) => Validators.required(v, 'Username'),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 18),
             _label('Password'),
             const SizedBox(height: 8),
             _input(
@@ -436,10 +495,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 22),
             SizedBox(
               width: double.infinity,
-              height: 54,
+              height: 52,
               child: ElevatedButton(
                 onPressed: authState.isLoading ? null : _login,
                 style: ElevatedButton.styleFrom(
@@ -449,7 +508,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   elevation: 0,
                   shadowColor: _primary.withValues(alpha: 0.25),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ).copyWith(
                   elevation: WidgetStateProperty.resolveWith<double>((states) {
@@ -457,7 +516,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     return 0;
                   }),
                 ),
-                child: authState.isLoading
+                child: (_isEmailLoginActive && authState.isLoading)
                     ? const SizedBox(
                         width: 20,
                         height: 20,
@@ -496,7 +555,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
             const SizedBox(height: 20),
             SizedBox(
-              height: 54,
+              width: double.infinity,
+              height: 52,
               child: OutlinedButton(
                 onPressed: authState.isLoading ? null : _loginWithGoogle,
                 style: OutlinedButton.styleFrom(
@@ -505,7 +565,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   foregroundColor: _textDark,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                 ).copyWith(
@@ -521,25 +581,34 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     return const BorderSide(color: Color(0xFFE2E0D9), width: 1);
                   }),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CustomPaint(painter: _GoogleLogoPainter()),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Continue with Google',
-                      style: GoogleFonts.inter(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: _textDark,
+                child: (_isGoogleLoginActive && authState.isLoading)
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0F5D4F)),
+                        ),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CustomPaint(painter: _GoogleLogoPainter()),
+                          ),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Continue with Google',
+                            style: GoogleFonts.inter(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: _textDark,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
               ),
             ),
             const SizedBox(height: 24),
@@ -630,7 +699,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       text,
       style: GoogleFonts.inter(
         fontSize: 14,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w600,
         color: _textDark,
       ),
     );
@@ -653,7 +722,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       height: 52,
       decoration: BoxDecoration(
         color: isFocused ? Colors.white : const Color(0xFFFAFAFA),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isFocused ? _primary : const Color(0xFFE2E0D9),
           width: isFocused ? 1.5 : 1,
@@ -661,8 +730,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         boxShadow: isFocused
             ? [
                 BoxShadow(
-                  color: _primary.withValues(alpha: 0.06),
-                  blurRadius: 12,
+                  color: _primary.withValues(alpha: 0.08),
+                  blurRadius: 14,
                   spreadRadius: 2,
                   offset: const Offset(0, 4),
                 ),

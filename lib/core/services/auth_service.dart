@@ -157,6 +157,16 @@ class AuthService {
     }
   }
 
+  HttpServer? _currentOAuthServer;
+
+  /// Cancel any pending local OAuth server (e.g. if user returned to app without authenticating).
+  void cancelOAuth() {
+    try {
+      _currentOAuthServer?.close(force: true);
+    } catch (_) {}
+    _currentOAuthServer = null;
+  }
+
   /// Login as clinic.
 
   Future<Map<String, String>?> _runLocalOAuthServer() async {
@@ -166,6 +176,7 @@ class AuthService {
       final provider = authMethods.oauth2.providers.firstWhere((p) => p.name == 'google');
 
       server = await HttpServer.bind(InternetAddress.anyIPv4, 8080, shared: true);
+      _currentOAuthServer = server;
       final redirectUrl = 'http://localhost:8080/callback';
       final state = _generateUniqueId(16);
 
@@ -176,7 +187,10 @@ class AuthService {
 
       await launchUrl(finalAuthUrl, mode: LaunchMode.externalApplication);
 
-      final request = await server.first;
+      final request = await server.first.timeout(
+        const Duration(minutes: 2),
+        onTimeout: () => throw TimeoutException('Google authentication timed out or was cancelled.'),
+      );
       final query = request.uri.queryParameters;
 
       request.response
@@ -202,6 +216,7 @@ class AuthService {
 ''');
       await request.response.close();
       await server.close();
+      _currentOAuthServer = null;
 
       if (query['state'] != state || query['code'] == null) {
         return null;
@@ -214,6 +229,7 @@ class AuthService {
       };
     } catch (e) {
       await server?.close(force: true);
+      _currentOAuthServer = null;
       debugPrint('Local OAuth server error: $e');
       return null;
     }
