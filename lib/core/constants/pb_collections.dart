@@ -15,4 +15,6 @@ class PBCollections {
   // v2 scheduling
   static const String schedulingAuditLogs = 'scheduling_audit_logs';
   static const String schedulingExceptions = 'scheduling_exceptions';
+  static const String systemSettings = 'system_settings';
 }
+

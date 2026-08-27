@@ -122,6 +122,29 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
       }
 
+      // Staff (Doctor / Receptionist) Lockout: If clinic subscription expired & grace passed
+      if (auth.role == UserRole.doctor || auth.role == UserRole.receptionist) {
+        if (auth.clinic != null &&
+            !auth.clinic!.isSubscriptionActive &&
+            loc != '/subscription-locked') {
+          return '/subscription-locked';
+        }
+      }
+
+      // Receptionist Role Guard: Financials, Analytics, and Clinical Recording restricted
+      if (auth.role == UserRole.receptionist) {
+        if (loc == '/analytics' ||
+            loc.startsWith('/analytics') ||
+            loc == '/billing' ||
+            loc.startsWith('/billing') ||
+            loc == '/sessions/record' ||
+            loc.startsWith('/sessions/record') ||
+            loc == '/consultation' ||
+            loc.startsWith('/consultation')) {
+          return '/dashboard';
+        }
+      }
+
       // Logged in user hitting root or login -> redirect to /dashboard (Home)
       if (loc == '/' || loc == '/login') {
         return '/dashboard';

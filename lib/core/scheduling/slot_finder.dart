@@ -282,8 +282,8 @@ class SchedulingContextLoader {
       if (clinicId != null && clinicId.isNotEmpty) {
         // Clinic doctor: load doctor-specific AND clinic-wide exceptions
         exFilter =
-            '(doctor = "$doctorId" || (clinic = "$clinicId" && doctor = "")) '
-            '&& date >= "$today" && date <= "$ninetyDaysOut"';
+            '(doctor = "$doctorId" || (clinic = "$clinicId" && (doctor = "" || type = "holiday")))'
+            ' && date >= "$today" && date <= "$ninetyDaysOut"';
       } else {
         // Independent doctor: load only doctor-specific exceptions
         exFilter =

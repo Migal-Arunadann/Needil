@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -279,12 +278,7 @@ class DoctorDashboardScreen extends ConsumerWidget {
                   const SizedBox(height: 28),
 
                   if (stats.isLoading)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 60),
-                        child: CircularProgressIndicator(color: Color(0xFF3B82F6)),
-                      ),
-                    )
+                    DashboardSkeletonView(isDesktop: isDesktop, showBottomCards: false)
                   else if (isDesktop)
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -498,40 +492,40 @@ class DoctorDashboardScreen extends ConsumerWidget {
                 ),
               ),
             ],
-            child: isDesktop 
-              ? const _HeaderCTAButton()
-              : Container(
-                  height: 38,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2563EB),
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF2563EB).withValues(alpha: 0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.add_rounded, color: Colors.white, size: 16),
-                      const SizedBox(width: 6),
-                      Text(
-                        'New Appointment',
-                        style: context.textStyles.bodyMedium.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+              child: isDesktop 
+                ? const _HeaderCTAButton()
+                : Container(
+                    height: 38,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F5D4F),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF0F5D4F).withValues(alpha: 0.25),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
                         ),
-                      ),
-                      const SizedBox(width: 6),
-                      const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 16),
-                    ],
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          'New Appointment',
+                          style: context.textStyles.bodyMedium.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 16),
+                      ],
+                    ),
                   ),
-                ),
-          ),
+            ),
         ],
       ),
     );
@@ -556,59 +550,35 @@ class _HeaderCTAButtonState extends State<_HeaderCTAButton> {
       onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        transform: Matrix4.diagonal3Values(_isHovered ? 1.03 : 1.0, _isHovered ? 1.03 : 1.0, 1.0),
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          color: _isHovered ? const Color(0xFF136B5C) : const Color(0xFF0F5D4F),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF3B82F6).withValues(alpha: _isHovered ? 0.35 : 0.2),
-              blurRadius: _isHovered ? 20 : 16,
-              offset: const Offset(0, 4),
+              color: const Color(0xFF0F5D4F).withValues(alpha: _isHovered ? 0.25 : 0.15),
+              blurRadius: 8,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              height: 40,
-              padding: const EdgeInsets.symmetric(horizontal: 18),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFF60A5FA).withValues(alpha: _isHovered ? 0.4 : 0.3),
-                    const Color(0xFF1D4ED8).withValues(alpha: 0.15),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFF60A5FA).withValues(alpha: _isHovered ? 0.45 : 0.35),
-                  width: 1.0,
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'New Appointment',
-                    style: context.textStyles.bodyMedium.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 18),
-                ],
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.add_rounded, color: Colors.white, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              'New Appointment',
+              style: context.textStyles.bodyMedium.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
               ),
             ),
-          ),
+            const SizedBox(width: 8),
+            const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white70, size: 18),
+          ],
         ),
       ),
     );

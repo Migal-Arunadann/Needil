@@ -8,11 +8,15 @@ import 'package:pms_app/features/consultations/models/consultation_model.dart';
 import 'package:pms_app/core/services/session_lifecycle_service.dart';
 import 'package:pms_app/core/scheduling/treatment_scheduler.dart' show RescheduleMode;
 import 'package:pms_app/core/utils/validators.dart';
+import 'package:pms_app/core/services/audit_service.dart';
 
 class AppointmentService {
   final PocketBase pb;
+  late final AuditService _audit;
 
-  AppointmentService(this.pb);
+  AppointmentService(this.pb) {
+    _audit = AuditService(pb);
+  }
 
   Future<RecordModel?> _findSessionRecordForAppointment({
     required String patientId,
@@ -148,26 +152,44 @@ class AppointmentService {
     String? dateFilter,
   }) async {
     final date = dateFilter ?? _todayString();
+    
+    // Resolve all doctors under this clinic to match legacy appointments missing the clinic field
+    List<String> doctorIds = [];
+    try {
+      final docs = await pb.collection(PBCollections.doctors).getList(
+        filter: 'clinic = "$clinicId"',
+        fields: 'id',
+        perPage: 100,
+      );
+      doctorIds = docs.items.map((r) => r.id).toList();
+    } catch (_) {}
+
+    final List<String> ownerConditions = ['clinic = "$clinicId"'];
+    for (final docId in doctorIds) {
+      ownerConditions.add('doctor = "$docId"');
+    }
+    final ownerFilter = '(${ownerConditions.join(" || ")})';
+
     String filter;
     String sortOrder = 'time';
     if (date == 'all') {
-      filter = 'clinic = "$clinicId"';
+      filter = ownerFilter;
       sortOrder = 'date,time';
     } else if (date.startsWith('range:')) {
       final parts = date.substring(6).split(':');
       final start = parts[0];
       final end = parts[1];
-      filter = 'clinic = "$clinicId" && date >= "$start" && date <= "$end"';
+      filter = '$ownerFilter && date >= "$start" && date <= "$end"';
       sortOrder = 'date,time';
     } else {
-      filter = 'clinic = "$clinicId" && date = "$date"';
+      filter = '$ownerFilter && date = "$date"';
     }
 
     final result = await pb.collection(PBCollections.appointments).getList(
       filter: filter,
       sort: sortOrder,
       expand: 'patient,doctor',
-      perPage: 100,
+      perPage: 250,
     );
     return result.items.map((r) => AppointmentModel.fromRecord(r)).toList();
   }
@@ -291,6 +313,8 @@ class AppointmentService {
     String? emergencyContact,
     String? allergiesConditions,
     String? gender,
+    String? nationality,
+    String? foreignNumber,
     String? occupation,
     String? email,
     int? age,
@@ -362,6 +386,8 @@ class AppointmentService {
       if (allergiesConditions != null && allergiesConditions.isNotEmpty)
         'allergies_conditions': allergiesConditions,
       if (gender != null && gender.isNotEmpty) 'gender': gender,
+      if (nationality != null && nationality.isNotEmpty) 'nationality': nationality,
+      if (foreignNumber != null && foreignNumber.isNotEmpty) 'foreign_number': foreignNumber,
       if (occupation != null && occupation.isNotEmpty) 'occupation': occupation,
       if (email != null && email.isNotEmpty) 'email': email,
       if (age != null) 'age': age,
@@ -385,11 +411,21 @@ class AppointmentService {
         body: body,
         files: files,
       );
+      _audit.log(
+        action: AuditAction.createPatient,
+        targetId: record.id,
+        details: 'Created patient profile with photo',
+      );
       return PatientModel.fromRecord(record);
     }
 
     final record =
         await pb.collection(PBCollections.patients).create(body: body);
+    _audit.log(
+      action: AuditAction.createPatient,
+      targetId: record.id,
+      details: 'Created patient profile',
+    );
     return PatientModel.fromRecord(record);
   }
 
@@ -929,6 +965,11 @@ class AppointmentService {
         'consent_given': true,
       },
     );
+    _audit.log(
+      action: AuditAction.createConsultation,
+      targetId: record.id,
+      details: 'Started consultation for patient $patientId with doctor $doctorId',
+    );
     return ConsultationModel.fromRecord(record);
   }
 
@@ -944,11 +985,16 @@ class AppointmentService {
         'deleted_at': nowStr,
       },
     );
+    _audit.log(
+      action: AuditAction.updatePatient,
+      targetId: consultationId,
+      details: 'Deleted consultation $consultationId',
+    );
 
     // 2. Find and soft delete associated treatment plans
     try {
       final plans = await pb.collection(PBCollections.treatmentPlans).getList(
-        filter: 'consultation = "$consultationId" && is_deleted = false',
+        filter: 'consultation = "$consultationId"',
       );
       for (final plan in plans.items) {
         await pb.collection(PBCollections.treatmentPlans).update(
@@ -962,7 +1008,7 @@ class AppointmentService {
         // 3. Find and soft delete associated sessions for each plan
         try {
           final sessions = await pb.collection(PBCollections.sessions).getList(
-            filter: 'treatment_plan = "${plan.id}" && is_deleted = false',
+            filter: 'treatment_plan = "${plan.id}"',
           );
           for (final session in sessions.items) {
             await pb.collection(PBCollections.sessions).update(
@@ -980,7 +1026,7 @@ class AppointmentService {
     // 4. Find associated appointment and reset consultation_form_saved
     try {
       final apts = await pb.collection(PBCollections.appointments).getList(
-        filter: 'linked_consultation_id = "${consultationId}"',
+        filter: 'linked_consultation_id = "$consultationId"',
       );
       for (final apt in apts.items) {
         await pb.collection(PBCollections.appointments).update(
@@ -1007,7 +1053,7 @@ class AppointmentService {
     // 2. Find and restore associated treatment plans
     try {
       final plans = await pb.collection(PBCollections.treatmentPlans).getList(
-        filter: 'consultation = "$consultationId" && is_deleted = true',
+        filter: 'consultation = "$consultationId"',
       );
       for (final plan in plans.items) {
         await pb.collection(PBCollections.treatmentPlans).update(
@@ -1021,7 +1067,7 @@ class AppointmentService {
         // 3. Find and restore associated sessions for each plan
         try {
           final sessions = await pb.collection(PBCollections.sessions).getList(
-            filter: 'treatment_plan = "${plan.id}" && is_deleted = true',
+            filter: 'treatment_plan = "${plan.id}"',
           );
           for (final session in sessions.items) {
             await pb.collection(PBCollections.sessions).update(

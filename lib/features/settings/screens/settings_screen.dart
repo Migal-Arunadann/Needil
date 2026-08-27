@@ -22,6 +22,7 @@ import 'package:pms_app/core/theme/theme_provider.dart';
 import 'package:pms_app/core/widgets/responsive_wrapper.dart';
 import 'package:pms_app/core/utils/image_helper.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
+import 'package:pms_app/features/scheduling/screens/scheduling_exceptions_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -115,6 +116,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageDoctorsScreen())),
             ),
             _settingsNavTile(
+              icon: Icons.event_busy_rounded,
+              iconColor: context.colors.warning,
+              title: 'Doctor Leaves & Clinic Holidays',
+              subtitle: 'Mark doctor time-off, blockout slots, and clinic closures',
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SchedulingExceptionsScreen())),
+            ),
+            _settingsNavTile(
               icon: Icons.support_agent_rounded,
               iconColor: context.colors.info,
               title: 'Manage Receptionist',
@@ -142,6 +150,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 );
                 if (mounted) setState(() {});
               },
+            ),
+            _settingsNavTile(
+              icon: Icons.event_busy_rounded,
+              iconColor: context.colors.warning,
+              title: 'My Leaves & Holidays',
+              subtitle: 'Mark personal leaves, time-off, and view clinic holidays',
+              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SchedulingExceptionsScreen())),
             ),
           ]),
           SizedBox(height: secGap),
@@ -255,13 +270,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _buildMobileHero(isClinic, auth),
                   const SizedBox(height: 12),
 
-                  // ── Operational ribbon ──
-                  _buildOperationalRibbon(isClinic, auth),
-                  const SizedBox(height: 12),
+                  if (auth.role == UserRole.clinic || auth.role == UserRole.doctor) ...[
+                    // ── Operational ribbon ──
+                    _buildOperationalRibbon(isClinic, auth),
+                    const SizedBox(height: 12),
 
-                  // ── Completion bar ──
-                  _buildCompletionBar(isClinic),
-                  const SizedBox(height: 24),
+                    // ── Completion bar ──
+                    _buildCompletionBar(isClinic),
+                    const SizedBox(height: 24),
+                  ],
 
                   // ── Settings ──
                   _buildSettingsRightColumn(context, auth, isClinic),
@@ -355,10 +372,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   _buildWebHeroCard(isClinic, auth, isDark),
-                                  const SizedBox(height: 16),
-                                  _buildOperationalRibbon(isClinic, auth),
-                                  const SizedBox(height: 16),
-                                  _buildCompletionBar(isClinic),
+                                  if (auth.role == UserRole.clinic || auth.role == UserRole.doctor) ...[
+                                    const SizedBox(height: 16),
+                                    _buildOperationalRibbon(isClinic, auth),
+                                    const SizedBox(height: 16),
+                                    _buildCompletionBar(isClinic),
+                                  ],
                                 ],
                               ),
                             ),
@@ -387,13 +406,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // ════════════════════════════════════════════════════════════════════════
 
   Widget _buildWebHeroCard(bool isClinic, AuthState auth, bool isDark) {
+    final isReceptionist = auth.role == UserRole.receptionist;
     final name = _nameFor(isClinic, auth);
     final username = _usernameFor(isClinic, auth);
     final email = isClinic ? (auth.clinic?.email ?? '') : (auth.doctor?.email ?? '');
+    final phone = isClinic
+        ? (auth.clinic?.phone ?? '')
+        : (isReceptionist
+            ? (auth.receptionist?.phone ?? '')
+            : (auth.doctor?.phone ?? ''));
+    final contactText = email.isNotEmpty ? email : phone;
+    final contactIcon = email.isNotEmpty ? Icons.mail_outline_rounded : Icons.phone_outlined;
     final role = _roleFor(isClinic, auth);
     final isVerified = isClinic ? (auth.clinic?.verified ?? false) : (auth.doctor?.verified ?? false);
-    final imageUrl = isClinic ? auth.clinic?.logoUrl : auth.doctor?.photoUrl;
+    final imageUrl = isClinic
+        ? auth.clinic?.logoUrl
+        : (isReceptionist ? auth.receptionist?.photoUrl : auth.doctor?.photoUrl);
     final clinicId = auth.clinic?.clinicId;
+    final receptionistId = auth.receptionist?.receptionistId;
 
     return Container(
       decoration: BoxDecoration(
@@ -468,7 +498,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                       child: imageUrl == null || imageUrl.isEmpty
                           ? Icon(
-                              isClinic ? Icons.local_hospital_rounded : Icons.person_rounded,
+                              isClinic
+                                  ? Icons.local_hospital_rounded
+                                  : (isReceptionist ? Icons.support_agent_rounded : Icons.person_rounded),
                               color: context.colors.primary,
                               size: 32,
                             )
@@ -522,10 +554,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         '@$username',
                         style: context.textStyles.caption.copyWith(fontWeight: FontWeight.w500),
                       ),
-                      _VerifiedChip(
-                        isVerified: isVerified,
-                        onTap: isVerified ? null : _requestVerification,
-                      ),
+                      if (!isReceptionist)
+                        _VerifiedChip(
+                          isVerified: isVerified,
+                          onTap: isVerified ? null : _requestVerification,
+                        ),
                       if (isClinic && clinicId != null && clinicId.isNotEmpty)
                         InkWell(
                           borderRadius: BorderRadius.circular(6),
@@ -558,17 +591,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                           ),
                         ),
+                      if (isReceptionist && receptionistId != null && receptionistId.isNotEmpty)
+                        InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () {
+                            Clipboard.setData(ClipboardData(text: receptionistId));
+                            HapticFeedback.lightImpact();
+                            _showSuccess('Staff ID "$receptionistId" copied');
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: context.colors.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: context.colors.primary.withValues(alpha: 0.2)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'ID: $receptionistId',
+                                  style: TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: context.colors.primary,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(Icons.copy_rounded, size: 10, color: context.colors.primary),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
-                  if (email.isNotEmpty) ...[
+                  if (contactText.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Row(
                       children: [
-                        Icon(Icons.mail_outline_rounded, size: 13, color: context.colors.textHint),
+                        Icon(contactIcon, size: 13, color: context.colors.textHint),
                         const SizedBox(width: 5),
                         Flexible(
                           child: Text(
-                            email,
+                            contactText,
                             style: context.textStyles.caption,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -611,13 +676,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   // ════════════════════════════════════════════════════════════════════════
 
   Widget _buildMobileHero(bool isClinic, AuthState auth) {
+    final isReceptionist = auth.role == UserRole.receptionist;
     final name = _nameFor(isClinic, auth);
     final username = _usernameFor(isClinic, auth);
     final email = isClinic ? (auth.clinic?.email ?? '') : (auth.doctor?.email ?? '');
+    final phone = isClinic
+        ? (auth.clinic?.phone ?? '')
+        : (isReceptionist
+            ? (auth.receptionist?.phone ?? '')
+            : (auth.doctor?.phone ?? ''));
+    final contactText = email.isNotEmpty ? email : phone;
+    final contactIcon = email.isNotEmpty ? Icons.mail_outline_rounded : Icons.phone_outlined;
     final role = _roleFor(isClinic, auth);
     final isVerified = isClinic ? (auth.clinic?.verified ?? false) : (auth.doctor?.verified ?? false);
-    final imageUrl = isClinic ? auth.clinic?.logoUrl : auth.doctor?.photoUrl;
+    final imageUrl = isClinic
+        ? auth.clinic?.logoUrl
+        : (isReceptionist ? auth.receptionist?.photoUrl : auth.doctor?.photoUrl);
     final clinicId = auth.clinic?.clinicId;
+    final receptionistId = auth.receptionist?.receptionistId;
 
     return Container(
       decoration: BoxDecoration(
@@ -732,7 +808,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                         child: imageUrl == null || imageUrl.isEmpty
                             ? Icon(
-                                isClinic ? Icons.local_hospital_rounded : Icons.person_rounded,
+                                isClinic
+                                    ? Icons.local_hospital_rounded
+                                    : (isReceptionist ? Icons.support_agent_rounded : Icons.person_rounded),
                                 color: context.colors.primary,
                                 size: 28,
                               )
@@ -778,10 +856,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          _VerifiedChip(
-                            isVerified: isVerified,
-                            onTap: isVerified ? null : _requestVerification,
-                          ),
+                          if (!isReceptionist)
+                            _VerifiedChip(
+                              isVerified: isVerified,
+                              onTap: isVerified ? null : _requestVerification,
+                            ),
                         ],
                       ),
                       const SizedBox(height: 3),
@@ -829,17 +908,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 ),
                               ),
                             ),
+                          if (isReceptionist && receptionistId != null && receptionistId.isNotEmpty)
+                            InkWell(
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () {
+                                Clipboard.setData(ClipboardData(text: receptionistId));
+                                HapticFeedback.lightImpact();
+                                _showSuccess('Staff ID "$receptionistId" copied to clipboard');
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: context.colors.primary.withValues(alpha: 0.06),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: context.colors.primary.withValues(alpha: 0.15)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'ID: $receptionistId',
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: context.colors.primary,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Icon(Icons.copy_rounded, size: 10, color: context.colors.primary),
+                                  ],
+                                ),
+                              ),
+                            ),
                         ],
                       ),
-                      if (email.isNotEmpty) ...[
+                      if (contactText.isNotEmpty) ...[
                         const SizedBox(height: 5),
                         Row(
                           children: [
-                            Icon(Icons.mail_outline_rounded, size: 13, color: context.colors.textHint),
+                            Icon(contactIcon, size: 13, color: context.colors.textHint),
                             const SizedBox(width: 5),
                             Flexible(
                               child: Text(
-                                email,
+                                contactText,
                                 style: context.textStyles.caption.copyWith(
                                   color: context.colors.textSecondary,
                                   fontSize: 11.5,
@@ -1092,10 +1203,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget _buildReceptionistDetailsCard() {
     final receptionist = ref.read(authProvider).receptionist;
     return _infoCard([
-      _infoRow('Name',     receptionist?.name ?? '—'),
-      _infoRow('Username', receptionist?.username ?? '—'),
-      _infoRow('Staff ID', receptionist?.receptionistId ?? '—'),
-      _infoRow('Role',     'Receptionist'),
+      _infoRow('Name', receptionist?.name ?? '—'),
+      _infoRow('Username', '@${receptionist?.username ?? '—'}'),
+      _infoRow('Staff ID', receptionist?.receptionistId ?? '—', copyable: true),
+      _infoRow('Phone', receptionist?.phone?.isNotEmpty == true ? receptionist!.phone! : 'Not configured'),
+      _infoRow('Role', 'Front Desk / Receptionist'),
     ]);
   }
 
@@ -1881,7 +1993,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   String _roleFor(bool isClinic, AuthState auth) {
     if (isClinic) return 'Clinic Account';
-    if (auth.role == UserRole.receptionist) return 'Staff Account';
+    if (auth.role == UserRole.receptionist) return 'Receptionist';
     return 'Doctor Account';
   }
 

@@ -1,6 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pms_app/core/services/appointment_service.dart';
-import 'package:pms_app/core/constants/pb_collections.dart';
 import 'package:pms_app/features/appointments/models/appointment_model.dart';
 import 'package:pms_app/features/scheduling/providers/scheduling_provider.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
@@ -60,9 +59,10 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
       final filterDate = date ?? state.selectedDate;
       List<AppointmentModel> result;
 
-      if (_authState.role == UserRole.clinic && _authState.userId != null) {
+      final clinicId = _authState.clinicId;
+      if ((_authState.role == UserRole.clinic || _authState.role == UserRole.receptionist) && clinicId != null) {
         result = await _service.getClinicAppointments(
-          _authState.userId!,
+          clinicId,
           dateFilter: filterDate,
         );
       } else if (_authState.userId != null) {
@@ -187,6 +187,8 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
     String? allergiesConditions,
     String? chronicDiseases,
     String? gender,
+    String? nationality,
+    String? foreignNumber,
     String? occupation,
     String? email,
     int? age,
@@ -225,6 +227,8 @@ class AppointmentListNotifier extends StateNotifier<AppointmentListState> {
               ? [if (allergiesConditions != null && allergiesConditions.isNotEmpty) allergiesConditions, 'Chronic: $chronicDiseases'].join(' | ')
               : allergiesConditions,
           gender: gender,
+          nationality: nationality,
+          foreignNumber: foreignNumber,
           occupation: occupation,
           email: email,
           age: age,

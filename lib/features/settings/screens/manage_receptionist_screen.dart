@@ -138,7 +138,14 @@ class _ManageReceptionistScreenState extends ConsumerState<ManageReceptionistScr
 
   Future<void> _showActivityLog(Map<String, dynamic> rec) async {
     final auditService = ref.read(auditServiceProvider);
-    final logs = await auditService.getReceptionistLogs(rec['id'] as String);
+    final recId = rec['id'] as String? ?? '';
+    final shortId = rec['receptionist_id'] as String? ?? '';
+    final username = rec['username'] as String? ?? '';
+    final logs = await auditService.getReceptionistLogs(
+      recId,
+      fallbackId: shortId,
+      username: username,
+    );
     if (!mounted) return;
 
     showModalBottomSheet(

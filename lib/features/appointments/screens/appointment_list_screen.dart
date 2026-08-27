@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:pms_app/core/scheduling/treatment_scheduler.dart';
 import 'package:flutter/foundation.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
+import 'package:pms_app/core/widgets/app_error_view.dart';
+import 'package:pms_app/core/widgets/shimmer_effect.dart';
 import 'dart:ui';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +19,7 @@ import 'package:pms_app/features/auth/models/doctor_model.dart';
 import 'package:pms_app/core/services/scheduling_service.dart';
 import 'package:pms_app/features/scheduling/screens/available_slots_screen.dart';
 import 'package:pms_app/features/consultations/screens/consultation_screen.dart';
+import 'package:pms_app/features/consultations/models/consultation_model.dart';
 import 'package:pms_app/features/treatments/screens/create_treatment_plan_screen.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
 import 'package:pms_app/core/services/auth_service.dart';
@@ -292,7 +295,7 @@ class _AppointmentListScreenState
   /// Check if the clinic has multiple doctors (for showing doctor name on cards).
   Future<void> _checkMultipleDoctors() async {
     final auth = ref.read(authProvider);
-    if (auth.role != UserRole.clinic || auth.clinicId == null) return;
+    if ((auth.role != UserRole.clinic && auth.role != UserRole.receptionist) || auth.clinicId == null) return;
     try {
       final pb = ref.read(pocketbaseProvider);
       final docs = await pb.collection('doctors').getList(
@@ -335,11 +338,26 @@ class _AppointmentListScreenState
       final pb = ref.read(pocketbaseProvider);
       final auth = ref.read(authProvider);
       final userId = auth.userId;
-      if (userId == null || userId.isEmpty) return;
-
-      final filterPrefix = auth.role == UserRole.clinic
-          ? 'clinic = "$userId"'
-          : 'doctor = "$userId"';
+      final clinicId = auth.clinicId;
+      String filterPrefix;
+      if ((auth.role == UserRole.clinic || auth.role == UserRole.receptionist) && clinicId != null) {
+        List<String> docIds = [];
+        try {
+          final docs = await pb.collection('doctors').getList(
+            filter: 'clinic = "$clinicId"',
+            fields: 'id',
+            perPage: 100,
+          );
+          docIds = docs.items.map((r) => r.id).toList();
+        } catch (_) {}
+        final List<String> conditions = ['clinic = "$clinicId"'];
+        for (final d in docIds) {
+          conditions.add('doctor = "$d"');
+        }
+        filterPrefix = '(${conditions.join(" || ")})';
+      } else {
+        filterPrefix = 'doctor = "$userId"';
+      }
 
       final now = DateTime.now();
       final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
@@ -572,17 +590,15 @@ class _AppointmentListScreenState
       try {
         final service = ref.read(appointmentServiceProvider);
         await service.markArrived(apt.id);
-        // Audit log for receptionist actions
+        // Audit log
         final auth = ref.read(authProvider);
-        if (auth.role == UserRole.receptionist) {
-          ref.read(auditServiceProvider).log(
-            userId: auth.userId ?? '',
-            userRole: 'receptionist',
-            action: AuditAction.markArrived,
-            targetId: apt.id,
-            details: 'Marked ${apt.displayName} as arrived',
-          );
-        }
+        ref.read(auditServiceProvider).log(
+          userId: auth.userId,
+          userRole: auth.role?.name ?? '',
+          action: AuditAction.markArrived,
+          targetId: apt.id,
+          details: 'Marked ${apt.displayName} as arrived',
+        );
         if (mounted) {
           AppToast.show('${apt.displayName} marked as arrived ✓', type: ToastType.success);
         }
@@ -644,17 +660,15 @@ class _AppointmentListScreenState
       try {
         final service = ref.read(appointmentServiceProvider);
         await service.updateStatus(apt.id, AppointmentStatus.cancelled);
-        // Audit log for receptionist actions
+        // Audit log
         final auth = ref.read(authProvider);
-        if (auth.role == UserRole.receptionist) {
-          ref.read(auditServiceProvider).log(
-            userId: auth.userId ?? '',
-            userRole: 'receptionist',
-            action: AuditAction.cancelAppointment,
-            targetId: apt.id,
-            details: 'Cancelled appointment for ${apt.displayName}',
-          );
-        }
+        ref.read(auditServiceProvider).log(
+          userId: auth.userId,
+          userRole: auth.role?.name ?? '',
+          action: AuditAction.cancelAppointment,
+          targetId: apt.id,
+          details: 'Cancelled appointment for ${apt.displayName}',
+        );
         if (mounted) {
           AppToast.show('Appointment for ${apt.displayName} cancelled', type: ToastType.info);
         }
@@ -904,17 +918,15 @@ class _AppointmentListScreenState
     try {
       final service = ref.read(appointmentServiceProvider);
       await service.markSessionArrived(apt.id);
-      // Audit log for receptionist actions
+      // Audit log
       final auth = ref.read(authProvider);
-      if (auth.role == UserRole.receptionist) {
-        ref.read(auditServiceProvider).log(
-          userId: auth.userId ?? '',
-          userRole: 'receptionist',
-          action: AuditAction.markArrived,
-          targetId: apt.id,
-          details: 'Marked ${apt.displayName} session as arrived',
-        );
-      }
+      ref.read(auditServiceProvider).log(
+        userId: auth.userId,
+        userRole: auth.role?.name ?? '',
+        action: AuditAction.markArrived,
+        targetId: apt.id,
+        details: 'Marked ${apt.displayName} session as arrived',
+      );
       // Reset consecutive miss counter since patient showed up (fire-and-forget)
       if (apt.patientId != null && apt.patientId!.isNotEmpty) {
         () async {
@@ -1472,6 +1484,60 @@ class _AppointmentListScreenState
       return;
     }
 
+    final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
+    if (isReceptionist) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: context.colors.surface,
+          title: Text('Mark Patient Arrived', style: context.textStyles.h3),
+          content: Text(
+            'Mark Session ${session.sessionNumber} for ${apt.displayName} as arrived?\n\n'
+            'This will update the appointment status so the doctor can record the session.',
+            style: context.textStyles.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: context.colors.success),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Mark Arrived'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+
+      try {
+        final pb = ref.read(pocketbaseProvider);
+        await pb.collection(PBCollections.appointments).update(apt.id, body: {
+          'status': 'waiting',
+          'reconciliation_reason': 'arrived_retroactively',
+        });
+        await pb.collection(PBCollections.sessions).update(session.id, body: {
+          'status': 'waiting',
+        });
+        try {
+          await pb.collection(PBCollections.treatmentPlans).update(session.treatmentPlanId, body: {
+            'consecutive_misses': 0,
+          });
+        } catch (_) {}
+
+        if (mounted) {
+          AppToast.show('${apt.displayName} marked as arrived ✓ Waiting for doctor.', type: ToastType.success);
+        }
+      } catch (e) {
+        if (mounted) _showError('$e');
+      }
+      ref.read(appointmentListProvider.notifier).loadAppointments();
+      _loadOverdueItems();
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1681,6 +1747,340 @@ class _AppointmentListScreenState
       }
     } catch (e) {
       if (mounted) AppToast.show('Error: $e', type: ToastType.error);
+    }
+  }
+
+  Future<void> _handleConsultationOverdueCame(AppointmentModel apt) async {
+    final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
+
+    if (isReceptionist) {
+      if (!apt.isEffectivePatientDetailsSaved) {
+        if (!mounted) return;
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PatientInfoScreen(
+              appointment: apt,
+              allowSkipRetroactive: true,
+              onSkipRetroactive: () async {
+                try {
+                  final pb = ref.read(pocketbaseProvider);
+                  if (apt.patientId != null && apt.patientId!.isNotEmpty) {
+                    await pb.collection('patients').update(apt.patientId!, body: {'requires_patient_details_update': true});
+                  }
+                  await pb.collection(PBCollections.appointments).update(apt.id, body: {
+                    'status': 'waiting',
+                    'reconciliation_reason': 'arrived_retroactively',
+                  });
+                } catch (_) {}
+                if (mounted) {
+                  Navigator.pop(context);
+                  AppToast.show('${apt.displayName} marked as arrived ✓ Waiting for doctor.', type: ToastType.success);
+                  ref.read(appointmentListProvider.notifier).loadAppointments();
+                  _loadOverdueItems();
+                }
+              },
+            ),
+          ),
+        );
+        ref.read(appointmentListProvider.notifier).loadAppointments();
+        _loadOverdueItems();
+        return;
+      }
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: context.colors.surface,
+          title: Text('Mark Patient Arrived', style: context.textStyles.h3),
+          content: Text(
+            'Mark consultation for ${apt.displayName} as arrived?\n\n'
+            'This will update the appointment status so the doctor can record the consultation.',
+            style: context.textStyles.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: context.colors.success),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Mark Arrived'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+
+      try {
+        final pb = ref.read(pocketbaseProvider);
+        await pb.collection(PBCollections.appointments).update(apt.id, body: {
+          'status': 'waiting',
+          'reconciliation_reason': 'arrived_retroactively',
+        });
+        if (mounted) {
+          AppToast.show('${apt.displayName} marked as arrived ✓ Waiting for doctor.', type: ToastType.success);
+        }
+      } catch (e) {
+        if (mounted) _showError('$e');
+      }
+      ref.read(appointmentListProvider.notifier).loadAppointments();
+      _loadOverdueItems();
+      return;
+    }
+
+    // Doctor Flow
+    if (!apt.isEffectivePatientDetailsSaved) {
+      if (!mounted) return;
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PatientInfoScreen(
+            appointment: apt,
+            allowSkipRetroactive: true,
+            onSkipRetroactive: () async {
+              try {
+                final pb = ref.read(pocketbaseProvider);
+                if (apt.patientId != null && apt.patientId!.isNotEmpty) {
+                  await pb.collection('patients').update(apt.patientId!, body: {'requires_patient_details_update': true});
+                }
+              } catch (_) {}
+              if (mounted) {
+                Navigator.pop(context);
+              }
+            },
+          ),
+        ),
+      );
+    }
+
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      await pb.collection(PBCollections.appointments).update(apt.id, body: {
+        'status': 'in_progress',
+        'reconciliation_reason': 'arrived_retroactively',
+      });
+    } catch (_) {}
+
+    if (!mounted) return;
+    if (apt.patientId == null || apt.patientId!.isEmpty) return;
+
+    try {
+      final service = ref.read(appointmentServiceProvider);
+      final (consultationId, isNew) = await service.getOrCreateConsultationForAppointment(apt);
+      if (isNew || apt.consultationStartTime == null) {
+        service.setConsultationStartTime(apt.id);
+      }
+
+      if (!mounted) return;
+      final savedConsultation = await Navigator.push<ConsultationModel?>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ConsultationScreen(
+            patientId: apt.patientId!,
+            patientName: apt.displayName,
+            doctorId: apt.doctorId,
+            consultationId: consultationId,
+            appointmentId: apt.id,
+          ),
+        ),
+      );
+
+      ref.read(appointmentListProvider.notifier).loadAppointments();
+      _loadOverdueItems();
+
+      if (savedConsultation != null && mounted) {
+        final createPlan = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            backgroundColor: context.colors.surface,
+            title: Row(
+              children: [
+                Icon(Icons.check_circle_outline_rounded, color: context.colors.success, size: 22),
+                const SizedBox(width: 8),
+                Text('Consultation Saved', style: context.textStyles.h3),
+              ],
+            ),
+            content: Text(
+              'Would you like to create a treatment plan for ${apt.displayName} now?',
+              style: context.textStyles.bodyMedium,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: Text('Later', style: TextStyle(color: context.colors.textHint)),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: context.colors.primary),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Create Plan'),
+              ),
+            ],
+          ),
+        );
+
+        if (createPlan == true && mounted) {
+          await _navigateToCreatePlan(apt, savedConsultation.id);
+        }
+      }
+    } catch (e) {
+      if (mounted) _showError('Error opening consultation: $e');
+    }
+  }
+
+  Future<void> _handleConsultationOverdueMissed(AppointmentModel apt) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Confirm Missed Consultation', style: context.textStyles.h3),
+        content: Text(
+          'Mark consultation for ${apt.displayName} as missed on ${apt.date}?\n\n'
+          'This will update the appointment status to missed.',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: context.colors.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Confirm Miss'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      await pb.collection(PBCollections.appointments).update(apt.id, body: {
+        'status': 'missed',
+      });
+
+      ref.read(appointmentListProvider.notifier).updateOneAppointment(
+        apt.copyWith(status: AppointmentStatus.missed),
+      );
+
+      if (mounted) {
+        AppToast.show('Consultation marked as missed.', type: ToastType.info);
+        ref.read(appointmentListProvider.notifier).loadAppointments();
+        _loadOverdueItems();
+      }
+    } catch (e) {
+      if (mounted) _showError('Error marking consultation as missed: $e');
+    }
+  }
+
+  Future<void> _handleConsultationOverdueClosed(AppointmentModel apt) async {
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Row(
+          children: [
+            Icon(Icons.business_rounded, color: context.colors.textSecondary, size: 22),
+            const SizedBox(width: 8),
+            Text('Clinic Was Closed', style: context.textStyles.h3),
+          ],
+        ),
+        content: Text(
+          'The clinic was closed on ${apt.date} for ${apt.displayName}\'s consultation.\n\n'
+          'Would you like to reschedule it for another date or mark it as missed due to clinic closure?',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'cancel'),
+            child: Text('Cancel', style: TextStyle(color: context.colors.textHint)),
+          ),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, 'missed_closed'),
+            style: OutlinedButton.styleFrom(foregroundColor: context.colors.error),
+            child: const Text('Mark Missed (Clinic Closed)'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: context.colors.primary),
+            onPressed: () => Navigator.pop(ctx, 'reschedule'),
+            child: const Text('Reschedule Now'),
+          ),
+        ],
+      ),
+    );
+
+    if (choice == null || choice == 'cancel' || !mounted) return;
+
+    if (choice == 'missed_closed') {
+      try {
+        final pb = ref.read(pocketbaseProvider);
+        await pb.collection(PBCollections.appointments).update(apt.id, body: {
+          'status': 'missed',
+          'reconciliation_reason': 'clinic_closed',
+        });
+        ref.read(appointmentListProvider.notifier).updateOneAppointment(
+          apt.copyWith(
+            status: AppointmentStatus.missed,
+            reconciliationReason: 'clinic_closed',
+          ),
+        );
+        if (mounted) {
+          AppToast.show('Consultation marked as missed (clinic closed).', type: ToastType.info);
+          ref.read(appointmentListProvider.notifier).loadAppointments();
+          _loadOverdueItems();
+        }
+      } catch (e) {
+        if (mounted) _showError('Error: $e');
+      }
+      return;
+    }
+
+    if (choice == 'reschedule') {
+      final bannerText = 'Clinic was closed — select a new date to reschedule consultation for "${apt.displayName}"';
+      final result = await Navigator.push<Map<String, dynamic>>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AvailableSlotsScreen(
+            doctorId: apt.doctorId,
+            clinicId: (apt.clinicId != null && apt.clinicId!.isNotEmpty) ? apt.clinicId : null,
+            treatmentDuration: 30,
+            contextBannerText: bannerText,
+          ),
+        ),
+      );
+
+      if (result == null || !mounted) {
+        AppToast.show('No slot picked — consultation remains overdue.', type: ToastType.warning);
+        return;
+      }
+
+      final newDate = DateFormat('yyyy-MM-dd').format(result['date'] as DateTime);
+      final newTime = result['time'] as String;
+
+      try {
+        final service = ref.read(appointmentServiceProvider);
+        await service.rescheduleAppointment(apt.id, newDate, newTime);
+        final pb = ref.read(pocketbaseProvider);
+        try {
+          await pb.collection(PBCollections.appointments).update(apt.id, body: {
+            'reconciliation_reason': 'rescheduled_clinic_closed',
+          });
+        } catch (_) {}
+
+        if (mounted) {
+          AppToast.show('Consultation rescheduled to $newDate at ${TimeUtils.formatStringTime(newTime)} ✓', type: ToastType.success);
+          ref.read(appointmentListProvider.notifier).loadAppointments();
+          _loadOverdueItems();
+        }
+      } catch (e) {
+        if (mounted) _showError('Error rescheduling: $e');
+      }
     }
   }
 
@@ -2387,7 +2787,7 @@ class _AppointmentListScreenState
                                   const SizedBox(height: 16),
                                   Expanded(
                                     child: state.isLoading
-                                        ? Center(child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 3))
+                                        ? _buildAppointmentsSkeletonList(context, true)
                                         : state.error != null
                                             ? _errorView(state.error!)
                                             : (consultations.isEmpty && sessions.isEmpty)
@@ -2498,11 +2898,21 @@ class _AppointmentListScreenState
                     // ── Horizontal Date Strip ──
                     SizedBox(
                       height: 84,
-                      child: ListView.builder(
+                      child: ListView.separated(
                         controller: _dateScrollCtrl,
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         itemCount: _dates.length,
+                        separatorBuilder: (context, index) {
+                          return Center(
+                            child: Container(
+                              height: 36,
+                              width: 1,
+                              margin: const EdgeInsets.symmetric(horizontal: 4.5),
+                              color: context.colors.border.withValues(alpha: 0.5),
+                            ),
+                          );
+                        },
                         itemBuilder: (context, index) {
                           final d = _dates[index];
                           final isSelected = d.day == _selectedDate.day &&
@@ -2521,7 +2931,6 @@ class _AppointmentListScreenState
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
                               width: 68,
-                              margin: const EdgeInsets.only(right: 10),
                               decoration: BoxDecoration(
                                 color: isSelected ? context.colors.primary : Colors.transparent,
                                 borderRadius: BorderRadius.circular(16),
@@ -2701,7 +3110,7 @@ class _AppointmentListScreenState
                     Expanded(
                       child: RepaintBoundary(
                         child: state.isLoading
-                            ? Center(child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 3))
+                            ? _buildAppointmentsSkeletonList(context, false)
                             : state.error != null
                                 ? _errorView(state.error!)
                                 : (consultations.isEmpty && sessions.isEmpty && _searchQuery.isEmpty)
@@ -2796,6 +3205,9 @@ class _AppointmentListScreenState
                 onUndoArrived: () => _undoArrived(e.value),
                 onTap: () => _navigateToPatient(e.value),
                 onLongPress: () => _cancelAppointment(e.value),
+                onOverdueCame: () => _handleConsultationOverdueCame(e.value),
+                onOverdueMissed: () => _handleConsultationOverdueMissed(e.value),
+                onOverdueClosed: () => _handleConsultationOverdueClosed(e.value),
               ),
             ),
           ),
@@ -3035,23 +3447,9 @@ class _AppointmentListScreenState
   }
 
   Widget _errorView(String error) {
-    return Center(
-      child: Padding(
-        padding: EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline_rounded, size: 48, color: context.colors.error),
-            const SizedBox(height: 12),
-            Text(error, textAlign: TextAlign.center, style: context.textStyles.bodyMedium.copyWith(color: context.colors.textSecondary)),
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () => ref.read(appointmentListProvider.notifier).loadAppointments(),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
+    return AppErrorView(
+      error: error,
+      onRetry: () => ref.read(appointmentListProvider.notifier).loadAppointments(),
     );
   }
 
@@ -3240,6 +3638,94 @@ class _AppointmentListScreenState
     );
   }
 
+    Widget _buildAppointmentsSkeletonList(BuildContext context, bool isDesktop) {
+    return ListView.builder(
+      padding: isDesktop
+          ? const EdgeInsets.only(bottom: 100)
+          : const EdgeInsets.fromLTRB(20, 4, 20, 120),
+      itemCount: 6,
+      itemBuilder: (context, index) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: context.colors.cardBackground,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: context.colors.border.withValues(alpha: 0.6),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: context.colors.shadowColor.withValues(alpha: 0.02),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ShimmerEffect(
+              child: isDesktop
+                  ? Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const SkeletonBox(width: 65, height: 26, borderRadius: 8),
+                        const SizedBox(width: 16),
+                        const SkeletonCircle(size: 42),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              SkeletonBox(width: 150, height: 16, borderRadius: 4),
+                              SizedBox(height: 8),
+                              SkeletonBox(width: 220, height: 12, borderRadius: 4),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        const SkeletonBox(width: 100, height: 32, borderRadius: 8),
+                        const SizedBox(width: 16),
+                        const SkeletonBox(width: 110, height: 38, borderRadius: 10),
+                      ],
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: const [
+                            SkeletonBox(width: 70, height: 22, borderRadius: 6),
+                            SkeletonBox(width: 80, height: 22, borderRadius: 6),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            const SkeletonCircle(size: 40),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: const [
+                                  SkeletonBox(width: 140, height: 15, borderRadius: 4),
+                                  SizedBox(height: 6),
+                                  SkeletonBox(width: 100, height: 11, borderRadius: 3),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        const SkeletonBox(width: double.infinity, height: 38, borderRadius: 10),
+                      ],
+                    ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Widget _buildAppointmentsListFiltered(
     List<AppointmentModel> consultations,
     List<AppointmentModel> sessions,
@@ -3360,6 +3846,9 @@ class _AppointmentListScreenState
                   onUndoArrived: () => _undoArrived(e.value),
                   onTap: () => _navigateToPatient(e.value),
                   onLongPress: () => _cancelAppointment(e.value),
+                  onOverdueCame: () => _handleConsultationOverdueCame(e.value),
+                  onOverdueMissed: () => _handleConsultationOverdueMissed(e.value),
+                  onOverdueClosed: () => _handleConsultationOverdueClosed(e.value),
                 ),
               ),
             ),
@@ -3538,6 +4027,9 @@ class _ScheduleCard extends ConsumerStatefulWidget {
   final VoidCallback onUndoArrived;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
+  final VoidCallback onOverdueCame;
+  final VoidCallback onOverdueMissed;
+  final VoidCallback onOverdueClosed;
   final bool showDoctorName;
   final String? clinicLocation;
   final bool isHighlighted;
@@ -3559,6 +4051,9 @@ class _ScheduleCard extends ConsumerStatefulWidget {
     required this.onUndoArrived,
     required this.onTap,
     required this.onLongPress,
+    required this.onOverdueCame,
+    required this.onOverdueMissed,
+    required this.onOverdueClosed,
     this.showDoctorName = false,
     this.clinicLocation,
     this.isHighlighted = false,
@@ -3728,6 +4223,12 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
   }
 
   Widget _buildMiddleIndicator(BuildContext context, AppointmentModel apt, Color statusColor) {
+    final isCancelled = apt.status == AppointmentStatus.cancelled;
+    final isCompleted = apt.status == AppointmentStatus.completed;
+    final isPastDate = apt.date.compareTo(DateFormat('yyyy-MM-dd').format(DateTime.now())) < 0;
+    final isOverdue = apt.status == AppointmentStatus.overdue || (isPastDate && !isCompleted && !isCancelled && !widget.isMissed);
+    final hasArrived = apt.checkInTime != null || apt.status == AppointmentStatus.waiting || apt.status == AppointmentStatus.inProgress;
+
     if (widget.isMissed) {
       return _indicatorItem(
         context: context,
@@ -3739,7 +4240,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
           _handleRetroactiveEntry(apt);
         }),
       );
-    } else if (apt.status == AppointmentStatus.cancelled) {
+    } else if (isCancelled) {
       return _indicatorItem(
         context: context,
         icon: Icons.cancel_rounded,
@@ -3747,16 +4248,13 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
         title: 'Cancelled',
         subtitle: 'Appointment cancelled',
       );
-    } else if (apt.status == AppointmentStatus.overdue) {
+    } else if (isOverdue && !hasArrived) {
       return _indicatorItem(
         context: context,
         icon: Icons.error_outline_rounded,
         iconColor: context.colors.error,
         title: 'Overdue',
         subtitle: 'Action required',
-        action: _buildForgotDetailsButton(context, () {
-          _handleRetroactiveEntry(apt);
-        }),
       );
     } else if (widget.isLate && !widget.isMissed && apt.status == AppointmentStatus.scheduled) {
       final now = DateTime.now();
@@ -4010,7 +4508,12 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
     );
   }
 
-  Widget _buildContactButtons(BuildContext context, AppointmentModel apt) {
+  Widget _buildContactButtons(BuildContext context, AppointmentModel apt, {bool isCompact = false}) {
+    final size = isCompact ? 34.0 : 36.0;
+    final iconSize = isCompact ? 15.0 : 16.0;
+    final gap = isCompact ? 5.0 : 6.0;
+    final radius = isCompact ? 9.0 : 10.0;
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -4026,21 +4529,21 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
             clinicLocation: widget.clinicLocation,
           ),
           child: Container(
-            width: 36,
-            height: 36,
+            width: size,
+            height: size,
             decoration: BoxDecoration(
               color: const Color(0xFF25D366).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(radius),
               border: Border.all(
                 color: const Color(0xFF25D366).withValues(alpha: 0.35),
                 width: 1.2,
               ),
             ),
-            child: const Icon(Icons.chat_rounded,
-                color: Color(0xFF25D366), size: 16),
+            child: Icon(Icons.chat_rounded,
+                color: const Color(0xFF25D366), size: iconSize),
           ),
         ),
-        const SizedBox(width: 6),
+        SizedBox(width: gap),
         GestureDetector(
           onTap: () async {
             if (apt.effectivePhone == null || apt.effectivePhone!.isEmpty) return;
@@ -4056,18 +4559,18 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
             }
           },
           child: Container(
-            width: 36,
-            height: 36,
+            width: size,
+            height: size,
             decoration: BoxDecoration(
               color: const Color(0xFF00BFA5).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(radius),
               border: Border.all(
                 color: const Color(0xFF00BFA5).withValues(alpha: 0.35),
                 width: 1.2,
               ),
             ),
-            child: const Icon(Icons.phone_rounded,
-                color: Color(0xFF00BFA5), size: 16),
+            child: Icon(Icons.phone_rounded,
+                color: const Color(0xFF00BFA5), size: iconSize),
           ),
         ),
       ],
@@ -4146,6 +4649,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
 
   Widget _buildDesktopPrimaryAction({
     required BuildContext context,
+    required bool showOverdueActions,
     required bool effectiveShowPlanSection,
     required bool isCompleted,
     required bool showEndedBtn,
@@ -4160,6 +4664,48 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
     required IconData fillDetailsIcon,
     required String? consultationId,
   }) {
+    if (showOverdueActions) {
+      return Row(
+        children: [
+          Expanded(
+            child: _ActionButton(
+              label: 'Arrived',
+              icon: Icons.check_circle_rounded,
+              color: context.colors.success,
+              onTap: widget.onOverdueCame,
+              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+              fontSize: 11.5,
+              iconSize: 13.5,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Expanded(
+            child: _ActionButton(
+              label: 'Missed',
+              icon: Icons.cancel_rounded,
+              color: context.colors.error,
+              onTap: widget.onOverdueMissed,
+              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+              fontSize: 11.5,
+              iconSize: 13.5,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Expanded(
+            child: _ActionButton(
+              label: 'Closed',
+              icon: Icons.business_rounded,
+              color: context.colors.textSecondary,
+              onTap: widget.onOverdueClosed,
+              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
+              fontSize: 11.5,
+              iconSize: 13.5,
+            ),
+          ),
+        ],
+      );
+    }
+
     final buttons = <Widget>[];
 
     if (effectiveShowPlanSection && !isCompleted) {
@@ -4254,16 +4800,19 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
   Widget _buildWaitingContextBar(BuildContext context, AppointmentModel apt) {
     final checkIn = apt.checkInTime?.toLocal();
     final now = DateTime.now();
-    final isPast = checkIn != null && (checkIn.year < now.year || checkIn.month < now.month || checkIn.day < now.day);
+    final isPastDate = apt.date.compareTo(DateFormat('yyyy-MM-dd').format(now)) < 0;
+    final isPast = (checkIn != null && (checkIn.year < now.year || checkIn.month < now.month || checkIn.day < now.day)) || isPastDate;
+    final isRetroactiveOverdue = isPast || apt.status == AppointmentStatus.overdue || apt.reconciliationReason == 'arrived_retroactively';
+    final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
 
     final diff = checkIn != null ? now.difference(checkIn).inMinutes : 0;
-    final isOverdue = isPast || diff >= 30;
+    final isOverdue = isRetroactiveOverdue || diff >= 30;
 
     String bannerText;
-    if (isPast) {
-      final dateStr = DateFormat('MMM d').format(checkIn);
-      final timeStr = DateFormat('h:mm a').format(checkIn);
-      bannerText = 'Checked in at $timeStr ($dateStr) · Uncompleted session';
+    if (isRetroactiveOverdue) {
+      bannerText = isReceptionist
+          ? 'Waiting for the doctor to fill the consultation form'
+          : 'Patient attended · Pending consultation form completion';
     } else {
       final waitText = diff <= 0
           ? 'Just checked in'
@@ -4418,6 +4967,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
 
   Widget _buildMobileHeroAction({
     required BuildContext context,
+    required bool showOverdueActions,
     required bool effectiveShowPlanSection,
     required bool isCompleted,
     required bool showEndedBtn,
@@ -4433,6 +4983,47 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
     required IconData fillDetailsIcon,
     required String? consultationId,
   }) {
+    if (showOverdueActions) {
+      return Row(
+        children: [
+          Expanded(
+            child: _ActionButton(
+              label: 'Arrived',
+              icon: Icons.check_circle_rounded,
+              color: context.colors.success,
+              onTap: widget.onOverdueCame,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              fontSize: 11,
+              iconSize: 13,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Expanded(
+            child: _ActionButton(
+              label: 'Missed',
+              icon: Icons.cancel_rounded,
+              color: context.colors.error,
+              onTap: widget.onOverdueMissed,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              fontSize: 11,
+              iconSize: 13,
+            ),
+          ),
+          const SizedBox(width: 5),
+          Expanded(
+            child: _ActionButton(
+              label: 'Closed',
+              icon: Icons.business_rounded,
+              color: context.colors.textSecondary,
+              onTap: widget.onOverdueClosed,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+              fontSize: 11,
+              iconSize: 13,
+            ),
+          ),
+        ],
+      );
+    }
     if (showArrivedBtn) {
       return _ActionButton(
         label: 'Patient Arrived',
@@ -4525,20 +5116,47 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
   @override
   Widget build(BuildContext context) {
     final apt = widget.apt;
+    final width = MediaQuery.sizeOf(context).width;
+    final isDesktop = width >= 900.0;
 
-    Color statusColor = context.colors.success;
-    String statusStr = 'Completed';
-    IconData statusIcon = Icons.check_circle_rounded;
+    final isScheduled = apt.status == AppointmentStatus.scheduled;
+    final isWaiting = apt.status == AppointmentStatus.waiting;
+    final isInProgress = apt.status == AppointmentStatus.inProgress;
+    final isCancelled = apt.status == AppointmentStatus.cancelled;
+    final isCompleted = apt.status == AppointmentStatus.completed;
+    final isPastDate = apt.date.compareTo(DateFormat('yyyy-MM-dd').format(DateTime.now())) < 0;
+    final isOverdue = apt.status == AppointmentStatus.overdue || (isPastDate && !isCompleted && !isCancelled && !widget.isMissed);
+
+    const kWaiting = Color(0xFFF59E0B);
+    Color statusColor;
+    String statusStr;
+    IconData statusIcon;
 
     if (widget.isMissed) {
       statusColor = context.colors.error; statusStr = 'Missed'; statusIcon = Icons.event_busy_rounded;
-    } else if (apt.status == AppointmentStatus.cancelled) {
+    } else if (isCancelled) {
       statusColor = context.colors.error; statusStr = 'Cancelled'; statusIcon = Icons.cancel_rounded;
-    } else if (apt.status == AppointmentStatus.inProgress) {
+    } else if (isCompleted) {
+      statusColor = context.colors.success; statusStr = 'Completed'; statusIcon = Icons.check_circle_rounded;
+    } else if (isOverdue) {
+      if (isWaiting) {
+        statusColor = kWaiting;
+        statusStr = isDesktop ? 'Overdue (Waiting)' : 'Overdue';
+        statusIcon = Icons.hourglass_empty_rounded;
+      } else if (isInProgress) {
+        statusColor = context.colors.warning;
+        statusStr = isDesktop ? 'Overdue (In Progress)' : 'Overdue';
+        statusIcon = Icons.sync_rounded;
+      } else {
+        statusColor = context.colors.error;
+        statusStr = 'Overdue';
+        statusIcon = Icons.error_outline_rounded;
+      }
+    } else if (isInProgress) {
       statusColor = context.colors.warning; statusStr = 'In Progress'; statusIcon = Icons.sync_rounded;
-    } else if (apt.status == AppointmentStatus.waiting) {
-      statusColor = const Color(0xFFF59E0B); statusStr = 'Waiting'; statusIcon = Icons.hourglass_empty_rounded;
-    } else if (apt.status == AppointmentStatus.scheduled) {
+    } else if (isWaiting) {
+      statusColor = kWaiting; statusStr = 'Waiting'; statusIcon = Icons.hourglass_empty_rounded;
+    } else {
       statusColor = const Color(0xFF7C3AED); statusStr = 'Scheduled'; statusIcon = Icons.access_time_filled;
     }
 
@@ -4547,16 +5165,16 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
     final typeLabel = isCallBy ? 'Call-By' : 'Walk-In';
     final typeIcon = isCallBy ? Icons.event_note_rounded : Icons.directions_walk_rounded;
 
-    final isScheduled = apt.status == AppointmentStatus.scheduled;
-    final isWaiting = apt.status == AppointmentStatus.waiting;
-    final isInProgress = apt.status == AppointmentStatus.inProgress;
     // Treat waiting + inProgress together as the "active" post-arrival state
     final isActive = isWaiting || isInProgress;
     final hasPatientLinked = apt.patientId != null && apt.patientId!.isNotEmpty;
+    final hasArrived = apt.checkInTime != null || isActive;
+    final isUnconfirmedOverdue = isOverdue && !hasArrived && !widget.isMissed && apt.status != AppointmentStatus.cancelled && !isCompleted;
+    final showOverdueActions = isUnconfirmedOverdue;
 
     // Step 1: Patient Arrived
-    final showArrivedBtn = isScheduled && !widget.isFutureDate && !widget.isMissed;
-    final showRescheduleBtn = isScheduled && (widget.isFutureDate || !widget.isMissed) || widget.isMissed && !isInProgress;
+    final showArrivedBtn = isScheduled && !widget.isFutureDate && !widget.isMissed && !isOverdue;
+    final showRescheduleBtn = !isOverdue && (isScheduled && (widget.isFutureDate || !widget.isMissed) || widget.isMissed && !isInProgress);
 
     final effectivePatientDetailsSaved = apt.isEffectivePatientDetailsSaved;
 
@@ -4569,18 +5187,23 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
         ? Icons.edit_note_rounded
         : Icons.badge_rounded;
 
+    final isRetroactiveOverdue = (isOverdue || isPastDate);
 
     // Step 3: Start/Resume Consultation
     final showStartConsultationBtn = isActive &&
         hasPatientLinked &&
         effectivePatientDetailsSaved &&
         !apt.consultationFormSaved;
-    final consultationLabel = apt.consultationStartTime != null && !apt.consultationFormSaved
-        ? 'Resume Consult'
-        : 'Start Consult';
-    final consultationIcon = apt.consultationStartTime != null && !apt.consultationFormSaved
-        ? Icons.arrow_forward_rounded
-        : Icons.medical_services_rounded;
+    final consultationLabel = isRetroactiveOverdue
+        ? 'Patient Came, Fill the Consultation Form'
+        : (apt.consultationStartTime != null && !apt.consultationFormSaved
+            ? 'Resume Consult'
+            : 'Start Consult');
+    final consultationIcon = isRetroactiveOverdue
+        ? Icons.edit_note_rounded
+        : (apt.consultationStartTime != null && !apt.consultationFormSaved
+            ? Icons.arrow_forward_rounded
+            : Icons.medical_services_rounded);
 
     // Show Create Plan if: consultation form is done, no plan linked yet, and
     // either we haven't loaded yet OR we loaded and confirmed no plan exists.
@@ -4595,7 +5218,6 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
     final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
     final effectiveShowStartConsultation = showStartConsultationBtn && !isReceptionist;
     final effectiveShowPlanSection = showPlanSection && !isReceptionist;
-    final isCompleted = apt.status == AppointmentStatus.completed;
     final showEndedBtn = apt.consultationFormSaved && !isReceptionist && !isCompleted && !isWaiting;
 
     // Left accent color
@@ -4608,13 +5230,10 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
                 : statusColor;
 
     final showEndedLabel = isCompleted && apt.consultationFormSaved && !isReceptionist;
-    final hasActions = showArrivedBtn || showRescheduleBtn || showFillDetailsBtn ||
+    final hasActions = showOverdueActions || showArrivedBtn || showRescheduleBtn || showFillDetailsBtn ||
         effectiveShowStartConsultation || effectiveShowPlanSection || showEndedBtn || showEndedLabel;
     
-    final hasPrimaryActions = effectiveShowPlanSection || showEndedBtn || effectiveShowStartConsultation || showFillDetailsBtn || showArrivedBtn;
-
-    final width = MediaQuery.sizeOf(context).width;
-    final isDesktop = width >= 900.0;
+    final hasPrimaryActions = showOverdueActions || effectiveShowPlanSection || showEndedBtn || effectiveShowStartConsultation || showFillDetailsBtn || showArrivedBtn;
 
     return FadeTransition(
       opacity: _fade,
@@ -4776,11 +5395,23 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
                                                 crossAxisAlignment: CrossAxisAlignment.start,
                                                 mainAxisAlignment: MainAxisAlignment.center,
                                                 children: [
-                                                  Text(
-                                                    _toTitleCase(apt.displayName),
-                                                    style: context.textStyles.h3.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                  Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                                    children: [
+                                                      Flexible(
+                                                        child: Text(
+                                                          _toTitleCase(apt.displayName),
+                                                          style: context.textStyles.h3.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      ),
+                                                      if (apt.ageGenderDisplay != null) ...[
+                                                        const SizedBox(width: 6),
+                                                        _AgeGenderBadge(text: apt.ageGenderDisplay!, isCompact: true),
+                                                      ],
+                                                    ],
                                                   ),
                                                   if (widget.showDoctorName && apt.doctorName != null && apt.doctorName!.isNotEmpty) ...[
                                                     const SizedBox(height: 3),
@@ -4804,7 +5435,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
                                                     spacing: 6,
                                                     runSpacing: 4,
                                                     children: [
-                                                      if (apt.status != AppointmentStatus.scheduled)
+                                                      if (apt.status != AppointmentStatus.scheduled || isOverdue)
                                                         _Pill(label: statusStr, icon: statusIcon, color: statusColor),
                                                       _Pill(label: typeLabel, icon: typeIcon, color: typeColor),
                                                       if (apt.isRescheduled)
@@ -4854,8 +5485,8 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
                                                       mainAxisAlignment: MainAxisAlignment.center,
                                                       children: [
                                                         if (apt.effectivePhone != null && apt.effectivePhone!.isNotEmpty) ...[
-                                                          _buildContactButtons(context, apt),
-                                                          const SizedBox(width: 6),
+                                                          _buildContactButtons(context, apt, isCompact: showOverdueActions),
+                                                          SizedBox(width: showOverdueActions ? 5 : 6),
                                                         ],
                                                         _buildDesktopSecondaryActions(
                                                           context: context,
@@ -4869,6 +5500,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
                                                       const SizedBox(height: 8),
                                                       _buildDesktopPrimaryAction(
                                                         context: context,
+                                                        showOverdueActions: showOverdueActions,
                                                         effectiveShowPlanSection: effectiveShowPlanSection,
                                                         isCompleted: apt.status == AppointmentStatus.completed,
                                                         showEndedBtn: showEndedBtn,
@@ -4892,6 +5524,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
                                                           Expanded(
                                                             child: _buildDesktopPrimaryAction(
                                                               context: context,
+                                                              showOverdueActions: showOverdueActions,
                                                               effectiveShowPlanSection: effectiveShowPlanSection,
                                                               isCompleted: apt.status == AppointmentStatus.completed,
                                                               showEndedBtn: showEndedBtn,
@@ -4993,14 +5626,25 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
 
                                      // ── Zone 1: Patient Name Headline (Spacious & Uncramped) ──
                                      const SizedBox(height: 6),
-                                     MarqueeText(
-                                       text: _toTitleCase(apt.displayName),
-                                       style: context.textStyles.h3.copyWith(
-                                         fontSize: 16.0,
-                                         fontWeight: FontWeight.w700,
-                                         color: context.colors.textPrimary,
-                                       ),
-                                     ),
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.center,
+                                        children: [
+                                          Flexible(
+                                            child: MarqueeText(
+                                              text: _toTitleCase(apt.displayName),
+                                              style: context.textStyles.h3.copyWith(
+                                                fontSize: 16.0,
+                                                fontWeight: FontWeight.w700,
+                                                color: context.colors.textPrimary,
+                                              ),
+                                            ),
+                                          ),
+                                          if (apt.ageGenderDisplay != null) ...[
+                                            const SizedBox(width: 6),
+                                            _AgeGenderBadge(text: apt.ageGenderDisplay!),
+                                          ],
+                                        ],
+                                      ),
 
                                      // ── Zone 1: Subtitle Row (Status Pill, Doctor Name, Rescheduled) ──
                                      const SizedBox(height: 6),
@@ -5027,7 +5671,7 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
                                      ),
 
                                     // ── Zone 2: Dynamic Live Context Strip ──
-                                    if (isWaiting && apt.checkInTime != null) ...[
+                                    if (isWaiting) ...[
                                       const SizedBox(height: 8),
                                       _buildWaitingContextBar(context, apt),
                                     ],
@@ -5122,12 +5766,13 @@ class _ScheduleCardState extends ConsumerState<_ScheduleCard> with TickerProvide
                                                 !isActive &&
                                                 !isCompleted &&
                                                 apt.status != AppointmentStatus.cancelled) ...[
-                                              _buildContactButtons(context, apt),
-                                              const SizedBox(width: 8),
+                                              _buildContactButtons(context, apt, isCompact: showOverdueActions),
+                                              SizedBox(width: showOverdueActions ? 5 : 8),
                                             ],
                                             Expanded(
                                               child: _buildMobileHeroAction(
                                                 context: context,
+                                                showOverdueActions: showOverdueActions,
                                                 effectiveShowPlanSection: effectiveShowPlanSection,
                                                 isCompleted: isCompleted,
                                                 showEndedBtn: showEndedBtn,
@@ -5402,6 +6047,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with TickerProviderS
   Widget _buildSessionStatus(BuildContext context, AppointmentModel apt, bool isCompleted) {
     final isPastDate = apt.date.compareTo(DateFormat('yyyy-MM-dd').format(DateTime.now())) < 0;
     final isOverdue = apt.status == AppointmentStatus.overdue || (isPastDate && !isCompleted && apt.status != AppointmentStatus.cancelled && !widget.isMissed);
+    final hasArrived = apt.checkInTime != null || apt.status == AppointmentStatus.waiting || apt.status == AppointmentStatus.inProgress;
 
     if (widget.isMissed) {
       return _indicatorItem(
@@ -5422,7 +6068,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with TickerProviderS
         title: 'Cancelled',
         subtitle: 'Session cancelled',
       );
-    } else if (isOverdue) {
+    } else if (isOverdue && !hasArrived) {
       return _indicatorItem(
         context: context,
         icon: Icons.error_outline_rounded,
@@ -5738,44 +6384,73 @@ class _SessionCardState extends ConsumerState<_SessionCard> with TickerProviderS
     }
 
     if (showStartBtn) {
-      if (apt.checkInTime != null) {
-        buttons.add(_ActionButton(
-          label: 'Undo Arrival',
-          icon: Icons.undo_rounded,
-          color: context.colors.textSecondary,
-          onTap: widget.onUndoArrived,
-          isSolid: false,
-        ));
-      }
       final isRetroactiveOverdue = (isOverdue || isPastDate);
       final needsDetails = !apt.isEffectivePatientDetailsSaved;
-
-      String actionLabel;
-      IconData actionIcon;
-      VoidCallback actionTap;
+      final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
 
       if (isRetroactiveOverdue) {
-        actionLabel = 'Fill Out Details';
-        actionIcon = Icons.edit_note_rounded;
-        actionTap = () => _handleRetroactiveEntry(apt);
-      } else if (needsDetails) {
-        actionLabel = 'Fill Patient Details';
-        actionIcon = Icons.badge_rounded;
-        actionTap = () => _handleRetroactiveEntry(apt);
+        if (isReceptionist) {
+          if (needsDetails) {
+            buttons.add(_ActionButton(
+              label: 'Fill Patient Details',
+              icon: Icons.badge_rounded,
+              color: context.colors.primary,
+              onTap: () => _handleRetroactiveEntry(apt),
+              isSolid: true,
+              showTrailingChevron: true,
+            ));
+          }
+          buttons.add(_ActionButton(
+            label: 'Undo Arrival',
+            icon: Icons.undo_rounded,
+            color: context.colors.textSecondary,
+            onTap: widget.onUndoArrived,
+            isSolid: false,
+          ));
+        } else {
+          buttons.add(_ActionButton(
+            label: 'Patient Came, Fill the Session Form',
+            icon: Icons.edit_note_rounded,
+            color: context.colors.primary,
+            onTap: () => _handleRetroactiveEntry(apt),
+            isSolid: true,
+            showTrailingChevron: true,
+          ));
+        }
       } else {
-        actionLabel = 'Start Session';
-        actionIcon = Icons.play_arrow_rounded;
-        actionTap = () => widget.onStartSession(_sessionId);
-      }
+        if (apt.checkInTime != null) {
+          buttons.add(_ActionButton(
+            label: 'Undo Arrival',
+            icon: Icons.undo_rounded,
+            color: context.colors.textSecondary,
+            onTap: widget.onUndoArrived,
+            isSolid: false,
+          ));
+        }
 
-      buttons.add(_ActionButton(
-        label: actionLabel,
-        icon: actionIcon,
-        color: context.colors.primary,
-        onTap: actionTap,
-        isSolid: true,
-        showTrailingChevron: true,
-      ));
+        String actionLabel;
+        IconData actionIcon;
+        VoidCallback actionTap;
+
+        if (needsDetails) {
+          actionLabel = 'Fill Patient Details';
+          actionIcon = Icons.badge_rounded;
+          actionTap = () => _handleRetroactiveEntry(apt);
+        } else {
+          actionLabel = 'Start Session';
+          actionIcon = Icons.play_arrow_rounded;
+          actionTap = () => widget.onStartSession(_sessionId);
+        }
+
+        buttons.add(_ActionButton(
+          label: actionLabel,
+          icon: actionIcon,
+          color: context.colors.primary,
+          onTap: actionTap,
+          isSolid: true,
+          showTrailingChevron: true,
+        ));
+      }
     }
 
     if (showResumeBtn) {
@@ -5898,16 +6573,19 @@ class _SessionCardState extends ConsumerState<_SessionCard> with TickerProviderS
   Widget _buildWaitingContextBar(BuildContext context, AppointmentModel apt) {
     final checkIn = apt.checkInTime?.toLocal();
     final now = DateTime.now();
-    final isPast = checkIn != null && (checkIn.year < now.year || checkIn.month < now.month || checkIn.day < now.day);
+    final isPastDate = apt.date.compareTo(DateFormat('yyyy-MM-dd').format(now)) < 0;
+    final isPast = (checkIn != null && (checkIn.year < now.year || checkIn.month < now.month || checkIn.day < now.day)) || isPastDate;
+    final isRetroactiveOverdue = isPast || apt.status == AppointmentStatus.overdue || apt.reconciliationReason == 'arrived_retroactively';
+    final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
 
     final diff = checkIn != null ? now.difference(checkIn).inMinutes : 0;
-    final isOverdue = isPast || diff >= 30;
+    final isOverdue = isRetroactiveOverdue || diff >= 30;
 
     String bannerText;
-    if (isPast) {
-      final dateStr = DateFormat('MMM d').format(checkIn);
-      final timeStr = DateFormat('h:mm a').format(checkIn);
-      bannerText = 'Arrived at $timeStr ($dateStr) · Uncompleted session';
+    if (isRetroactiveOverdue) {
+      bannerText = isReceptionist
+          ? 'Waiting for the doctor to fill the session form'
+          : 'Patient attended · Pending session form completion';
     } else {
       final waitText = diff <= 0
           ? 'Just arrived'
@@ -6125,16 +6803,74 @@ class _SessionCardState extends ConsumerState<_SessionCard> with TickerProviderS
       final isOverdue = apt.status == AppointmentStatus.overdue || (isPastDate && apt.status != AppointmentStatus.completed && apt.status != AppointmentStatus.cancelled);
       final isRetroactiveOverdue = (isOverdue || isPastDate);
       final needsDetails = !apt.isEffectivePatientDetailsSaved;
+      final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
+
+      if (isRetroactiveOverdue) {
+        if (isReceptionist) {
+          if (needsDetails) {
+            return Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: _ActionButton(
+                    label: 'Undo Arrival',
+                    icon: Icons.undo_rounded,
+                    color: context.colors.textSecondary,
+                    onTap: widget.onUndoArrived,
+                    isSolid: false,
+                    padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 6),
+                    fontSize: 11.5,
+                    iconSize: 13.5,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  flex: 6,
+                  child: _ActionButton(
+                    label: 'Fill Patient Details',
+                    icon: Icons.badge_rounded,
+                    color: context.colors.primary,
+                    onTap: () => _handleRetroactiveEntry(apt),
+                    isSolid: true,
+                    showTrailingChevron: true,
+                    padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 6),
+                    fontSize: 11.5,
+                    iconSize: 13.5,
+                  ),
+                ),
+              ],
+            );
+          }
+          return _ActionButton(
+            label: 'Undo Arrival',
+            icon: Icons.undo_rounded,
+            color: context.colors.textSecondary,
+            onTap: widget.onUndoArrived,
+            isSolid: false,
+            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 6),
+            fontSize: 11.5,
+            iconSize: 13.5,
+          );
+        } else {
+          return _ActionButton(
+            label: 'Patient Came, Fill the Session Form',
+            icon: Icons.edit_note_rounded,
+            color: context.colors.primary,
+            onTap: () => _handleRetroactiveEntry(apt),
+            isSolid: true,
+            showTrailingChevron: true,
+            padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 6),
+            fontSize: 11.5,
+            iconSize: 13.5,
+          );
+        }
+      }
 
       String actionLabel;
       IconData actionIcon;
       VoidCallback actionTap;
 
-      if (isRetroactiveOverdue) {
-        actionLabel = 'Fill Out Details';
-        actionIcon = Icons.edit_note_rounded;
-        actionTap = () => _handleRetroactiveEntry(apt);
-      } else if (needsDetails) {
+      if (needsDetails) {
         actionLabel = 'Fill Details';
         actionIcon = Icons.badge_rounded;
         actionTap = () => _handleRetroactiveEntry(apt);
@@ -6272,9 +7008,19 @@ class _SessionCardState extends ConsumerState<_SessionCard> with TickerProviderS
     } else if (isCompleted) {
       statusColor = context.colors.success; statusStr = 'Completed'; statusIcon = Icons.check_circle_rounded;
     } else if (isOverdue) {
-      statusColor = context.colors.error;
-      statusStr = isWaiting ? 'Overdue (Waiting)' : isInProgress ? 'Overdue (In Progress)' : 'Overdue';
-      statusIcon = Icons.error_outline_rounded;
+      if (isWaiting) {
+        statusColor = kWaiting;
+        statusStr = isDesktop ? 'Overdue (Waiting)' : 'Overdue';
+        statusIcon = Icons.hourglass_empty_rounded;
+      } else if (isInProgress) {
+        statusColor = context.colors.warning;
+        statusStr = isDesktop ? 'Overdue (In Progress)' : 'Overdue';
+        statusIcon = Icons.sync_rounded;
+      } else {
+        statusColor = context.colors.error;
+        statusStr = 'Overdue';
+        statusIcon = Icons.error_outline_rounded;
+      }
     } else if (isInProgress) {
       statusColor = context.colors.warning; statusStr = 'In Progress'; statusIcon = Icons.sync_rounded;
     } else if (isWaiting) {
@@ -6519,11 +7265,23 @@ class _SessionCardState extends ConsumerState<_SessionCard> with TickerProviderS
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
-                                            Text(
-                                              _toTitleCase(apt.displayName),
-                                              style: context.textStyles.h3.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment: CrossAxisAlignment.center,
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    _toTitleCase(apt.displayName),
+                                                    style: context.textStyles.h3.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                if (apt.ageGenderDisplay != null) ...[
+                                                  const SizedBox(width: 6),
+                                                  _AgeGenderBadge(text: apt.ageGenderDisplay!, isCompact: true),
+                                                ],
+                                              ],
                                             ),
                                             if (widget.showDoctorName && apt.doctorName != null && apt.doctorName!.isNotEmpty) ...[
                                               const SizedBox(height: 3),
@@ -6559,7 +7317,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with TickerProviderS
                                               spacing: 6,
                                               runSpacing: 4,
                                               children: [
-                                                if (!isOverdue)
+
                                                   _Pill(
                                                     label: statusStr,
                                                     icon: statusIcon,
@@ -6799,13 +7557,24 @@ class _SessionCardState extends ConsumerState<_SessionCard> with TickerProviderS
 
                                         // ── Zone 1: Patient Name Headline (Spacious & Uncramped) ──
                                         const SizedBox(height: 6),
-                                        MarqueeText(
-                                          text: _toTitleCase(apt.displayName),
-                                          style: context.textStyles.h3.copyWith(
-                                            fontSize: 16.0,
-                                            fontWeight: FontWeight.w700,
-                                            color: context.colors.textPrimary,
-                                          ),
+                                        Row(
+                                          crossAxisAlignment: CrossAxisAlignment.center,
+                                          children: [
+                                            Flexible(
+                                              child: MarqueeText(
+                                                text: _toTitleCase(apt.displayName),
+                                                style: context.textStyles.h3.copyWith(
+                                                  fontSize: 16.0,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: context.colors.textPrimary,
+                                                ),
+                                              ),
+                                            ),
+                                            if (apt.ageGenderDisplay != null) ...[
+                                              const SizedBox(width: 6),
+                                              _AgeGenderBadge(text: apt.ageGenderDisplay!),
+                                            ],
+                                          ],
                                         ),
 
                                         // ── Zone 1: Subtitle Row (Status Pill, Doctor, Modality [Teal], Rescheduled) ──
@@ -6841,7 +7610,7 @@ class _SessionCardState extends ConsumerState<_SessionCard> with TickerProviderS
                                         ),
 
                                         // ── Zone 2: Live Context Strip ──
-                                        if (isWaiting && apt.checkInTime != null) ...[
+                                        if (isWaiting) ...[
                                           const SizedBox(height: 8),
                                           _buildWaitingContextBar(context, apt),
                                         ],
@@ -7207,6 +7976,45 @@ class _MobileSearchPillState extends State<_MobileSearchPill> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AgeGenderBadge extends StatelessWidget {
+  final String text;
+  final bool isCompact;
+
+  const _AgeGenderBadge({
+    required this.text,
+    this.isCompact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final formattedText = text.startsWith('(') ? text : '($text)';
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: isCompact ? 5.5 : 6.5,
+        vertical: isCompact ? 1.5 : 2,
+      ),
+      decoration: BoxDecoration(
+        color: context.colors.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: context.colors.primary.withValues(alpha: 0.22),
+          width: 1,
+        ),
+      ),
+      child: Text(
+        formattedText,
+        style: TextStyle(
+          color: context.colors.primary,
+          fontSize: isCompact ? 11 : 11.5,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.2,
+          height: 1.1,
         ),
       ),
     );

@@ -184,7 +184,7 @@ class _CreateTreatmentPlanScreenState
   /// Check if the logged-in user is a clinic account and load clinic doctors.
   Future<void> _checkAccountTypeAndLoadDoctors() async {
     final auth = ref.read(authProvider);
-    if (auth.role == UserRole.clinic && auth.clinicId != null) {
+    if ((auth.role == UserRole.clinic || auth.role == UserRole.receptionist) && auth.clinicId != null) {
       setState(() {
         _isClinicAccount = true;
         _isLoadingDoctors = true;

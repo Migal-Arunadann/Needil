@@ -27,8 +27,13 @@ import 'package:pms_app/features/patients/screens/family_member_selection_screen
 
 class CreateAppointmentScreen extends ConsumerStatefulWidget {
   final bool initialIsCallBy;
+  final PatientModel? initialPatient;
 
-  const CreateAppointmentScreen({super.key, this.initialIsCallBy = true});
+  const CreateAppointmentScreen({
+    super.key,
+    this.initialIsCallBy = true,
+    this.initialPatient,
+  });
 
   @override
   ConsumerState<CreateAppointmentScreen> createState() =>
@@ -60,6 +65,9 @@ class _CreateAppointmentScreenState
   final _emailCtrl = TextEditingController();
   final _referenceCtrl = TextEditingController();
   final _personalNotesCtrl = TextEditingController();
+  final _nationalityCtrl = TextEditingController(text: 'India');
+  final _foreignNumberCtrl = TextEditingController();
+  String _selectedForeignPhoneCode = '+1';
   String? _selectedGender;
   bool _dataConsentGiven = false;
   bool _privacyPolicyAccepted = false;
@@ -85,6 +93,13 @@ class _CreateAppointmentScreenState
   void initState() {
     super.initState();
     _isCallBy = widget.initialIsCallBy;
+    if (widget.initialPatient != null) {
+      _applySelectedPatient(widget.initialPatient!);
+      if (widget.initialPatient!.doctorId.isNotEmpty) {
+        _selectedDoctorId = widget.initialPatient!.doctorId;
+      }
+      _handledPhone = widget.initialPatient!.phone;
+    }
     _loadDoctors();
     _phoneCtrl.addListener(_onPhoneChanged);
     // Pre-fill city from clinic profile
@@ -99,9 +114,10 @@ class _CreateAppointmentScreenState
 
   Future<void> _loadDoctors() async {
     final auth = ref.read(authProvider);
-    if (auth.role == UserRole.clinic && auth.userId != null) {
+    if ((auth.role == UserRole.clinic || auth.role == UserRole.receptionist) &&
+        auth.clinicId != null) {
       final service = ref.read(appointmentServiceProvider);
-      final docs = await service.getClinicDoctors(auth.userId!);
+      final docs = await service.getClinicDoctors(auth.clinicId!);
       if (mounted) {
         setState(() {
           _doctors = docs;
@@ -244,6 +260,16 @@ class _CreateAppointmentScreenState
     if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
     if (existing.personalNotes != null && existing.personalNotes!.isNotEmpty) _personalNotesCtrl.text = existing.personalNotes!;
     if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
+    if (existing.nationality != null && existing.nationality!.isNotEmpty) {
+      _nationalityCtrl.text = existing.nationality!;
+    } else {
+      _nationalityCtrl.text = 'India';
+    }
+    if (existing.foreignNumber != null && existing.foreignNumber!.isNotEmpty) {
+      _foreignNumberCtrl.text = existing.foreignNumber!;
+    } else {
+      _foreignNumberCtrl.clear();
+    }
     setState(() {
       _existingPatient = existing;
       _isRegisteredPatient = !_isCallBy;
@@ -256,6 +282,12 @@ class _CreateAppointmentScreenState
     if (primary.city != null && primary.city!.isNotEmpty) _cityCtrl.text = primary.city!;
     if (primary.area != null && primary.area!.isNotEmpty) _areaCtrl.text = primary.area!;
     if (primary.pincode != null && primary.pincode!.isNotEmpty) _pincodeCtrl.text = primary.pincode!;
+    if (primary.nationality != null && primary.nationality!.isNotEmpty) {
+      _nationalityCtrl.text = primary.nationality!;
+    } else {
+      _nationalityCtrl.text = 'India';
+    }
+    _foreignNumberCtrl.clear();
     _nameCtrl.clear();
     _dobCtrl.clear();
     _occupationCtrl.clear();
@@ -315,7 +347,7 @@ class _CreateAppointmentScreenState
     await Future.delayed(const Duration(milliseconds: 50));
 
     final auth = ref.read(authProvider);
-    final isClinic = auth.role == UserRole.clinic;
+    final isClinic = auth.role == UserRole.clinic || auth.role == UserRole.receptionist;
     final doctorId = isClinic ? _selectedDoctorId : auth.userId;
 
     if (doctorId == null) {
@@ -358,8 +390,6 @@ class _CreateAppointmentScreenState
   Future<void> _submit() async {
     if (_isSubmitting) return;
     if (!_formKey.currentState!.validate()) return;
-
-    final navigator = Navigator.of(context);
 
     // Gender is mandatory for walk-in
     if (!_isCallBy && _selectedGender == null) {
@@ -626,6 +656,8 @@ class _CreateAppointmentScreenState
         area: _areaCtrl.text.isNotEmpty ? _areaCtrl.text : null,
         pincode: _pincodeCtrl.text.isNotEmpty ? _pincodeCtrl.text : null,
         gender: _selectedGender,
+        nationality: _nationalityCtrl.text.trim().isNotEmpty ? _nationalityCtrl.text.trim() : 'India',
+        foreignNumber: _foreignNumberCtrl.text.trim().isNotEmpty ? _foreignNumberCtrl.text.trim() : null,
         occupation: _occupationCtrl.text.isNotEmpty ? _occupationCtrl.text : null,
         email: _emailCtrl.text.isNotEmpty ? _emailCtrl.text : null,
         age: calculatedAge,
@@ -644,16 +676,14 @@ class _CreateAppointmentScreenState
     setState(() => _isSubmitting = false);
 
     if (success && mounted) {
-      // Audit log for receptionist actions
+      // Audit log
       final auth = ref.read(authProvider);
-      if (auth.role == UserRole.receptionist) {
-        ref.read(auditServiceProvider).log(
-          userId: auth.userId ?? '',
-          userRole: 'receptionist',
-          action: AuditAction.createAppointment,
-          details: 'Created ${_isCallBy ? 'call-by' : 'walk-in'} for ${_nameCtrl.text.trim()}',
-        );
-      }
+      ref.read(auditServiceProvider).log(
+        userId: auth.userId,
+        userRole: auth.role?.name ?? '',
+        action: AuditAction.createAppointment,
+        details: 'Created ${_isCallBy ? 'call-by' : 'walk-in'} for ${_nameCtrl.text.trim()}',
+      );
       AppToast.show('${_isCallBy ? 'Call-by' : 'Walk-in'} appointment created!', type: ToastType.success);
       if (context.canPop()) {
         context.pop();
@@ -678,7 +708,7 @@ class _CreateAppointmentScreenState
     });
 
     final auth = ref.watch(authProvider);
-    final isClinic = auth.role == UserRole.clinic;
+    final isClinic = auth.role == UserRole.clinic || auth.role == UserRole.receptionist;
 
     return Scaffold(
       backgroundColor: context.colors.background,
@@ -1270,6 +1300,10 @@ class _CreateAppointmentScreenState
               emailCtrl: _emailCtrl,
               referenceCtrl: _referenceCtrl,
               personalNotesCtrl: _personalNotesCtrl,
+              nationalityCtrl: _nationalityCtrl,
+              foreignNumberCtrl: _foreignNumberCtrl,
+              selectedForeignPhoneCode: _selectedForeignPhoneCode,
+              onForeignPhoneCodeChanged: (v) => setState(() => _selectedForeignPhoneCode = v),
               selectedGender: _selectedGender,
               onGenderChanged: (v) => setState(() => _selectedGender = v),
               consentGiven: _dataConsentGiven,

@@ -131,7 +131,7 @@ class DataExportService {
 
   Future<String> exportTreatmentPlansCSV(String clinicId) async {
     final records = await _fetchAllRecords(
-        PBCollections.treatmentPlans, "clinic='$clinicId'");
+        PBCollections.treatmentPlans, "patient.clinic='$clinicId' || doctor.clinic='$clinicId'");
     final rows = <String>[
       _csvRow([
         'ID', 'Patient ID', 'Doctor ID', 'Treatment Type',

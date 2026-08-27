@@ -1,11 +1,15 @@
 import 'package:pocketbase/pocketbase.dart';
 import 'package:pms_app/features/patients/models/patient_model.dart';
 import 'package:pms_app/core/constants/pb_collections.dart';
+import 'package:pms_app/core/services/audit_service.dart';
 
 class PatientService {
   final PocketBase pb;
+  late final AuditService _audit;
 
-  PatientService(this.pb);
+  PatientService(this.pb) {
+    _audit = AuditService(pb);
+  }
 
   /// Fetch all patients for a specific clinic.
   Future<List<PatientModel>> getClinicPatients(String clinicId) async {
@@ -46,6 +50,11 @@ class PatientService {
   /// Update an existing patient record.
   Future<PatientModel> updatePatient(String patientId, Map<String, dynamic> body) async {
     final record = await pb.collection(PBCollections.patients).update(patientId, body: body);
+    _audit.log(
+      action: AuditAction.updatePatient,
+      targetId: patientId,
+      details: 'Updated patient record',
+    );
     return PatientModel.fromRecord(record);
   }
 

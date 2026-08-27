@@ -33,6 +33,8 @@ class PatientDetailsForm extends StatefulWidget {
   final TextEditingController emailCtrl;
   final TextEditingController referenceCtrl;
   final TextEditingController personalNotesCtrl;
+  final TextEditingController? nationalityCtrl;
+  final TextEditingController? foreignNumberCtrl;
 
   // ── State bindings ────────────────────────────────────────────────────────
   final String? selectedGender;
@@ -43,8 +45,6 @@ class PatientDetailsForm extends StatefulWidget {
 
   final bool privacyPolicyAccepted;
   final ValueChanged<bool> onPrivacyPolicyChanged;
-
-
 
   final String? howDidYouHear;
   final ValueChanged<String?> onHowDidYouHearChanged;
@@ -63,6 +63,8 @@ class PatientDetailsForm extends StatefulWidget {
   final bool isCheckingPhone;
   final String selectedPhoneCode;
   final ValueChanged<String> onPhoneCodeChanged;
+  final String selectedForeignPhoneCode;
+  final ValueChanged<String>? onForeignPhoneCodeChanged;
   final List<PatientModel>? matchingPatients;
   final PatientModel? existingPatient;
   final VoidCallback? onAddFamilyMember;
@@ -83,6 +85,8 @@ class PatientDetailsForm extends StatefulWidget {
     required this.emailCtrl,
     required this.referenceCtrl,
     required this.personalNotesCtrl,
+    this.nationalityCtrl,
+    this.foreignNumberCtrl,
     required this.selectedGender,
     required this.onGenderChanged,
     required this.consentGiven,
@@ -101,6 +105,8 @@ class PatientDetailsForm extends StatefulWidget {
     this.isCheckingPhone = false,
     required this.selectedPhoneCode,
     required this.onPhoneCodeChanged,
+    this.selectedForeignPhoneCode = '+1',
+    this.onForeignPhoneCodeChanged,
     this.matchingPatients,
     this.existingPatient,
     this.onAddFamilyMember,
@@ -114,16 +120,50 @@ class PatientDetailsForm extends StatefulWidget {
 
 class _PatientDetailsFormState extends State<PatientDetailsForm> {
   int? _calculatedAge;
+  late TextEditingController _nationalityCtrl;
+  late TextEditingController _foreignNumberCtrl;
+  late String _foreignPhoneCode;
+  bool _ownsNationalityCtrl = false;
+  bool _ownsForeignNumberCtrl = false;
 
-  static const List<String> _howDidYouHearOptions = [
-    'Google',
-    'Social Media',
-    'Friend / Family',
-    'Doctor Referral',
-    'Walk-in',
-    'Newspaper / Flyer',
-    'Other',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    if (widget.nationalityCtrl != null) {
+      _nationalityCtrl = widget.nationalityCtrl!;
+    } else {
+      _nationalityCtrl = TextEditingController(text: 'India');
+      _ownsNationalityCtrl = true;
+    }
+    if (_nationalityCtrl.text.trim().isEmpty) {
+      _nationalityCtrl.text = 'India';
+    }
+
+    if (widget.foreignNumberCtrl != null) {
+      _foreignNumberCtrl = widget.foreignNumberCtrl!;
+    } else {
+      _foreignNumberCtrl = TextEditingController();
+      _ownsForeignNumberCtrl = true;
+    }
+
+    _foreignPhoneCode = widget.selectedForeignPhoneCode;
+    _nationalityCtrl.addListener(_onNationalityChanged);
+    _recomputeAge();
+    widget.dobCtrl.addListener(_recomputeAge);
+  }
+
+  @override
+  void dispose() {
+    widget.dobCtrl.removeListener(_recomputeAge);
+    _nationalityCtrl.removeListener(_onNationalityChanged);
+    if (_ownsNationalityCtrl) _nationalityCtrl.dispose();
+    if (_ownsForeignNumberCtrl) _foreignNumberCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onNationalityChanged() {
+    if (mounted) setState(() {});
+  }
 
   void _recomputeAge() {
     final dob = DateTime.tryParse(widget.dobCtrl.text);
@@ -160,22 +200,6 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
     final dt = DateTime.tryParse(raw);
     if (dt == null) return raw;
     return '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
-  }
-
-
-
-
-  @override
-  void initState() {
-    super.initState();
-    _recomputeAge();
-    widget.dobCtrl.addListener(_recomputeAge);
-  }
-
-  @override
-  void dispose() {
-    widget.dobCtrl.removeListener(_recomputeAge);
-    super.dispose();
   }
 
   @override
@@ -482,6 +506,119 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
       ],
     );
 
+    final isForeign = _nationalityCtrl.text.trim().isNotEmpty &&
+        _nationalityCtrl.text.trim().toLowerCase() != 'india';
+
+    final nationalitySection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const AppLabel(text: 'Nationality', isRequired: true),
+        const SizedBox(height: 8),
+        _NationalityDropdown(
+          selectedCountry: _nationalityCtrl.text.trim().isEmpty ? 'India' : _nationalityCtrl.text.trim(),
+          onChanged: (newCountry) {
+            if (newCountry != null) {
+              _nationalityCtrl.text = newCountry;
+              if (newCountry != 'India') {
+                final defaultDial = kCountryDialCodes[newCountry] ?? '+1';
+                setState(() {
+                  _foreignPhoneCode = defaultDial;
+                });
+                if (widget.onForeignPhoneCodeChanged != null) {
+                  widget.onForeignPhoneCodeChanged!(defaultDial);
+                }
+              } else {
+                _foreignNumberCtrl.clear();
+              }
+              setState(() {});
+            }
+          },
+        ),
+      ],
+    );
+
+    final foreignNumberSection = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            const AppLabel(text: 'Foreign Contact Number'),
+            const SizedBox(width: 6),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: context.colors.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                'Info only',
+                style: TextStyle(
+                  color: context.colors.primary,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 52,
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              decoration: BoxDecoration(
+                color: context.colors.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.colors.border),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: kInternationalDialCodes.contains(_foreignPhoneCode) ? _foreignPhoneCode : '+1',
+                  icon: const Icon(Icons.arrow_drop_down, size: 18),
+                  items: kInternationalDialCodes.map((code) {
+                    return DropdownMenuItem(
+                      value: code,
+                      child: Text(
+                        code,
+                        style: context.textStyles.bodyMedium.copyWith(
+                          color: context.colors.textPrimary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _foreignPhoneCode = val;
+                      });
+                      if (widget.onForeignPhoneCodeChanged != null) {
+                        widget.onForeignPhoneCodeChanged!(val);
+                      }
+                    }
+                  },
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: AppTextField(
+                label: '',
+                hint: 'e.g. 555-0199 (Optional)',
+                controller: _foreignNumberCtrl,
+                keyboardType: TextInputType.phone,
+                prefixIcon: Icon(Icons.public_rounded, color: context.colors.textHint),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+
     final occupationSection = AppTextField(
       controller: widget.occupationCtrl,
       label: 'Occupation',
@@ -622,6 +759,19 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Expanded(child: nationalitySection),
+                  const SizedBox(width: 16),
+                  if (isForeign) ...[
+                    Expanded(child: foreignNumberSection),
+                  ] else ...[
+                    const Spacer(),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 20),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Expanded(child: occupationSection),
                   const SizedBox(width: 16),
                   Expanded(child: emailSection),
@@ -672,6 +822,12 @@ class _PatientDetailsFormState extends State<PatientDetailsForm> {
               genderSection,
               const SizedBox(height: 16),
               dobAgeSection,
+              const SizedBox(height: 16),
+              nationalitySection,
+              if (isForeign) ...[
+                const SizedBox(height: 16),
+                foreignNumberSection,
+              ],
               const SizedBox(height: 16),
               occupationSection,
               const SizedBox(height: 16),
@@ -1025,6 +1181,286 @@ class _CombinedSourceDropdownState extends State<_CombinedSourceDropdown> {
           ),
         ],
       ],
+    );
+  }
+}
+
+// ─── Country & Nationality Constants ──────────────────────────────────────────
+
+const List<String> kNationalities = [
+  'India',
+  'United States',
+  'United Kingdom',
+  'United Arab Emirates',
+  'Canada',
+  'Australia',
+  'Saudi Arabia',
+  'Qatar',
+  'Kuwait',
+  'Oman',
+  'Bahrain',
+  'Singapore',
+  'Malaysia',
+  'Germany',
+  'France',
+  'Netherlands',
+  'New Zealand',
+  'Sri Lanka',
+  'Nepal',
+  'Bangladesh',
+  'Pakistan',
+  'South Africa',
+  'Philippines',
+  'Other',
+];
+
+const Map<String, String> kCountryDialCodes = {
+  'India': '+91',
+  'United States': '+1',
+  'United Kingdom': '+44',
+  'United Arab Emirates': '+971',
+  'Canada': '+1',
+  'Australia': '+61',
+  'Saudi Arabia': '+966',
+  'Qatar': '+974',
+  'Kuwait': '+965',
+  'Oman': '+968',
+  'Bahrain': '+973',
+  'Singapore': '+65',
+  'Malaysia': '+60',
+  'Germany': '+49',
+  'France': '+33',
+  'Netherlands': '+31',
+  'New Zealand': '+64',
+  'Sri Lanka': '+94',
+  'Nepal': '+977',
+  'Bangladesh': '+880',
+  'Pakistan': '+92',
+  'South Africa': '+27',
+  'Philippines': '+63',
+  'Other': '+1',
+};
+
+const List<String> kInternationalDialCodes = [
+  '+1', '+44', '+971', '+966', '+61', '+65', '+974', '+965', '+968', '+973',
+  '+49', '+33', '+31', '+64', '+94', '+977', '+880', '+92', '+27', '+63',
+  '+81', '+86', '+82', '+7', '+39', '+34', '+41', '+46', '+47', '+45',
+  '+48', '+351', '+353', '+32', '+30', '+90', '+20', '+234', '+254', '+55',
+  '+52', '+54', '+56', '+57',
+];
+
+/// Searchable Nationality Dropdown / Picker
+class _NationalityDropdown extends StatelessWidget {
+  final String selectedCountry;
+  final ValueChanged<String?> onChanged;
+
+  const _NationalityDropdown({
+    required this.selectedCountry,
+    required this.onChanged,
+  });
+
+  void _showPicker(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _CountrySearchDialog(
+        currentSelection: selectedCountry,
+        onSelect: (country) {
+          onChanged(country);
+          Navigator.pop(ctx);
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isIndia = selectedCountry.toLowerCase() == 'india';
+
+    return InkWell(
+      onTap: () => _showPicker(context),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: context.colors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isIndia ? context.colors.border : context.colors.primary.withValues(alpha: 0.8),
+            width: isIndia ? 1.0 : 1.2,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.public_rounded,
+              size: 20,
+              color: isIndia ? context.colors.textHint : context.colors.primary,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                selectedCountry,
+                style: context.textStyles.bodyMedium.copyWith(
+                  color: context.colors.textPrimary,
+                  fontWeight: isIndia ? FontWeight.normal : FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: context.colors.textHint,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CountrySearchDialog extends StatefulWidget {
+  final String currentSelection;
+  final ValueChanged<String> onSelect;
+
+  const _CountrySearchDialog({
+    required this.currentSelection,
+    required this.onSelect,
+  });
+
+  @override
+  State<_CountrySearchDialog> createState() => _CountrySearchDialogState();
+}
+
+class _CountrySearchDialogState extends State<_CountrySearchDialog> {
+  final _searchCtrl = TextEditingController();
+  List<String> _filtered = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filtered = List.from(kNationalities);
+    _searchCtrl.addListener(_filterList);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _filterList() {
+    final q = _searchCtrl.text.trim().toLowerCase();
+    setState(() {
+      if (q.isEmpty) {
+        _filtered = List.from(kNationalities);
+      } else {
+        _filtered = kNationalities
+            .where((c) => c.toLowerCase().contains(q))
+            .toList();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _searchCtrl.text.trim();
+    final hasExactMatch = _filtered.any((c) => c.toLowerCase() == query.toLowerCase());
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: context.colors.surface,
+      child: Container(
+        width: 420,
+        constraints: const BoxConstraints(maxHeight: 520),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.public_rounded, color: context.colors.primary, size: 22),
+                const SizedBox(width: 10),
+                Text(
+                  'Select Nationality',
+                  style: context.textStyles.h4.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            AppTextField(
+              label: '',
+              controller: _searchCtrl,
+              hint: 'Search country or nationality...',
+              prefixIcon: Icon(Icons.search_rounded, color: context.colors.textHint),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView(
+                children: [
+                  ..._filtered.map((country) {
+                    final isSelected = country.toLowerCase() == widget.currentSelection.toLowerCase();
+                    return ListTile(
+                      dense: true,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      tileColor: isSelected ? context.colors.primary.withValues(alpha: 0.1) : null,
+                      leading: Icon(
+                        country == 'India' ? Icons.home_rounded : Icons.flight_takeoff_rounded,
+                        size: 18,
+                        color: isSelected ? context.colors.primary : context.colors.textSecondary,
+                      ),
+                      title: Text(
+                        country,
+                        style: context.textStyles.bodyMedium.copyWith(
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                          color: isSelected ? context.colors.primary : context.colors.textPrimary,
+                        ),
+                      ),
+                      trailing: isSelected
+                          ? Icon(Icons.check_circle_rounded, color: context.colors.primary, size: 18)
+                          : (kCountryDialCodes.containsKey(country)
+                              ? Text(
+                                  kCountryDialCodes[country]!,
+                                  style: context.textStyles.caption.copyWith(color: context.colors.textHint),
+                                )
+                              : null),
+                      onTap: () => widget.onSelect(country),
+                    );
+                  }),
+                  if (query.isNotEmpty && !hasExactMatch) ...[
+                    const Divider(height: 16),
+                    ListTile(
+                      dense: true,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      leading: Icon(Icons.add_location_alt_outlined, color: context.colors.accent, size: 18),
+                      title: Text(
+                        'Use custom: "$query"',
+                        style: context.textStyles.bodyMedium.copyWith(
+                          color: context.colors.accent,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      onTap: () => widget.onSelect(query),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

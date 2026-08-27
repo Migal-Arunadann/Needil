@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pms_app/core/constants/app_colors.dart';
-import 'package:pms_app/core/constants/app_text_styles.dart';
 import 'package:pms_app/core/widgets/app_text_field.dart';
 import 'package:pms_app/core/widgets/app_button.dart';
 import 'package:pms_app/core/constants/pb_collections.dart';
@@ -38,7 +36,10 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
 
   Future<void> _checkGoogleLinked() async {
     final auth = ref.read(authProvider);
-    if (auth.userId == null) return;
+    if (auth.role != UserRole.clinic || auth.userId == null) {
+      if (mounted) setState(() => _isLoadingGoogle = false);
+      return;
+    }
     
     final isLinked = await ref.read(authProvider.notifier).authService.hasGoogleAccount(auth.userId!);
     if (mounted) {
@@ -83,9 +84,15 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
     try {
       final pb = ref.read(pocketbaseProvider);
       final auth = ref.read(authProvider);
-      final isClinic = auth.role == UserRole.clinic;
       final userId = auth.userId!;
-      final collection = isClinic ? PBCollections.clinics : PBCollections.doctors;
+      final String collection;
+      if (auth.role == UserRole.clinic) {
+        collection = PBCollections.clinics;
+      } else if (auth.role == UserRole.receptionist) {
+        collection = PBCollections.receptionists;
+      } else {
+        collection = PBCollections.doctors;
+      }
 
       await pb.collection(collection).update(userId, body: {
         'oldPassword': current,
@@ -255,7 +262,11 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
                     _infoRow(
                       Icons.person_rounded,
                       'Account type',
-                      isClinic ? 'Clinic Account' : 'Doctor Account',
+                      isClinic
+                          ? 'Clinic Account'
+                          : (auth.role == UserRole.receptionist
+                              ? 'Receptionist / Staff'
+                              : 'Doctor Account'),
                     ),
                     Divider(height: 16, color: context.colors.border),
                     _infoRow(
@@ -263,9 +274,18 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
                       'Username',
                       isClinic
                           ? (auth.clinic?.username ?? '—')
-                          : (auth.doctor?.username ?? '—'),
+                          : (auth.role == UserRole.receptionist
+                              ? (auth.receptionist?.username ?? '—')
+                              : (auth.doctor?.username ?? '—')),
                     ),
-                    if (!isClinic) ...[
+                    if (auth.role == UserRole.receptionist) ...[
+                      Divider(height: 16, color: context.colors.border),
+                      _infoRow(
+                        Icons.tag_rounded,
+                        'Staff ID',
+                        auth.receptionist?.receptionistId ?? '—',
+                      ),
+                    ] else if (auth.role == UserRole.doctor) ...[
                       Divider(height: 16, color: context.colors.border),
                       _infoRow(
                         Icons.business_rounded,
@@ -327,7 +347,7 @@ class _PrivacySecurityScreenState extends ConsumerState<PrivacySecurityScreen> {
                       else
                         Switch(
                           value: _isGoogleLinked,
-                          activeColor: context.colors.primary,
+                          activeThumbColor: context.colors.primary,
                           onChanged: _toggleGoogleLink,
                         ),
                     ],

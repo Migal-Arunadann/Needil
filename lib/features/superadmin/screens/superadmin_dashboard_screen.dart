@@ -106,46 +106,75 @@ class _SuperadminDashboardScreenState
                       ),
                       const SizedBox(height: 28),
 
-                      // Stats row
+                      // Stats grid (6 metrics)
                       Text('Platform Overview',
                         style: context.textStyles.label.copyWith(color: SAColors.textSecondary, fontSize: 12, letterSpacing: 1)),
                       const SizedBox(height: 12),
                       statsAsync.when(
                         loading: () => _statsPlaceholder(),
                         error: (e, _) => _errorCard(context, 'Failed to load stats: ${ErrorFormatter.format(e)}'),
-                        data: (stats) => Column(
-                          children: [
-                            Row(children: [
-                              Expanded(child: _statCard(context,
-                                Icons.business_rounded,
-                                '${stats['total_clinics']}',
-                                'Clinics',
-                                SAColors.accent,
-                              )),
-                              const SizedBox(width: 12),
-                              Expanded(child: _statCard(context,
-                                Icons.medical_services_rounded,
-                                '${stats['total_doctors']}',
-                                'Doctors',
-                                const Color(0xFF06B6D4),
-                              )),
-                              const SizedBox(width: 12),
-                              Expanded(child: _statCard(context,
-                                Icons.person_rounded,
-                                '${stats['total_receptionists']}',
-                                'Staff',
-                                SAColors.success,
-                              )),
-                            ]),
-                          ],
-                        ),
+                        data: (stats) {
+                          final expiringSoon = (stats['expiring_soon'] as int?) ?? 0;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Row 1: Clinics, Active, Expiring Soon
+                              Row(children: [
+                                Expanded(child: _statCard(context,
+                                  Icons.business_rounded,
+                                  '${stats['total_clinics'] ?? 0}',
+                                  'Total Clinics',
+                                  SAColors.accent,
+                                )),
+                                const SizedBox(width: 12),
+                                Expanded(child: _statCard(context,
+                                  Icons.verified_rounded,
+                                  '${stats['active_clinics'] ?? 0}',
+                                  'Active Plans',
+                                  SAColors.success,
+                                )),
+                                const SizedBox(width: 12),
+                                Expanded(child: _statCard(context,
+                                  Icons.timer_outlined,
+                                  '$expiringSoon',
+                                  'Expiring <7d',
+                                  expiringSoon > 0 ? SAColors.warning : SAColors.textHint,
+                                )),
+                              ]),
+                              const SizedBox(height: 12),
+                              // Row 2: Patients, Consultations, Sessions
+                              Row(children: [
+                                Expanded(child: _statCard(context,
+                                  Icons.people_alt_rounded,
+                                  '${stats['total_patients'] ?? 0}',
+                                  'Total Patients',
+                                  const Color(0xFF38BDF8),
+                                )),
+                                const SizedBox(width: 12),
+                                Expanded(child: _statCard(context,
+                                  Icons.medical_information_rounded,
+                                  '${stats['total_consultations'] ?? 0}',
+                                  'Consultations',
+                                  const Color(0xFFA855F7),
+                                )),
+                                const SizedBox(width: 12),
+                                Expanded(child: _statCard(context,
+                                  Icons.calendar_month_rounded,
+                                  '${stats['total_sessions'] ?? 0}',
+                                  'Sessions',
+                                  const Color(0xFFEC4899),
+                                )),
+                              ]),
+                            ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 28),
 
                       // ── Reactivation Requests ───────────────────────────────
                       reactivationAsync.when(
                         loading: () => const SizedBox.shrink(),
-                        error: (_, __) => const SizedBox.shrink(),
+                        error: (e, _) => const SizedBox.shrink(),
                         data: (requests) => requests.isEmpty
                             ? const SizedBox.shrink()
                             : Column(

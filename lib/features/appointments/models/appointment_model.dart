@@ -47,6 +47,9 @@ class AppointmentModel {
   final String? doctorName;
   final String? expandedPatientName;
   final String? expandedPatientPhone;
+  final int? expandedPatientAge;
+  final String? expandedPatientGender;
+  final String? expandedPatientDob;
   final bool requiresPatientDetailsUpdate;
 
   AppointmentModel({
@@ -86,6 +89,9 @@ class AppointmentModel {
     this.doctorName,
     this.expandedPatientName,
     this.expandedPatientPhone,
+    this.expandedPatientAge,
+    this.expandedPatientGender,
+    this.expandedPatientDob,
     this.requiresPatientDetailsUpdate = false,
   });
 
@@ -128,6 +134,9 @@ class AppointmentModel {
     String? doctorName,
     String? expandedPatientName,
     String? expandedPatientPhone,
+    Object? expandedPatientAge = _sentinel,
+    Object? expandedPatientGender = _sentinel,
+    Object? expandedPatientDob = _sentinel,
     bool? requiresPatientDetailsUpdate,
   }) {
     return AppointmentModel(
@@ -167,6 +176,9 @@ class AppointmentModel {
       doctorName: doctorName ?? this.doctorName,
       expandedPatientName: expandedPatientName ?? this.expandedPatientName,
       expandedPatientPhone: expandedPatientPhone ?? this.expandedPatientPhone,
+      expandedPatientAge: expandedPatientAge == _sentinel ? this.expandedPatientAge : expandedPatientAge as int?,
+      expandedPatientGender: expandedPatientGender == _sentinel ? this.expandedPatientGender : expandedPatientGender as String?,
+      expandedPatientDob: expandedPatientDob == _sentinel ? this.expandedPatientDob : expandedPatientDob as String?,
       requiresPatientDetailsUpdate: requiresPatientDetailsUpdate ?? this.requiresPatientDetailsUpdate,
     );
   }
@@ -183,6 +195,9 @@ class AppointmentModel {
     String? doctorName;
     String? expandedPatientName;
     String? expandedPatientPhone;
+    int? expandedPatientAge;
+    String? expandedPatientGender;
+    String? expandedPatientDob;
     bool requiresPatientDetailsUpdate = false;
 
     try {
@@ -191,15 +206,35 @@ class AppointmentModel {
         if (expandData.containsKey('doctor')) {
           final doc = expandData['doctor'];
           if (doc is Map) doctorName = doc['name'] as String?;
+          if (doc is RecordModel) doctorName = doc.getStringValue('name');
         }
         if (expandData.containsKey('patient')) {
           final pat = expandData['patient'];
           if (pat is Map) {
-            expandedPatientName = pat['full_name'] as String?;
+            expandedPatientName = pat['full_name'] as String? ?? pat['name'] as String?;
             expandedPatientPhone = pat['phone'] as String?;
+            final rawAge = pat['age'];
+            if (rawAge is int) {
+              expandedPatientAge = rawAge;
+            } else if (rawAge is num) {
+              expandedPatientAge = rawAge.toInt();
+            } else if (rawAge is String) {
+              expandedPatientAge = int.tryParse(rawAge);
+            }
+            expandedPatientGender = pat['gender'] as String?;
+            expandedPatientDob = pat['date_of_birth'] as String?;
             if (pat.containsKey('requires_patient_details_update')) {
               requiresPatientDetailsUpdate = pat['requires_patient_details_update'] as bool? ?? false;
             }
+          } else if (pat is RecordModel) {
+            final fn = pat.getStringValue('full_name');
+            expandedPatientName = fn.isNotEmpty ? fn : pat.getStringValue('name');
+            expandedPatientPhone = pat.getStringValue('phone');
+            final rawAge = pat.getIntValue('age');
+            if (rawAge > 0) expandedPatientAge = rawAge;
+            expandedPatientGender = pat.getStringValue('gender');
+            expandedPatientDob = pat.getStringValue('date_of_birth');
+            requiresPatientDetailsUpdate = pat.getBoolValue('requires_patient_details_update');
           }
         }
       }
@@ -250,6 +285,9 @@ class AppointmentModel {
       doctorName: doctorName,
       expandedPatientName: expandedPatientName,
       expandedPatientPhone: expandedPatientPhone,
+      expandedPatientAge: expandedPatientAge,
+      expandedPatientGender: expandedPatientGender,
+      expandedPatientDob: expandedPatientDob,
       requiresPatientDetailsUpdate: requiresPatientDetailsUpdate,
     );
   }
@@ -299,6 +337,54 @@ class AppointmentModel {
 
   /// Effective phone: expanded patient phone > placeholder phone
   String? get effectivePhone => expandedPatientPhone ?? patientPhone;
+
+  /// Formatted age and gender string, e.g. "34M", "28F", "45O", "34", "M".
+  /// Returns null if neither age nor gender is available.
+  String? get ageGenderDisplay {
+    int? effectiveAge = expandedPatientAge;
+    if ((effectiveAge == null || effectiveAge <= 0) &&
+        expandedPatientDob != null &&
+        expandedPatientDob!.trim().isNotEmpty) {
+      try {
+        final dob = DateTime.tryParse(expandedPatientDob!.trim());
+        if (dob != null) {
+          final now = DateTime.now();
+          int calculatedAge = now.year - dob.year;
+          if (now.month < dob.month || (now.month == dob.month && now.day < dob.day)) {
+            calculatedAge--;
+          }
+          if (calculatedAge > 0 && calculatedAge < 130) {
+            effectiveAge = calculatedAge;
+          }
+        }
+      } catch (_) {}
+    }
+
+    String? gCode;
+    if (expandedPatientGender != null && expandedPatientGender!.trim().isNotEmpty) {
+      final g = expandedPatientGender!.trim().toUpperCase();
+      if (g.startsWith('M')) {
+        gCode = 'M';
+      } else if (g.startsWith('F')) {
+        gCode = 'F';
+      } else if (g.startsWith('O')) {
+        gCode = 'O';
+      } else if (g.length <= 3) {
+        gCode = g;
+      } else {
+        gCode = g.substring(0, 1);
+      }
+    }
+
+    if (effectiveAge != null && effectiveAge > 0 && gCode != null && gCode.isNotEmpty) {
+      return '$effectiveAge$gCode';
+    } else if (effectiveAge != null && effectiveAge > 0) {
+      return '$effectiveAge';
+    } else if (gCode != null && gCode.isNotEmpty) {
+      return gCode;
+    }
+    return null;
+  }
 
   static AppointmentType _parseType(String t) {
     if (t == 'walk_in') return AppointmentType.walkIn;

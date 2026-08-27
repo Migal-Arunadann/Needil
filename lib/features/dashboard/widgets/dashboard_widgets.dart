@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
+import 'package:pms_app/core/widgets/shimmer_effect.dart';
 
 import 'package:pms_app/features/dashboard/providers/dashboard_provider.dart';
 import 'package:pms_app/features/appointments/models/appointment_model.dart';
@@ -164,22 +165,60 @@ class TodaySummaryBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (stats.isLoading) {
-      return Container(
-        height: 110,
-        decoration: BoxDecoration(
-          color: context.colors.cardBackground,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
-        ),
-        child: const Center(
-          child: CircularProgressIndicator(color: Color(0xFF3B82F6), strokeWidth: 2.5),
-        ),
-      );
-    }
-
     final width = MediaQuery.of(context).size.width;
     final isDesktop = width >= 900.0;
+
+    if (stats.isLoading) {
+      final skeletonCards = List.generate(
+        3,
+        (_) => Container(
+          height: 110,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: context.colors.cardBackground,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: context.colors.border.withValues(alpha: 0.4)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: const [
+                  SkeletonCircle(size: 28),
+                  SkeletonBox(width: 40, height: 16, borderRadius: 6),
+                ],
+              ),
+              const SkeletonBox(width: 60, height: 22, borderRadius: 6),
+              const SkeletonBox(width: 90, height: 12, borderRadius: 4),
+            ],
+          ),
+        ),
+      );
+
+      return ShimmerEffect(
+        child: isDesktop
+            ? Row(
+                children: [
+                  Expanded(child: skeletonCards[0]),
+                  const SizedBox(width: 20),
+                  Expanded(child: skeletonCards[1]),
+                  const SizedBox(width: 20),
+                  Expanded(child: skeletonCards[2]),
+                ],
+              )
+            : Column(
+                children: [
+                  skeletonCards[0],
+                  const SizedBox(height: 12),
+                  skeletonCards[1],
+                  const SizedBox(height: 12),
+                  skeletonCards[2],
+                ],
+              ),
+      );
+    }
 
     final cards = [
       SummaryCard(
@@ -332,7 +371,12 @@ class EmptyState extends StatelessWidget {
 // ─── Dashboard Overview Section (2x2 Grid) ───────────────────
 class DashboardOverviewSection extends StatelessWidget {
   final DashboardStats stats;
-  const DashboardOverviewSection({super.key, required this.stats});
+  final bool showRevenue;
+  const DashboardOverviewSection({
+    super.key,
+    required this.stats,
+    this.showRevenue = true,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -417,31 +461,57 @@ class DashboardOverviewSection extends StatelessWidget {
       ],
     );
 
-    final card4 = DashboardOverviewCard(
-      title: "Today's Revenue",
-      icon: Icons.payments_outlined,
-      color: const Color(0xFFD97706),
-      onTap: () => mainLayoutKey.currentState?.switchToTab(2),
-      children: [
-        DashboardOverviewItem(
-          label: "Total Collected",
-          value: '₹${stats.feesTotalToday}',
-          color: const Color(0xFF111827),
-        ),
-        const DashboardOverviewDivider(),
-        DashboardOverviewItem(
-          label: "Consultations",
-          value: '₹${stats.feesOnlyConsultationToday}',
-          color: const Color(0xFF4B5563),
-        ),
-        const DashboardOverviewDivider(),
-        DashboardOverviewItem(
-          label: "Sessions",
-          value: '₹${stats.feesOnlySessionToday}',
-          color: const Color(0xFF4B5563),
-        ),
-      ],
-    );
+    final card4 = showRevenue
+        ? DashboardOverviewCard(
+            title: "Today's Revenue",
+            icon: Icons.payments_outlined,
+            color: const Color(0xFFD97706),
+            onTap: () => mainLayoutKey.currentState?.switchToTab(2),
+            children: [
+              DashboardOverviewItem(
+                label: "Total Collected",
+                value: '₹${stats.feesTotalToday}',
+                color: const Color(0xFF111827),
+              ),
+              const DashboardOverviewDivider(),
+              DashboardOverviewItem(
+                label: "Consultations",
+                value: '₹${stats.feesOnlyConsultationToday}',
+                color: const Color(0xFF4B5563),
+              ),
+              const DashboardOverviewDivider(),
+              DashboardOverviewItem(
+                label: "Sessions",
+                value: '₹${stats.feesOnlySessionToday}',
+                color: const Color(0xFF4B5563),
+              ),
+            ],
+          )
+        : DashboardOverviewCard(
+            title: "Front Desk Queue",
+            icon: Icons.how_to_reg_rounded,
+            color: const Color(0xFF0F5D4F),
+            onTap: () => mainLayoutKey.currentState?.switchToTab(1),
+            children: [
+              DashboardOverviewItem(
+                label: "Checked In",
+                value: '${stats.patientsSeenToday}',
+                color: const Color(0xFF16A34A),
+              ),
+              const DashboardOverviewDivider(),
+              DashboardOverviewItem(
+                label: "In Waiting",
+                value: '${stats.patientsRemainingToday}',
+                color: const Color(0xFFD97706),
+              ),
+              const DashboardOverviewDivider(),
+              DashboardOverviewItem(
+                label: "Total Expected",
+                value: '${stats.patientsExpectedToday}',
+                color: const Color(0xFF0F5D4F),
+              ),
+            ],
+          );
 
     if (isDesktop) {
       return Column(
@@ -1325,4 +1395,348 @@ class _WebGlassCardState extends State<WebGlassCard> {
     );
   }
 }
+
+// ─── Dashboard Full Layout Skeleton View ───────────────────────
+
+class DashboardSkeletonView extends StatelessWidget {
+  final bool isDesktop;
+  final bool showBottomCards;
+
+  const DashboardSkeletonView({
+    super.key,
+    required this.isDesktop,
+    this.showBottomCards = true,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isDesktop) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Left Main Pane (flex 7)
+          Expanded(
+            flex: 7,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const ShimmerEffect(
+                  child: SkeletonBox(width: 170, height: 22, borderRadius: 6),
+                ),
+                const SizedBox(height: 18),
+                const _DashboardOverviewSkeleton(isDesktop: true),
+                if (showBottomCards) ...[
+                  const SizedBox(height: 28),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Expanded(
+                        child: _CardContainerSkeleton(height: 310),
+                      ),
+                      SizedBox(width: 24),
+                      Expanded(
+                        child: _CardContainerSkeleton(height: 310),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 32),
+          // Right Side Pane (flex 3)
+          Expanded(
+            flex: 3,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const ShimmerEffect(
+                  child: SkeletonBox(width: 150, height: 22, borderRadius: 6),
+                ),
+                const SizedBox(height: 18),
+                const _QuickStatRowSkeleton(),
+                const SizedBox(height: 16),
+                const _QuickStatRowSkeleton(),
+                const SizedBox(height: 36),
+                const ShimmerEffect(
+                  child: SkeletonBox(width: 130, height: 20, borderRadius: 6),
+                ),
+                const SizedBox(height: 12),
+                const _WaitingListSkeleton(),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Mobile View
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const ShimmerEffect(
+          child: SkeletonBox(width: 170, height: 22, borderRadius: 6),
+        ),
+        const SizedBox(height: 16),
+        const _DashboardOverviewSkeleton(isDesktop: false),
+        const SizedBox(height: 24),
+        const ShimmerEffect(
+          child: SkeletonBox(width: 150, height: 20, borderRadius: 6),
+        ),
+        const SizedBox(height: 12),
+        const _QuickStatRowSkeleton(),
+        const SizedBox(height: 10),
+        const _QuickStatRowSkeleton(),
+        if (showBottomCards) ...[
+          const SizedBox(height: 24),
+          const _CardContainerSkeleton(height: 250),
+          const SizedBox(height: 24),
+          const _CardContainerSkeleton(height: 250),
+        ],
+      ],
+    );
+  }
+}
+
+class _DashboardOverviewSkeleton extends StatelessWidget {
+  final bool isDesktop;
+
+  const _DashboardOverviewSkeleton({required this.isDesktop});
+
+  Widget _buildCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+      ),
+      child: ShimmerEffect(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: const [
+                SkeletonCircle(size: 24),
+                SizedBox(width: 10),
+                SkeletonBox(width: 140, height: 16, borderRadius: 4),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      SkeletonBox(width: 60, height: 10, borderRadius: 3),
+                      SizedBox(height: 6),
+                      SkeletonBox(width: 40, height: 18, borderRadius: 4),
+                    ],
+                  ),
+                ),
+                Container(width: 1, height: 32, color: context.colors.divider),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      SkeletonBox(width: 60, height: 10, borderRadius: 3),
+                      SizedBox(height: 6),
+                      SkeletonBox(width: 40, height: 18, borderRadius: 4),
+                    ],
+                  ),
+                ),
+                Container(width: 1, height: 32, color: context.colors.divider),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      SkeletonBox(width: 60, height: 10, borderRadius: 3),
+                      SizedBox(height: 6),
+                      SkeletonBox(width: 40, height: 18, borderRadius: 4),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (isDesktop) {
+      return Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _buildCard(context)),
+              const SizedBox(width: 20),
+              Expanded(child: _buildCard(context)),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _buildCard(context)),
+              const SizedBox(width: 20),
+              Expanded(child: _buildCard(context)),
+            ],
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      children: [
+        _buildCard(context),
+        const SizedBox(height: 12),
+        _buildCard(context),
+        const SizedBox(height: 12),
+        _buildCard(context),
+        const SizedBox(height: 12),
+        _buildCard(context),
+      ],
+    );
+  }
+}
+
+class _CardContainerSkeleton extends StatelessWidget {
+  final double height;
+
+  const _CardContainerSkeleton({required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+      ),
+      child: ShimmerEffect(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: const [
+                SkeletonBox(width: 120, height: 18, borderRadius: 4),
+                SkeletonBox(width: 50, height: 14, borderRadius: 4),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: List.generate(
+                  3,
+                  (_) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      children: const [
+                        SkeletonCircle(size: 36),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SkeletonBox(width: 100, height: 14, borderRadius: 4),
+                              SizedBox(height: 6),
+                              SkeletonBox(width: 60, height: 10, borderRadius: 3),
+                            ],
+                          ),
+                        ),
+                        SkeletonBox(width: 45, height: 14, borderRadius: 4),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QuickStatRowSkeleton extends StatelessWidget {
+  const _QuickStatRowSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: context.colors.border.withValues(alpha: 0.6),
+          width: 1.0,
+        ),
+      ),
+      child: ShimmerEffect(
+        child: Row(
+          children: const [
+            SkeletonBox(width: 36, height: 36, borderRadius: 10),
+            SizedBox(width: 14),
+            Expanded(child: SkeletonBox(width: 110, height: 14, borderRadius: 4)),
+            SkeletonBox(width: 30, height: 18, borderRadius: 4),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WaitingListSkeleton extends StatelessWidget {
+  const _WaitingListSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+      ),
+      child: ShimmerEffect(
+        child: Column(
+          children: List.generate(
+            3,
+            (index) => Padding(
+              padding: EdgeInsets.only(bottom: index == 2 ? 0 : 12),
+              child: Row(
+                children: const [
+                  SkeletonCircle(size: 32),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SkeletonBox(width: 80, height: 13, borderRadius: 3),
+                        SizedBox(height: 4),
+                        SkeletonBox(width: 50, height: 9, borderRadius: 3),
+                      ],
+                    ),
+                  ),
+                  SkeletonBox(width: 40, height: 16, borderRadius: 6),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 

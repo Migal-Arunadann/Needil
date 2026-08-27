@@ -521,6 +521,57 @@ class TreatmentScheduler {
     }
   }
 
+  /// Inspects all pending sessions of [planId] and ensures they are strictly in chronological order:
+  /// Session 1 date < Session 2 date < Session 3 date < Session 4 date...
+  /// If any session has an inverted or colliding date, it realigns them from the first inverted session.
+  Future<void> realignPlanSequence(String planId, {required String performedBy}) async {
+    try {
+      final context = await contextLoader.load(planId);
+      final allSessions = await _loadPendingSessions(planId, includeMissed: true);
+      if (allSessions.length < 2) return;
+
+      allSessions.sort((a, b) => a.sessionNumber.compareTo(b.sessionNumber));
+
+      bool needsRealign = false;
+      int firstInvertedIndex = -1;
+
+      for (int i = 1; i < allSessions.length; i++) {
+        final prevDt = DateTime.tryParse(allSessions[i - 1].scheduledDate);
+        final currDt = DateTime.tryParse(allSessions[i].scheduledDate);
+        if (prevDt != null && currDt != null) {
+          if (!currDt.isAfter(prevDt)) {
+            needsRealign = true;
+            firstInvertedIndex = i;
+            break;
+          }
+        }
+      }
+
+      if (!needsRealign || firstInvertedIndex == -1) return;
+
+      final prevSession = allSessions[firstInvertedIndex - 1];
+      final anchorDate = DateTime.tryParse(prevSession.scheduledDate)?.toLocal() ?? DateTime.now();
+      final sessionsToReschedule = allSessions.sublist(firstInvertedIndex);
+      final preferredTime = await _loadPreferredTime(planId);
+
+      final proposal = await _generateProposal(
+        context: context,
+        sessionsToReschedule: sessionsToReschedule,
+        anchorDate: anchorDate,
+        preferredTime: preferredTime,
+        trigger: 'sequence_realign',
+        performedBy: performedBy,
+        planId: planId,
+        anchorIsOffset: true,
+      );
+
+      final validation = _validateProposal(proposal);
+      await _commitProposal(proposal, validation, context);
+    } catch (e) {
+      debugPrint('[TreatmentScheduler] realignPlanSequence error: $e');
+    }
+  }
+
   /// Checks if there is a pending session scheduled on the [targetDate] that is not [excludeSessionId].
   Future<SessionModel?> findConflictingSession(
     String planId,

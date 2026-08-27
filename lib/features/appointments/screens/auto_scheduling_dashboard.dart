@@ -5,7 +5,9 @@ import 'package:intl/intl.dart';
 import 'package:pms_app/core/providers/session_lifecycle_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
+import 'package:pms_app/core/widgets/app_error_view.dart';
 import 'package:pms_app/features/auth/providers/auth_provider.dart';
+import 'package:pms_app/core/services/auth_service.dart';
 import 'package:pms_app/features/treatments/models/session_model.dart';
 import 'package:pms_app/features/treatments/models/treatment_plan_model.dart';
 import 'package:pms_app/features/appointments/models/appointment_model.dart';
@@ -16,6 +18,7 @@ import 'package:pms_app/features/patients/screens/patient_profile_screen.dart';
 import 'package:pms_app/features/scheduling/screens/available_slots_screen.dart';
 import 'package:pms_app/features/treatments/widgets/cascade_preview_sheet.dart';
 import 'package:pms_app/core/scheduling/treatment_scheduler.dart';
+import 'package:pms_app/core/constants/pb_collections.dart';
 
 /// Needs Attention Dashboard.
 ///
@@ -180,6 +183,83 @@ class _AutoSchedulingDashboardState
   // ─── Patient Came ──────────────────────────────────────────────────────────
 
   Future<void> _onPatientCame(SessionModel session) async {
+    final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
+
+    if (isReceptionist) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: context.colors.surface,
+          title: Text('Mark Patient Arrived', style: context.textStyles.h3),
+          content: Text(
+            'Mark Session ${session.sessionNumber} for ${session.patientName ?? "Patient"} as arrived?\n\n'
+            'This will update the session status to waiting for the doctor to fill the session form.',
+            style: context.textStyles.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: context.colors.success),
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Mark Arrived'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+
+      setState(() { _isProcessing = true; _processingId = session.id; });
+      try {
+        final pb = ref.read(pocketbaseProvider);
+        await pb.collection(PBCollections.sessions).update(session.id, body: {
+          'status': 'waiting',
+        });
+        try {
+          await pb.collection(PBCollections.treatmentPlans).update(session.treatmentPlanId, body: {
+            'consecutive_misses': 0,
+          });
+        } catch (_) {}
+
+        try {
+          final datePrefix = session.scheduledDate.length >= 10
+              ? session.scheduledDate.substring(0, 10)
+              : session.scheduledDate;
+          final apts = await pb.collection(PBCollections.appointments).getList(
+            filter: 'linked_session_id = "${session.id}" || (patient = "${session.patientId}" && date = "$datePrefix")',
+          );
+          for (final apt in apts.items) {
+            await pb.collection(PBCollections.appointments).update(apt.id, body: {
+              'status': 'waiting',
+              'reconciliation_reason': 'arrived_retroactively',
+            });
+          }
+        } catch (_) {}
+
+        if (mounted) {
+          setState(() {
+            final idx = _sessions.indexWhere((s) => s.id == session.id);
+            if (idx != -1) {
+              _sessions[idx] = session.copyWith(status: SessionStatus.waiting);
+            }
+          });
+          widget.onRefresh();
+          AppToast.show(
+            '${session.patientName ?? "Patient"} marked as arrived ✓ Waiting for doctor.',
+            type: ToastType.success,
+          );
+        }
+      } catch (e) {
+        if (mounted) AppToast.show('Error: $e', type: ToastType.error);
+      } finally {
+        if (mounted) setState(() { _isProcessing = false; _processingId = null; });
+      }
+      return;
+    }
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -221,6 +301,71 @@ class _AutoSchedulingDashboardState
     // auto-completes it retroactively when the doctor saves.
     Navigator.of(context).pop();
     context.push('/sessions/record', extra: session);
+  }
+
+  Future<void> _onSessionUndoArrival(SessionModel session) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Undo Arrival', style: context.textStyles.h3),
+        content: Text(
+          'Revert arrival for Session ${session.sessionNumber} (${session.patientName ?? "Patient"}) back to overdue?',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: context.colors.warning),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Undo Arrival'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() { _isProcessing = true; _processingId = session.id; });
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      await pb.collection(PBCollections.sessions).update(session.id, body: {
+        'status': 'scheduled',
+      });
+
+      try {
+        final datePrefix = session.scheduledDate.length >= 10
+            ? session.scheduledDate.substring(0, 10)
+            : session.scheduledDate;
+        final apts = await pb.collection(PBCollections.appointments).getList(
+          filter: 'linked_session_id = "${session.id}" || (patient = "${session.patientId}" && date = "$datePrefix")',
+        );
+        for (final apt in apts.items) {
+          await pb.collection(PBCollections.appointments).update(apt.id, body: {
+            'status': 'scheduled',
+            'reconciliation_reason': '',
+          });
+        }
+      } catch (_) {}
+
+      if (mounted) {
+        setState(() {
+          final idx = _sessions.indexWhere((s) => s.id == session.id);
+          if (idx != -1) {
+            _sessions[idx] = session.copyWith(status: SessionStatus.overdue);
+          }
+        });
+        widget.onRefresh();
+        AppToast.show('Arrival undone for ${session.patientName ?? "Patient"}', type: ToastType.info);
+      }
+    } catch (e) {
+      if (mounted) AppToast.show('Error: $e', type: ToastType.error);
+    } finally {
+      if (mounted) setState(() { _isProcessing = false; _processingId = null; });
+    }
   }
 
   // ─── Patient Missed ──────────────────────────────────────────────────
@@ -448,7 +593,121 @@ class _AutoSchedulingDashboardState
     }
   }
 
-  // ─── Consultations Handlers ─────────────────────────────────────────────
+  // ─── Consultation Arrived ───────────────────────────────────────────────
+
+  Future<void> _onConsultationArrived(AppointmentModel apt) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Mark Patient Arrived', style: context.textStyles.h3),
+        content: Text(
+          'Mark consultation for ${apt.patientName ?? "Patient"} as arrived?\n\n'
+          'This will notify the doctor to fill the consultation form.',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: context.colors.success),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Mark Arrived'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() { _isProcessing = true; _processingId = apt.id; });
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      await pb.collection(PBCollections.appointments).update(apt.id, body: {
+        'status': 'waiting',
+        'reconciliation_reason': 'arrived_retroactively',
+      });
+
+      if (mounted) {
+        setState(() {
+          final idx = _consultations.indexWhere((c) => c.id == apt.id);
+          if (idx != -1) {
+            _consultations[idx] = apt.copyWith(
+              status: AppointmentStatus.waiting,
+              reconciliationReason: 'arrived_retroactively',
+            );
+          }
+        });
+        widget.onRefresh();
+        AppToast.show(
+          '${apt.patientName ?? "Patient"} marked as arrived ✓ Waiting for doctor.',
+          type: ToastType.success,
+        );
+      }
+    } catch (e) {
+      if (mounted) AppToast.show('Error: $e', type: ToastType.error);
+    } finally {
+      if (mounted) setState(() { _isProcessing = false; _processingId = null; });
+    }
+  }
+
+  Future<void> _onConsultationUndoArrival(AppointmentModel apt) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: context.colors.surface,
+        title: Text('Undo Arrival', style: context.textStyles.h3),
+        content: Text(
+          'Revert arrival for ${apt.patientName ?? "Patient"} back to overdue?',
+          style: context.textStyles.bodyMedium,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: context.colors.warning),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Undo Arrival'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() { _isProcessing = true; _processingId = apt.id; });
+    try {
+      final pb = ref.read(pocketbaseProvider);
+      await pb.collection(PBCollections.appointments).update(apt.id, body: {
+        'status': 'scheduled',
+        'reconciliation_reason': '',
+      });
+
+      if (mounted) {
+        setState(() {
+          final idx = _consultations.indexWhere((c) => c.id == apt.id);
+          if (idx != -1) {
+            _consultations[idx] = apt.copyWith(
+              status: AppointmentStatus.scheduled,
+              reconciliationReason: null,
+            );
+          }
+        });
+        widget.onRefresh();
+        AppToast.show('Arrival undone for ${apt.patientName ?? "Patient"}', type: ToastType.info);
+      }
+    } catch (e) {
+      if (mounted) AppToast.show('Error: $e', type: ToastType.error);
+    } finally {
+      if (mounted) setState(() { _isProcessing = false; _processingId = null; });
+    }
+  }
+
+  // ─── Consultation Didn't Arrive ───────────────────────────────────────────
 
   Future<void> _onConsultationDidntArrive(AppointmentModel apt) async {
     final confirmed = await showDialog<bool>(
@@ -631,7 +890,13 @@ class _AutoSchedulingDashboardState
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError || !snapshot.hasData) {
-          return Center(child: Text('Failed to load patient: ${snapshot.error}'));
+          return Center(
+            child: AppErrorView(
+              error: snapshot.error,
+              isCompact: true,
+              onRetry: () => setState(() {}),
+            ),
+          );
         }
         return ClipRRect(
           borderRadius: const BorderRadius.horizontal(right: Radius.circular(24)),
@@ -793,37 +1058,122 @@ class _AutoSchedulingDashboardState
             ),
           ),
           Divider(height: 1, color: context.colors.border.withValues(alpha: 0.4)),
-          // Action buttons
           if (isLoading)
             const Padding(
               padding: EdgeInsets.all(16),
               child: Center(child: CircularProgressIndicator()),
             )
-          else
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _actionButton(
-                      label: 'Didn\'t Arrive',
-                      icon: Icons.event_busy_rounded,
-                      color: context.colors.error,
-                      onTap: () => _onConsultationDidntArrive(apt),
+          else ...[
+            Builder(builder: (context) {
+              final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
+              final isArrived = apt.status == AppointmentStatus.waiting ||
+                  apt.reconciliationReason == 'arrived_retroactively' ||
+                  apt.checkInTime != null;
+
+              if (isArrived) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: (isReceptionist ? const Color(0xFFF59E0B) : context.colors.primary).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: (isReceptionist ? const Color(0xFFF59E0B) : context.colors.primary).withValues(alpha: 0.28),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isReceptionist ? Icons.hourglass_top_rounded : Icons.assignment_turned_in_rounded,
+                            size: 14,
+                            color: isReceptionist ? const Color(0xFFD97706) : context.colors.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              isReceptionist
+                                  ? 'Waiting for the doctor to fill the consultation form'
+                                  : 'Patient attended · Pending consultation form completion',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isReceptionist ? const Color(0xFFD97706) : context.colors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _actionButton(
-                      label: 'Forgot to Record',
-                      icon: Icons.edit_note_rounded,
-                      color: context.colors.primary,
-                      onTap: () => _onConsultationForgotRecord(apt),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                      child: isReceptionist
+                          ? _actionButton(
+                              label: 'Undo Arrival',
+                              icon: Icons.undo_rounded,
+                              color: context.colors.textSecondary,
+                              onTap: () => _onConsultationUndoArrival(apt),
+                            )
+                          : _actionButton(
+                              label: 'Patient Came, Fill the Consultation Form',
+                              icon: Icons.edit_note_rounded,
+                              color: context.colors.primary,
+                              onTap: () => _onConsultationForgotRecord(apt),
+                            ),
                     ),
-                  ),
-                ],
-              ),
-            ),
+                  ],
+                );
+              }
+
+              // Not arrived yet
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                child: Row(
+                  children: [
+                    if (isReceptionist) ...[
+                      Expanded(
+                        child: _actionButton(
+                          label: 'Patient Arrived',
+                          icon: Icons.how_to_reg_rounded,
+                          color: context.colors.success,
+                          onTap: () => _onConsultationArrived(apt),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _actionButton(
+                          label: 'Didn\'t Arrive',
+                          icon: Icons.event_busy_rounded,
+                          color: context.colors.error,
+                          onTap: () => _onConsultationDidntArrive(apt),
+                        ),
+                      ),
+                    ] else ...[
+                      Expanded(
+                        child: _actionButton(
+                          label: 'Didn\'t Arrive',
+                          icon: Icons.event_busy_rounded,
+                          color: context.colors.error,
+                          onTap: () => _onConsultationDidntArrive(apt),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _actionButton(
+                          label: 'Forgot to Record',
+                          icon: Icons.edit_note_rounded,
+                          color: context.colors.primary,
+                          onTap: () => _onConsultationForgotRecord(apt),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }),
+          ],
         ],
       ),
     );
@@ -941,46 +1291,109 @@ class _AutoSchedulingDashboardState
             ),
           ),
           Divider(height: 1, color: context.colors.border.withValues(alpha: 0.4)),
-          // Action buttons
           if (isLoading)
             const Padding(
               padding: EdgeInsets.all(16),
               child: Center(child: CircularProgressIndicator()),
             )
-          else
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _actionButton(
-                      label: 'Patient Arrived',
-                      icon: Icons.check_circle_rounded,
-                      color: context.colors.success,
-                      onTap: () => _onPatientCame(session),
+          else ...[
+            Builder(builder: (context) {
+              final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
+              final isArrived = session.status == SessionStatus.waiting;
+
+              if (isArrived) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: (isReceptionist ? const Color(0xFFF59E0B) : context.colors.primary).withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: (isReceptionist ? const Color(0xFFF59E0B) : context.colors.primary).withValues(alpha: 0.28),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isReceptionist ? Icons.hourglass_top_rounded : Icons.assignment_turned_in_rounded,
+                            size: 14,
+                            color: isReceptionist ? const Color(0xFFD97706) : context.colors.primary,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              isReceptionist
+                                  ? 'Waiting for the doctor to fill the session form'
+                                  : 'Patient attended · Pending session form completion',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: isReceptionist ? const Color(0xFFD97706) : context.colors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _actionButton(
-                      label: 'Patient Missed',
-                      icon: Icons.cancel_rounded,
-                      color: context.colors.error,
-                      onTap: () => _onPatientMissed(session),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                      child: isReceptionist
+                          ? _actionButton(
+                              label: 'Undo Arrival',
+                              icon: Icons.undo_rounded,
+                              color: context.colors.textSecondary,
+                              onTap: () => _onSessionUndoArrival(session),
+                            )
+                          : _actionButton(
+                              label: 'Patient Came, Fill the Session Form',
+                              icon: Icons.edit_note_rounded,
+                              color: context.colors.primary,
+                              onTap: () => _onPatientCame(session),
+                            ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _actionButton(
-                      label: 'Clinic Closed',
-                      icon: Icons.business_rounded,
-                      color: context.colors.textSecondary,
-                      onTap: () => _onClinicClosed(session),
+                  ],
+                );
+              }
+
+              // Not arrived yet
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _actionButton(
+                        label: 'Patient Arrived',
+                        icon: Icons.check_circle_rounded,
+                        color: context.colors.success,
+                        onTap: () => _onPatientCame(session),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _actionButton(
+                        label: 'Patient Missed',
+                        icon: Icons.cancel_rounded,
+                        color: context.colors.error,
+                        onTap: () => _onPatientMissed(session),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _actionButton(
+                        label: 'Clinic Closed',
+                        icon: Icons.business_rounded,
+                        color: context.colors.textSecondary,
+                        onTap: () => _onClinicClosed(session),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
         ],
       ),
     ));
@@ -1171,41 +1584,104 @@ class _AutoSchedulingDashboardState
             padding: EdgeInsets.symmetric(vertical: 12),
             child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
           )
-        else
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _actionButton(
-                    label: 'Patient Arrived',
-                    icon: Icons.check_circle_rounded,
-                    color: context.colors.success,
-                    onTap: () => _onPatientCame(session),
+        else ...[
+          Builder(builder: (context) {
+            final isReceptionist = ref.read(authProvider).role == UserRole.receptionist;
+            final isArrived = session.status == SessionStatus.waiting;
+
+            if (isArrived) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    margin: const EdgeInsets.fromLTRB(12, 6, 12, 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: (isReceptionist ? const Color(0xFFF59E0B) : context.colors.primary).withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: (isReceptionist ? const Color(0xFFF59E0B) : context.colors.primary).withValues(alpha: 0.28),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isReceptionist ? Icons.hourglass_top_rounded : Icons.assignment_turned_in_rounded,
+                          size: 13,
+                          color: isReceptionist ? const Color(0xFFD97706) : context.colors.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            isReceptionist
+                                ? 'Waiting for the doctor to fill the session form'
+                                : 'Patient attended · Pending session form completion',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w600,
+                              color: isReceptionist ? const Color(0xFFD97706) : context.colors.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _actionButton(
-                    label: "Patient Missed",
-                    icon: Icons.cancel_rounded,
-                    color: context.colors.error,
-                    onTap: () => _onPatientMissed(session),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+                    child: isReceptionist
+                        ? _actionButton(
+                            label: 'Undo Arrival',
+                            icon: Icons.undo_rounded,
+                            color: context.colors.textSecondary,
+                            onTap: () => _onSessionUndoArrival(session),
+                          )
+                        : _actionButton(
+                            label: 'Patient Came, Fill the Session Form',
+                            icon: Icons.edit_note_rounded,
+                            color: context.colors.primary,
+                            onTap: () => _onPatientCame(session),
+                          ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _actionButton(
-                    label: 'Clinic Closed',
-                    icon: Icons.business_rounded,
-                    color: context.colors.textSecondary,
-                    onTap: () => _onClinicClosed(session),
+                ],
+              );
+            }
+
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _actionButton(
+                      label: 'Patient Arrived',
+                      icon: Icons.check_circle_rounded,
+                      color: context.colors.success,
+                      onTap: () => _onPatientCame(session),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: context.colors.border.withValues(alpha: 0.3)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _actionButton(
+                      label: "Patient Missed",
+                      icon: Icons.cancel_rounded,
+                      color: context.colors.error,
+                      onTap: () => _onPatientMissed(session),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _actionButton(
+                      label: 'Clinic Closed',
+                      icon: Icons.business_rounded,
+                      color: context.colors.textSecondary,
+                      onTap: () => _onClinicClosed(session),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+        Divider(height: 1, color: context.colors.border.withValues(alpha: 0.3)),
       ],
     );
   }

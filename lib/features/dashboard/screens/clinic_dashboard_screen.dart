@@ -299,12 +299,7 @@ class ClinicDashboardScreen extends ConsumerWidget {
                   const SizedBox(height: 32),
 
                   if (stats.isLoading)
-                    const Center(
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(vertical: 60),
-                        child: CircularProgressIndicator(),
-                      ),
-                    )
+                    DashboardSkeletonView(isDesktop: isDesktop, showBottomCards: true)
                   else if (isDesktop)
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -488,44 +483,55 @@ class ClinicDashboardScreen extends ConsumerWidget {
       data: Theme.of(context).copyWith(
         cardColor: context.colors.surface,
       ),
-      child: PopupMenuButton<bool>(
-        tooltip: 'Book New Appointment',
-        offset: const Offset(0, 44),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: context.colors.border.withValues(alpha: 0.5)),
-        ),
-        onSelected: (isCallBy) {
-          context.push(
-            '/appointments/create',
-            extra: {'isCallBy': isCallBy},
-          );
-        },
-        itemBuilder: (context) => [
-          PopupMenuItem(
-            value: true,
-            child: Row(
-              children: [
-                Icon(Icons.phone_in_talk_rounded, color: context.colors.info, size: 16),
-                const SizedBox(width: 8),
-                Text('Call-By / Booking', style: TextStyle(color: context.colors.textPrimary, fontSize: 13)),
-              ],
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Tooltip(
+            message: 'Doctor Leaves & Clinic Holidays',
+            child: IconButton(
+              icon: Icon(Icons.event_busy_rounded, size: 20, color: context.colors.textSecondary),
+              onPressed: () => context.push('/scheduling/exceptions'),
             ),
           ),
-          PopupMenuItem(
-            value: false,
-            child: Row(
-              children: [
-                Icon(Icons.directions_walk_rounded, color: context.colors.success, size: 16),
-                const SizedBox(width: 8),
-                Text('Walk-In Patient', style: TextStyle(color: context.colors.textPrimary, fontSize: 13)),
-              ],
+          const SizedBox(width: 4),
+          PopupMenuButton<bool>(
+            tooltip: 'Book New Appointment',
+            offset: const Offset(0, 44),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: context.colors.border.withValues(alpha: 0.5)),
             ),
-          ),
-        ],
-        child: isDesktop 
-          ? const _HeaderCTAButton()
-          : Container(
+            onSelected: (isCallBy) {
+              context.push(
+                '/appointments/create',
+                extra: {'isCallBy': isCallBy},
+              );
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: true,
+                child: Row(
+                  children: [
+                    Icon(Icons.phone_in_talk_rounded, color: context.colors.info, size: 16),
+                    const SizedBox(width: 8),
+                    Text('Call-By / Booking', style: TextStyle(color: context.colors.textPrimary, fontSize: 13)),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: false,
+                child: Row(
+                  children: [
+                    Icon(Icons.directions_walk_rounded, color: context.colors.success, size: 16),
+                    const SizedBox(width: 8),
+                    Text('Walk-In Patient', style: TextStyle(color: context.colors.textPrimary, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ],
+            child: isDesktop 
+              ? const _HeaderCTAButton()
+              : Container(
               height: 38,
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
@@ -556,6 +562,8 @@ class ClinicDashboardScreen extends ConsumerWidget {
                 ],
               ),
             ),
+          ),
+        ],
       ),
     );
   }

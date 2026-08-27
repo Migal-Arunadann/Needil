@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:pms_app/core/utils/whatsapp_helper.dart';
 import 'package:pms_app/core/services/data_export_service.dart';
 import 'package:pms_app/core/widgets/app_toast.dart';
+import 'package:pms_app/core/widgets/app_error_view.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:pms_app/core/constants/pb_collections.dart';
@@ -33,6 +34,7 @@ import 'package:pms_app/core/utils/time_utils.dart';
 import 'package:pms_app/core/widgets/reschedule_anchor_dialog.dart';
 import 'package:pms_app/features/scheduling/screens/scheduling_audit_history_screen.dart';
 import 'package:pms_app/features/patients/screens/edit_patient_screen.dart';
+import 'package:pms_app/features/appointments/screens/create_appointment_screen.dart';
 
 class PatientProfileScreen extends ConsumerStatefulWidget {
   final PatientModel patient;
@@ -72,8 +74,14 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   void initState() {
     super.initState();
     _patient = widget.patient;
-    _desktopTabIndex = widget.initialTabIndex == 2 ? 0 : widget.initialTabIndex;
-    _tabController = TabController(length: 3, vsync: this, initialIndex: widget.initialTabIndex);
+    final auth = ref.read(authProvider);
+    final isReceptionist = auth.role == UserRole.receptionist;
+    final tabCount = isReceptionist ? 2 : 3;
+    final initIndex = isReceptionist
+        ? (widget.initialTabIndex == 2 ? 1 : 0)
+        : widget.initialTabIndex;
+    _desktopTabIndex = isReceptionist ? 1 : (widget.initialTabIndex == 2 ? 0 : widget.initialTabIndex);
+    _tabController = TabController(length: tabCount, vsync: this, initialIndex: initIndex);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -165,9 +173,12 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     try {
       final pb = ref.read(pocketbaseProvider);
       final list = await pb.collection(PBCollections.consultations).getFullList(
-        filter: 'patient = "${_patient.id}" && is_deleted = false',
+        filter: 'patient = "${_patient.id}"',
       );
-      final consultations = list.map((r) => ConsultationModel.fromRecord(r)).toList();
+      final consultations = list
+          .map((r) => ConsultationModel.fromRecord(r))
+          .where((c) => !c.isDeleted)
+          .toList();
       final hasConsultations = consultations.isNotEmpty;
 
       String ongoingId = '';
@@ -236,6 +247,8 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isReceptionist = ref.watch(authProvider).role == UserRole.receptionist;
+
     if (widget.isCompact) {
       return Container(
         color: context.colors.background,
@@ -250,7 +263,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
               ),
             ),
             Expanded(
-              child: _buildTreatmentsTab(),
+              child: isReceptionist ? _buildHistoryTab() : _buildTreatmentsTab(),
             ),
           ],
         ),
@@ -390,21 +403,31 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
               indicatorWeight: 2.5,
               labelStyle: context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w700),
               unselectedLabelStyle: context.textStyles.bodyMedium.copyWith(fontWeight: FontWeight.w500),
-              tabs: const [
-                Tab(text: 'Treatments'),
-                Tab(text: 'History'),
-                Tab(text: 'Details'),
-              ],
+              tabs: isReceptionist
+                  ? const [
+                      Tab(text: 'History'),
+                      Tab(text: 'Details'),
+                    ]
+                  : const [
+                      Tab(text: 'Treatments'),
+                      Tab(text: 'History'),
+                      Tab(text: 'Details'),
+                    ],
             ),
           ),
           Expanded(
             child: TabBarView(
               controller: _tabController,
-              children: [
-                _buildTreatmentsTab(),
-                _buildHistoryTab(),
-                _buildBasicDetailsTab(),
-              ],
+              children: isReceptionist
+                  ? [
+                      _buildHistoryTab(),
+                      _buildBasicDetailsTab(),
+                    ]
+                  : [
+                      _buildTreatmentsTab(),
+                      _buildHistoryTab(),
+                      _buildBasicDetailsTab(),
+                    ],
             ),
           ),
         ],
@@ -705,6 +728,18 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     }
   }
 
+  void _bookAppointmentForPatient() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateAppointmentScreen(
+          initialPatient: _patient,
+          initialIsCallBy: true,
+        ),
+      ),
+    );
+  }
+
   Future<void> _startConsultation() async {
     try {
       if (!mounted) return;
@@ -822,6 +857,27 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
   Widget? _buildFAB(bool hasOngoing) {
     if (_tabController.index != 0) return null;
+
+    final auth = ref.watch(authProvider);
+    if (auth.role == UserRole.receptionist) {
+      return FloatingActionButton.extended(
+        heroTag: null,
+        onPressed: () {
+          HapticFeedback.lightImpact();
+          _bookAppointmentForPatient();
+        },
+        backgroundColor: context.colors.primary,
+        icon: const Icon(Icons.add_rounded, color: Colors.white, size: 20),
+        label: const Text(
+          'Book Appointment',
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            fontSize: 14,
+          ),
+        ),
+      );
+    }
 
     bool hasCompletedCurrent = false;
     if (widget.appointment != null) {
@@ -970,6 +1026,8 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
             if (p.age != null) _buildDesktopDetailRow('Age', '${p.age} years'),
             if (p.dateOfBirth?.isNotEmpty == true) _buildDesktopDetailRow('Date of Birth', p.dateOfBirth!),
             if (p.gender?.isNotEmpty == true) _buildDesktopDetailRow('Gender', p.gender!),
+            if (p.nationality?.isNotEmpty == true) _buildDesktopDetailRow('Nationality', p.nationality!),
+            if (p.foreignNumber?.isNotEmpty == true) _buildDesktopDetailRow('Foreign Contact No.', p.foreignNumber!),
             if (p.occupation?.isNotEmpty == true) _buildDesktopDetailRow('Occupation', p.occupation!),
             
             const SizedBox(height: 24),
@@ -1067,6 +1125,32 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
   }
 
   Widget _buildDesktopConsultAction(bool hasOngoing) {
+    final auth = ref.watch(authProvider);
+    if (auth.role == UserRole.receptionist) {
+      return Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: context.colors.primary.withValues(alpha: 0.15),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ElevatedButton.icon(
+          onPressed: _bookAppointmentForPatient,
+          icon: const Icon(Icons.add_rounded, color: Colors.white),
+          label: const Text('Book Appointment', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: context.colors.primary,
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            elevation: 0,
+          ),
+        ),
+      );
+    }
+
     if (_ongoingConsultationId == null) {
       return const SizedBox(
         height: 44,
@@ -1086,7 +1170,7 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         ? 'Resume Consult'
         : (hasCompletedCurrent
             ? 'View / Edit Consult'
-            : (_hasAnyConsultation ? '+ New Consultation' : 'Start Consult'));
+            : (_hasAnyConsultation ? 'New Consultation' : 'Start Consult'));
     
     final buttonIcon = hasOngoing 
         ? Icons.play_arrow_rounded 
@@ -1118,6 +1202,8 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
 
 
   Widget _buildDesktopTabsSection() {
+    final isReceptionist = ref.watch(authProvider).role == UserRole.receptionist;
+
     return Container(
       decoration: BoxDecoration(
         color: context.colors.cardBackgroundAlt,
@@ -1147,28 +1233,32 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
             ),
             child: Row(
               children: [
-                _buildDesktopTabHeader('Treatments', 0),
-                const SizedBox(width: 4),
-                _buildDesktopTabHeader('History', 1),
+                if (!isReceptionist) ...[
+                  _buildDesktopTabHeader('Treatments', 0),
+                  const SizedBox(width: 4),
+                  _buildDesktopTabHeader('History', 1),
+                ] else ...[
+                  _buildDesktopTabHeader('History', 1, isClickable: false),
+                ],
                 const Spacer(),
               ],
             ),
           ),
           // ── Tab content ───────────────────────────────────────────────
           Expanded(
-            child: _desktopTabIndex == 0
-                ? _buildTreatmentsTab()
-                : _buildHistoryTab(),
+            child: (isReceptionist || _desktopTabIndex == 1)
+                ? _buildHistoryTab()
+                : _buildTreatmentsTab(),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDesktopTabHeader(String text, int index) {
-    final active = _desktopTabIndex == index;
+  Widget _buildDesktopTabHeader(String text, int index, {bool isClickable = true}) {
+    final active = _desktopTabIndex == index || !isClickable;
     return GestureDetector(
-      onTap: () => setState(() => _desktopTabIndex = index),
+      onTap: isClickable ? () => setState(() => _desktopTabIndex = index) : null,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
@@ -1201,12 +1291,13 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     final patientId = _patient.id;
 
     final list = await pb.collection(PBCollections.consultations).getFullList(
-      filter: 'patient = "$patientId" && is_deleted = false',
+      filter: 'patient = "$patientId"',
     );
 
     final entries = <_ConsultationEntry>[];
     for (final cRecord in list) {
       final c = ConsultationModel.fromRecord(cRecord);
+      if (c.isDeleted) continue;
       
       AppointmentModel? aptModel;
       try {
@@ -1222,8 +1313,21 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
       entries.add(_ConsultationEntry(consultation: c, appointment: aptModel));
     }
 
-    entries.sort((a, b) =>
-        (b.consultation.created ?? DateTime(0)).compareTo(a.consultation.created ?? DateTime(0)));
+    DateTime getEntryTimestamp(_ConsultationEntry entry) {
+      if (entry.consultation.created != null) {
+        return entry.consultation.created!;
+      }
+      if (entry.appointment?.date != null && entry.appointment!.date.isNotEmpty) {
+        final aptDt = DateTime.tryParse(entry.appointment!.date);
+        if (aptDt != null) return aptDt;
+      }
+      if (entry.consultation.updated != null) {
+        return entry.consultation.updated!;
+      }
+      return DateTime(0);
+    }
+
+    entries.sort((a, b) => getEntryTimestamp(b).compareTo(getEntryTimestamp(a)));
 
     return entries;
   }
@@ -1238,9 +1342,9 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
               child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 3));
         }
         if (snapshot.hasError) {
-          return Center(
-            child: Text('Error loading treatments: ${snapshot.error}',
-                style: context.textStyles.bodyMedium),
+          return AppErrorView(
+            error: snapshot.error,
+            onRetry: () => setState(() {}),
           );
         }
 
@@ -1282,10 +1386,19 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
                   ElevatedButton.icon(
                     onPressed: () {
                       HapticFeedback.lightImpact();
-                      _startConsultation();
+                      if (ref.read(authProvider).role == UserRole.receptionist) {
+                        _bookAppointmentForPatient();
+                      } else {
+                        _startConsultation();
+                      }
                     },
                     icon: const Icon(Icons.add_rounded, size: 18, color: Colors.white),
-                    label: const Text('Start Consultation', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    label: Text(
+                      ref.read(authProvider).role == UserRole.receptionist
+                          ? 'Book Appointment'
+                          : 'Start Consultation',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: context.colors.primary,
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -1460,7 +1573,10 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
           return Center(child: CircularProgressIndicator(color: context.colors.primary, strokeWidth: 3));
         }
         if (snapshot.hasError) {
-          return Center(child: Text('Error loading history: ${snapshot.error}', style: context.textStyles.bodyMedium));
+          return AppErrorView(
+            error: snapshot.error,
+            onRetry: () => setState(() {}),
+          );
         }
 
         final events = snapshot.data ?? [];
@@ -1827,11 +1943,10 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
         sort: '-date,-time',
       ).catchError((_) => <RecordModel>[]),
       pb.collection(PBCollections.consultations).getFullList(
-        filter: 'patient = "$patientId" && is_deleted = false',
-        sort: '-created',
+        filter: 'patient = "$patientId"',
       ).catchError((_) => <RecordModel>[]),
       pb.collection(PBCollections.sessions).getFullList(
-        filter: 'patient = "$patientId" && is_deleted = false',
+        filter: 'patient = "$patientId"',
         sort: '-scheduled_date,-scheduled_time',
       ).catchError((_) => <RecordModel>[]),
       pb.collection(PBCollections.doctors).getFullList().catchError((_) => <RecordModel>[]),
@@ -1852,13 +1967,19 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
     // Build consultation lookup map
     final Map<String, ConsultationModel> consultMap = {};
     for (final c in consultRecords) {
-      consultMap[c.id] = ConsultationModel.fromRecord(c);
+      final model = ConsultationModel.fromRecord(c);
+      if (!model.isDeleted) {
+        consultMap[c.id] = model;
+      }
     }
 
     // Build session lookup map
     final Map<String, SessionModel> sessionMap = {};
     for (final s in sessionRecords) {
-      sessionMap[s.id] = SessionModel.fromRecord(s);
+      final model = SessionModel.fromRecord(s);
+      if (!model.isDeleted) {
+        sessionMap[s.id] = model;
+      }
     }
 
     final events = <_HistoryEvent>[];
@@ -2199,6 +2320,8 @@ class _PatientProfileScreenState extends ConsumerState<PatientProfileScreen>
               if (p.age != null) _profileDetailRow('Age', '${p.age} years'),
               if (p.dateOfBirth?.isNotEmpty == true) _profileDetailRow('Date of Birth', p.dateOfBirth!),
               if (p.gender?.isNotEmpty == true) _profileDetailRow('Gender', p.gender!),
+              if (p.nationality?.isNotEmpty == true) _profileDetailRow('Nationality', p.nationality!),
+              if (p.foreignNumber?.isNotEmpty == true) _profileDetailRow('Foreign Contact No.', p.foreignNumber!),
               if (p.occupation?.isNotEmpty == true) _profileDetailRow('Occupation', p.occupation!),
             ],
           ),
@@ -2404,9 +2527,10 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   Future<void> _loadClinicDoctors() async {
     try {
       final auth = ref.read(authProvider);
-      if (auth.role == UserRole.clinic && auth.userId != null) {
+      if ((auth.role == UserRole.clinic || auth.role == UserRole.receptionist) &&
+          auth.clinicId != null) {
         final service = ref.read(appointmentServiceProvider);
-        final docs = await service.getClinicDoctors(auth.userId!);
+        final docs = await service.getClinicDoctors(auth.clinicId!);
         if (mounted) {
           setState(() {
             _clinicDoctors = docs;
@@ -2420,13 +2544,14 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     try {
       final pb = ref.read(pocketbaseProvider);
       final res = await pb.collection(PBCollections.treatmentPlans).getList(
-        filter: 'consultation = "${c.id}" && is_deleted = false',
+        filter: 'consultation = "${c.id}"',
         perPage: 10,
       );
       if (!mounted) return;
 
       for (final rec in res.items) {
         final plan = TreatmentPlanModel.fromRecord(rec);
+        if (plan.isDeleted) continue;
         if (plan.isMaintenance) {
           _maintenancePlan = plan;
           await _loadSessions(plan.id, isMaintenance: true);
@@ -2553,6 +2678,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
   @override
   Widget build(BuildContext context) {
     final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final isReceptionist = ref.watch(authProvider).role == UserRole.receptionist;
     
     if (isDesktop) {
       final activeColor = _cardColor;
@@ -2649,9 +2775,11 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               Divider(height: 1, indent: 20, endIndent: 20, color: context.colors.border),
               _buildConsultationDetails(),
               if (_planLoaded) _buildSessionsSection(),
-              const SizedBox(height: 12),
-              _buildDeleteButton(isDesktop),
-              const SizedBox(height: 12),
+              if (!isReceptionist) ...[
+                const SizedBox(height: 12),
+                _buildDeleteButton(isDesktop),
+                const SizedBox(height: 12),
+              ],
             ],
           ],
         ),
@@ -2754,9 +2882,11 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
             Divider(height: 1, indent: 16, endIndent: 16, color: context.colors.border),
             _buildConsultationDetails(),
             if (_planLoaded) _buildSessionsSection(),
-            const SizedBox(height: 12),
-            _buildDeleteButton(false),
-            const SizedBox(height: 12),
+            if (!isReceptionist) ...[
+              const SizedBox(height: 12),
+              _buildDeleteButton(false),
+              const SizedBox(height: 12),
+            ],
           ],
         ],
       ),
@@ -3133,6 +3263,10 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
 
   Widget _buildConsultationDetails() {
     final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final isReceptionist = ref.watch(authProvider).role == UserRole.receptionist;
+    if (isReceptionist) {
+      return const SizedBox.shrink();
+    }
     
     return Padding(
       padding: isDesktop
@@ -3317,6 +3451,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
 
   Widget _buildSessionsSection() {
     final isDesktop = MediaQuery.of(context).size.width >= 900;
+    final isReceptionist = ref.watch(authProvider).role == UserRole.receptionist;
     
     return Padding(
       padding: isDesktop
@@ -3358,8 +3493,8 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               else
                 ..._buildSessionList(_treatmentSessions),
 
-              // Add Session button (only when plan is active)
-              if (_treatmentPlan!.status == TreatmentPlanStatus.active)
+              // Add Session button (only when plan is active & not receptionist)
+              if (!isReceptionist && _treatmentPlan!.status == TreatmentPlanStatus.active)
                 _addSessionButton(
                   label: 'Add Session',
                   isMaintenance: false,
@@ -3368,8 +3503,8 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
                 ),
               const SizedBox(height: 12),
 
-              // End Sessions button (visible when pending sessions exist)
-              if (_treatmentSessions.any((s) {
+              // End Sessions button (visible when pending sessions exist & not receptionist)
+              if (!isReceptionist && _treatmentSessions.any((s) {
                   final ds = _displayStatus(s);
                   return ds == SessionStatus.upcoming ||
                       ds == SessionStatus.waiting ||
@@ -3398,8 +3533,8 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               ],
             ],
 
-            // Create Maintenance Plan button
-            if (_treatmentPlan != null && _maintenancePlan == null && _allTreatmentDone) ...[
+            // Create Maintenance Plan button (not receptionist)
+            if (!isReceptionist && _treatmentPlan != null && _maintenancePlan == null && _allTreatmentDone) ...[
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
@@ -3476,8 +3611,8 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               else
                 ..._buildSessionList(_maintenanceSessions),
 
-              // Add Maintenance Session button (only when plan is active)
-              if (_maintenancePlan!.status == TreatmentPlanStatus.active)
+              // Add Maintenance Session button (only when plan is active & not receptionist)
+              if (!isReceptionist && _maintenancePlan!.status == TreatmentPlanStatus.active)
                 _addSessionButton(
                   label: 'Add Maintenance Session',
                   isMaintenance: true,
@@ -4065,8 +4200,12 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
       });
     }
 
+    final isReceptionist = ref.watch(authProvider).role == UserRole.receptionist;
+
     Widget tile = GestureDetector(
-      onTap: () async {
+      onTap: isReceptionist
+          ? null
+          : () async {
         if (!isEditable && !isViewable) return;
         if (isEditable) {
           final sessionDay = date != null
@@ -4322,9 +4461,17 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
               '${session.isMaintenance ? "Maintenance" : "Session"} ${session.sessionNumber}',
               style: context.textStyles.h4,
             ),
-            Text(
-              'Scheduled: ${session.scheduledDate}${session.scheduledTime != null ? " at ${session.scheduledTime}" : ""}',
-              style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
+            Builder(
+              builder: (context) {
+                final dt = DateTime.tryParse(session.scheduledDate);
+                final formattedDate = dt != null ? DateFormat('EEE, MMM d, yyyy').format(dt.toLocal()) : session.scheduledDate;
+                final hasTime = session.scheduledTime != null && session.scheduledTime!.trim().isNotEmpty;
+                final formattedTime = hasTime ? ' at ${TimeUtils.formatStringTime(session.scheduledTime!)}' : '';
+                return Text(
+                  'Scheduled: $formattedDate$formattedTime',
+                  style: context.textStyles.caption.copyWith(color: context.colors.textSecondary),
+                );
+              },
             ),
             const SizedBox(height: 20),
             _actionTile(
@@ -4742,7 +4889,7 @@ class _ConsultationCardState extends ConsumerState<_ConsultationCard> {
     required TreatmentPlanModel plan,
   }) {
     final auth = ref.read(authProvider);
-    final isClinic = auth.role == UserRole.clinic;
+    final isClinic = auth.role == UserRole.clinic || auth.role == UserRole.receptionist;
 
     DateTime? selectedDate;
     String? selectedTimeStr;
@@ -5122,15 +5269,15 @@ class _RecentlyDeletedSheetState extends ConsumerState<RecentlyDeletedSheet> {
     try {
       final pb = ref.read(pocketbaseProvider);
       final list = await pb.collection(PBCollections.consultations).getFullList(
-        filter: 'patient = "${widget.patientId}" && is_deleted = true',
-        sort: '-deleted_at',
+        filter: 'patient = "${widget.patientId}"',
       );
 
       final now = DateTime.now();
       _deletedItems = list.map((r) => ConsultationModel.fromRecord(r)).where((c) {
-        if (c.deletedAt == null) return false;
+        if (!c.isDeleted || c.deletedAt == null) return false;
         return now.difference(c.deletedAt!).inDays <= 30;
       }).toList();
+      _deletedItems.sort((a, b) => (b.deletedAt ?? DateTime(0)).compareTo(a.deletedAt ?? DateTime(0)));
     } catch (_) {}
     if (mounted) setState(() => _loading = false);
   }

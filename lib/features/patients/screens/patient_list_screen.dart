@@ -16,6 +16,7 @@ import 'package:pms_app/core/theme/app_theme.dart';
 import 'package:pms_app/core/widgets/responsive_wrapper.dart';
 import 'package:pms_app/core/providers/pocketbase_provider.dart';
 import 'package:pms_app/core/utils/error_formatter.dart';
+import 'package:pms_app/core/widgets/app_error_view.dart';
 import 'package:pms_app/features/appointments/providers/appointment_provider.dart';
 import 'package:pms_app/features/dashboard/widgets/dashboard_widgets.dart';
 
@@ -1778,26 +1779,9 @@ class _WebErrorView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline_rounded,
-                size: 48, color: context.colors.error),
-            const SizedBox(height: 12),
-            Text(
-              ErrorFormatter.format(error),
-              textAlign: TextAlign.center,
-              style: context.textStyles.bodyMedium
-                  .copyWith(color: context.colors.textSecondary),
-            ),
-            const SizedBox(height: 16),
-            TextButton(onPressed: onRetry, child: const Text('Retry')),
-          ],
-        ),
-      ),
+    return AppErrorView(
+      error: error,
+      onRetry: onRetry,
     );
   }
 }

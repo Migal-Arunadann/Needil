@@ -20,6 +20,8 @@ class PatientModel {
   final bool privacyPolicyAccepted;
   final String? privacyPolicyAcceptedDate;
   final String? gender;
+  final String? nationality;
+  final String? foreignNumber;
   final String? occupation;
   final String? email;
   final int? age;
@@ -50,6 +52,8 @@ class PatientModel {
     required this.doctorId,
     this.clinicId,
     this.gender,
+    this.nationality = 'India',
+    this.foreignNumber,
     this.occupation,
     this.email,
     this.age,
@@ -89,6 +93,12 @@ class PatientModel {
       doctorId: record.getStringValue('doctor'),
       clinicId: record.getStringValue('clinic'),
       gender: record.getStringValue('gender'),
+      nationality: record.getStringValue('nationality').isNotEmpty
+          ? record.getStringValue('nationality')
+          : 'India',
+      foreignNumber: record.getStringValue('foreign_number').isNotEmpty
+          ? record.getStringValue('foreign_number')
+          : null,
       occupation: record.getStringValue('occupation'),
       email: record.getStringValue('email'),
       age: record.getIntValue('age'),
@@ -165,6 +175,8 @@ class PatientModel {
       'doctor': doctorId,
       if (clinicId != null && clinicId!.isNotEmpty) 'clinic': clinicId,
       if (gender != null && gender!.isNotEmpty) 'gender': gender,
+      if (nationality != null && nationality!.isNotEmpty) 'nationality': nationality,
+      if (foreignNumber != null && foreignNumber!.isNotEmpty) 'foreign_number': foreignNumber,
       if (occupation != null && occupation!.isNotEmpty) 'occupation': occupation,
       if (email != null && email!.isNotEmpty) 'email': email,
       if (age != null) 'age': age,
@@ -184,5 +196,73 @@ class PatientModel {
         'privacy_policy_accepted_date': privacyPolicyAcceptedDate,
       'requires_patient_details_update': requiresPatientDetailsUpdate,
     };
+  }
+
+  PatientModel copyWith({
+    String? id,
+    String? fullName,
+    String? phone,
+    String? patientId,
+    String? photo,
+    String? dateOfBirth,
+    String? address,
+    String? city,
+    String? area,
+    String? pincode,
+    String? emergencyContact,
+    String? allergiesConditions,
+    String? doctorId,
+    String? clinicId,
+    String? gender,
+    String? nationality,
+    String? foreignNumber,
+    String? occupation,
+    String? email,
+    int? age,
+    String? reference,
+    String? howDidYouHear,
+    String? personalNotes,
+    String? relationToPrimary,
+    bool? consentGiven,
+    String? consentDate,
+    bool? privacyPolicyAccepted,
+    String? privacyPolicyAcceptedDate,
+    DateTime? created,
+    DateTime? updated,
+    bool? requiresPatientDetailsUpdate,
+  }) {
+    return PatientModel(
+      id: id ?? this.id,
+      fullName: fullName ?? this.fullName,
+      phone: phone ?? this.phone,
+      patientId: patientId ?? this.patientId,
+      photo: photo ?? this.photo,
+      dateOfBirth: dateOfBirth ?? this.dateOfBirth,
+      address: address ?? this.address,
+      city: city ?? this.city,
+      area: area ?? this.area,
+      pincode: pincode ?? this.pincode,
+      emergencyContact: emergencyContact ?? this.emergencyContact,
+      allergiesConditions: allergiesConditions ?? this.allergiesConditions,
+      doctorId: doctorId ?? this.doctorId,
+      clinicId: clinicId ?? this.clinicId,
+      gender: gender ?? this.gender,
+      nationality: nationality ?? this.nationality,
+      foreignNumber: foreignNumber ?? this.foreignNumber,
+      occupation: occupation ?? this.occupation,
+      email: email ?? this.email,
+      age: age ?? this.age,
+      reference: reference ?? this.reference,
+      howDidYouHear: howDidYouHear ?? this.howDidYouHear,
+      personalNotes: personalNotes ?? this.personalNotes,
+      relationToPrimary: relationToPrimary ?? this.relationToPrimary,
+      consentGiven: consentGiven ?? this.consentGiven,
+      consentDate: consentDate ?? this.consentDate,
+      privacyPolicyAccepted: privacyPolicyAccepted ?? this.privacyPolicyAccepted,
+      privacyPolicyAcceptedDate: privacyPolicyAcceptedDate ?? this.privacyPolicyAcceptedDate,
+      created: created ?? this.created,
+      updated: updated ?? this.updated,
+      requiresPatientDetailsUpdate: requiresPatientDetailsUpdate ?? this.requiresPatientDetailsUpdate,
+    );
   }
 }

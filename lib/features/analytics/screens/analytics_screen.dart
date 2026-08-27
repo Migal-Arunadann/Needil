@@ -2,14 +2,13 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'dart:math' as math;
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:pms_app/features/analytics/providers/analytics_provider.dart';
 import 'package:pms_app/core/theme/app_theme.dart';
-import 'package:pms_app/core/widgets/responsive_wrapper.dart';
+import 'package:pms_app/core/widgets/shimmer_effect.dart';
 import 'package:pms_app/features/dashboard/widgets/dashboard_widgets.dart';
 
 // --- Color palette for charts ------------------------------------------------
@@ -31,8 +30,13 @@ class AnalyticsScreen extends ConsumerWidget {
       backgroundColor: isDesktop ? Colors.transparent : context.colors.background,
       body: SafeArea(
         child: data.isLoading
-              ? const _LoadingView()
-              : RefreshIndicator(
+            ? SingleChildScrollView(
+                padding: isDesktop
+                    ? const EdgeInsets.fromLTRB(36, 20, 36, 100)
+                    : const EdgeInsets.fromLTRB(24, 20, 24, 100),
+                child: _AnalyticsSkeletonView(isDesktop: isDesktop),
+              )
+            : RefreshIndicator(
                   color: context.colors.primary,
                   onRefresh: () => ref.read(analyticsProvider.notifier).load(),
                   child: CustomScrollView(
@@ -694,24 +698,247 @@ class _SectionHeader extends StatelessWidget {
 }
 
 // ------
-// Loading view
+// Analytics Skeleton View
 // ------
 
-class _LoadingView extends StatelessWidget {
-  const _LoadingView();
+class _AnalyticsSkeletonView extends StatelessWidget {
+  final bool isDesktop;
+
+  const _AnalyticsSkeletonView({required this.isDesktop});
+
+  Widget _buildKpiCard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: context.colors.cardBackground,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              SkeletonBox(width: 80, height: 12, borderRadius: 3),
+              SkeletonCircle(size: 28),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const SkeletonBox(width: 60, height: 22, borderRadius: 4),
+          const SizedBox(height: 8),
+          const SkeletonBox(width: 90, height: 10, borderRadius: 3),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return ShimmerEffect(
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircularProgressIndicator(color: context.colors.primary),
-          const SizedBox(height: 16),
-          Text(
-            'Loading analytics…',
-            style: TextStyle(color: context.colors.textSecondary),
+          // Header Skeleton
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  SkeletonBox(width: 140, height: 26, borderRadius: 6),
+                  SizedBox(height: 6),
+                  SkeletonBox(width: 220, height: 14, borderRadius: 4),
+                ],
+              ),
+              const SkeletonBox(width: 130, height: 36, borderRadius: 10),
+            ],
           ),
+          const SizedBox(height: 20),
+
+          // KPI Metric Cards (4 cards)
+          if (isDesktop)
+            Row(
+              children: [
+                Expanded(child: _buildKpiCard(context)),
+                const SizedBox(width: 16),
+                Expanded(child: _buildKpiCard(context)),
+                const SizedBox(width: 16),
+                Expanded(child: _buildKpiCard(context)),
+                const SizedBox(width: 16),
+                Expanded(child: _buildKpiCard(context)),
+              ],
+            )
+          else
+            Column(
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _buildKpiCard(context)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildKpiCard(context)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _buildKpiCard(context)),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildKpiCard(context)),
+                  ],
+                ),
+              ],
+            ),
+          const SizedBox(height: 16),
+
+          // Revenue / Trend Card Skeleton
+          Container(
+            height: 180,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: context.colors.cardBackground,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: const [
+                    SkeletonBox(width: 120, height: 16, borderRadius: 4),
+                    SkeletonBox(width: 60, height: 14, borderRadius: 4),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const SkeletonBox(width: 140, height: 28, borderRadius: 6),
+                const Spacer(),
+                const SkeletonBox(width: double.infinity, height: 40, borderRadius: 8),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Section Title
+          const SkeletonBox(width: 150, height: 18, borderRadius: 4),
+          const SizedBox(height: 12),
+
+          // Today's Snapshot (4 cards)
+          if (isDesktop)
+            Row(
+              children: List.generate(
+                4,
+                (i) => Expanded(
+                  child: Container(
+                    margin: EdgeInsets.only(right: i < 3 ? 16 : 0),
+                    height: 85,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: context.colors.cardBackground,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: const [
+                        SkeletonBox(width: 70, height: 11, borderRadius: 3),
+                        SkeletonBox(width: 45, height: 20, borderRadius: 4),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            Column(
+              children: List.generate(
+                4,
+                (i) => Container(
+                  margin: EdgeInsets.only(bottom: i < 3 ? 10 : 0),
+                  height: 65,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: context.colors.cardBackground,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: const [
+                      SkeletonBox(width: 110, height: 14, borderRadius: 3),
+                      SkeletonBox(width: 45, height: 18, borderRadius: 4),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          const SizedBox(height: 24),
+
+          // Charts Section Skeleton
+          if (isDesktop)
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    height: 280,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: context.colors.cardBackground,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        SkeletonBox(width: 140, height: 16, borderRadius: 4),
+                        SizedBox(height: 20),
+                        Expanded(child: SkeletonBox(width: double.infinity, height: double.infinity, borderRadius: 8)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Container(
+                    height: 280,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: context.colors.cardBackground,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        SkeletonBox(width: 140, height: 16, borderRadius: 4),
+                        SizedBox(height: 20),
+                        Expanded(child: SkeletonBox(width: double.infinity, height: double.infinity, borderRadius: 8)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            )
+          else ...[
+            Container(
+              height: 240,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: context.colors.cardBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: context.colors.border.withValues(alpha: 0.6)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  SkeletonBox(width: 130, height: 15, borderRadius: 4),
+                  SizedBox(height: 16),
+                  Expanded(child: SkeletonBox(width: double.infinity, height: double.infinity, borderRadius: 8)),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

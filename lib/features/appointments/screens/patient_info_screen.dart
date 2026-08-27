@@ -51,6 +51,9 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
   final _emailCtrl = TextEditingController();
   final _referenceCtrl = TextEditingController();
   final _personalNotesCtrl = TextEditingController();
+  final _nationalityCtrl = TextEditingController(text: 'India');
+  final _foreignNumberCtrl = TextEditingController();
+  String _selectedForeignPhoneCode = '+1';
 
   String? _howDidYouHear;
   bool _isNewFamilyMember = false;
@@ -110,6 +113,16 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     if (existing.email != null && existing.email!.isNotEmpty) _emailCtrl.text = existing.email!;
     if (existing.personalNotes != null && existing.personalNotes!.isNotEmpty) _personalNotesCtrl.text = existing.personalNotes!;
     if (existing.gender != null && existing.gender!.isNotEmpty) _selectedGender = existing.gender;
+    if (existing.nationality != null && existing.nationality!.isNotEmpty) {
+      _nationalityCtrl.text = existing.nationality!;
+    } else {
+      _nationalityCtrl.text = 'India';
+    }
+    if (existing.foreignNumber != null && existing.foreignNumber!.isNotEmpty) {
+      _foreignNumberCtrl.text = existing.foreignNumber!;
+    } else {
+      _foreignNumberCtrl.clear();
+    }
     setState(() {
       _existingPatient = existing;
       _isRegisteredPatient = true;
@@ -122,6 +135,12 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
     if (primary.city != null && primary.city!.isNotEmpty) _cityCtrl.text = primary.city!;
     if (primary.area != null && primary.area!.isNotEmpty) _areaCtrl.text = primary.area!;
     if (primary.pincode != null && primary.pincode!.isNotEmpty) _pincodeCtrl.text = primary.pincode!;
+    if (primary.nationality != null && primary.nationality!.isNotEmpty) {
+      _nationalityCtrl.text = primary.nationality!;
+    } else {
+      _nationalityCtrl.text = 'India';
+    }
+    _foreignNumberCtrl.clear();
     if (!preserveName) _nameCtrl.clear();
     _dobCtrl.clear();
     _occupationCtrl.clear();
@@ -266,6 +285,8 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
           clinicId: widget.appointment.clinicId,
           dateOfBirth: _dobCtrl.text,
           gender: _selectedGender,
+          nationality: _nationalityCtrl.text.trim().isNotEmpty ? _nationalityCtrl.text.trim() : 'India',
+          foreignNumber: _foreignNumberCtrl.text.trim().isNotEmpty ? _foreignNumberCtrl.text.trim() : null,
           city: _cityCtrl.text.isNotEmpty ? _cityCtrl.text : null,
           area: _areaCtrl.text.isNotEmpty ? _areaCtrl.text : null,
           pincode: _pincodeCtrl.text.isNotEmpty ? _pincodeCtrl.text : null,
@@ -434,6 +455,10 @@ class _PatientInfoScreenState extends ConsumerState<PatientInfoScreen> {
                     emailCtrl: _emailCtrl,
                     referenceCtrl: _referenceCtrl,
                     personalNotesCtrl: _personalNotesCtrl,
+                    nationalityCtrl: _nationalityCtrl,
+                    foreignNumberCtrl: _foreignNumberCtrl,
+                    selectedForeignPhoneCode: _selectedForeignPhoneCode,
+                    onForeignPhoneCodeChanged: (v) => setState(() => _selectedForeignPhoneCode = v),
                     selectedGender: _selectedGender,
                     onGenderChanged: (v) => setState(() => _selectedGender = v),
                     consentGiven: _dataConsentGiven,

@@ -42,6 +42,9 @@ class ClinicModel {
   final DateTime? created;
   final DateTime? updated;
 
+  /// Grace period length in days before hard lock
+  static const int gracePeriodDays = 3;
+
   /// True when clinic has self-requested deletion and is in 30-day grace period.
   bool get isPendingDeletion => status == 'pending_deletion';
 
@@ -51,13 +54,41 @@ class ClinicModel {
     return purgeAt!.difference(DateTime.now()).inDays.clamp(0, 9999);
   }
 
-  /// True when the clinic has an active or trialing subscription that hasn't expired.
+  /// True when the clinic has an active, trialing, or base subscription that hasn't expired past the 3-day grace period.
   bool get isSubscriptionActive {
-    if (subscriptionStatus == 'trialing' || subscriptionStatus == 'active') {
+    if (isDeactivated) return false;
+    if (subscriptionStatus == 'canceled' || subscriptionStatus == 'expired') return false;
+    if (subscriptionStatus == 'trialing' || subscriptionStatus == 'active' || subscriptionStatus == 'base') {
       if (subscriptionEndDate == null) return true; // no end date = unlimited
-      return subscriptionEndDate!.isAfter(DateTime.now());
+      final graceExpiry = subscriptionEndDate!.add(const Duration(days: gracePeriodDays));
+      return DateTime.now().isBefore(graceExpiry);
     }
     return false;
+  }
+
+  /// True if currently past subscriptionEndDate but still within the 3-day grace period.
+  bool get isInGracePeriod {
+    if (isDeactivated || subscriptionEndDate == null) return false;
+    if (subscriptionStatus == 'canceled' || subscriptionStatus == 'expired') return false;
+    final now = DateTime.now();
+    final isPastEnd = now.isAfter(subscriptionEndDate!);
+    final isBeforeGraceEnd = now.isBefore(subscriptionEndDate!.add(const Duration(days: gracePeriodDays)));
+    return isPastEnd && isBeforeGraceEnd;
+  }
+
+  /// True if completely expired past the 3-day grace period (or marked canceled/expired/deactivated).
+  bool get isHardLocked {
+    if (isDeactivated) return true;
+    if (subscriptionStatus == 'canceled' || subscriptionStatus == 'expired') return true;
+    if (subscriptionEndDate == null) return false;
+    final graceEnd = subscriptionEndDate!.add(const Duration(days: gracePeriodDays));
+    return DateTime.now().isAfter(graceEnd);
+  }
+
+  /// Days until subscription expires (positive = remaining, negative = expired/overdue).
+  int? get daysUntilExpiration {
+    if (subscriptionEndDate == null) return null;
+    return subscriptionEndDate!.difference(DateTime.now()).inDays;
   }
 
   ClinicModel({
