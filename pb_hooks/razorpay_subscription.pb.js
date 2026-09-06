@@ -1,488 +1,204 @@
-/// <reference path="../pb_data/types.d.ts" />
-
-/**
- * Needil PMS — Razorpay Subscription Management Routes
- * All payment secret handling happens server-side here.
- * The Flutter client NEVER receives RAZORPAY_KEY_SECRET.
- */
+﻿/// <reference path=" ../pb_data/types.d.ts\ />
 
 console.log('>>> [RAZORPAY_HOOKS] Subscription hooks loaded');
 
-const RZP_KEY_ID = $os.getenv('RAZORPAY_KEY_ID') || '';
-const RZP_KEY_SECRET = $os.getenv('RAZORPAY_KEY_SECRET') || '';
-
-// Pure-JS base64 (btoa / $security.base64Encode not available in this PB runtime)
-function _base64(str) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  let out = '';
-  for (let block, code, idx = 0, map = chars;
-       str.charAt(idx | 0) || (map = '=', idx % 1);
-       out += map.charAt(63 & block >> 8 - idx % 1 * 8)) {
-    code = str.charCodeAt(idx += 3 / 4);
-    block = block << 8 | code;
-  }
-  return out;
-}
-
-const RZP_AUTH = 'Basic ' + _base64(RZP_KEY_ID + ':' + RZP_KEY_SECRET);
-
-// Helper: get authenticated record from PocketBase request context
-function getAuth(e) {
-  if (e.auth) return e.auth;
-  if (e.get && typeof e.get === 'function') {
-    const rec = e.get('authRecord');
-    if (rec) return rec;
-  }
-  if (e.httpContext && typeof e.httpContext.get === 'function') {
-    const rec = e.httpContext.get('authRecord');
-    if (rec) return rec;
-  }
-  try {
-    if (typeof $app.requestInfo === 'function') {
-      const info = $app.requestInfo();
-      if (info && info.authRecord) return info.authRecord;
-    }
-  } catch (_) {}
-  return null;
-}
-
-// Helper: save record across PB versions
-function saveRecord(record) {
-  if (typeof $app.save === 'function') {
-    return $app.save(record);
-  }
-  if ($app.dao && typeof $app.dao().saveRecord === 'function') {
-    return $app.dao().saveRecord(record);
-  }
-}
-
-// Helper: find record by ID across PB versions
-function findRecordById(collection, id) {
-  try {
-    if (typeof $app.findRecordById === 'function') {
-      return $app.findRecordById(collection, id);
-    }
-    if ($app.dao && typeof $app.dao().findRecordById === 'function') {
-      return $app.dao().findRecordById(collection, id);
-    }
-  } catch (_) {}
-  return null;
-}
-
-// Helper: find first record by filter across PB versions
-function findFirstRecordByFilter(collection, filter) {
-  try {
-    if (typeof $app.findFirstRecordByFilter === 'function') {
-      return $app.findFirstRecordByFilter(collection, filter);
-    }
-    if ($app.dao && typeof $app.dao().findFirstRecordByFilter === 'function') {
-      return $app.dao().findFirstRecordByFilter(collection, filter);
-    }
-  } catch (_) {}
-  return null;
-}
-
-// Helper: find collection
-function findCollection(nameOrId) {
-  try {
-    if (typeof $app.findCollectionByNameOrId === 'function') {
-      return $app.findCollectionByNameOrId(nameOrId);
-    }
-    if ($app.dao && typeof $app.dao().findCollectionByNameOrId === 'function') {
-      return $app.dao().findCollectionByNameOrId(nameOrId);
-    }
-  } catch (_) {}
-  return null;
-}
-
-
-// Helper: get system setting value
-function getSystemSetting(key, defaultValue) {
-  try {
-    const record = findFirstRecordByFilter('system_settings', `key = '${key}'`);
-    return record ? record.getString('value') : defaultValue;
-  } catch (_) {
-    return defaultValue;
-  }
-}
-
-// Helper: find clinic record by id
-function findClinic(clinicId) {
-  return findRecordById('clinics', clinicId);
-}
-
-// ─── Route 1: Start Free Trial ───────────────────────────────────────────────
-// POST /api/custom/start-trial
 routerAdd('POST', '/api/custom/start-trial', (e) => {
-  const auth = e.auth;
-  if (!auth) {
-    return e.json(401, { error: 'Unauthorized' });
-  }
-
-  try {
-    const clinic = findClinic(auth.id);
-    if (!clinic) {
-      return e.json(404, { error: 'Clinic not found' });
-    }
-
-    // Server-side trial abuse prevention
-    if (clinic.getBool('has_used_trial')) {
-      return e.json(400, { error: 'Free trial already used for this account' });
-    }
-
-    const trialDays = parseInt(getSystemSetting('default_trial_days', '14'));
-    const now = new Date();
-    const trialEnd = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
-
-    // Apply promo extended trial if code was passed
-    let promoCode = '';
-    let extraDays = 0;
-    try {
-      const body = (e.request.data || {});
-      promoCode = body.promoCode || '';
-    } catch (_) {}
-
-    if (promoCode) {
-      try {
-        const promo = findFirstRecordByFilter(
-          'promo_codes',
-          `code = '${promoCode}' && discount_type = 'extended_trial' && is_active = true`
-        );
-        if (promo) {
-          const validUntil = promo.getString('valid_until');
-          const maxUses = promo.getInt('max_uses');
-          const timesUsed = promo.getInt('times_used');
-          const now2 = new Date();
-          const isExpired = validUntil && new Date(validUntil) < now2;
-          const isExhausted = maxUses > 0 && timesUsed >= maxUses;
-          if (!isExpired && !isExhausted) {
-            extraDays = promo.getInt('discount_value');
-            // Increment usage
-            promo.set('times_used', timesUsed + 1);
-            saveRecord(promo);
-          }
-        }
-      } catch (_) {}
-    }
-
-    if (extraDays > 0) {
-      trialEnd.setTime(trialEnd.getTime() + extraDays * 24 * 60 * 60 * 1000);
-    }
-
-    clinic.set('subscription_status', 'trialing');
-    clinic.set('subscription_end_date', trialEnd.toISOString());
-    clinic.set('has_used_trial', true);
-    clinic.set('trial_started_at', now.toISOString());
-    if (promoCode) clinic.set('promo_code_used', promoCode);
-    saveRecord(clinic);
-
-    console.log(`>>> [RAZORPAY_HOOKS] Trial started for clinic ${auth.id}, ends ${trialEnd.toISOString()}`);
-    return e.json(200, {
-      success: true,
-      trialEndDate: trialEnd.toISOString(),
-      trialDays: trialDays + extraDays,
-    });
-  } catch (err) {
-    console.error('>>> [RAZORPAY_HOOKS] start-trial error:', err);
-    return e.json(500, { error: 'Failed to start trial' });
-  }
+ const auth = e.auth;
+ if (!auth) return e.json(401, { error: 'Unauthorized' });
+ try {
+ const clinic = .findRecordById('clinics', auth.id);
+ if (!clinic) return e.json(404, { error: 'Clinic not found' });
+ const hasTrial = clinic.get('has_used_trial');
+ if (hasTrial === true || hasTrial === 1 || hasTrial === 'true') {
+ return e.json(400, { error: 'Free trial already used for this account' });
+ }
+ const now = new Date();
+ const trialEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+ clinic.set('subscription_status', 'trialing');
+ clinic.set('trial_start_date', now.toISOString());
+ clinic.set('trial_end_date', trialEnd.toISOString());
+ clinic.set('subscription_end_date', trialEnd.toISOString());
+ clinic.set('has_used_trial', true);
+ .save(clinic);
+ return e.json(200, { success: true, trialEndDate: trialEnd.toISOString(), trialDays: 14 });
+ } catch (err) {
+ console.error('>>> [RAZORPAY_HOOKS] start-trial error:', err);
+ return e.json(500, { error: 'Failed to start trial: ' + (err.message || String(err)) });
+ }
 });
 
-// ─── Route 2: Validate Promo Code ────────────────────────────────────────────
-// POST /api/custom/validate-promo
 routerAdd('POST', '/api/custom/validate-promo', (e) => {
-  const auth = e.auth;
-  if (!auth) {
-    return e.json(401, { error: 'Unauthorized' });
-  }
-
-  let body;
-  try {
-    body = (e.request.data || {});
-  } catch (_) {
-    return e.json(400, { error: 'Invalid JSON body' });
-  }
-
-  const code = (body.code || '').toUpperCase();
-  const billingCycle = body.billingCycle || '';
-  const planId = body.planId || '';
-
-  if (!code) {
-    return e.json(400, { error: 'Promo code is required' });
-  }
-
-  try {
-    const promo = findFirstRecordByFilter(
-      'promo_codes',
-      `code = '${code}'`
-    );
-
-    if (!promo) {
-      return e.json(200, { valid: false, error: 'Promo code not found' });
-    }
-
-    if (!promo.getBool('is_active')) {
-      return e.json(200, { valid: false, error: 'This promo code is no longer active' });
-    }
-
-    const validFrom = promo.getString('valid_from');
-    const validUntil = promo.getString('valid_until');
-    const now = new Date();
-
-    if (validFrom && new Date(validFrom) > now) {
-      return e.json(200, { valid: false, error: 'This promo code is not yet active' });
-    }
-    if (validUntil && new Date(validUntil) < now) {
-      return e.json(200, { valid: false, error: 'This promo code has expired' });
-    }
-
-    const maxUses = promo.getInt('max_uses');
-    const timesUsed = promo.getInt('times_used');
-    if (maxUses > 0 && timesUsed >= maxUses) {
-      return e.json(200, { valid: false, error: 'This promo code has reached its usage limit' });
-    }
-
-    // Check applicable cycles
-    const applicableCycles = promo.getString('applicable_cycles');
-    if (applicableCycles && billingCycle) {
-      const allowed = applicableCycles.split(',').map(s => s.trim());
-      if (!allowed.includes(billingCycle)) {
-        return e.json(200, { valid: false, error: `This promo code is not valid for the ${billingCycle} plan` });
-      }
-    }
-
-    const discountType = promo.getString('discount_type');
-    const discountValue = promo.getInt('discount_value');
-
-    // Calculate discounted price if planId provided
-    let finalPricePaise = null;
-    let discountAmountPaise = null;
-    let extraTrialDays = null;
-
-    if (discountType === 'extended_trial') {
-      extraTrialDays = discountValue;
-    } else if (planId) {
-      try {
-        const plan = findRecordById('subscription_plans', planId);
-        if (plan) {
-          const originalPrice = plan.getInt('price_paise');
-          if (discountType === 'percentage') {
-            discountAmountPaise = Math.floor(originalPrice * discountValue / 100);
-          } else if (discountType === 'fixed') {
-            discountAmountPaise = Math.min(discountValue, originalPrice);
-          }
-          finalPricePaise = Math.max(0, originalPrice - discountAmountPaise);
-        }
-      } catch (_) {}
-    }
-
-    return e.json(200, {
-      valid: true,
-      discountType,
-      discountValue,
-      finalPricePaise,
-      discountAmountPaise,
-      extraTrialDays,
-      promoCode: promo.getString('code'),
-    });
-  } catch (err) {
-    console.error('>>> [RAZORPAY_HOOKS] validate-promo error:', err);
-    return e.json(500, { error: 'Failed to validate promo code' });
-  }
+ const auth = e.auth;
+ if (!auth) return e.json(401, { error: 'Unauthorized' });
+ return e.json(200, { valid: false, discount: 0 });
 });
 
-// ─── Route 3: Create Subscription ────────────────────────────────────────────
-// POST /api/custom/create-subscription
 routerAdd('POST', '/api/custom/create-subscription', (e) => {
-  const auth = e.auth;
-  if (!auth) {
-    return e.json(401, { error: 'Unauthorized' });
-  }
+ const auth = e.auth;
+ if (!auth) return e.json(401, { error: 'Unauthorized' });
 
-  if (!RZP_KEY_ID || !RZP_KEY_SECRET) {
-    return e.json(500, { error: 'Razorpay is not configured. Contact support.' });
-  }
+ const KEY_ID = .getenv('RAZORPAY_KEY_ID') || '';
+ const KEY_SECRET = .getenv('RAZORPAY_KEY_SECRET') || '';
+ if (!KEY_ID || !KEY_SECRET) return e.json(500, { error: 'Razorpay not configured' });
 
-  let body;
-  try {
-    body = (e.request.data || {});
-  } catch (_) {
-    return e.json(400, { error: 'Invalid JSON body' });
-  }
+ const AUTH_HEADER = 'Basic ' + (function(s) {
+ var ch = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/', o = '';
+ for (var bl, x, i = 0, m = ch; s.charAt(i | 0) || (m = '=', i % 1); o += m.charAt(63 & bl >> 8 - i % 1 * 8)) {
+ x = s.charCodeAt(i += 3 / 4);
+ bl = bl << 8 | x;
+ }
+ return o;
+ })(KEY_ID + ':' + KEY_SECRET);
 
-  const planId = body.planId || '';
-  const promoCode = (body.promoCode || '').toUpperCase();
+ let planId = '';
+ let promoCode = '';
 
-  if (!planId) {
-    return e.json(400, { error: 'planId is required' });
-  }
+ // 1. Try e.requestInfo().body
+ try {
+ const ri = e.requestInfo();
+ if (ri && ri.body) {
+ if (typeof ri.body === 'string') {
+ const parsed = JSON.parse(ri.body);
+ planId = (parsed.planId || '').toString();
+ promoCode = (parsed.promoCode || '').toString();
+ } else if (typeof ri.body === 'object') {
+ planId = (ri.body.planId || ri.body['planId'] || '').toString();
+ promoCode = (ri.body.promoCode || ri.body['promoCode'] || '').toString();
+ }
+ }
+ } catch (err) {
+ console.log('>>> [RAZORPAY_HOOKS] requestInfo error:', err);
+ }
 
-  try {
-    const plan = findRecordById('subscription_plans', planId);
-    if (!plan) {
-      return e.json(404, { error: 'Plan not found' });
-    }
+ // 2. Try e.bindBody with predefined keys
+ if (!planId) {
+ try {
+ const data = { planId: '', promoCode: '' };
+ e.bindBody(data);
+ if (data.planId) planId = data.planId.toString();
+ if (data.promoCode) promoCode = data.promoCode.toString();
+ } catch (err) {
+ console.log('>>> [RAZORPAY_HOOKS] bindBody error:', err);
+ }
+ }
 
-    const razorpayPlanId = plan.getString('razorpay_plan_id');
-    if (!razorpayPlanId) {
-      return e.json(400, { error: 'This plan is not yet configured with a Razorpay Plan ID. Contact support.' });
-    }
+ if (!planId) {
+ console.error('>>> [RAZORPAY_HOOKS] planId missing. requestInfo:', JSON.stringify(e.requestInfo() || {}));
+ return e.json(400, { error: 'planId is required' });
+ }
 
-    const clinic = findClinic(auth.id);
-    if (!clinic) {
-      return e.json(404, { error: 'Clinic not found' });
-    }
+ try {
+ const plan = .findRecordById('subscription_plans', planId);
+ if (!plan) return e.json(404, { error: 'Plan not found' });
+ const rzpPlanId = plan.get('razorpay_plan_id') || (plan.getString ? plan.getString('razorpay_plan_id') : '');
+ if (!rzpPlanId) return e.json(400, { error: 'Plan not configured with Razorpay ID' });
 
-    // Determine total billing cycles based on billing cycle type
-    const billingCycle = plan.getString('billing_cycle');
-    let totalCount = 12; // default monthly
-    if (billingCycle === 'semi_annual') totalCount = 4;
-    if (billingCycle === 'annual') totalCount = 5;
+ const clinic = .findRecordById('clinics', auth.id);
+ if (!clinic) return e.json(404, { error: 'Clinic not found' });
 
-    // Build Razorpay subscription payload
-    const subscriptionPayload = {
-      plan_id: razorpayPlanId,
-      total_count: totalCount,
-      quantity: 1,
-      customer_notify: 1,
-      notes: {
-        clinic_id: auth.id,
-        plan_id: planId,
-        billing_cycle: billingCycle,
-        promo_code: promoCode,
-      },
-    };
+ const billing = plan.get('billing_cycle') || (plan.getString ? plan.getString('billing_cycle') : '') || 'monthly';
+ let totalCount = 12;
+ if (billing === 'semi_annual') totalCount = 4;
+ if (billing === 'annual') totalCount = 5;
 
-    // Call Razorpay Subscriptions API
-    const response = $http.send({
-      method: 'POST',
-      url: 'https://api.razorpay.com/v1/subscriptions',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': RZP_AUTH,
-      },
-      body: JSON.stringify(subscriptionPayload),
-      timeout: 30,
-    });
+ const resp = .send({
+ method: 'POST',
+ url: 'https://api.razorpay.com/v1/subscriptions',
+ headers: {
+ 'Content-Type': 'application/json',
+ 'Authorization': AUTH_HEADER,
+ },
+ body: JSON.stringify({
+ plan_id: rzpPlanId,
+ total_count: totalCount,
+ quantity: 1,
+ customer_notify: 1,
+ notes: {
+ clinic_id: auth.id,
+ plan_id: planId,
+ },
+ }),
+ timeout: 30,
+ });
 
-    if (response.statusCode !== 200 && response.statusCode !== 201) {
-      console.error('>>> [RAZORPAY_HOOKS] Razorpay error:', response.raw);
-      return e.json(502, { error: 'Failed to create subscription with Razorpay. Please try again.' });
-    }
+ if (resp.statusCode !== 200 && resp.statusCode !== 201) {
+ console.error('>>> [RAZORPAY_HOOKS] Razorpay API error:', resp.raw);
+ return e.json(502, { error: 'Razorpay error: ' + resp.raw });
+ }
 
-    const rzpData = JSON.parse(response.raw);
+ const rzp = resp.json || JSON.parse(resp.raw || '{}');
+ clinic.set('razorpay_subscription_id', rzp.id);
+ clinic.set('subscription_plan_id', planId);
+ .save(clinic);
 
-    // Save subscription ID on clinic record
-    clinic.set('razorpay_subscription_id', rzpData.id);
-    clinic.set('subscription_plan_id', planId);
-    if (promoCode) clinic.set('promo_code_used', promoCode);
-    saveRecord(clinic);
-
-    console.log(`>>> [RAZORPAY_HOOKS] Subscription created: ${rzpData.id} for clinic ${auth.id}`);
-
-    return e.json(200, {
-      subscriptionId: rzpData.id,
-      shortUrl: rzpData.short_url || '',
-      razorpayKeyId: RZP_KEY_ID,
-    });
-  } catch (err) {
-    console.error('>>> [RAZORPAY_HOOKS] create-subscription error:', err);
-    return e.json(500, { error: 'Failed to create subscription' });
-  }
+ console.log('>>> [RAZORPAY_HOOKS] Subscription created:', rzp.id);
+ return e.json(200, {
+ subscriptionId: rzp.id,
+ shortUrl: rzp.short_url || '',
+ razorpayKeyId: KEY_ID,
+ });
+ } catch (err) {
+ console.error('>>> [RAZORPAY_HOOKS] create-subscription error:', err);
+ return e.json(500, { error: 'Failed: ' + (err.message || String(err)) });
+ }
 });
 
-// ─── Route 4: Verify Payment ──────────────────────────────────────────────────
-// POST /api/custom/verify-payment
 routerAdd('POST', '/api/custom/verify-payment', (e) => {
-  const auth = e.auth;
-  if (!auth) {
-    return e.json(401, { error: 'Unauthorized' });
-  }
+ const auth = e.auth;
+ if (!auth) return e.json(401, { error: 'Unauthorized' });
 
-  let body;
-  try {
-    body = (e.request.data || {});
-  } catch (_) {
-    return e.json(400, { error: 'Invalid JSON body' });
-  }
+ const KEY_SECRET = .getenv('RAZORPAY_KEY_SECRET') || '';
+ let paymentId = '';
+ let subscriptionId = '';
+ let sig = '';
 
-  const { paymentId, subscriptionId, signature } = body;
-  if (!paymentId || !subscriptionId || !signature) {
-    return e.json(400, { error: 'paymentId, subscriptionId, and signature are required' });
-  }
+ // 1. Try e.requestInfo().body
+ try {
+ const ri = e.requestInfo();
+ if (ri && ri.body) {
+ if (typeof ri.body === 'string') {
+ const parsed = JSON.parse(ri.body);
+ paymentId = (parsed.paymentId || '').toString();
+ subscriptionId = (parsed.subscriptionId || '').toString();
+ sig = (parsed.signature || '').toString();
+ } else if (typeof ri.body === 'object') {
+ paymentId = (ri.body.paymentId || ri.body['paymentId'] || '').toString();
+ subscriptionId = (ri.body.subscriptionId || ri.body['subscriptionId'] || '').toString();
+ sig = (ri.body.signature || ri.body['signature'] || '').toString();
+ }
+ }
+ } catch (_) {}
 
-  try {
-    // Verify HMAC-SHA256 signature
-    const message = paymentId + '|' + subscriptionId;
-    const expectedSignature = $security.hs256(message, RZP_KEY_SECRET);
+ // 2. Try e.bindBody
+ if (!paymentId || !subscriptionId || !sig) {
+ try {
+ const data = { paymentId: '', subscriptionId: '', signature: '' };
+ e.bindBody(data);
+ paymentId = paymentId || (data.paymentId || '').toString();
+ subscriptionId = subscriptionId || (data.subscriptionId || '').toString();
+ sig = sig || (data.signature || '').toString();
+ } catch (_) {}
+ }
 
-    if (signature !== expectedSignature) {
-      console.error(`>>> [RAZORPAY_HOOKS] Signature mismatch for payment ${paymentId}`);
-      return e.json(400, { error: 'Payment verification failed: invalid signature' });
-    }
+ if (!paymentId || !subscriptionId || !sig) {
+ return e.json(400, { error: 'Missing required fields: paymentId, subscriptionId, signature' });
+ }
 
-    const clinic = findClinic(auth.id);
-    if (!clinic) {
-      return e.json(404, { error: 'Clinic not found' });
-    }
-
-    // Determine plan details from saved subscription_plan_id
-    let billingCycle = 'monthly';
-    let pricePaise = 0;
-    const planId = clinic.getString('subscription_plan_id');
-    let planRecord = null;
-    if (planId) {
-      try {
-        planRecord = findRecordById('subscription_plans', planId);
-        if (planRecord) {
-          billingCycle = planRecord.getString('billing_cycle');
-          pricePaise = planRecord.getInt('price_paise');
-        }
-      } catch (_) {}
-    }
-
-    // Calculate subscription end date from billing cycle
-    const now = new Date();
-    let endDate = new Date(now);
-    if (billingCycle === 'monthly') endDate.setMonth(endDate.getMonth() + 1);
-    else if (billingCycle === 'semi_annual') endDate.setMonth(endDate.getMonth() + 6);
-    else if (billingCycle === 'annual') endDate.setFullYear(endDate.getFullYear() + 1);
-
-    // Update clinic subscription
-    clinic.set('subscription_status', 'active');
-    clinic.set('subscription_end_date', endDate.toISOString());
-    clinic.set('razorpay_subscription_id', subscriptionId);
-    saveRecord(clinic);
-
-    // Log to payment_history
-    try {
-      const paymentHistoryCol = findCollection('payment_history');
-      if (paymentHistoryCol) {
-        const histRecord = new Record(paymentHistoryCol);
-        histRecord.set('clinic_id', auth.id);
-        histRecord.set('razorpay_payment_id', paymentId);
-        histRecord.set('razorpay_subscription_id', subscriptionId);
-        histRecord.set('amount_paise', pricePaise);
-        histRecord.set('currency', 'INR');
-        histRecord.set('status', 'success');
-        histRecord.set('billing_cycle', billingCycle);
-        histRecord.set('promo_code', clinic.getString('promo_code_used') || '');
-        histRecord.set('event_type', 'payment.verified');
-        histRecord.set('timestamp', now.toISOString());
-        saveRecord(histRecord);
-      }
-    } catch (logErr) {
-      console.error('>>> [RAZORPAY_HOOKS] Failed to log payment history:', logErr);
-    }
-
-    console.log(`>>> [RAZORPAY_HOOKS] Payment verified: ${paymentId}, clinic ${auth.id} now active until ${endDate.toISOString()}`);
-    return e.json(200, {
-      success: true,
-      subscriptionStatus: 'active',
-      subscriptionEndDate: endDate.toISOString(),
-    });
-  } catch (err) {
-    console.error('>>> [RAZORPAY_HOOKS] verify-payment error:', err);
-    return e.json(500, { error: 'Failed to verify payment' });
-  }
+ try {
+ const expected = .hs256(paymentId + '|' + subscriptionId, KEY_SECRET);
+ if (expected !== sig) {
+ console.error('>>> [RAZORPAY_HOOKS] Signature mismatch. Expected:', expected, 'Got:', sig);
+ return e.json(400, { error: 'Invalid payment signature' });
+ }
+ const clinic = .findRecordById('clinics', auth.id);
+ if (!clinic) return e.json(404, { error: 'Clinic not found' });
+ clinic.set('subscription_status', 'active');
+ clinic.set('last_payment_id', paymentId);
+ .save(clinic);
+ console.log('>>> [RAZORPAY_HOOKS] Payment verified for clinic:', auth.id);
+ return e.json(200, { success: true, subscriptionStatus: 'active' });
+ } catch (err) {
+ console.error('>>> [RAZORPAY_HOOKS] verify-payment error:', err);
+ return e.json(500, { error: 'Failed: ' + (err.message || String(err)) });
+ }
 });
