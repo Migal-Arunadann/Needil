@@ -1,4 +1,4 @@
-﻿/// <reference path="../pb_data/types.d.ts" />
+/// <reference path="../pb_data/types.d.ts" />
 
 /**
  * Needil PMS — Razorpay Subscription Management Routes
@@ -10,7 +10,21 @@ console.log('>>> [RAZORPAY_HOOKS] Subscription hooks loaded');
 
 const RZP_KEY_ID = $os.getenv('RAZORPAY_KEY_ID') || '';
 const RZP_KEY_SECRET = $os.getenv('RAZORPAY_KEY_SECRET') || '';
-const RZP_AUTH = 'Basic ' + $security.base64Encode(RZP_KEY_ID + ':' + RZP_KEY_SECRET);
+
+// Pure-JS base64 (btoa / $security.base64Encode not available in this PB runtime)
+function _base64(str) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let out = '';
+  for (let block, code, idx = 0, map = chars;
+       str.charAt(idx | 0) || (map = '=', idx % 1);
+       out += map.charAt(63 & block >> 8 - idx % 1 * 8)) {
+    code = str.charCodeAt(idx += 3 / 4);
+    block = block << 8 | code;
+  }
+  return out;
+}
+
+const RZP_AUTH = 'Basic ' + _base64(RZP_KEY_ID + ':' + RZP_KEY_SECRET);
 
 // Helper: get authenticated record from PocketBase request context
 function getAuth(e) {
