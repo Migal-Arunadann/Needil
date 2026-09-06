@@ -66,3 +66,32 @@ onRecordAfterUpdateSuccess((e) => {
 onRecordAfterDeleteSuccess((e) => {
   writeAuditLog(e, 'DELETE');
 }, ...AUDITED_COLLECTIONS);
+
+// ─── Subscription Lifecycle Audit ────────────────────────────────────────────
+// Log subscription-related field changes on clinics
+onRecordAfterUpdateSuccess((e) => {
+  if (!e.record) return;
+  const oldStatus = e.oldRecord ? e.oldRecord.getString('subscription_status') : '';
+  const newStatus = e.record.getString('subscription_status');
+  if (oldStatus === newStatus) return; // No subscription status change
+
+  try {
+    const auditLogsCollection = $app.findCollectionByNameOrId('audit_logs');
+    if (!auditLogsCollection) return;
+
+    const logRecord = new Record(auditLogsCollection);
+    logRecord.set('user_id', e.record.id);
+    logRecord.set('user_role', 'system');
+    logRecord.set('action', `SUBSCRIPTION_${newStatus.toUpperCase()}`);
+    logRecord.set('target_id', e.record.id);
+    logRecord.set('details', `Subscription status changed from ${oldStatus} to ${newStatus}`);
+    logRecord.set('timestamp', new Date().toISOString());
+    logRecord.set('ip_address', '');
+    logRecord.set('clinic_id', e.record.id);
+    $app.save(logRecord);
+
+    console.log(`>>> [AUDIT_HOOK] Subscription status change logged: ${oldStatus} -> ${newStatus} for clinic ${e.record.id}`);
+  } catch (err) {
+    console.error('>>> [AUDIT_HOOK] Subscription audit error:', err);
+  }
+}, 'clinics');
