@@ -11,7 +11,7 @@ const WEBHOOK_SECRET = $os.getenv('RAZORPAY_WEBHOOK_SECRET') || '';
 
 routerAdd('POST', '/api/webhooks/razorpay', (e) => {
   const signature = e.request.header.get('x-razorpay-signature');
-  const rawBody = readerToString(e.request.body);
+  const rawBody = JSON.stringify(e.request.data || {});
 
   if (!signature || !rawBody) {
     console.error('>>> [WEBHOOK_HOOK] Missing signature or body');

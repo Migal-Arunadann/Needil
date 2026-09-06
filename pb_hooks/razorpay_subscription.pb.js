@@ -114,7 +114,7 @@ function findClinic(clinicId) {
 // ─── Route 1: Start Free Trial ───────────────────────────────────────────────
 // POST /api/custom/start-trial
 routerAdd('POST', '/api/custom/start-trial', (e) => {
-  const auth = getAuth(e);
+  const auth = e.auth;
   if (!auth) {
     return e.json(401, { error: 'Unauthorized' });
   }
@@ -138,7 +138,7 @@ routerAdd('POST', '/api/custom/start-trial', (e) => {
     let promoCode = '';
     let extraDays = 0;
     try {
-      const body = JSON.parse(readerToString(e.request.body));
+      const body = (e.request.data || {});
       promoCode = body.promoCode || '';
     } catch (_) {}
 
@@ -191,14 +191,14 @@ routerAdd('POST', '/api/custom/start-trial', (e) => {
 // ─── Route 2: Validate Promo Code ────────────────────────────────────────────
 // POST /api/custom/validate-promo
 routerAdd('POST', '/api/custom/validate-promo', (e) => {
-  const auth = getAuth(e);
+  const auth = e.auth;
   if (!auth) {
     return e.json(401, { error: 'Unauthorized' });
   }
 
   let body;
   try {
-    body = JSON.parse(readerToString(e.request.body));
+    body = (e.request.data || {});
   } catch (_) {
     return e.json(400, { error: 'Invalid JSON body' });
   }
@@ -294,7 +294,7 @@ routerAdd('POST', '/api/custom/validate-promo', (e) => {
 // ─── Route 3: Create Subscription ────────────────────────────────────────────
 // POST /api/custom/create-subscription
 routerAdd('POST', '/api/custom/create-subscription', (e) => {
-  const auth = getAuth(e);
+  const auth = e.auth;
   if (!auth) {
     return e.json(401, { error: 'Unauthorized' });
   }
@@ -305,7 +305,7 @@ routerAdd('POST', '/api/custom/create-subscription', (e) => {
 
   let body;
   try {
-    body = JSON.parse(readerToString(e.request.body));
+    body = (e.request.data || {});
   } catch (_) {
     return e.json(400, { error: 'Invalid JSON body' });
   }
@@ -394,14 +394,14 @@ routerAdd('POST', '/api/custom/create-subscription', (e) => {
 // ─── Route 4: Verify Payment ──────────────────────────────────────────────────
 // POST /api/custom/verify-payment
 routerAdd('POST', '/api/custom/verify-payment', (e) => {
-  const auth = getAuth(e);
+  const auth = e.auth;
   if (!auth) {
     return e.json(401, { error: 'Unauthorized' });
   }
 
   let body;
   try {
-    body = JSON.parse(readerToString(e.request.body));
+    body = (e.request.data || {});
   } catch (_) {
     return e.json(400, { error: 'Invalid JSON body' });
   }
